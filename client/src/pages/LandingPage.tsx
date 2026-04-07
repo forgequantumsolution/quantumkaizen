@@ -150,22 +150,22 @@ export default function LandingPage() {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', border: '1px solid #E5E7EB', borderRadius: '4px', padding: '6px 14px', marginBottom: '32px' }}>
             <span style={{ width: '20px', height: '1px', background: '#C9A84C', display: 'inline-block' }} />
             <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6B7280' }}>
-              Enterprise Quality Management System
+              Quality Management for Manufacturing & Production
             </span>
           </div>
 
           {/* Headline */}
           <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '56px', lineHeight: 1.08, fontWeight: 700, color: '#111827', margin: '0 0 8px' }}>
-            Quality Without
+            Built for the
           </h1>
           <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '56px', lineHeight: 1.08, fontWeight: 400, fontStyle: 'italic', color: '#C9A84C', margin: '0 0 32px' }}>
-            Compromise.
+            Shop Floor.
           </h1>
 
           <p style={{ fontSize: '16px', color: '#6B7280', lineHeight: 1.7, maxWidth: '480px', marginBottom: '40px' }}>
-            Quantum Kaizen is an end-to-end Quality Management System that connects
-            non-conformances, CAPA, audits, documents, supplier quality, risk, and
-            training — giving your team one source of truth for every quality decision.
+            Quantum Kaizen is a Quality Management System purpose-built for manufacturing
+            and production facilities — connecting non-conformances, CAPA, production audits,
+            equipment, supplier quality, and workforce training in one operational platform.
           </p>
 
           {/* CTAs */}
@@ -246,9 +246,9 @@ export default function LandingPage() {
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '40px 32px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '32px', textAlign: 'center' }}>
           {[
             { num: '15+', label: 'Integrated QMS Modules' },
-            { num: '100%', label: 'Traceable Audit Trail' },
-            { num: '40%', label: 'Faster CAPA Closure' },
-            { num: 'ISO', label: '9001 & 14001 Ready' },
+            { num: '100%', label: 'Digital Traceability' },
+            { num: '40%', label: 'Reduction in Defect Escapes' },
+            { num: 'ISO', label: '9001:2015 Ready' },
           ].map(s => (
             <div key={s.num}>
               <p style={{ fontFamily: 'Georgia, serif', fontSize: '36px', fontWeight: 700, color: '#C9A84C', marginBottom: '4px' }}>{s.num}</p>
@@ -263,33 +263,34 @@ export default function LandingPage() {
         <div style={{ textAlign: 'center', marginBottom: '56px' }}>
           <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C9A84C', marginBottom: '12px' }}>QMS Modules</p>
           <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '38px', fontWeight: 700, color: '#111827', marginBottom: '16px' }}>
-            Every Quality Process.<br />One Connected Platform.
+            Every Quality Process.<br />One Production Platform.
           </h2>
           <p style={{ fontSize: '15px', color: '#6B7280', maxWidth: '560px', margin: '0 auto', lineHeight: 1.7 }}>
-            From issue detection to resolution — Quantum Kaizen covers the full quality
-            lifecycle across manufacturing, pharma, food &amp; beverage, and chemical industries.
+            From the production line to the board room — Quantum Kaizen gives manufacturing
+            and production teams a single system to manage, measure, and improve quality
+            at every stage of operations.
           </p>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
           <FeatureCard icon={AlertTriangle} accent="#EF4444" title="Non-Conformance & CAPA"
-            desc="Capture quality deviations, perform root cause analysis, and drive corrective and preventive actions through to verified closure." />
+            desc="Log production deviations, scrap, and rework events. Drive root cause analysis and corrective actions through to verified closure — right from the shop floor." />
           <FeatureCard icon={FileText} accent="#C9A84C" title="Document Control"
-            desc="Manage SOPs, work instructions, forms, and policies with version control, e-signature approvals, and controlled distribution." />
+            desc="Centralise work instructions, SOPs, drawings, and inspection plans with version control, controlled distribution, and e-signature workflows." />
           <FeatureCard icon={Shield} accent="#3B82F6" title="Risk Management & FMEA"
-            desc="Identify, assess, and mitigate quality risks with quantified risk matrices, FMEA worksheets, and automated escalation workflows." />
+            desc="Run process and design FMEAs, quantify risk with severity-occurrence-detection matrices, and link risks directly to control plans." />
           <FeatureCard icon={BarChart3} accent="#8B5CF6" title="Audit Management"
-            desc="Plan and execute internal and external audits, track findings, assign owners, and monitor closure rates on a live dashboard." />
+            desc="Schedule internal process audits, layered process audits (LPA), and third-party inspections. Track findings and closure rates in real time." />
           <FeatureCard icon={Users} accent="#F59E0B" title="Supplier Quality"
-            desc="Qualify and monitor suppliers, track incoming quality, manage supplier CAPAs, and maintain a complete approved vendor list." />
+            desc="Qualify suppliers, track incoming inspection results, raise supplier CAPAs, and maintain a live approved vendor list with performance scorecards." />
           <FeatureCard icon={RefreshCw} accent="#06B6D4" title="Change Control"
-            desc="Manage engineering changes, process modifications, and system updates through a structured, approval-gated change workflow." />
-          <FeatureCard icon={Activity} accent="#22C55E" title="Calibration & Equipment"
-            desc="Schedule calibrations, store certificates, receive out-of-tolerance alerts, and maintain complete equipment maintenance history." />
+            desc="Manage engineering change notices (ECN), process change requests, and production line modifications through structured approval workflows." />
+          <FeatureCard icon={Activity} accent="#22C55E" title="Equipment & Calibration"
+            desc="Track equipment calibration schedules, preventive maintenance, out-of-tolerance alerts, and full equipment history for every asset on the floor." />
           <FeatureCard icon={Award} accent="#EC4899" title="Training & Competency"
-            desc="Assign role-based training programs, track completions, manage competency matrices, and produce regulator-ready training records." />
-          <FeatureCard icon={CheckCircle} accent="#14B8A6" title="Complaints & Feedback"
-            desc="Log customer complaints, investigate root causes, track response timelines, and close the loop with structured resolution reports." />
+            desc="Map operator skill requirements to production roles, track training completions, and generate competency records for audits and compliance reviews." />
+          <FeatureCard icon={CheckCircle} accent="#14B8A6" title="Customer Complaints"
+            desc="Capture field complaints and customer returns, link to production batches, run 8D or 5-Why investigations, and issue formal 8D reports." />
         </div>
       </section>
 
@@ -298,14 +299,14 @@ export default function LandingPage() {
         <div style={{ maxWidth: '900px', margin: '0 auto', textAlign: 'center', marginBottom: '56px' }}>
           <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C9A84C', marginBottom: '12px' }}>How It Works</p>
           <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '38px', fontWeight: 700, color: '#111827', marginBottom: '16px' }}>
-            From Issue to Resolution<br />in Minutes, Not Weeks
+            From Production Line<br />to Closed Issue — Fast
           </h2>
         </div>
         <div style={{ maxWidth: '900px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '32px' }}>
           {[
-            { step: '01', title: 'Detect & Log', desc: 'Capture non-conformances, complaints, or audit findings from any device, anywhere on the shop floor.' },
-            { step: '02', title: 'Investigate & Act', desc: 'Run structured root cause analysis, assign CAPA owners, set deadlines, and track progress in real time.' },
-            { step: '03', title: 'Verify & Close', desc: 'Validate corrective action effectiveness, generate compliance reports, and close issues with a full audit trail.' },
+            { step: '01', title: 'Detect & Log', desc: 'Operators log defects, scrap, downtime events, or near-misses on the spot — via mobile, tablet, or workstation.' },
+            { step: '02', title: 'Investigate & Act', desc: 'Quality engineers run 5-Why or Fishbone analysis, assign CAPA tasks, and track progress against deadlines.' },
+            { step: '03', title: 'Verify & Close', desc: 'Validate effectiveness of corrective actions, sign off digitally, and archive the full record for your next audit.' },
           ].map(item => (
             <div key={item.step} style={{ textAlign: 'center', padding: '32px 24px' }}>
               <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#1A1A2E', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
@@ -324,15 +325,15 @@ export default function LandingPage() {
           <div>
             <p style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#C9A84C', marginBottom: '16px' }}>Standards & Compliance</p>
             <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '38px', fontWeight: 700, color: '#fff', lineHeight: 1.2, marginBottom: '20px' }}>
-              Built for Regulated<br />Industries
+              Audit-Ready.<br />Every Single Day.
             </h2>
             <p style={{ fontSize: '15px', color: '#9CA3AF', lineHeight: 1.7, marginBottom: '36px' }}>
-              Quantum Kaizen is engineered to meet the most demanding quality standards
-              across manufacturing, pharmaceutical, chemical, and food &amp; beverage sectors —
-              so your audits are always ready.
+              Quantum Kaizen keeps your manufacturing facility permanently audit-ready —
+              with structured records, e-signatures, and traceability baked into every
+              workflow, not bolted on at the last minute.
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-              {['ISO 9001:2015', 'ISO 14001', 'ISO 45001', 'FDA 21 CFR Part 11', 'GMP / GLP', 'AS9100D', 'IATF 16949', 'FSSAI'].map(b => (
+              {['ISO 9001:2015', 'IATF 16949', 'AS9100D', 'ISO 14001', 'ISO 45001', 'GMP / GLP', 'BRC / FSSC 22000', 'FDA 21 CFR'].map(b => (
                 <ComplianceBadge key={b} label={b} />
               ))}
             </div>
@@ -357,11 +358,12 @@ export default function LandingPage() {
       <section style={{ background: '#F9F7F2', padding: '80px 32px', textAlign: 'center' }}>
         <div style={{ maxWidth: '600px', margin: '0 auto' }}>
           <h2 style={{ fontFamily: 'Georgia, serif', fontSize: '38px', fontWeight: 700, color: '#111827', marginBottom: '16px' }}>
-            Ready to Elevate<br />Your Quality System?
+            Stop Chasing Quality.<br />Start Building It In.
           </h2>
           <p style={{ fontSize: '15px', color: '#6B7280', marginBottom: '36px', lineHeight: 1.7 }}>
-            Join manufacturing and regulated industry teams already using Quantum Kaizen
-            to reduce defects, pass audits, and build a culture of continuous improvement.
+            Manufacturing teams use Quantum Kaizen to cut defect escape rates, reduce audit
+            preparation time, and build a measurable culture of continuous improvement
+            across every shift and production line.
           </p>
           <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button
@@ -409,7 +411,7 @@ export default function LandingPage() {
           </div>
           <div style={{ borderTop: '1px solid #1F2937', paddingTop: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <p style={{ color: '#4B5563', fontSize: '12px', margin: 0 }}>© 2026 Forge Quantum Solutions. All rights reserved.</p>
-            <p style={{ color: '#4B5563', fontSize: '12px', margin: 0 }}>ISO 9001 · Quality Management Software</p>
+            <p style={{ color: '#4B5563', fontSize: '12px', margin: 0 }}>ISO 9001:2015 · QMS for Manufacturing & Production</p>
           </div>
         </div>
       </footer>
