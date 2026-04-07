@@ -1,0 +1,16 @@
+# Global ownership — all files require review from core team
+* @forgequantumsolution/core
+
+# Security-critical files — require security review
+server/src/middleware/auth.ts          @forgequantumsolution/core
+server/src/middleware/security.ts      @forgequantumsolution/core
+server/src/config/                     @forgequantumsolution/core
+server/src/services/auth.service.ts    @forgequantumsolution/core
+server/prisma/schema.prisma            @forgequantumsolution/core
+.github/workflows/                     @forgequantumsolution/core
+docker-compose.prod.yml                @forgequantumsolution/core
+server/Dockerfile                      @forgequantumsolution/core
+client/Dockerfile                      @forgequantumsolution/core
+
+# Documentation
+SECURITY.md                            @forgequantumsolution/core

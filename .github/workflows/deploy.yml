@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy — Build, Scan & Release
 
 on:
   push:
@@ -11,59 +11,82 @@ env:
   CLIENT_IMAGE: ghcr.io/${{ github.repository }}/client
 
 jobs:
-  # ─── Build & Push Docker Images ─────────────────────────────────────
+  # ── BUILD & PUSH IMAGES ──────────────────────────────────────────────
   build-and-push:
     name: Build & Push Images
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+      security-events: write
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      short-sha: ${{ steps.version.outputs.SHORT_SHA }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Extract version from tag
+      - name: Extract version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+        run: |
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_OUTPUT
 
-      - name: Log in to Container Registry
+      - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push server image
+      - name: Build & push server
         uses: docker/build-push-action@v5
         with:
           context: ./server
           push: true
           tags: |
             ${{ env.SERVER_IMAGE }}:${{ steps.version.outputs.VERSION }}
-            ${{ env.SERVER_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.SERVER_IMAGE }}:${{ steps.version.outputs.SHORT_SHA }}
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
             org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Build & push client image
+      - name: Build & push client
         uses: docker/build-push-action@v5
         with:
           context: ./client
           push: true
           tags: |
             ${{ env.CLIENT_IMAGE }}:${{ steps.version.outputs.VERSION }}
-            ${{ env.CLIENT_IMAGE }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            ${{ env.CLIENT_IMAGE }}:${{ steps.version.outputs.SHORT_SHA }}
           labels: |
             org.opencontainers.image.version=${{ steps.version.outputs.VERSION }}
             org.opencontainers.image.revision=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-  # ─── Deploy to Staging ──────────────────────────────────────────────
+      - name: Trivy scan pushed server image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.SERVER_IMAGE }}:${{ steps.version.outputs.VERSION }}
+          format: sarif
+          output: trivy-deploy.sarif
+          severity: CRITICAL
+          exit-code: '1'
+        continue-on-error: true
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-deploy.sarif
+        continue-on-error: true
+
+  # ── DEPLOY STAGING ───────────────────────────────────────────────────
   deploy-staging:
     name: Deploy to Staging
     runs-on: ubuntu-latest
@@ -72,88 +95,107 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      # ── Option A: Docker Compose on VM (SSH) ─────────────────────────
+      # Uncomment when SSH secrets are configured:
+      # - name: Deploy via SSH
+      #   uses: appleboy/ssh-action@v1
+      #   with:
+      #     host: ${{ secrets.STAGING_HOST }}
+      #     username: ${{ secrets.STAGING_USER }}
+      #     key: ${{ secrets.STAGING_SSH_KEY }}
+      #     script: |
+      #       cd /opt/quantum-kaizen
+      #       export SERVER_VERSION=${{ needs.build-and-push.outputs.version }}
+      #       export CLIENT_VERSION=${{ needs.build-and-push.outputs.version }}
+      #       docker compose -f docker-compose.prod.yml pull
+      #       docker compose -f docker-compose.prod.yml up -d --remove-orphans
+      #       docker compose -f docker-compose.prod.yml exec -T server \
+      #         npx prisma migrate deploy
+      #       sleep 15
+      #       curl -f http://localhost/health || exit 1
 
-      # ── Option A: AWS ECS ──────────────────────────────────────────
-      # Uncomment and configure for AWS ECS deployment
-      # - name: Configure AWS Credentials
-      #   uses: aws-actions/configure-aws-credentials@v4
+      # ── Option B: AWS ECS ────────────────────────────────────────────
+      # - uses: aws-actions/configure-aws-credentials@v4
       #   with:
       #     aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
       #     aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       #     aws-region: ${{ vars.AWS_REGION }}
-      #
-      # - name: Deploy to ECS
-      #   run: |
-      #     aws ecs update-service \
-      #       --cluster quantum-kaizen-staging \
-      #       --service qk-server \
-      #       --force-new-deployment
-      #     aws ecs update-service \
-      #       --cluster quantum-kaizen-staging \
-      #       --service qk-client \
-      #       --force-new-deployment
+      # - run: |
+      #     aws ecs update-service --cluster qk-staging --service qk-server --force-new-deployment
+      #     aws ecs update-service --cluster qk-staging --service qk-client --force-new-deployment
+      #     aws ecs wait services-stable --cluster qk-staging --services qk-server qk-client
 
-      # ── Option B: Azure Container Apps ─────────────────────────────
-      # Uncomment and configure for Azure deployment
-      # - name: Azure Login
-      #   uses: azure/login@v1
-      #   with:
-      #     creds: ${{ secrets.AZURE_CREDENTIALS }}
-      #
-      # - name: Deploy to Azure Container Apps
-      #   run: |
-      #     az containerapp update \
-      #       --name qk-server \
-      #       --resource-group quantum-kaizen-staging \
-      #       --image ${{ env.SERVER_IMAGE }}:${{ steps.version.outputs.VERSION }}
-      #     az containerapp update \
-      #       --name qk-client \
-      #       --resource-group quantum-kaizen-staging \
-      #       --image ${{ env.CLIENT_IMAGE }}:${{ steps.version.outputs.VERSION }}
-
-      # ── Option C: Docker Compose on VM (SSH) ───────────────────────
-      # Uncomment and configure for direct VM deployment
-      # - name: Deploy via SSH
-      #   uses: appleboy/ssh-action@v1
-      #   with:
-      #     host: ${{ secrets.DEPLOY_HOST }}
-      #     username: ${{ secrets.DEPLOY_USER }}
-      #     key: ${{ secrets.DEPLOY_SSH_KEY }}
-      #     script: |
-      #       cd /opt/quantum-kaizen
-      #       docker compose -f docker-compose.prod.yml pull
-      #       docker compose -f docker-compose.prod.yml up -d
-      #       docker compose -f docker-compose.prod.yml exec server npx prisma migrate deploy
-
-      - name: Deployment placeholder
+      - name: Staging deployment info
         run: |
-          echo "=== Quantum Kaizen Deployment ==="
-          echo "Version: ${{ steps.version.outputs.VERSION }}"
-          echo "Server Image: ${{ env.SERVER_IMAGE }}:${{ steps.version.outputs.VERSION }}"
-          echo "Client Image: ${{ env.CLIENT_IMAGE }}:${{ steps.version.outputs.VERSION }}"
+          echo "=== Staging Deploy ==="
+          echo "Version:      ${{ needs.build-and-push.outputs.version }}"
+          echo "Server image: ${{ env.SERVER_IMAGE }}:${{ needs.build-and-push.outputs.version }}"
+          echo "Client image: ${{ env.CLIENT_IMAGE }}:${{ needs.build-and-push.outputs.version }}"
           echo ""
-          echo "Configure one of the deployment options above (AWS ECS, Azure Container Apps, or SSH)"
-          echo "by uncommenting the relevant section and adding required secrets."
+          echo "Uncomment a deployment option above (SSH/AWS/Azure) to activate."
 
-  # ─── Deploy to Production ───────────────────────────────────────────
+      - name: Smoke test staging
+        run: |
+          echo "TODO: curl -f https://staging.quantumkaizen.io/health"
+          echo "Add smoke test URL once staging infra is configured"
+
+  # ── DEPLOY PRODUCTION ────────────────────────────────────────────────
   deploy-production:
     name: Deploy to Production
     runs-on: ubuntu-latest
-    needs: deploy-staging
-    environment: production
+    needs: [build-and-push, deploy-staging]
+    environment: production  # requires manual approval in GitHub Settings
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      # ── Option A: Docker Compose on VM (SSH) ─────────────────────────
+      # - name: Deploy to production via SSH
+      #   uses: appleboy/ssh-action@v1
+      #   with:
+      #     host: ${{ secrets.PROD_HOST }}
+      #     username: ${{ secrets.PROD_USER }}
+      #     key: ${{ secrets.PROD_SSH_KEY }}
+      #     script: |
+      #       cd /opt/quantum-kaizen
+      #       # Snapshot DB before deploy
+      #       docker compose -f docker-compose.prod.yml exec -T db \
+      #         pg_dump -U postgres quantum_kaizen > /backups/pre-deploy-$(date +%Y%m%d%H%M%S).sql
+      #       # Pull and deploy new images
+      #       export SERVER_VERSION=${{ needs.build-and-push.outputs.version }}
+      #       export CLIENT_VERSION=${{ needs.build-and-push.outputs.version }}
+      #       docker compose -f docker-compose.prod.yml pull
+      #       docker compose -f docker-compose.prod.yml up -d --remove-orphans
+      #       docker compose -f docker-compose.prod.yml exec -T server \
+      #         npx prisma migrate deploy
+      #       # Health check
+      #       sleep 30
+      #       curl -f https://app.quantumkaizen.io/health || \
+      #         (docker compose -f docker-compose.prod.yml rollback && exit 1)
 
-      - name: Production deployment placeholder
+      - name: Production deployment info
         run: |
-          echo "=== Production Deployment ==="
-          echo "Version: ${{ steps.version.outputs.VERSION }}"
-          echo "Requires manual approval via GitHub environment protection rules."
-          echo "Configure the deployment steps matching your infrastructure provider."
+          echo "=== Production Deploy ==="
+          echo "Version:      ${{ needs.build-and-push.outputs.version }}"
+          echo "Server image: ${{ env.SERVER_IMAGE }}:${{ needs.build-and-push.outputs.version }}"
+          echo "Client image: ${{ env.CLIENT_IMAGE }}:${{ needs.build-and-push.outputs.version }}"
+          echo "Requires: manual approval via GitHub environment protection rules"
+
+      - name: Post-deploy smoke test
+        run: |
+          echo "TODO: Run scripts/smoke-test.sh against production URL"
+
+      - name: Create GitHub Release
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ needs.build-and-push.outputs.version }}';
+            await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: `v${version}`,
+              name: `Quantum Kaizen v${version}`,
+              body: `## Quantum Kaizen v${version}\n\n**Images:**\n- Server: \`${{ env.SERVER_IMAGE }}:${version}\`\n- Client: \`${{ env.CLIENT_IMAGE }}:${version}\`\n\n**SHA:** ${{ github.sha }}`,
+              draft: false,
+              prerelease: false,
+            });
+        continue-on-error: true

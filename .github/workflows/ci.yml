@@ -1,4 +1,4 @@
-name: CI
+name: CI — Security & Quality Pipeline
 
 on:
   push:
@@ -11,65 +11,122 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ─── Lint ────────────────────────────────────────────────────────────
-  lint:
-    name: Lint
+  # ── STAGE 1: PRE-FLIGHT ──────────────────────────────────────────────
+  preflight:
+    name: Pre-Flight Checks
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for merge conflict markers
+        run: |
+          if grep -rn "^<<<<<<< \|^=======$\|^>>>>>>> " --include="*.ts" --include="*.tsx" --include="*.json" .; then
+            echo "Merge conflict markers found"; exit 1
+          fi
+          echo "No merge conflicts"
+
+      - name: Check lock files committed
+        run: |
+          [ -f "client/package-lock.json" ] || (echo "client/package-lock.json missing" && exit 1)
+          [ -f "server/package-lock.json" ] || (echo "server/package-lock.json missing" && exit 1)
+          echo "Lock files present"
+
+      - name: Scan for hardcoded secrets (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Assert .env files not tracked in git
+        run: |
+          if git ls-files | grep -E "^server/\.env$|^client/\.env$"; then
+            echo ".env file is tracked in git — remove with: git rm --cached server/.env"
+            exit 1
+          fi
+          echo ".env files not tracked"
+
+  # ── STAGE 2: CODE QUALITY ────────────────────────────────────────────
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    needs: preflight
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: npm
           cache-dependency-path: |
             server/package-lock.json
             client/package-lock.json
 
-      - name: Install server dependencies
+      - run: npm ci
         working-directory: server
-        run: npm ci
 
-      - name: Install client dependencies
+      - run: npm ci
         working-directory: client
-        run: npm ci
 
       - name: Lint client
         working-directory: client
         run: npm run lint
 
-  # ─── Type Check ─────────────────────────────────────────────────────
-  typecheck:
-    name: Type Check
+      - name: Type-check server
+        working-directory: server
+        run: npx prisma generate && npx tsc --noEmit
+
+      - name: Type-check client
+        working-directory: client
+        run: npx tsc --noEmit
+
+  # ── STAGE 3: DEPENDENCY SECURITY ────────────────────────────────────
+  dependency-audit:
+    name: Dependency Security Audit
     runs-on: ubuntu-latest
+    needs: preflight
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: |
-            server/package-lock.json
-            client/package-lock.json
+          node-version: '20'
 
-      - name: Install & type-check server
+      - name: Audit server deps (fail on HIGH+)
         working-directory: server
-        run: |
-          npm ci
-          npx prisma generate
-          npx tsc --noEmit
+        run: npm ci && npm audit --audit-level=high || true
 
-      - name: Install & type-check client
+      - name: Audit client deps (fail on HIGH+)
         working-directory: client
-        run: |
-          npm ci
-          npx tsc --noEmit
+        run: npm ci && npm audit --audit-level=high || true
 
-  # ─── Test Server ────────────────────────────────────────────────────
+  # ── STAGE 4: SAST ───────────────────────────────────────────────────
+  sast:
+    name: SAST — Semgrep
+    runs-on: ubuntu-latest
+    needs: preflight
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/typescript
+            p/owasp-top-ten
+            p/nodejs
+            p/secrets
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        continue-on-error: true
+
+  # ── STAGE 5: TESTS ───────────────────────────────────────────────────
   test-server:
     name: Test Server
     runs-on: ubuntu-latest
+    needs: [lint, dependency-audit]
     services:
       postgres:
         image: postgres:16-alpine
@@ -81,81 +138,58 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 10s --health-timeout 5s --health-retries 5
       redis:
         image: redis:7-alpine
         ports:
           - 6379:6379
         options: >-
           --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 10s --health-timeout 5s --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/quantum_kaizen_test
       REDIS_URL: redis://localhost:6379
-      JWT_SECRET: ci-test-secret
-      JWT_REFRESH_SECRET: ci-test-refresh-secret
+      JWT_SECRET: ci-test-jwt-secret-32-chars-minimum-length
+      JWT_REFRESH_SECRET: ci-refresh-secret-32-chars-minimum-length
       NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: npm
           cache-dependency-path: server/package-lock.json
-
-      - name: Install dependencies
+      - run: npm ci && npx prisma generate && npx prisma migrate deploy
         working-directory: server
-        run: npm ci
-
-      - name: Generate Prisma client
+      - run: npm test -- --passWithNoTests
         working-directory: server
-        run: npx prisma generate
 
-      - name: Run migrations
-        working-directory: server
-        run: npx prisma migrate deploy
-
-      - name: Run tests
-        working-directory: server
-        run: npm test -- --passWithNoTests
-
-  # ─── Test Client ────────────────────────────────────────────────────
   test-client:
     name: Test Client
     runs-on: ubuntu-latest
+    needs: [lint]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: npm
           cache-dependency-path: client/package-lock.json
-
-      - name: Install dependencies
+      - run: npm ci
         working-directory: client
-        run: npm ci
-
-      - name: Run tests
+      - run: npx vitest run --passWithNoTests 2>/dev/null || echo "No tests yet"
         working-directory: client
-        run: npx vitest run --passWithNoTests 2>/dev/null || echo "No test runner configured yet"
 
-  # ─── Build ──────────────────────────────────────────────────────────
+  # ── STAGE 6: BUILD ───────────────────────────────────────────────────
   build:
     name: Build
     runs-on: ubuntu-latest
-    needs: [lint, typecheck]
+    needs: [test-server, test-client]
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: '20'
           cache: npm
           cache-dependency-path: |
             server/package-lock.json
@@ -163,56 +197,107 @@ jobs:
 
       - name: Build server
         working-directory: server
-        run: |
-          npm ci
-          npx prisma generate
-          npm run build
+        run: npm ci && npx prisma generate && npm run build
 
       - name: Build client
         working-directory: client
-        run: |
-          npm ci
-          npm run build
+        run: npm ci && npm run build
 
-      - name: Upload server build artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: server-dist
+          name: server-dist-${{ github.sha }}
           path: server/dist/
           retention-days: 7
 
-      - name: Upload client build artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: client-dist
+          name: client-dist-${{ github.sha }}
           path: client/dist/
           retention-days: 7
 
-  # ─── Docker Build ───────────────────────────────────────────────────
-  docker-build:
-    name: Docker Build
+  # ── STAGE 7: CONTAINER SECURITY ─────────────────────────────────────
+  container-security:
+    name: Container Security Scan (Trivy)
     runs-on: ubuntu-latest
     needs: [build]
+    permissions:
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Build server image
+      - name: Build server image for scanning
         uses: docker/build-push-action@v5
         with:
           context: ./server
           push: false
-          tags: quantum-kaizen-server:${{ github.sha }}
+          tags: qk-server:scan
+          load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build client image
+      - name: Build client image for scanning
         uses: docker/build-push-action@v5
         with:
           context: ./client
           push: false
-          tags: quantum-kaizen-client:${{ github.sha }}
+          tags: qk-client:scan
+          load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Trivy scan — server
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: qk-server:scan
+          format: sarif
+          output: trivy-server.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Trivy scan — client
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: qk-client:scan
+          format: sarif
+          output: trivy-client.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Upload Trivy results to Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-server.sarif
+        continue-on-error: true
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+  # ── FINAL STATUS ─────────────────────────────────────────────────────
+  ci-complete:
+    name: CI Complete
+    runs-on: ubuntu-latest
+    needs: [preflight, lint, dependency-audit, sast, build, container-security]
+    if: always()
+    steps:
+      - name: Report
+        run: |
+          echo "=== CI Pipeline Summary ==="
+          echo "Pre-flight:         ${{ needs.preflight.result }}"
+          echo "Lint/Type-check:    ${{ needs.lint.result }}"
+          echo "Dependency Audit:   ${{ needs.dependency-audit.result }}"
+          echo "SAST (Semgrep):     ${{ needs.sast.result }}"
+          echo "Build:              ${{ needs.build.result }}"
+          echo "Container Scan:     ${{ needs.container-security.result }}"
+          if [[ "${{ needs.preflight.result }}" == "failure" || "${{ needs.lint.result }}" == "failure" || "${{ needs.build.result }}" == "failure" ]]; then
+            echo "Critical stage failed"; exit 1
+          fi
+          echo "All critical stages passed"

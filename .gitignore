@@ -1,38 +1,57 @@
-# Dependencies
+# ── Dependencies ─────────────────────────────────────────────────────
 node_modules/
 
-# Build outputs
+# ── Build outputs ────────────────────────────────────────────────────
 dist/
 build/
 .next/
 
-# Environment
+# ── Environment & Secrets (NEVER commit) ────────────────────────────
 .env
 .env.local
 .env.production
+.env.staging
+.env.development.local
+.env.test.local
+.env.production.local
+server/.env
+client/.env
+*.env
 
-# IDE
+# ── IDE ───────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
+.cursor/
 
-# OS
+# ── OS ───────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# Prisma
+# ── Prisma ───────────────────────────────────────────────────────────
 server/prisma/migrations/
 server/prisma/dev.db
 
-# Logs
+# ── Logs ─────────────────────────────────────────────────────────────
 *.log
 logs/
+server/logs/
 
-# Coverage
+# ── Coverage ─────────────────────────────────────────────────────────
 coverage/
+.nyc_output/
 
-# Temp
+# ── Temp ─────────────────────────────────────────────────────────────
 tmp/
 temp/
 .cache/
+
+# ── Security scan baselines (committed intentionally) ────────────────
+# .secrets.baseline  ← keep this tracked when created
+
+# ── Vercel ───────────────────────────────────────────────────────────
+.vercel/
+
+# ── Claude ───────────────────────────────────────────────────────────
+.claude/settings.local.json
