@@ -1,5 +1,5 @@
 # ── Stage 1: Builder ──────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:25-alpine AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN npx prisma generate && npm run build
 RUN npm prune --omit=dev
 
 # ── Stage 2: Runtime (minimal) ────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:25-alpine AS runner
 
 # Security: create non-root user
 RUN addgroup --system --gid 1001 nodejs && \
