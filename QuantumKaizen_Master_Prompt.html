@@ -1,0 +1,1472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quantum Kaizen — Master Development Prompt</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --ink: #0d0f14;
+    --paper: #f5f3ee;
+    --cream: #ede9e0;
+    --gold: #b8860b;
+    --gold-light: #e8d080;
+    --gold-pale: #fdf8e8;
+    --blue-deep: #0a1628;
+    --blue-mid: #1a3050;
+    --blue-rule: #1e4080;
+    --accent: #c0392b;
+    --accent-soft: #fdf0ee;
+    --muted: #6b6760;
+    --border: #d4cfc4;
+    --rule: #b8b0a0;
+    --success: #1a6b3c;
+    --purple: #3d1a6b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  /* COVER PAGE */
+  .cover {
+    background: var(--blue-deep);
+    color: #fff;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 40px;
+    position: relative;
+    overflow: hidden;
+    text-align: center;
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 39px,
+      rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px
+    ),
+    repeating-linear-gradient(
+      90deg, transparent, transparent 39px,
+      rgba(255,255,255,0.03) 39px, rgba(255,255,255,0.03) 40px
+    );
+  }
+
+  .cover-badge {
+    background: var(--gold);
+    color: var(--blue-deep);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    padding: 6px 18px;
+    border-radius: 2px;
+    margin-bottom: 32px;
+    position: relative;
+  }
+
+  .cover-company {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    margin-bottom: 20px;
+    position: relative;
+  }
+
+  .cover-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(42px, 8vw, 72px);
+    line-height: 1.08;
+    color: #fff;
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .cover-title em {
+    font-style: italic;
+    color: var(--gold-light);
+  }
+
+  .cover-subtitle {
+    font-size: 16px;
+    color: rgba(255,255,255,0.55);
+    max-width: 560px;
+    margin-bottom: 48px;
+    position: relative;
+  }
+
+  .cover-meta {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+    position: relative;
+  }
+
+  .cover-meta-item {
+    text-align: center;
+  }
+
+  .cover-meta-item .label {
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.35);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .cover-meta-item .value {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    color: var(--gold-light);
+  }
+
+  .cover-divider {
+    width: 80px;
+    height: 1px;
+    background: var(--gold);
+    margin: 40px auto;
+    position: relative;
+  }
+
+  /* TOC */
+  .toc {
+    background: var(--blue-mid);
+    color: #fff;
+    padding: 60px 48px;
+    page-break-after: always;
+  }
+
+  .toc-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold-light);
+    margin-bottom: 32px;
+  }
+
+  .toc-list {
+    list-style: none;
+    counter-reset: toc;
+  }
+
+  .toc-item {
+    counter-increment: toc;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.07);
+    font-size: 14px;
+    color: rgba(255,255,255,0.75);
+  }
+
+  .toc-item::before {
+    content: counter(toc, decimal-leading-zero);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    min-width: 28px;
+  }
+
+  .toc-item strong {
+    color: #fff;
+    font-weight: 500;
+  }
+
+  /* BODY LAYOUT */
+  .doc {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 72px 60px;
+  }
+
+  /* SECTION */
+  .section {
+    margin-bottom: 72px;
+  }
+
+  .section-number {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+
+  .section-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    color: var(--blue-deep);
+    line-height: 1.15;
+    margin-bottom: 8px;
+  }
+
+  .section-rule {
+    width: 48px;
+    height: 3px;
+    background: var(--gold);
+    margin-bottom: 28px;
+  }
+
+  .section-lead {
+    font-size: 16px;
+    line-height: 1.75;
+    color: var(--ink);
+    max-width: 740px;
+    margin-bottom: 32px;
+  }
+
+  /* SUBSECTIONS */
+  h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--blue-deep);
+    margin: 40px 0 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h3::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 16px;
+    background: var(--gold);
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
+  h4 {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin: 28px 0 8px;
+  }
+
+  p {
+    color: var(--ink);
+    margin-bottom: 16px;
+    max-width: 720px;
+  }
+
+  /* PROMPT BLOCK */
+  .prompt-block {
+    background: var(--blue-deep);
+    border-radius: 8px;
+    padding: 36px 40px;
+    margin: 28px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .prompt-block::before {
+    content: 'PROMPT';
+    position: absolute;
+    top: 16px;
+    right: 20px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: rgba(255,255,255,0.2);
+  }
+
+  .prompt-block p, .prompt-block li {
+    color: rgba(255,255,255,0.85);
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    line-height: 1.75;
+    max-width: 100%;
+    margin-bottom: 10px;
+  }
+
+  .prompt-block strong {
+    color: var(--gold-light);
+    font-weight: 500;
+  }
+
+  .prompt-block .prompt-section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 20px 0 6px;
+    display: block;
+  }
+
+  .prompt-block ul, .prompt-block ol {
+    padding-left: 20px;
+    margin-bottom: 12px;
+  }
+
+  /* CODE BLOCK */
+  .code-block {
+    background: #1a1e2e;
+    border-radius: 6px;
+    padding: 20px 24px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+
+  .code-block pre {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: #a8d8b8;
+    line-height: 1.65;
+    white-space: pre;
+  }
+
+  .code-block .cm { color: #5c6a7a; }
+  .code-block .ck { color: #88aaee; }
+  .code-block .cs { color: #f8c87a; }
+  .code-block .cn { color: #e8a880; }
+
+  /* FEATURE GRID */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin: 24px 0;
+  }
+
+  .feature-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--blue-rule);
+    border-radius: 6px;
+    padding: 20px 22px;
+  }
+
+  .feature-card.gold {
+    border-top-color: var(--gold);
+  }
+
+  .feature-card.green {
+    border-top-color: var(--success);
+  }
+
+  .feature-card.red {
+    border-top-color: var(--accent);
+  }
+
+  .feature-card.purple {
+    border-top-color: var(--purple);
+  }
+
+  .feature-card h4 {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+
+  .feature-card ul {
+    padding-left: 16px;
+    color: var(--ink);
+    font-size: 13.5px;
+    line-height: 1.7;
+  }
+
+  .feature-card li {
+    margin-bottom: 4px;
+  }
+
+  /* PILL TAGS */
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 16px 0;
+  }
+
+  .tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+
+  .tag-blue { background: #dde8f5; color: var(--blue-rule); }
+  .tag-gold { background: #fdf3d0; color: #7a5c00; }
+  .tag-green { background: #d5ede0; color: var(--success); }
+  .tag-red { background: #fde8e5; color: var(--accent); }
+  .tag-gray { background: var(--cream); color: var(--muted); }
+  .tag-purple { background: #ede5f8; color: var(--purple); }
+
+  /* TABLE */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+
+  thead th {
+    background: var(--blue-deep);
+    color: var(--gold-light);
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 12px 14px;
+    text-align: left;
+    font-weight: 500;
+  }
+
+  tbody tr:nth-child(even) { background: var(--cream); }
+  tbody tr:nth-child(odd) { background: #fff; }
+
+  tbody td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--ink);
+    vertical-align: top;
+    line-height: 1.55;
+  }
+
+  tbody td:first-child {
+    font-weight: 600;
+    color: var(--blue-deep);
+    white-space: nowrap;
+  }
+
+  /* CALLOUT */
+  .callout {
+    display: flex;
+    gap: 16px;
+    background: var(--gold-pale);
+    border-left: 4px solid var(--gold);
+    border-radius: 0 6px 6px 0;
+    padding: 18px 22px;
+    margin: 24px 0;
+  }
+
+  .callout-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .callout p {
+    margin: 0;
+    font-size: 14px;
+    color: #5a4400;
+    max-width: 100%;
+    line-height: 1.65;
+  }
+
+  .callout p strong {
+    color: #3a2c00;
+  }
+
+  /* PHASE TIMELINE */
+  .timeline {
+    position: relative;
+    padding-left: 36px;
+    margin: 24px 0;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 11px;
+    top: 8px;
+    bottom: 8px;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-bottom: 32px;
+  }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -29px;
+    top: 6px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--gold);
+    border: 2px solid var(--paper);
+  }
+
+  .timeline-item h4 {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin: 0 0 4px;
+  }
+
+  .timeline-item h5 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--blue-deep);
+    margin-bottom: 8px;
+  }
+
+  .timeline-item p {
+    font-size: 13.5px;
+    color: var(--muted);
+    margin: 0;
+    max-width: 640px;
+  }
+
+  /* DIVIDER */
+  .hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 48px 0;
+  }
+
+  /* MODULE BADGE */
+  .module-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--blue-deep);
+    color: var(--gold-light);
+    padding: 6px 14px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    margin: 4px 4px 4px 0;
+  }
+
+  .module-badge .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--gold);
+    flex-shrink: 0;
+  }
+
+  /* SPEC TABLE */
+  .spec-table {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin: 20px 0;
+  }
+
+  .spec-row {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .spec-row:last-child { border-bottom: none; }
+
+  .spec-label {
+    background: var(--cream);
+    padding: 12px 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-right: 1px solid var(--border);
+  }
+
+  .spec-value {
+    padding: 12px 16px;
+    font-size: 13.5px;
+    color: var(--ink);
+    line-height: 1.55;
+  }
+
+  /* PRINT */
+  @media print {
+    .cover { min-height: auto; }
+    .prompt-block { background: #eee !important; }
+    .prompt-block p, .prompt-block li, .prompt-block strong { color: #000 !important; }
+  }
+
+  @media (max-width: 700px) {
+    .doc { padding: 40px 24px; }
+    .prompt-block { padding: 24px 20px; }
+    .spec-row { grid-template-columns: 1fr; }
+    .spec-label { border-right: none; border-bottom: 1px solid var(--border); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ COVER -->
+<div class="cover">
+  <div class="cover-badge">Master Development Prompt — Confidential</div>
+  <div class="cover-company">Forge Quantum Solutions</div>
+  <div class="cover-title">Quantum<br><em>Kaizen</em></div>
+  <div class="cover-subtitle">Enterprise Quality, Document & Learning Management Platform — Full-Stack Development Specification</div>
+  <div class="cover-divider"></div>
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <span class="label">Version</span>
+      <span class="value">v1.0</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="label">Stack</span>
+      <span class="value">React · Node.js · Tailwind</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="label">Modules</span>
+      <span class="value">QMS · DMS · LMS</span>
+    </div>
+    <div class="cover-meta-item">
+      <span class="label">Standard</span>
+      <span class="value">ISO 9001 · IATF · GMP</span>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ TOC -->
+<div class="toc">
+  <div class="toc-title">Table of Contents</div>
+  <ol class="toc-list">
+    <li class="toc-item"><strong>Project Identity & Vision</strong> — Company context, product philosophy, naming rationale</li>
+    <li class="toc-item"><strong>Master System Prompt</strong> — Complete prompt for AI-assisted development</li>
+    <li class="toc-item"><strong>Technology Stack Specification</strong> — Frontend, backend, database, infrastructure</li>
+    <li class="toc-item"><strong>QMS Module Specification</strong> — All quality management sub-modules and workflows</li>
+    <li class="toc-item"><strong>DMS Module Specification</strong> — Document lifecycle, version control, e-signatures</li>
+    <li class="toc-item"><strong>LMS Module Specification</strong> — Training programs, competency, certification</li>
+    <li class="toc-item"><strong>Cross-Cutting Concerns</strong> — Auth, approvals, e-signatures, RBAC, audit trail</li>
+    <li class="toc-item"><strong>Industry Configuration Profiles</strong> — Automotive, pharma, F&amp;B, chemical, energy, O&amp;G</li>
+    <li class="toc-item"><strong>Data Architecture</strong> — Schema patterns, master data entities, API conventions</li>
+    <li class="toc-item"><strong>UI/UX Design Language</strong> — Design system, component library, accessibility</li>
+    <li class="toc-item"><strong>Security &amp; Compliance Framework</strong> — 21 CFR Part 11, IATF, ISO, ALCOA++</li>
+    <li class="toc-item"><strong>Development Phasing</strong> — Roadmap, MVP scope, release milestones</li>
+  </ol>
+</div>
+
+<!-- ============================================================ BODY -->
+<div class="doc">
+
+<!-- ======= SECTION 1 ======= -->
+<div class="section">
+  <div class="section-number">Section 01</div>
+  <div class="section-title">Project Identity &amp; Vision</div>
+  <div class="section-rule"></div>
+  <p class="section-lead">
+    Quantum Kaizen is the flagship enterprise software product of <strong>Forge Quantum Solutions</strong> — a next-generation, fully integrated compliance platform that unifies Quality Management, Document Control, and Learning Management in a single, industry-agnostic system. The product name fuses the precision of quantum thinking with the Japanese philosophy of continuous improvement (<em>kaizen</em>), embodying the platform's core promise: relentless improvement, rigorously governed.
+  </p>
+
+  <h3>Naming Philosophy</h3>
+  <p><strong>Quantum</strong> reflects the platform's ambition for precision, speed, and transformative leaps — not incremental patches. <strong>Kaizen</strong> grounds it in proven continuous improvement methodology embraced across every regulated industry. Together, Quantum Kaizen signals a platform that is both technically advanced and operationally disciplined.</p>
+
+  <h3>Target Markets</h3>
+  <div class="tags">
+    <span class="tag tag-blue">Automotive &amp; IATF 16949</span>
+    <span class="tag tag-blue">Automobile Manufacturing</span>
+    <span class="tag tag-red">Pharmaceutical &amp; GMP</span>
+    <span class="tag tag-green">Food &amp; Beverage · FSMA</span>
+    <span class="tag tag-gold">Chemical Industry</span>
+    <span class="tag tag-gray">Energy Sector</span>
+    <span class="tag tag-gray">Oil &amp; Gas · API Q1/Q2</span>
+    <span class="tag tag-purple">General Manufacturing · ISO 9001</span>
+  </div>
+
+  <h3>Core Differentiators</h3>
+  <div class="feature-grid">
+    <div class="feature-card gold">
+      <h4>Industry Intelligence</h4>
+      <ul>
+        <li>Configuration profiles per industry</li>
+        <li>Pre-loaded regulatory templates</li>
+        <li>Standard-specific form fields</li>
+        <li>Industry-aware risk matrices</li>
+      </ul>
+    </div>
+    <div class="feature-card">
+      <h4>Governance Engine</h4>
+      <ul>
+        <li>Multi-level configurable approvals</li>
+        <li>21 CFR Part 11 electronic signatures</li>
+        <li>Complete immutable audit trail</li>
+        <li>ALCOA++ data integrity controls</li>
+      </ul>
+    </div>
+    <div class="feature-card green">
+      <h4>Unified Platform</h4>
+      <ul>
+        <li>QMS + DMS + LMS in one system</li>
+        <li>Shared master data layer</li>
+        <li>Cross-module linked records</li>
+        <li>Single sign-on experience</li>
+      </ul>
+    </div>
+    <div class="feature-card purple">
+      <h4>Modern Engineering</h4>
+      <ul>
+        <li>React + Tailwind CSS frontend</li>
+        <li>Node.js microservices backend</li>
+        <li>Role-based access control</li>
+        <li>Mobile-responsive interface</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 2 — MASTER PROMPT ======= -->
+<div class="section">
+  <div class="section-number">Section 02</div>
+  <div class="section-title">Master System Prompt</div>
+  <div class="section-rule"></div>
+  <p class="section-lead">The following is the complete, production-ready prompt to be used with any AI coding assistant (Claude, GPT-4, Cursor, Copilot) to develop the Quantum Kaizen platform. It encodes the full product vision, technical requirements, and compliance standards.</p>
+
+  <div class="callout">
+    <div class="callout-icon">⚡</div>
+    <p><strong>Usage:</strong> Paste this entire prompt at the start of each development session or as a system prompt in your AI coding environment. Append specific module or feature requests after the prompt. Use section markers (e.g., <code>[QMS]</code>, <code>[DMS]</code>) to scope requests.</p>
+  </div>
+
+  <div class="prompt-block">
+    <span class="prompt-section-label">── Identity & Context ──────────────────────────────────────</span>
+    <p>You are a senior full-stack software architect and engineer helping build <strong>Quantum Kaizen</strong> — a comprehensive, enterprise-grade compliance and quality management platform developed by <strong>Forge Quantum Solutions</strong>. This is a mission-critical SaaS product designed for regulated industries including automotive, pharmaceutical, food & beverage, chemical, energy, and oil & gas.</p>
+
+    <span class="prompt-section-label">── Product Modules ──────────────────────────────────────────</span>
+    <p>The platform consists of three tightly integrated primary modules:</p>
+    <ul>
+      <li><strong>QMS — Quality Management System:</strong> Audit Management, CAPA (Corrective & Preventive Actions), Risk Management, Non-Conformance (NC) Management, Supplier Quality Management, Compliance Management, FMEA (Failure Mode & Effects Analysis), Change Control, Customer Complaints, Management Review, and KPI/Metrics Dashboard.</li>
+      <li><strong>DMS — Document Management System:</strong> Controlled document lifecycle (Draft → Review → Approval → Publish → Archive), version control with revision tracking, electronic distribution and acknowledgement, document expiry & renewal, template management, and full integration with all QMS and LMS workflows.</li>
+      <li><strong>LMS — Learning Management System:</strong> Training program creation, participant assignment, training session scheduling, assessment and evaluation, competency records, certification management, training effectiveness tracking, and mandatory training compliance monitoring.</li>
+    </ul>
+
+    <span class="prompt-section-label">── Technology Stack ─────────────────────────────────────────</span>
+    <p><strong>Frontend:</strong> React 18+ with TypeScript, Tailwind CSS v3 for styling, React Router v6 for navigation, React Query (TanStack Query) for server state management, React Hook Form with Zod for validation, Zustand for global UI state, Recharts for analytics and dashboards, React Table (TanStack Table) for data-heavy views. Use a clean, professional design language — navy/slate primary palette with gold accent, generous whitespace, clear typographic hierarchy. All components must be fully accessible (WCAG 2.1 AA).</p>
+    <p><strong>Backend:</strong> Node.js 20+ with Express.js (or Fastify for high-performance routes), TypeScript throughout, Prisma ORM with PostgreSQL as primary database, Redis for session management and caching, Bull/BullMQ for background job queues (notifications, report generation, scheduled tasks), Multer + S3-compatible storage for file uploads, Nodemailer for email notifications, JWT + refresh token authentication, Passport.js for SSO integration.</p>
+    <p><strong>Infrastructure:</strong> Docker containerisation, RESTful API design following OpenAPI 3.0 specification, environment-based configuration, structured logging with Winston/Pino, comprehensive error handling with proper HTTP status codes, rate limiting, CORS configuration, and Helmet.js security headers.</p>
+
+    <span class="prompt-section-label">── Core Architecture Principles ─────────────────────────────</span>
+    <ul>
+      <li><strong>Multi-tenancy:</strong> Full tenant isolation at the database level using schema-per-tenant or row-level security. Each organisation's data is completely isolated. Tenant-specific configurations for industry profiles, approval workflows, form templates, and regulatory standards.</li>
+      <li><strong>RBAC (Role-Based Access Control):</strong> Granular, configurable permission system. Predefined roles: Super Admin, Tenant Admin, Quality Manager, Quality Engineer, Auditor, Document Controller, Trainer, Trainee, Department Head, Read-Only. Custom role creation with permission matrix. Module-level, record-level, and field-level access control.</li>
+      <li><strong>Multi-Level Approval Workflows:</strong> Every critical record (CAPA, Audit, Document, NC, Risk, Training) must support configurable multi-stage approval chains. Each stage has assignees, deadline, escalation rules, and rejection/rework loops. Workflows are tenant-configurable without code changes. Support for parallel approvals (multiple approvers at one stage) and sequential approvals. Delegation capability when approvers are absent.</li>
+      <li><strong>Electronic Signatures (21 CFR Part 11 compliant):</strong> Every approval action requires a secure e-signature capturing: user credentials re-verification (PIN or password re-entry), meaning of signature (Approved / Reviewed / Acknowledged / Rejected), timestamp (server-side UTC), IP address, user agent, signature hash stored immutably. Signatures must be non-repudiable and tamper-evident.</li>
+      <li><strong>Immutable Audit Trail:</strong> Every create, read (for sensitive records), update, delete, status change, login, approval, and export must be logged to an immutable audit log table. Log entries include: entity type, entity ID, action, before/after state (JSON diff), actor user ID, actor name, timestamp, IP, session ID. The audit log must never be editable by any user role, including administrators.</li>
+      <li><strong>ALCOA++ Data Integrity:</strong> All data entries must meet ALCOA++ principles — Attributable, Legible, Contemporaneous, Original, Accurate, Complete, Consistent, Enduring, Available. Implement system-level controls: mandatory fields, date/time auto-stamping, user attribution, version control, and data validation at both client and server.</li>
+    </ul>
+
+    <span class="prompt-section-label">── QMS Sub-Module Requirements ──────────────────────────────</span>
+    <p><strong>Audit Management:</strong> Create, schedule, and manage internal/external/third-party audits. Audit types: System Audit, Process Audit, Product Audit, Supplier Audit, Compliance Audit. Features: audit plan with scope, criteria, and team; checklist builder with question sets per standard (ISO 9001, IATF 16949, AS9100, GMP, ISO 45001); finding recording with evidence attachments; automatic NC generation from findings; multi-level review and approval; audit report generation; closure workflow with effectiveness verification; dashboard with audit frequency, finding trends, and open action tracking.</p>
+    <p><strong>CAPA Management:</strong> Full corrective and preventive action lifecycle: Initiation → Problem Statement → Containment → Root Cause Analysis (5-Whys, Fishbone/Ishikawa diagram builder, FTA, FMEA) → Action Definition → Implementation → Effectiveness Verification → Closure. Support for CAPA PR (Problem Report), linkage to NC/Audit findings, action owner assignment, due date tracking, escalation on overdue, effectiveness check scheduling, recurrence detection. Risk-based CAPA prioritisation (Critical/Major/Minor) with configurable thresholds per industry.</p>
+    <p><strong>Risk Management:</strong> Risk identification, assessment using configurable Likelihood × Consequence matrices (5×5, 4×4 options), RPN calculation for FMEA-style risks, control measure definition (hierarchy: Elimination → Substitution → Engineering → Administrative → PPE), residual risk evaluation, risk owner assignment, review scheduling, risk register dashboard with heatmap visualisation, automatic escalation for unacceptable residual risks.</p>
+    <p><strong>Non-Conformance Management:</strong> Rapid NC recording with classification (Deviation, Product NC, Process NC, OOS, Complaint), severity assessment, containment actions, batch/lot traceability, disposition workflow (Use As-Is / Rework / Scrap / Return to Vendor), root cause analysis, CAPA linkage, re-inspection tracking, customer notification workflow, regulatory reporting flags.</p>
+    <p><strong>Supplier Management:</strong> Supplier registration and qualification workflow, supplier categorisation (Critical/Major/Minor), performance evaluation scorecards, approved supplier list (ASL) management, supplier audit scheduling, document control for supplier certificates, auto-expiry alerts for certifications, supplier portal access for self-service updates (optional module).</p>
+    <p><strong>Compliance Management:</strong> Register and track regulatory and customer requirements, link standards clauses to procedures and controls, compliance calendar with scheduled reviews, gap assessment tracking, compliance dashboard, corrective action linkage for gaps. Supported standards: ISO 9001:2015, IATF 16949:2016, ISO 14001:2015, ISO 45001:2018, AS9100D, ISO/TS 29001, API Spec Q1/Q2, 21 CFR Part 11, EU GMP Annex 11, FSSC 22000, ISO 22000, HACCP, REACH, GHS, OSHA PSM, EPA RMP.</p>
+    <p><strong>FMEA Module:</strong> Design FMEA (DFMEA) and Process FMEA (PFMEA) with full AIAG-VDA methodology support. Function/Failure mode/Effect/Cause entry, Severity/Occurrence/Detection (S/O/D) ratings, RPN and Action Priority (AP) calculation, current controls documentation, recommended actions with owner and due date, post-action S/O/D re-evaluation, FMEA history with revision tracking, export to AIAG/VDA standard Excel format.</p>
+    <p><strong>Change Control:</strong> Formal change request lifecycle for process, product, system, and document changes. Change impact assessment, affected document/process linkage, stakeholder notification, multi-level approval, validation/qualification tracking, post-change effectiveness review, regulatory notification flag for major changes.</p>
+
+    <span class="prompt-section-label">── DMS Requirements ─────────────────────────────────────────</span>
+    <p>Document lifecycle: <strong>Draft → Under Review → Pending Approval → Approved/Published → Obsolete → Archived.</strong> Each transition is governed by the configured approval workflow with e-signatures. Key features: document numbering with configurable format (e.g., QMS-SOP-001), auto-version increment (major/minor), revision history with change summary, controlled copy distribution list, read receipt tracking, document acknowledgement workflow, expiry date monitoring with renewal alerts, document hierarchy (Level 1: Policies, Level 2: Procedures/SOPs, Level 3: Work Instructions, Level 4: Forms/Records), template library with pre-built forms for each industry, full-text search with metadata filters, document linking (parent-child relationships), external document register for supplier/customer documents, print control with watermarking (CONTROLLED COPY / UNCONTROLLED COPY), download audit trail.</p>
+
+    <span class="prompt-section-label">── LMS Requirements ─────────────────────────────────────────</span>
+    <p>Training program management: create training programs with type (Induction, On-the-Job, Classroom, eLearning, OJT Sign-off, Regulatory), linked documents and SOPs, assessment questions, passing criteria, and validity period. Training matrix: define competency requirements by role/department and auto-identify training gaps. Training scheduling with calendar view, participant management, attendance recording, online assessment with auto-scoring, certificate generation and storage, training effectiveness evaluation (L1 Reaction / L2 Learning / L3 Behaviour / L4 Results — Kirkpatrick model), mandatory training compliance dashboard, regulatory training records meeting 21 CFR Part 11 and GMP requirements, trainer qualification management, training gap reports.</p>
+
+    <span class="prompt-section-label">── Industry Configuration Profiles ──────────────────────────</span>
+    <p>The platform must support configuration profiles that activate industry-specific forms, terminologies, workflow templates, and regulatory checklists without code changes. Profiles to implement:</p>
+    <ul>
+      <li><strong>Automotive/IATF 16949:</strong> AIAG core tools (APQP, PPAP, FMEA, MSA, SPC), customer-specific requirements (CSRs), 8D problem solving, PFMEA with AIAG-VDA methodology, core tool document templates, supplier PPAP submission tracking.</li>
+      <li><strong>Pharmaceutical/GMP:</strong> Deviation and OOS/OOT management, batch record linkage, product lifecycle controls, 21 CFR Part 11 e-signature on all approvals, Annex 11 computerised system validation (CSV) documentation, periodic product review (PPR), change control with regulatory notification, GMP training records.</li>
+      <li><strong>Food &amp; Beverage:</strong> HACCP plan management, food safety hazard register, prerequisite program (PRP) tracking, allergen control records, FSSC 22000 / ISO 22000 compliance checklists, food safety team management, verification and validation activities, recall and withdrawal management.</li>
+      <li><strong>Chemical:</strong> SDS/GHS chemical registry integration, hazard classification, REACH compliance tracking, process safety management (OSHA PSM / EPA RMP), process hazard analysis (PHA), management of change (MOC) for chemical processes, waste stream management, environmental compliance monitoring.</li>
+      <li><strong>Energy &amp; Oil and Gas:</strong> API Q1/Q2 compliance, ISO/TS 29001 quality management, safety case management, permit-to-work integration, inspection and testing records, integrity management, contractor management, HSE event tracking, regulatory reporting (BSEE, NOPSEMA equivalent).</li>
+      <li><strong>General Manufacturing/ISO 9001:</strong> Standard ISO 9001:2015 clause-mapped compliance, process approach with turtle diagrams, context of the organisation (SWOT/PESTLE), interested party register, customer satisfaction tracking, continual improvement register.</li>
+    </ul>
+
+    <span class="prompt-section-label">── UI/UX Requirements ───────────────────────────────────────</span>
+    <p>Design a clean, professional, enterprise-grade interface that prioritises usability for daily operational users (not just administrators). Key requirements: persistent left sidebar navigation with module icons and collapsible sub-menus; top header with breadcrumbs, global search, notification bell with real-time count, and user profile dropdown; dashboard landing page per module with KPI cards, overdue action lists, charts, and quick-action buttons; consistent form patterns for all record creation (wizard-style for complex records, single-page for simple ones); status badges with colour coding (Draft=gray, In Progress=blue, Pending Approval=amber, Approved=green, Overdue=red, Closed=slate); data tables with column sorting, filtering, pagination, column toggle, bulk actions, and export (CSV/Excel/PDF); responsive design from 1024px desktop down to 768px tablet; skeleton loading states; toast notifications for all user actions; confirm dialogs for irreversible actions.</p>
+
+    <span class="prompt-section-label">── Notifications & Escalations ──────────────────────────────</span>
+    <p>Implement a comprehensive notification system covering: in-app notifications (real-time via WebSockets), email notifications with configurable templates, and optional SMS (pluggable provider). Notification triggers: record assigned to user, approval action required, record overdue (configurable reminder cadence), workflow stage transition, record rejected/returned, upcoming expiry (documents, certifications, audits), system alerts (failed background jobs). Escalation engine: if approval is not actioned within SLA, auto-escalate to the next level or manager. All notification preferences configurable per user and per notification type.</p>
+
+    <span class="prompt-section-label">── Reporting & Analytics ────────────────────────────────────</span>
+    <p>Build comprehensive reporting across all modules: standard reports (CAPA status summary, audit findings by category, NC trend analysis, training compliance rate, document expiry calendar, supplier performance scorecard, risk heatmap), custom report builder with drag-and-drop field selection, scheduled report delivery via email, export to PDF and Excel, charts using Recharts (bar, line, pie, area, heatmap), module-level dashboards with real-time KPIs, management review pack generator that aggregates data from all modules into a single PDF report, regulatory inspection-ready record retrieval.</p>
+
+    <span class="prompt-section-label">── API & Integration ────────────────────────────────────────</span>
+    <p>Expose a RESTful API following OpenAPI 3.0 specification for all CRUD operations and workflow actions. Include: API key management for external integrations, webhook support for outbound events, CSV/Excel bulk import for master data (users, suppliers, documents), integration adapters (configurable) for ERP systems (SAP, Oracle, Microsoft Dynamics), LDAP/Active Directory for user provisioning, and email gateways. All API endpoints must have input validation, proper error responses, and rate limiting.</p>
+
+    <span class="prompt-section-label">── Code Quality Standards ────────────────────────────────────</span>
+    <p>Apply these standards consistently: TypeScript strict mode throughout (no implicit any), ESLint + Prettier configuration enforced, component/function-level JSDoc comments for non-obvious logic, unit tests with Jest for business logic and utilities, integration tests for API endpoints, meaningful variable and function names (avoid single-letter names outside loops), error boundaries in React, server-side input sanitisation on all user inputs, parameterised queries (never string concatenation for SQL), secrets in environment variables (never in code), dependency injection pattern for services, separation of concerns (controllers → services → repositories), database migrations with Prisma migrate, seed scripts for development data.</p>
+
+    <span class="prompt-section-label">── Response Format Instructions ─────────────────────────────</span>
+    <p>When generating code: always show the complete file, never truncate with "// ... rest of the code". Include file path as a comment at the top. Explain architecture decisions briefly before the code block. When generating schemas, show the Prisma model AND the corresponding TypeScript types. When generating components, include the props interface, the component, and basic usage example. When asked for a feature, implement it completely — do not scaffold or leave TODOs unless explicitly asked for a skeleton.</p>
+  </div>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 3 ======= -->
+<div class="section">
+  <div class="section-number">Section 03</div>
+  <div class="section-title">Technology Stack Specification</div>
+  <div class="section-rule"></div>
+
+  <table>
+    <thead>
+      <tr><th>Layer</th><th>Technology</th><th>Purpose</th><th>Version</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>UI Framework</td><td>React + TypeScript</td><td>Component-based SPA with type safety</td><td>18.x / 5.x</td></tr>
+      <tr><td>Styling</td><td>Tailwind CSS</td><td>Utility-first CSS, design system tokens</td><td>3.x</td></tr>
+      <tr><td>Server State</td><td>TanStack Query</td><td>API caching, optimistic updates, stale-while-revalidate</td><td>5.x</td></tr>
+      <tr><td>Forms</td><td>React Hook Form + Zod</td><td>Performant forms with schema validation</td><td>7.x / 3.x</td></tr>
+      <tr><td>Client State</td><td>Zustand</td><td>Lightweight global state (UI preferences, auth)</td><td>4.x</td></tr>
+      <tr><td>Data Tables</td><td>TanStack Table</td><td>Headless table with sorting, filtering, pagination</td><td>8.x</td></tr>
+      <tr><td>Charts</td><td>Recharts</td><td>Declarative React charts for dashboards</td><td>2.x</td></tr>
+      <tr><td>Router</td><td>React Router</td><td>Client-side routing with nested layouts</td><td>6.x</td></tr>
+      <tr><td>Runtime</td><td>Node.js</td><td>Server runtime</td><td>20 LTS</td></tr>
+      <tr><td>API Framework</td><td>Express.js</td><td>HTTP server, middleware, routing</td><td>4.x</td></tr>
+      <tr><td>ORM</td><td>Prisma</td><td>Type-safe DB access, migrations</td><td>5.x</td></tr>
+      <tr><td>Database</td><td>PostgreSQL</td><td>Primary relational database</td><td>16.x</td></tr>
+      <tr><td>Cache / Queue</td><td>Redis + BullMQ</td><td>Session cache, background jobs, rate limit store</td><td>7.x / 4.x</td></tr>
+      <tr><td>File Storage</td><td>AWS S3 (or MinIO)</td><td>Document uploads, report storage</td><td>—</td></tr>
+      <tr><td>Auth</td><td>JWT + Passport.js</td><td>Stateless auth with SSO support</td><td>—</td></tr>
+      <tr><td>Real-time</td><td>Socket.IO</td><td>Live notifications, approval events</td><td>4.x</td></tr>
+      <tr><td>Email</td><td>Nodemailer</td><td>Transactional email via SMTP/SendGrid</td><td>6.x</td></tr>
+      <tr><td>PDF Generation</td><td>Puppeteer / PDFKit</td><td>Reports, certificates, controlled copy exports</td><td>—</td></tr>
+      <tr><td>Testing</td><td>Jest + Supertest</td><td>Unit and integration tests</td><td>29.x</td></tr>
+      <tr><td>Container</td><td>Docker + Compose</td><td>Local dev and deployment</td><td>—</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 4 - QMS ======= -->
+<div class="section">
+  <div class="section-number">Section 04</div>
+  <div class="section-title">QMS Module Specification</div>
+  <div class="section-rule"></div>
+  <p class="section-lead">The Quality Management System module is the operational core of Quantum Kaizen. It implements the full quality event lifecycle across eleven sub-modules, each configurable for the regulatory standards applicable to the tenant's industry profile.</p>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 32px;">
+    <span class="module-badge"><span class="dot"></span>Audit Management</span>
+    <span class="module-badge"><span class="dot"></span>CAPA Management</span>
+    <span class="module-badge"><span class="dot"></span>Risk Management</span>
+    <span class="module-badge"><span class="dot"></span>Non-Conformance</span>
+    <span class="module-badge"><span class="dot"></span>Supplier Quality</span>
+    <span class="module-badge"><span class="dot"></span>Compliance</span>
+    <span class="module-badge"><span class="dot"></span>FMEA</span>
+    <span class="module-badge"><span class="dot"></span>Change Control</span>
+    <span class="module-badge"><span class="dot"></span>Customer Complaints</span>
+    <span class="module-badge"><span class="dot"></span>Management Review</span>
+    <span class="module-badge"><span class="dot"></span>KPI Dashboard</span>
+  </div>
+
+  <h3>Quality Event Lifecycle</h3>
+  <p>Every quality event (NC, deviation, complaint, audit finding) follows a structured seven-stage lifecycle. The system enforces stage gates — a record cannot advance without all mandatory fields completed and approvals secured.</p>
+
+  <table>
+    <thead>
+      <tr><th>Stage</th><th>Name</th><th>Key Actions</th><th>Who</th><th>Approval Required</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>Initiation & Logging</td><td>Record event, attach evidence, containment actions</td><td>Any employee</td><td>No</td></tr>
+      <tr><td>2</td><td>Classification & Risk</td><td>Assign type, severity (Critical/Major/Minor), impact scope</td><td>Quality Reviewer</td><td>Review sign-off</td></tr>
+      <tr><td>3</td><td>Impact Assessment</td><td>Affected batches/lots, release status, containment verification</td><td>Investigation Lead</td><td>No</td></tr>
+      <tr><td>4</td><td>Root Cause Analysis</td><td>5-Whys, Fishbone, FTA, FMEA — documented findings</td><td>SME / RCA Lead</td><td>QA Manager review</td></tr>
+      <tr><td>5</td><td>CAPA Definition</td><td>Actions, owners, due dates, success criteria</td><td>CAPA Owner</td><td>QA Manager approval</td></tr>
+      <tr><td>6</td><td>Implementation</td><td>Execute actions, upload evidence, verify completion</td><td>Action Owners</td><td>Implementation verification</td></tr>
+      <tr><td>7</td><td>Effectiveness Check</td><td>Monitor recurrence, audit verification, trend analysis</td><td>QA Manager</td><td>Formal closure e-signature</td></tr>
+    </tbody>
+  </table>
+
+  <h3>CAPA Workflow — Detailed Prompt Extension</h3>
+  <div class="prompt-block">
+    <span class="prompt-section-label">── [QMS-CAPA] Specific Implementation Prompt ────────────────</span>
+    <p>Build the CAPA module with the following implementation details:</p>
+    <ul>
+      <li><strong>CAPA Record Structure:</strong> CAPA number (auto-generated, format: CAPA-YYYY-NNNN), title, description, source (NC / Audit / Complaint / Proactive / Management / Customer), linked source record (FK), severity (Critical/Major/Minor), site, department, product/process affected, discovery date, due date, owner, status.</li>
+      <li><strong>RCA Tools:</strong> Implement an interactive 5-Whys builder (expandable rows, minimum 3 whys required for Major/Critical), a visual Fishbone diagram builder with the six standard branches (Man, Machine, Material, Method, Measurement, Environment) — each branch allows adding sub-causes with free text. Store RCA data as structured JSON. Render the fishbone diagram as a scalable SVG in the UI and in PDF exports.</li>
+      <li><strong>Action Tracking:</strong> Each CAPA can have multiple corrective actions and multiple preventive actions. Each action has: description, type (Corrective/Preventive), owner, due date, evidence type required, completion date, evidence attachment, verification status. Overdue actions trigger escalation emails at D-7, D-3, D+1, D+7.</li>
+      <li><strong>Effectiveness Check:</strong> Configurable monitoring period after closure (30/60/90/180 days). Effectiveness criteria defined at CAPA creation. Post-closure follow-up tasks assigned to verifier. Pass/Fail determination with evidence. If failed, system automatically re-opens the CAPA and creates a new linked CAPA.</li>
+      <li><strong>CAPA Analytics:</strong> Dashboard showing: open CAPAs by source, department, severity, owner; CAPA cycle time trends; recurrence rate; on-time closure rate; overdue aging chart; top 10 root causes by frequency (Pareto). Export management review pack as PDF.</li>
+    </ul>
+  </div>
+
+  <h3>Risk Management — Risk Matrix Engine</h3>
+  <p>Implement a configurable risk matrix engine that supports tenant-specific risk assessment models. Each industry profile ships with a default matrix that can be modified by the tenant admin.</p>
+  <div class="spec-table">
+    <div class="spec-row">
+      <div class="spec-label">Matrix Dimensions</div>
+      <div class="spec-value">5×5 (default), 4×4, or 3×3 — configurable per tenant. Rows = Likelihood (1–5), Columns = Consequence (1–5)</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Risk Score</div>
+      <div class="spec-value">Likelihood × Consequence = RPN. Thresholds configurable: Low (1–4), Medium (5–9), High (10–16), Critical (17–25)</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Control Hierarchy</div>
+      <div class="spec-value">Elimination → Substitution → Engineering Controls → Administrative Controls → PPE (hierarchy enforced in selection UI)</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Post-Mitigation</div>
+      <div class="spec-value">Residual risk calculated after controls applied. Residual above threshold triggers mandatory re-approval</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Risk Register</div>
+      <div class="spec-value">Filterable by department, site, severity, owner, review date. Heatmap visualisation. Export to Excel and PDF</div>
+    </div>
+  </div>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 5 - DMS ======= -->
+<div class="section">
+  <div class="section-number">Section 05</div>
+  <div class="section-title">DMS Module Specification</div>
+  <div class="section-rule"></div>
+  <p class="section-lead">The Document Management System is the backbone of all controlled information in Quantum Kaizen. It manages the complete lifecycle of every document from initial draft through to archival, enforcing version control, access control, review cycles, and regulatory-compliant e-signature approvals at every stage.</p>
+
+  <h3>Document Lifecycle States</h3>
+  <div class="tags">
+    <span class="tag tag-gray">📝 Draft</span>
+    <span class="tag tag-blue">🔍 Under Review</span>
+    <span class="tag tag-gold">⏳ Pending Approval</span>
+    <span class="tag tag-green">✅ Published (Effective)</span>
+    <span class="tag tag-red">⚠️ Under Revision</span>
+    <span class="tag tag-gray">📦 Obsolete</span>
+    <span class="tag tag-gray">🗃️ Archived</span>
+  </div>
+
+  <h3>Key DMS Features</h3>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4>Version Control</h4>
+      <ul>
+        <li>Major revision (1.0 → 2.0) for content changes</li>
+        <li>Minor revision (1.0 → 1.1) for formatting fixes</li>
+        <li>Change summary required at each revision</li>
+        <li>Full revision history with diff view</li>
+        <li>Previous versions accessible but watermarked OBSOLETE</li>
+      </ul>
+    </div>
+    <div class="feature-card gold">
+      <h4>Distribution & Acknowledgement</h4>
+      <ul>
+        <li>Controlled distribution list per document</li>
+        <li>Mandatory read receipt for regulated documents</li>
+        <li>Overdue acknowledgement escalation</li>
+        <li>Compliance reporting: % acknowledged by dept</li>
+        <li>Read receipt logged as immutable audit record</li>
+      </ul>
+    </div>
+    <div class="feature-card green">
+      <h4>Template Library</h4>
+      <ul>
+        <li>Pre-built templates per document type</li>
+        <li>Industry-specific form templates (CAPA forms, audit checklists, risk assessments)</li>
+        <li>Smart fields linked to master data</li>
+        <li>PDF and Word template support</li>
+      </ul>
+    </div>
+    <div class="feature-card red">
+      <h4>Print & Access Control</h4>
+      <ul>
+        <li>Dynamic watermark: CONTROLLED / UNCONTROLLED</li>
+        <li>Print tracking with user and timestamp</li>
+        <li>Download audit trail per document</li>
+        <li>View-only mode for read-only roles</li>
+        <li>Expiry lock — expired documents non-printable</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Document Hierarchy</h3>
+  <table>
+    <thead>
+      <tr><th>Level</th><th>Document Type</th><th>Description</th><th>Review Frequency</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Level 1</td><td>Quality Policy / Manual</td><td>Top-level commitment statements and quality management system overview</td><td>Annual</td></tr>
+      <tr><td>Level 2</td><td>Procedures / SOPs</td><td>How processes are managed and controlled — cross-functional instructions</td><td>Annual / On change</td></tr>
+      <tr><td>Level 3</td><td>Work Instructions</td><td>Step-by-step task-level instructions for specific operations</td><td>Annual / On change</td></tr>
+      <tr><td>Level 4</td><td>Forms, Templates, Records</td><td>Blank forms, templates, and completed records generated by procedures</td><td>On change</td></tr>
+      <tr><td>External</td><td>Customer / Supplier Docs</td><td>Controlled externally — tracked in external document register</td><td>On receipt of update</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 6 - LMS ======= -->
+<div class="section">
+  <div class="section-number">Section 06</div>
+  <div class="section-title">LMS Module Specification</div>
+  <div class="section-rule"></div>
+  <p class="section-lead">The Learning Management System links directly to the DMS (employees must read and acknowledge SOPs before training is marked complete) and to the QMS (CAPA actions can trigger mandatory retraining). It implements the Kirkpatrick four-level evaluation model and full competency matrix management.</p>
+
+  <h3>Training Program Structure</h3>
+  <div class="spec-table">
+    <div class="spec-row">
+      <div class="spec-label">Program Types</div>
+      <div class="spec-value">Induction / On-the-Job Training (OJT) / Classroom / eLearning / Regulatory / Refresher / Competency Assessment</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Content Types</div>
+      <div class="spec-value">Linked DMS documents, uploaded presentations (PPT/PDF), video links, external URLs, practical sign-off checklists</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Assessment</div>
+      <div class="spec-value">Multiple choice, true/false, open text, practical sign-off. Configurable pass mark (default 80%). Unlimited attempts or restricted attempts.</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Validity Period</div>
+      <div class="spec-value">Configurable per program (e.g., annual refresher). Auto-expiry notification at D-60, D-30, D-7. Expired training flagged on compliance dashboard.</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Certificates</div>
+      <div class="spec-value">Auto-generated PDF certificate on completion. Contains: trainee name, program name, completion date, trainer/assessor, expiry date, unique certificate ID, QR code linking to verification record.</div>
+    </div>
+  </div>
+
+  <h3>Competency Matrix</h3>
+  <p>The competency matrix defines the training requirements for every role in the organisation. The system automatically calculates each employee's training gap and displays it on their personal development dashboard.</p>
+
+  <div class="prompt-block">
+    <span class="prompt-section-label">── [LMS] Competency Matrix Prompt Extension ─────────────────</span>
+    <p>Implement the competency matrix as a many-to-many relationship between <strong>job roles</strong> (or individual employees) and <strong>training programs</strong>, with the following attributes on the junction record: required (boolean), proficiency level required (Awareness / Working Knowledge / Proficient / Expert), deadline from hire date (number of days), and whether it is regulatory-mandatory. Build a visual matrix UI where rows are employees/roles and columns are training programs — cells show status (Completed / Expired / Overdue / Not Started / Not Required) with colour coding. Allow bulk assignment of training programs to a role. Provide a gap analysis report that shows each employee's outstanding training by program, overdue count, and % compliance per department.</p>
+  </div>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 7 - CROSS CUTTING ======= -->
+<div class="section">
+  <div class="section-number">Section 07</div>
+  <div class="section-title">Cross-Cutting Concerns</div>
+  <div class="section-rule"></div>
+
+  <h3>Multi-Level Approval Engine</h3>
+  <p>The approval engine is a reusable service consumed by QMS, DMS, and LMS modules. It is fully configurable by tenant administrators without code changes.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4>Stage Configuration</h4>
+      <ul>
+        <li>Unlimited approval stages per workflow</li>
+        <li>Stage name, order, and SLA (hours/days)</li>
+        <li>Sequential or parallel approval within a stage</li>
+        <li>Role-based or user-specific assignees</li>
+        <li>Conditional stages (e.g., only if risk = Critical)</li>
+      </ul>
+    </div>
+    <div class="feature-card gold">
+      <h4>Actions per Stage</h4>
+      <ul>
+        <li>Approve (with e-signature + comment)</li>
+        <li>Reject → sends to initiator with reason</li>
+        <li>Return for Revision → specific stage</li>
+        <li>Delegate to another user</li>
+        <li>Request Additional Information</li>
+      </ul>
+    </div>
+    <div class="feature-card green">
+      <h4>Escalation Rules</h4>
+      <ul>
+        <li>Reminder at 50% of SLA elapsed</li>
+        <li>Escalation to supervisor at SLA breach</li>
+        <li>Second escalation to manager at 2× SLA</li>
+        <li>Full notification trail preserved</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Electronic Signature Specification (21 CFR Part 11)</h3>
+  <div class="prompt-block">
+    <span class="prompt-section-label">── [SECURITY] E-Signature Implementation Prompt ─────────────</span>
+    <p>Implement electronic signatures compliant with 21 CFR Part 11 and EU GMP Annex 11. Each signature event must:</p>
+    <ul>
+      <li>Require the user to re-enter their password (or PIN if configured) — credentials are verified server-side, not just checked client-side.</li>
+      <li>Display the meaning of the signature (e.g., "I approve this document as the Quality Manager") — the meaning must be explicitly selected or displayed and cannot be omitted.</li>
+      <li>Capture and store immutably: <strong>user_id, user_name, user_role, signature_meaning, timestamp_utc, ip_address, user_agent, record_type, record_id, record_version, signature_hash</strong> (SHA-256 of the above fields combined).</li>
+      <li>Generate a unique signature token that is stored in the signed record. Any tampering with the record will invalidate the hash — implement a background integrity check job.</li>
+      <li>Display the signature block in all exports and PDFs: Name, Title, Date/Time, Meaning, Signature ID.</li>
+      <li>The signature modal must include a clear notice: "This is a legally binding electronic signature equivalent to a handwritten signature."</li>
+      <li>Store all signature records in a dedicated <code>electronic_signatures</code> table that is append-only — no UPDATE or DELETE permissions granted to any application role.</li>
+    </ul>
+  </div>
+
+  <h3>Immutable Audit Trail</h3>
+  <div class="spec-table">
+    <div class="spec-row">
+      <div class="spec-label">Trigger Events</div>
+      <div class="spec-value">CREATE, UPDATE, DELETE, STATUS_CHANGE, LOGIN, LOGOUT, EXPORT, PRINT, DOWNLOAD, APPROVAL_ACTION, SIGNATURE, VIEW (sensitive records)</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Logged Fields</div>
+      <div class="spec-value">id, tenant_id, user_id, user_name, user_role, action, entity_type, entity_id, before_state (JSON), after_state (JSON), changed_fields[], timestamp_utc, ip_address, session_id, user_agent</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Storage</div>
+      <div class="spec-value">Separate audit_log table in PostgreSQL. Application role has INSERT only — no UPDATE, DELETE. Partitioned by month for performance. Compressed after 90 days.</div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Retrieval</div>
+      <div class="spec-value">Filter by entity, user, action type, date range. Paginated with export to CSV/Excel. Available to QA Manager and above roles only.</div>
+    </div>
+  </div>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 8 ======= -->
+<div class="section">
+  <div class="section-number">Section 08</div>
+  <div class="section-title">Industry Configuration Profiles</div>
+  <div class="section-rule"></div>
+
+  <table>
+    <thead>
+      <tr><th>Industry</th><th>Key Standards</th><th>Profile Activates</th><th>Unique Features</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Automotive</td>
+        <td>IATF 16949, AIAG, VDA</td>
+        <td>Core tools (APQP, PPAP, FMEA, MSA, SPC), CSR tracking</td>
+        <td>8D solver, PPAP submission portal, customer scorecard</td>
+      </tr>
+      <tr>
+        <td>Pharmaceutical</td>
+        <td>21 CFR, EU GMP Annex 11, ICH Q10</td>
+        <td>Deviation/OOS management, batch linkage, CSV documentation</td>
+        <td>Periodic Product Review, pharmacovigilance event flag</td>
+      </tr>
+      <tr>
+        <td>Food &amp; Beverage</td>
+        <td>FSSC 22000, ISO 22000, HACCP</td>
+        <td>HACCP plan, PRP tracking, allergen control</td>
+        <td>Recall/withdrawal workflow, CCP monitoring records</td>
+      </tr>
+      <tr>
+        <td>Chemical</td>
+        <td>REACH, GHS, OSHA PSM, EPA RMP</td>
+        <td>Chemical registry, SDS management, PHA/HAZOP</td>
+        <td>MOC workflow, waste stream tracking, TRI reporting</td>
+      </tr>
+      <tr>
+        <td>Energy</td>
+        <td>ISO 50001, ISO 55001</td>
+        <td>Energy baseline, performance indicators, asset management</td>
+        <td>Energy audit management, EnPI tracking</td>
+      </tr>
+      <tr>
+        <td>Oil &amp; Gas</td>
+        <td>API Q1/Q2, ISO/TS 29001</td>
+        <td>Safety case, permit-to-work integration, inspection records</td>
+        <td>Integrity management, contractor qualification portal</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 9 ======= -->
+<div class="section">
+  <div class="section-number">Section 09</div>
+  <div class="section-title">Data Architecture</div>
+  <div class="section-rule"></div>
+
+  <h3>Core Prisma Schema Pattern</h3>
+  <div class="code-block">
+<pre><span class="cm">// prisma/schema.prisma — Core shared entities</span>
+
+<span class="ck">model</span> <span class="cn">Tenant</span> {
+  id          String   <span class="cs">@id @default(uuid())</span>
+  code        String   <span class="cs">@unique</span>
+  name        String
+  industry    Industry
+  settings    Json     <span class="cm">// Industry profile config, workflow templates</span>
+  isActive    Boolean  <span class="cs">@default(true)</span>
+  createdAt   DateTime <span class="cs">@default(now())</span>
+  users       User[]
+  documents   Document[]
+  capas       Capa[]
+}
+
+<span class="ck">model</span> <span class="cn">User</span> {
+  id          String   <span class="cs">@id @default(uuid())</span>
+  tenantId    String
+  employeeId  String
+  email       String
+  name        String
+  role        Role
+  department  String?
+  site        String?
+  isActive    Boolean  <span class="cs">@default(true)</span>
+  tenant      Tenant   <span class="cs">@relation(fields: [tenantId], references: [id])</span>
+  <span class="cs">@@unique([tenantId, email])</span>
+  <span class="cs">@@index([tenantId, role])</span>
+}
+
+<span class="ck">model</span> <span class="cn">AuditLog</span> {
+  id           String   <span class="cs">@id @default(uuid())</span>
+  tenantId     String
+  userId       String
+  userName     String
+  userRole     String
+  action       AuditAction
+  entityType   String
+  entityId     String
+  beforeState  Json?
+  afterState   Json?
+  changedFields String[]
+  timestampUtc DateTime <span class="cs">@default(now())</span>
+  ipAddress    String
+  sessionId    String
+  userAgent    String
+  <span class="cs">@@index([tenantId, entityType, entityId])</span>
+  <span class="cs">@@index([tenantId, userId, timestampUtc])</span>
+}
+
+<span class="ck">model</span> <span class="cn">ElectronicSignature</span> {
+  id              String   <span class="cs">@id @default(uuid())</span>
+  tenantId        String
+  userId          String
+  userName        String
+  userRole        String
+  meaning         String   <span class="cm">// e.g., "Approved as Quality Manager"</span>
+  entityType      String
+  entityId        String
+  entityVersion   String
+  timestampUtc    DateTime <span class="cs">@default(now())</span>
+  ipAddress       String
+  userAgent       String
+  signatureHash   String   <span class="cm">// SHA-256 of all above fields</span>
+  <span class="cs">@@index([tenantId, entityType, entityId])</span>
+}</pre>
+  </div>
+
+  <h3>API Naming Convention</h3>
+  <div class="spec-table">
+    <div class="spec-row">
+      <div class="spec-label">Base URL Pattern</div>
+      <div class="spec-value"><code>/api/v1/{module}/{resource}</code> — e.g., <code>/api/v1/qms/capas</code>, <code>/api/v1/dms/documents</code></div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Pagination</div>
+      <div class="spec-value">Query params: <code>?page=1&limit=25&sortBy=createdAt&sortOrder=desc</code>. Response: <code>{data, meta: {total, page, limit, totalPages}}</code></div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Filtering</div>
+      <div class="spec-value"><code>?status=OPEN&severity=CRITICAL&assigneeId=UUID&dateFrom=ISO&dateTo=ISO</code></div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Error Format</div>
+      <div class="spec-value"><code>{error: {code: "VALIDATION_ERROR", message: "...", details: [{field, message}]}}</code></div>
+    </div>
+    <div class="spec-row">
+      <div class="spec-label">Tenant Isolation</div>
+      <div class="spec-value">All queries auto-scoped to <code>req.user.tenantId</code> at middleware layer — never trust client-provided tenant ID</div>
+    </div>
+  </div>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 10 ======= -->
+<div class="section">
+  <div class="section-number">Section 10</div>
+  <div class="section-title">UI/UX Design Language</div>
+  <div class="section-rule"></div>
+  <p class="section-lead">Quantum Kaizen's interface follows a professional, enterprise design language — precise, high-information-density, and deeply usable by quality professionals who spend their full working day in the system. The design avoids gratuitous decoration, prioritising clarity and predictability over novelty.</p>
+
+  <h3>Tailwind Design Tokens</h3>
+  <div class="code-block">
+<pre><span class="cm">// tailwind.config.js — Quantum Kaizen design tokens</span>
+<span class="ck">module</span>.exports = {
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          navy:    <span class="cs">'#0a1628'</span>,   <span class="cm">// Primary backgrounds</span>
+          blue:    <span class="cs">'#1a3050'</span>,   <span class="cm">// Navigation, headers</span>
+          rule:    <span class="cs">'#1e4080'</span>,   <span class="cm">// Card top accents</span>
+          gold:    <span class="cs">'#b8860b'</span>,   <span class="cm">// Primary accent</span>
+          'gold-light': <span class="cs">'#e8d080'</span>,<span class="cm">// Light gold for dark bg</span>
+        },
+        status: {
+          draft:     <span class="cs">'#6b7280'</span>,
+          review:    <span class="cs">'#3b82f6'</span>,
+          pending:   <span class="cs">'#d97706'</span>,
+          approved:  <span class="cs">'#059669'</span>,
+          overdue:   <span class="cs">'#dc2626'</span>,
+          closed:    <span class="cs">'#475569'</span>,
+        },
+        severity: {
+          critical:  <span class="cs">'#dc2626'</span>,
+          major:     <span class="cs">'#ea580c'</span>,
+          minor:     <span class="cs">'#ca8a04'</span>,
+          info:      <span class="cs">'#2563eb'</span>,
+        }
+      },
+      fontFamily: {
+        sans:  [<span class="cs">'Outfit'</span>, <span class="cs">'system-ui'</span>, <span class="cs">'sans-serif'</span>],
+        mono:  [<span class="cs">'DM Mono'</span>, <span class="cs">'ui-monospace'</span>, <span class="cs">'monospace'</span>],
+      }
+    }
+  }
+}</pre>
+  </div>
+
+  <h3>Component Patterns</h3>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <h4>Record Status Badge</h4>
+      <ul>
+        <li>Pill shape, colour from status tokens</li>
+        <li>Icon + text label always</li>
+        <li>Consistent across all modules</li>
+        <li>Accessible contrast ratio ≥ 4.5:1</li>
+      </ul>
+    </div>
+    <div class="feature-card gold">
+      <h4>Approval Timeline</h4>
+      <ul>
+        <li>Vertical stepper showing all stages</li>
+        <li>Completed = filled check + timestamp</li>
+        <li>Active = animated pulse indicator</li>
+        <li>Pending = hollow circle</li>
+        <li>Rejected = red X with reason tooltip</li>
+      </ul>
+    </div>
+    <div class="feature-card green">
+      <h4>Data Tables</h4>
+      <ul>
+        <li>TanStack Table, server-side pagination</li>
+        <li>Column sort, filter, toggle visibility</li>
+        <li>Row selection for bulk actions</li>
+        <li>Export button (CSV / Excel / PDF)</li>
+        <li>Inline quick-actions per row</li>
+      </ul>
+    </div>
+    <div class="feature-card purple">
+      <h4>Form Patterns</h4>
+      <ul>
+        <li>Wizard stepper for complex records</li>
+        <li>Inline validation on blur</li>
+        <li>Auto-save draft every 60s</li>
+        <li>Unsaved changes warning on navigate</li>
+        <li>Required field marker (*) on labels</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 11 ======= -->
+<div class="section">
+  <div class="section-number">Section 11</div>
+  <div class="section-title">Security &amp; Compliance Framework</div>
+  <div class="section-rule"></div>
+
+  <table>
+    <thead>
+      <tr><th>Control</th><th>Implementation</th><th>Standard Reference</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Authentication</td><td>JWT access token (15min) + refresh token (7 days), httpOnly cookies, token rotation</td><td>21 CFR Part 11 §11.10(d)</td></tr>
+      <tr><td>Password Policy</td><td>Min 12 chars, complexity, 90-day expiry, last 10 passwords prevented, lockout after 5 fails</td><td>21 CFR Part 11 §11.300</td></tr>
+      <tr><td>Session Management</td><td>Concurrent session limit configurable, inactivity timeout (configurable, default 30min), session invalidation on password change</td><td>EU GMP Annex 11</td></tr>
+      <tr><td>Data Encryption</td><td>TLS 1.3 in transit, AES-256 at rest for sensitive fields (e-signatures, credentials), encrypted S3 buckets</td><td>ISO 27001 A.10</td></tr>
+      <tr><td>Input Validation</td><td>Zod schema validation client + server, parameterised queries only (Prisma), XSS prevention, CSRF tokens</td><td>OWASP Top 10</td></tr>
+      <tr><td>Audit Integrity</td><td>Append-only audit log, SHA-256 hash chain, nightly integrity verification job</td><td>21 CFR Part 11 §11.10(e)</td></tr>
+      <tr><td>Access Control</td><td>RBAC with least-privilege, row-level security for tenant isolation, API endpoint-level permission checks</td><td>ISO 27001 A.9</td></tr>
+      <tr><td>ALCOA++</td><td>Server-side timestamps only, user ID auto-stamped, mandatory fields enforced, version history preserved, no hard deletes</td><td>FDA Data Integrity Guidance</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<hr class="hr">
+
+<!-- ======= SECTION 12 ======= -->
+<div class="section">
+  <div class="section-number">Section 12</div>
+  <div class="section-title">Development Phasing</div>
+  <div class="section-rule"></div>
+
+  <div class="timeline">
+    <div class="timeline-item">
+      <h4>Phase 1 — Foundation (Months 1–3)</h4>
+      <h5>Platform Core + DMS MVP</h5>
+      <p>Authentication, RBAC, multi-tenancy, audit trail, e-signature engine, document lifecycle (Draft → Approve → Publish), version control, basic QMS: Non-Conformance creation and approval, dashboard skeleton, notification engine.</p>
+    </div>
+    <div class="timeline-item">
+      <h4>Phase 2 — QMS Full Rollout (Months 4–6)</h4>
+      <h5>Complete QMS + Industry Profiles</h5>
+      <p>CAPA with RCA tools, Risk Management with matrix engine, Audit Management, Compliance tracking, Supplier Management, FMEA module. Industry configuration profiles: Automotive and Pharmaceutical. Reporting and analytics dashboards per module.</p>
+    </div>
+    <div class="timeline-item">
+      <h4>Phase 3 — LMS + Integrations (Months 7–9)</h4>
+      <h5>Learning Management + DMS Advanced</h5>
+      <p>Full LMS: training programs, competency matrix, certification, Kirkpatrick evaluation. DMS advanced features: template library, print control, external document register, bulk import. API layer, webhook support, ERP adapter framework. Food & Beverage and Chemical industry profiles.</p>
+    </div>
+    <div class="timeline-item">
+      <h4>Phase 4 — Enterprise &amp; Scale (Months 10–12)</h4>
+      <h5>Advanced Features + Go-to-Market</h5>
+      <p>Change Control, Customer Complaints, Management Review pack generator, supplier portal (self-service), SSO integration (SAML 2.0 / OIDC), custom report builder, mobile PWA, Energy and Oil & Gas industry profiles, performance optimisation, penetration testing, SOC 2 audit preparation.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="callout-icon">📋</div>
+    <p><strong>Prompt Usage Tip:</strong> Prefix each AI development session with the full Section 02 Master System Prompt, then append a scoped request such as: <em>"[QMS-CAPA] Build the CAPA creation wizard — a multi-step form with steps: Problem Statement → Containment → RCA → Actions → Review. Use React Hook Form with Zod, Tailwind styling, and include TypeScript types, the Prisma schema additions, and the Express route handler."</em></p>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div style="border-top: 2px solid var(--border); margin-top: 80px; padding-top: 32px; display: flex; justify-content: space-between; align-items: center; flex-wrap: gap; gap: 16px;">
+  <div>
+    <div style="font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); margin-bottom: 4px;">FORGE QUANTUM SOLUTIONS</div>
+    <div style="font-size: 13px; color: var(--muted);">Quantum Kaizen — Master Development Prompt v1.0</div>
+  </div>
+  <div style="font-family: 'DM Mono', monospace; font-size: 10px; color: var(--rule); text-align: right;">
+    <div>QMS · DMS · LMS</div>
+    <div>React · Node.js · Tailwind</div>
+    <div>ISO 9001 · IATF · 21 CFR</div>
+  </div>
+</div>
+
+</div><!-- /doc -->
+</body>
+</html>

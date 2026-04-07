@@ -1,0 +1,835 @@
+// Quantum Kaizen — Enterprise Compliance Platform
+// Prisma Schema v1.0
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────────────
+
+enum Industry {
+  AUTOMOTIVE
+  PHARMACEUTICAL
+  FOOD_BEVERAGE
+  CHEMICAL
+  ENERGY
+  OIL_GAS
+  GENERAL_MANUFACTURING
+}
+
+enum Role {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  QUALITY_MANAGER
+  QUALITY_ENGINEER
+  AUDITOR
+  DOCUMENT_CONTROLLER
+  TRAINER
+  TRAINEE
+  DEPARTMENT_HEAD
+  READ_ONLY
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+  LOGIN
+  LOGOUT
+  EXPORT
+  PRINT
+  DOWNLOAD
+  APPROVAL_ACTION
+  SIGNATURE
+  VIEW
+}
+
+enum DocumentStatus {
+  DRAFT
+  UNDER_REVIEW
+  PENDING_APPROVAL
+  PUBLISHED
+  UNDER_REVISION
+  OBSOLETE
+  ARCHIVED
+}
+
+enum DocumentLevel {
+  LEVEL_1_POLICY
+  LEVEL_2_PROCEDURE
+  LEVEL_3_WORK_INSTRUCTION
+  LEVEL_4_FORM
+  EXTERNAL
+}
+
+enum NCStatus {
+  OPEN
+  UNDER_INVESTIGATION
+  CONTAINMENT
+  ROOT_CAUSE_ANALYSIS
+  CAPA_DEFINITION
+  IMPLEMENTATION
+  EFFECTIVENESS_CHECK
+  CLOSED
+}
+
+enum NCSeverity {
+  CRITICAL
+  MAJOR
+  MINOR
+}
+
+enum NCType {
+  DEVIATION
+  PRODUCT_NC
+  PROCESS_NC
+  OOS
+  COMPLAINT
+}
+
+enum NCDisposition {
+  USE_AS_IS
+  REWORK
+  SCRAP
+  RETURN_TO_VENDOR
+  PENDING
+}
+
+enum CAPAStatus {
+  INITIATED
+  CONTAINMENT
+  ROOT_CAUSE_ANALYSIS
+  ACTION_DEFINITION
+  IMPLEMENTATION
+  EFFECTIVENESS_VERIFICATION
+  CLOSED
+  REOPENED
+}
+
+enum CAPASource {
+  NC
+  AUDIT
+  COMPLAINT
+  PROACTIVE
+  MANAGEMENT
+  CUSTOMER
+}
+
+enum CAPAActionType {
+  CORRECTIVE
+  PREVENTIVE
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RETURNED
+  DELEGATED
+}
+
+enum TrainingType {
+  INDUCTION
+  ON_THE_JOB
+  CLASSROOM
+  ELEARNING
+  REGULATORY
+  REFRESHER
+  COMPETENCY_ASSESSMENT
+}
+
+enum TrainingStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+  OVERDUE
+}
+
+enum ProficiencyLevel {
+  AWARENESS
+  WORKING_KNOWLEDGE
+  PROFICIENT
+  EXPERT
+}
+
+enum NotificationType {
+  ASSIGNMENT
+  APPROVAL_REQUIRED
+  OVERDUE
+  WORKFLOW_TRANSITION
+  REJECTION
+  EXPIRY_WARNING
+  SYSTEM_ALERT
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─── CORE MODELS ──────────────────────────────────────────────────────
+
+model Tenant {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  industry  Industry
+  settings  Json     @default("{}")
+  logoUrl   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users                  User[]
+  documents              Document[]
+  nonConformances        NonConformance[]
+  capas                  CAPA[]
+  riskRegisters          RiskRegister[]
+  approvalWorkflows      ApprovalWorkflow[]
+  approvalRequests       ApprovalRequest[]
+  notifications          Notification[]
+  trainingPrograms       TrainingProgram[]
+  competencyMatrices     CompetencyMatrix[]
+  audits                 Audit[]
+  fmeaRecords            FMEARecord[]
+  complianceRequirements ComplianceRequirement[]
+  suppliers              Supplier[]
+  changeRequests         ChangeRequest[]
+  complaints             Complaint[]
+  managementReviews      ManagementReview[]
+}
+
+model User {
+  id           String    @id @default(uuid())
+  tenantId     String
+  employeeId   String
+  email        String
+  name         String
+  passwordHash String
+  role         Role
+  department   String?
+  site         String?
+  phone        String?
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  reportedNCs       NonConformance[]  @relation("NCReporter")
+  assignedNCs       NonConformance[]  @relation("NCAssignee")
+  ownedCAPAs        CAPA[]            @relation("CAPAOwner")
+  ownedDocuments    Document[]        @relation("DocumentOwner")
+  ownedRisks        RiskRegister[]    @relation("RiskOwner")
+  refreshTokens     RefreshToken[]
+  createdAudits     Audit[]
+  createdFMEAs      FMEARecord[]
+  createdChanges    ChangeRequest[]
+  createdComplaints Complaint[]
+  createdReviews    ManagementReview[]
+
+  @@unique([tenantId, email])
+  @@unique([tenantId, employeeId])
+  @@index([tenantId, role])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── AUDIT & SECURITY ─────────────────────────────────────────────────
+
+model AuditLog {
+  id            String      @id @default(uuid())
+  tenantId      String
+  userId        String
+  userName      String
+  userRole      String
+  action        AuditAction
+  entityType    String
+  entityId      String
+  beforeState   Json?
+  afterState    Json?
+  changedFields String[]
+  timestampUtc  DateTime    @default(now())
+  ipAddress     String
+  sessionId     String
+  userAgent     String
+
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, userId, timestampUtc])
+  @@index([tenantId, timestampUtc])
+}
+
+model ElectronicSignature {
+  id            String   @id @default(uuid())
+  tenantId      String
+  userId        String
+  userName      String
+  userRole      String
+  meaning       String
+  entityType    String
+  entityId      String
+  entityVersion String
+  timestampUtc  DateTime @default(now())
+  ipAddress     String
+  userAgent     String
+  signatureHash String
+
+  @@index([tenantId, entityType, entityId])
+}
+
+// ─── APPROVAL WORKFLOW ────────────────────────────────────────────────
+
+model ApprovalWorkflow {
+  id         String   @id @default(uuid())
+  tenantId   String
+  name       String
+  entityType String
+  stages     Json
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant   Tenant            @relation(fields: [tenantId], references: [id])
+  requests ApprovalRequest[]
+}
+
+model ApprovalRequest {
+  id            String         @id @default(uuid())
+  tenantId      String
+  workflowId    String
+  entityType    String
+  entityId      String
+  currentStage  Int            @default(1)
+  status        ApprovalStatus @default(PENDING)
+  requestedById String
+  requestedAt   DateTime       @default(now())
+  completedAt   DateTime?
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id])
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id])
+  actions  ApprovalAction[]
+
+  @@index([tenantId, entityType, entityId])
+}
+
+model ApprovalAction {
+  id                String   @id @default(uuid())
+  approvalRequestId String
+  stage             Int
+  action            String
+  userId            String
+  userName          String
+  comment           String?
+  signatureId       String?
+  actionAt          DateTime @default(now())
+
+  approvalRequest ApprovalRequest @relation(fields: [approvalRequestId], references: [id])
+}
+
+// ─── DMS — DOCUMENT MANAGEMENT ────────────────────────────────────────
+
+model Document {
+  id               String         @id @default(uuid())
+  tenantId         String
+  documentNumber   String
+  title            String
+  description      String?
+  level            DocumentLevel
+  category         String?
+  department       String?
+  status           DocumentStatus @default(DRAFT)
+  currentVersion   String         @default("1.0")
+  content          String?        @db.Text
+  filePath         String?
+  fileSize         Int?
+  mimeType         String?
+  ownerId          String
+  reviewerId       String?
+  approverId       String?
+  effectiveDate    DateTime?
+  expiryDate       DateTime?
+  reviewDate       DateTime?
+  isControlled     Boolean        @default(true)
+  distributionList Json?
+  tags             String[]
+  parentDocumentId String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  tenant         Tenant              @relation(fields: [tenantId], references: [id])
+  owner          User                @relation("DocumentOwner", fields: [ownerId], references: [id])
+  parentDocument Document?           @relation("DocumentHierarchy", fields: [parentDocumentId], references: [id])
+  childDocuments Document[]          @relation("DocumentHierarchy")
+  versions       DocumentVersion[]
+  acknowledgements DocumentAcknowledgement[]
+
+  @@unique([tenantId, documentNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, level])
+  @@index([tenantId, department])
+}
+
+model DocumentVersion {
+  id               String   @id @default(uuid())
+  documentId       String
+  versionNumber    String
+  changeSummary    String?
+  content          String?  @db.Text
+  filePath         String?
+  createdById      String
+  createdAt        DateTime @default(now())
+  isCurrentVersion Boolean  @default(false)
+
+  document         Document                  @relation(fields: [documentId], references: [id])
+  acknowledgements DocumentAcknowledgement[]
+
+  @@index([documentId, versionNumber])
+}
+
+model DocumentAcknowledgement {
+  id                String    @id @default(uuid())
+  documentId        String
+  documentVersionId String
+  userId            String
+  acknowledgedAt    DateTime?
+  isOverdue         Boolean   @default(false)
+
+  document Document        @relation(fields: [documentId], references: [id])
+  version  DocumentVersion @relation(fields: [documentVersionId], references: [id])
+
+  @@unique([documentId, documentVersionId, userId])
+}
+
+// ─── QMS — NON-CONFORMANCE ────────────────────────────────────────────
+
+model NonConformance {
+  id                  String        @id @default(uuid())
+  tenantId            String
+  ncNumber            String
+  title               String
+  description         String        @db.Text
+  type                NCType
+  severity            NCSeverity
+  status              NCStatus      @default(OPEN)
+  disposition         NCDisposition @default(PENDING)
+  source              String?
+  departmentAffected  String?
+  productProcess      String?
+  batchLot            String?
+  containmentActions  Json?
+  rootCauseAnalysis   Json?
+  evidence            Json?
+  reportedById        String
+  assignedToId        String?
+  dueDate             DateTime?
+  closedAt            DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  tenant     Tenant @relation(fields: [tenantId], references: [id])
+  reportedBy User   @relation("NCReporter", fields: [reportedById], references: [id])
+  assignedTo User?  @relation("NCAssignee", fields: [assignedToId], references: [id])
+  capas      CAPA[] @relation("NCToCapa")
+
+  @@unique([tenantId, ncNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, severity])
+  @@index([tenantId, type])
+  @@index([tenantId, assignedToId])
+}
+
+// ─── QMS — CAPA ───────────────────────────────────────────────────────
+
+model CAPA {
+  id                     String     @id @default(uuid())
+  tenantId               String
+  capaNumber             String
+  title                  String
+  description            String     @db.Text
+  source                 CAPASource
+  severity               NCSeverity
+  status                 CAPAStatus @default(INITIATED)
+  sourceRecordId         String?
+  sourceRecordType       String?
+  department             String?
+  site                   String?
+  productProcess         String?
+  discoveryDate          DateTime?
+  dueDate                DateTime?
+  ownerId                String
+  rootCauseAnalysis      Json?
+  effectivenessCriteria  String?
+  monitoringPeriodDays   Int?       @default(90)
+  effectivenessCheckDate DateTime?
+  effectivenessResult    String?
+  closedAt               DateTime?
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  tenant           Tenant          @relation(fields: [tenantId], references: [id])
+  owner            User            @relation("CAPAOwner", fields: [ownerId], references: [id])
+  actions          CAPAAction[]
+  nonConformances  NonConformance[] @relation("NCToCapa")
+
+  @@unique([tenantId, capaNumber])
+  @@index([tenantId, status])
+  @@index([tenantId, source])
+  @@index([tenantId, ownerId])
+}
+
+model CAPAAction {
+  id                  String         @id @default(uuid())
+  capaId              String
+  type                CAPAActionType
+  description         String
+  ownerId             String
+  dueDate             DateTime?
+  completionDate      DateTime?
+  evidencePath        String?
+  evidenceDescription String?
+  verificationStatus  String?
+  verifiedById        String?
+  verifiedAt          DateTime?
+  createdAt           DateTime       @default(now())
+
+  capa CAPA @relation(fields: [capaId], references: [id])
+
+  @@index([capaId])
+}
+
+// ─── QMS — RISK REGISTER ──────────────────────────────────────────────
+
+model RiskRegister {
+  id                   String    @id @default(uuid())
+  tenantId             String
+  riskNumber           String
+  title                String
+  description          String    @db.Text
+  category             String?
+  department           String?
+  likelihood           Int
+  consequence          Int
+  riskScore            Int
+  riskLevel            RiskLevel
+  controlMeasures      Json?
+  residualLikelihood   Int?
+  residualConsequence  Int?
+  residualScore        Int?
+  residualLevel        RiskLevel?
+  ownerId              String
+  reviewDate           DateTime?
+  status               String    @default("ACTIVE")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  owner  User   @relation("RiskOwner", fields: [ownerId], references: [id])
+
+  @@unique([tenantId, riskNumber])
+  @@index([tenantId, riskLevel])
+  @@index([tenantId, department])
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────────────────────────
+
+model Notification {
+  id         String           @id @default(uuid())
+  tenantId   String
+  userId     String
+  type       NotificationType
+  title      String
+  message    String
+  entityType String?
+  entityId   String?
+  isRead     Boolean          @default(false)
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([userId, tenantId, isRead])
+  @@index([tenantId, createdAt])
+}
+
+// ─── LMS — TRAINING ──────────────────────────────────────────────────
+
+model TrainingProgram {
+  id                  String       @id @default(uuid())
+  tenantId            String
+  title               String
+  description         String?      @db.Text
+  type                TrainingType
+  content             Json?
+  assessmentQuestions Json?
+  passingScore        Int          @default(80)
+  validityDays        Int?
+  isActive            Boolean      @default(true)
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  tenant             Tenant               @relation(fields: [tenantId], references: [id])
+  assignments        TrainingAssignment[]
+  competencyMatrices CompetencyMatrix[]
+
+  @@index([tenantId, type])
+}
+
+model TrainingAssignment {
+  id             String         @id @default(uuid())
+  programId      String
+  userId         String
+  status         TrainingStatus @default(NOT_STARTED)
+  assignedAt     DateTime       @default(now())
+  dueDate        DateTime?
+  completedAt    DateTime?
+  score          Int?
+  certificateUrl String?
+  expiresAt      DateTime?
+
+  program TrainingProgram @relation(fields: [programId], references: [id])
+
+  @@index([programId, userId])
+  @@index([userId, status])
+}
+
+model CompetencyMatrix {
+  id                    String           @id @default(uuid())
+  tenantId              String
+  roleOrUserId          String
+  programId             String
+  isRequired            Boolean          @default(true)
+  proficiencyLevel      ProficiencyLevel @default(AWARENESS)
+  deadlineDays          Int?
+  isRegulatoryMandatory Boolean          @default(false)
+
+  tenant  Tenant          @relation(fields: [tenantId], references: [id])
+  program TrainingProgram @relation(fields: [programId], references: [id])
+
+  @@unique([tenantId, roleOrUserId, programId])
+}
+
+// ─── AUDIT MANAGEMENT ─────────────────────────────────────────────────
+
+model Audit {
+  id            String   @id @default(cuid())
+  tenantId      String
+  auditNumber   String
+  title         String
+  type          String   // INTERNAL | EXTERNAL | SUPPLIER | CERTIFICATION
+  status        String   @default("PLANNED") // PLANNED | IN_PROGRESS | COMPLETED | CANCELLED
+  standard      String
+  scope         String
+  department    String
+  leadAuditor   String
+  auditTeam     String[]
+  plannedStart  DateTime
+  plannedEnd    DateTime
+  actualStart   DateTime?
+  actualEnd     DateTime?
+  createdById   String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  findings      AuditFinding[]
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  createdBy     User     @relation(fields: [createdById], references: [id])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model AuditFinding {
+  id          String   @id @default(cuid())
+  auditId     String
+  type        String   // MAJOR | MINOR | OFI
+  clause      String
+  description String
+  status      String   @default("OPEN") // OPEN | CLOSED
+  audit       Audit    @relation(fields: [auditId], references: [id])
+  @@index([auditId])
+}
+
+// ─── FMEA ─────────────────────────────────────────────────────────────
+
+model FMEARecord {
+  id             String   @id @default(cuid())
+  tenantId       String
+  fmeaNumber     String
+  title          String
+  type           String   // DESIGN | PROCESS
+  productProcess String
+  teamMembers    String
+  scope          String
+  status         String   @default("DRAFT")
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  failureModes   FMEAFailureMode[]
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  createdBy      User     @relation(fields: [createdById], references: [id])
+  @@index([tenantId])
+}
+
+model FMEAFailureMode {
+  id                  String   @id @default(cuid())
+  fmeaId              String
+  function            String
+  failureMode         String
+  effect              String
+  severity            Int
+  cause               String
+  occurrence          Int
+  preventionControl   String
+  detectionControl    String
+  detection           Int
+  rpn                 Int
+  recommendedAction   String
+  responsible         String
+  targetDate          DateTime?
+  fmea                FMEARecord @relation(fields: [fmeaId], references: [id])
+  @@index([fmeaId])
+}
+
+// ─── COMPLIANCE ───────────────────────────────────────────────────────
+
+model ComplianceRequirement {
+  id              String   @id @default(cuid())
+  tenantId        String
+  standard        String
+  clauseNumber    String
+  clauseTitle     String
+  requirementText String
+  status          String   @default("NOT_ASSESSED") // COMPLIANT | PARTIAL | NON_COMPLIANT | NOT_ASSESSED
+  evidence        String?
+  owner           String?
+  nextReview      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  @@index([tenantId])
+  @@index([standard])
+}
+
+// ─── SUPPLIER MANAGEMENT ──────────────────────────────────────────────
+
+model Supplier {
+  id               String   @id @default(cuid())
+  tenantId         String
+  supplierCode     String
+  companyName      String
+  category         String
+  status           String   @default("APPROVED") // APPROVED | CONDITIONAL | SUSPENDED | DISQUALIFIED
+  riskRating       String   @default("MEDIUM")
+  contactPerson    String
+  email            String
+  phone            String?
+  address          String?
+  city             String?
+  country          String?
+  productsServices String
+  qualityScore     Float    @default(0)
+  deliveryScore    Float    @default(0)
+  certifications   SupplierCertification[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model SupplierCertification {
+  id                String   @id @default(cuid())
+  supplierId        String
+  name              String
+  certificateNumber String?
+  issuedBy          String?
+  expiryDate        DateTime?
+  supplier          Supplier @relation(fields: [supplierId], references: [id])
+  @@index([supplierId])
+}
+
+// ─── CHANGE MANAGEMENT ────────────────────────────────────────────────
+
+model ChangeRequest {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  changeNumber       String
+  title              String
+  type               String   // PROCESS | PRODUCT | SYSTEM | SUPPLIER | REGULATORY
+  priority           String   @default("MEDIUM")
+  status             String   @default("DRAFT")
+  description        String
+  justification      String
+  riskAssessment     String?
+  implementationPlan String?
+  createdById        String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  tenant             Tenant   @relation(fields: [tenantId], references: [id])
+  createdBy          User     @relation(fields: [createdById], references: [id])
+  @@index([tenantId])
+  @@index([status])
+}
+
+// ─── COMPLAINTS ───────────────────────────────────────────────────────
+
+model Complaint {
+  id               String   @id @default(cuid())
+  tenantId         String
+  complaintNumber  String
+  title            String
+  source           String   // CUSTOMER | INTERNAL | REGULATORY | SUPPLIER
+  severity         String   @default("MEDIUM")
+  status           String   @default("OPEN")
+  customerName     String?
+  productService   String?
+  description      String
+  immediateAction  String?
+  rootCause        String?
+  correctiveAction String?
+  closedAt         DateTime?
+  createdById      String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  tenant           Tenant   @relation(fields: [tenantId], references: [id])
+  createdBy        User     @relation(fields: [createdById], references: [id])
+  @@index([tenantId])
+  @@index([status])
+}
+
+// ─── MANAGEMENT REVIEW ────────────────────────────────────────────────
+
+model ManagementReview {
+  id             String   @id @default(cuid())
+  tenantId       String
+  title          String
+  date           DateTime
+  time           String
+  status         String   @default("Scheduled")
+  agenda         String[]
+  attendees      Json
+  minutesSummary String?
+  actionItems    Json
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  tenant         Tenant   @relation(fields: [tenantId], references: [id])
+  createdBy      User     @relation(fields: [createdById], references: [id])
+  @@index([tenantId])
+}
