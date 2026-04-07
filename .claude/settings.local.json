@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(vercel --version)",
+      "Bash(vercel --prod)",
+      "Bash(vercel link:*)",
+      "Bash(vercel --prod --scope forge-quantum-solution)"
+    ]
+  }
+}
