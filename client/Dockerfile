@@ -12,7 +12,7 @@ COPY . .
 RUN npm run build
 
 # ─── Stage 2: Nginx ───────────────────────────────────────────────────
-FROM nginx:1.27-alpine AS runner
+FROM nginx:1.29-alpine AS runner
 
 LABEL maintainer="Forge Quantum Solutions <devops@forgequantum.com>"
 LABEL description="Quantum Kaizen Web Client"
