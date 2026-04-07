@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, ClipboardCheck, LayoutList, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { DataTable } from '@/components/ui/DataTable';
+import type { Column } from '@/components/ui/DataTable';
 import { StatsCard } from '@/components/ui/StatsCard';
 import { useAudits, useAuditStats, type Audit, type AuditStatus, type AuditType } from './hooks';
 import { cn } from '@/lib/utils';
@@ -48,51 +49,51 @@ export default function AuditListPage() {
 
   // ── Table columns ───────────────────────────────────────────────────────
 
-  const columns = [
+  const columns: Column<Audit>[] = [
     {
+      key: 'auditNumber',
       header: 'Audit #',
-      accessorKey: 'auditNumber' as keyof Audit,
-      cell: (v: unknown) => (
+      render: (row) => (
         <span className="font-mono text-mono-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-          {v as string}
+          {row.auditNumber}
         </span>
       ),
     },
     {
+      key: 'title',
       header: 'Title',
-      accessorKey: 'title' as keyof Audit,
-      cell: (v: unknown) => <span className="text-sm font-medium text-gray-900">{v as string}</span>,
+      render: (row) => <span className="text-sm font-medium text-gray-900">{row.title}</span>,
     },
     {
+      key: 'type',
       header: 'Type',
-      accessorKey: 'type' as keyof Audit,
-      cell: (v: unknown) => (
+      render: (row) => (
         <span className="text-xs px-2 py-0.5 rounded-full bg-slate-900/10 text-slate-900 font-medium">
-          {TYPE_LABELS[v as AuditType]}
+          {TYPE_LABELS[row.type]}
         </span>
       ),
     },
     {
+      key: 'standard',
       header: 'Standard',
-      accessorKey: 'standard' as keyof Audit,
-      cell: (v: unknown) => <span className="text-xs text-gray-600">{v as string}</span>,
+      render: (row) => <span className="text-xs text-gray-600">{row.standard}</span>,
     },
     {
+      key: 'leadAuditor',
       header: 'Lead Auditor',
-      accessorKey: 'leadAuditor' as keyof Audit,
-      cell: (v: unknown) => <span className="text-sm text-gray-700">{v as string}</span>,
+      render: (row) => <span className="text-sm text-gray-700">{row.leadAuditor}</span>,
     },
     {
+      key: 'plannedStart',
       header: 'Planned Date',
-      accessorKey: 'plannedStart' as keyof Audit,
-      cell: (v: unknown) => (
-        <span className="text-xs text-gray-500">{new Date(v as string).toLocaleDateString()}</span>
+      render: (row) => (
+        <span className="text-xs text-gray-500">{new Date(row.plannedStart).toLocaleDateString()}</span>
       ),
     },
     {
+      key: 'majorFindings',
       header: 'Findings',
-      accessorKey: 'majorFindings' as keyof Audit,
-      cell: (_: unknown, row: Audit) => (
+      render: (row) => (
         <div className="flex items-center gap-1.5">
           {row.majorFindings > 0 && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">
@@ -111,11 +112,11 @@ export default function AuditListPage() {
       ),
     },
     {
+      key: 'status',
       header: 'Status',
-      accessorKey: 'status' as keyof Audit,
-      cell: (v: unknown) => (
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[v as AuditStatus]}`}>
-          {(v as string).replace('_', ' ')}
+      render: (row) => (
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[row.status]}`}>
+          {row.status.replace('_', ' ')}
         </span>
       ),
     },
@@ -194,11 +195,11 @@ export default function AuditListPage() {
       {/* Table View */}
       {viewMode === 'table' && (
         <DataTable
-          data={audits as unknown as Record<string, unknown>[]}
-          columns={columns as unknown as Parameters<typeof DataTable>[0]['columns']}
+          data={audits}
+          columns={columns}
           isLoading={isLoading}
           emptyMessage="No audits found"
-          onRowClick={(row) => navigate(`/qms/audits/${(row as Record<string, unknown>).id}`)}
+          onRowClick={(row) => navigate(`/qms/audits/${row.id}`)}
         />
       )}
 
