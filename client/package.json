@@ -22,7 +22,7 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.53.2",
     "react-hot-toast": "^2.4.1",
-    "react-router-dom": "^6.28.0",
+    "react-router-dom": "^7.14.0",
     "recharts": "^2.14.1",
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^2.6.0",
