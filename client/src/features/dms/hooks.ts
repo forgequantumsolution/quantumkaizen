@@ -180,6 +180,7 @@ export interface DocumentTemplate {
   fields: string[];
   guidelines: string[];
   tags: string[];
+  applicableDepartments?: string[];
   versions: TemplateVersion[];
   createdAt: string;
   updatedAt: string;
@@ -399,8 +400,13 @@ export function useCreateTemplate() {
       documentLevel: payload.documentLevel as DocumentTemplate['documentLevel'],
       industry: payload.industry,
       applicableDepartments: payload.applicableDepartments,
-      version: '1.0',
       downloads: 0,
+      documentsCreated: 0,
+      activeUsers: 0,
+      author: 'You',
+      sections: [],
+      fields: [],
+      guidelines: [],
       tags: payload.tags ?? [],
       versions: [{ version: '1.0', date: new Date().toISOString().slice(0, 10), changes: 'Initial version', author: 'You' }],
       createdAt: new Date().toISOString(),
