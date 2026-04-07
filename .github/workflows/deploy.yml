@@ -185,7 +185,7 @@ jobs:
           echo "TODO: Run scripts/smoke-test.sh against production URL"
 
       - name: Create GitHub Release
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const version = '${{ needs.build-and-push.outputs.version }}';
