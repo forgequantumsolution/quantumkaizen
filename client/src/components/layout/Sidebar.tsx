@@ -6,6 +6,7 @@ import {
   ChevronRight, Truck, GitBranch, MessageSquareWarning,
   BarChart3, Gauge, ClipboardList, Clock, FileCode,
   ShieldCheck, BookOpen, RefreshCw, Network, ChevronDown,
+  TrendingUp, Trophy,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
@@ -20,8 +21,9 @@ const navigation: NavSection[] = [
   {
     title: 'Overview',
     items: [
-      { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-      { label: 'Workflows', path: '/workflows',  icon: Network },
+      { label: 'Dashboard',  path: '/dashboard',  icon: LayoutDashboard },
+      { label: 'Analytics',  path: '/analytics',  icon: TrendingUp },
+      { label: 'Workflows',  path: '/workflows',  icon: Network },
     ],
   },
   {
@@ -35,6 +37,7 @@ const navigation: NavSection[] = [
       { label: 'FMEA',             path: '/qms/fmea',              icon: Activity },
       { label: 'Compliance',       path: '/qms/compliance',        icon: Scale },
       { label: 'Suppliers',        path: '/qms/suppliers',         icon: Truck },
+      { label: 'Scorecards',       path: '/qms/suppliers/scorecards', icon: Trophy },
       { label: 'Change Control',   path: '/qms/change-control',    icon: GitBranch },
       { label: 'Complaints',       path: '/qms/complaints',        icon: MessageSquareWarning },
       { label: 'Mgmt Review',      path: '/qms/management-review', icon: BarChart3 },

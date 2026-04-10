@@ -11,6 +11,7 @@ import NotificationPanel from '@/components/shared/NotificationPanel';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { cn } from '@/lib/utils';
 import GlobalSearch from '@/components/shared/GlobalSearch';
+import { useFiscalYearStore, FISCAL_YEARS } from '@/stores/fiscalYearStore';
 
 const MOCK_NOTIFICATIONS: AppNotification[] = [
   {
@@ -64,6 +65,7 @@ const breadcrumbMap: Record<string, string> = {
   risks: 'Risk Register', audits: 'Audits', fmea: 'FMEA',
   documents: 'Documents', training: 'Training Programs',
   'audit-log': 'Audit Log', settings: 'Settings',
+  analytics: 'Analytics', scorecards: 'Scorecards',
   new: 'New', hub: 'Compliance Hub',
   'inspection-readiness': 'Inspection Readiness',
   'regulatory-changes': 'Regulatory Changes',
@@ -104,6 +106,7 @@ export default function Header() {
   const { user, logout } = useAuthStore();
   const { setSidebarOpen } = useUIStore();
   const { notifications, isOpen, togglePanel, setNotifications } = useNotificationStore();
+  const { year: fyYear, setYear: setFyYear } = useFiscalYearStore();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -187,6 +190,24 @@ export default function Header() {
         <div className="flex items-center gap-1 shrink-0">
           {/* Language */}
           <LanguageSwitcher />
+
+          {/* FY selector — compact toggle */}
+          <div className="hidden sm:flex items-center border border-gray-200 rounded overflow-hidden ml-1">
+            {FISCAL_YEARS.map(y => (
+              <button
+                key={y}
+                onClick={() => setFyYear(y)}
+                className="px-2 h-6 text-[11px] font-medium transition-colors border-r last:border-r-0"
+                style={
+                  fyYear === y
+                    ? { backgroundColor: '#1A1A2E', color: '#C9A84C' }
+                    : { backgroundColor: 'transparent', color: '#9CA3AF' }
+                }
+              >
+                {y}
+              </button>
+            ))}
+          </div>
 
           {/* Role badge — always visible per compliance req. */}
           {roleLabel && (

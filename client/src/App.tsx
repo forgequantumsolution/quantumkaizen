@@ -27,6 +27,10 @@ import RiskDetailPage from '@/features/qms/risk/RiskDetailPage';
 import AuditListPage from '@/features/qms/audit/AuditListPage';
 import AuditCreatePage from '@/features/qms/audit/AuditCreatePage';
 import AuditDetailPage from '@/features/qms/audit/AuditDetailPage';
+// Analytics
+import AnalyticsPage from '@/features/analytics/AnalyticsPage';
+// QMS — Supplier Scorecards
+import SupplierScorecardsPage from '@/features/qms/supplier/SupplierScorecardsPage';
 // QMS — FMEA
 import FMEAListPage from '@/features/qms/fmea/FMEAListPage';
 import FMEACreatePage from '@/features/qms/fmea/FMEACreatePage';
@@ -86,6 +90,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/workflows" element={<WorkflowsPage />} />
           <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
 
@@ -121,6 +126,7 @@ export default function App() {
           {/* QMS — Supplier */}
           <Route path="/qms/suppliers" element={<SupplierListPage />} />
           <Route path="/qms/suppliers/new" element={<SupplierCreatePage />} />
+          <Route path="/qms/suppliers/scorecards" element={<SupplierScorecardsPage />} />
           <Route path="/qms/suppliers/:id" element={<SupplierDetailPage />} />
 
           {/* QMS — Change Control */}

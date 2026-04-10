@@ -746,6 +746,7 @@ model Supplier {
   qualityScore     Float    @default(0)
   deliveryScore    Float    @default(0)
   certifications   SupplierCertification[]
+  scores           SupplierScore[]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   tenant           Tenant   @relation(fields: [tenantId], references: [id])
@@ -762,6 +763,27 @@ model SupplierCertification {
   expiryDate        DateTime?
   supplier          Supplier @relation(fields: [supplierId], references: [id])
   @@index([supplierId])
+}
+
+// Calculated scorecard per supplier per fiscal year.
+// Composite: passRate×50% + capaClosureRate×30% + auditScore×20%
+model SupplierScore {
+  id              String   @id @default(cuid())
+  tenantId        String
+  supplierId      String
+  fiscalYear      Int
+  score           Float    @default(0)   // composite 0–100
+  grade           String   @default("C") // A ≥85 | B 70–84 | C <70
+  passRate        Float    @default(0)   // inspection pass %
+  capaClosureRate Float    @default(0)   // CAPA closure %
+  auditScore      Float    @default(0)   // last audit score
+  prevScore       Float?                 // previous year for delta
+  updatedAt       DateTime @updatedAt
+
+  supplier Supplier @relation(fields: [supplierId], references: [id])
+
+  @@unique([tenantId, supplierId, fiscalYear])
+  @@index([tenantId, fiscalYear])
 }
 
 // ─── CHANGE MANAGEMENT ────────────────────────────────────────────────

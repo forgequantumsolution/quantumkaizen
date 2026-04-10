@@ -325,3 +325,79 @@ export const addEvaluation = async (req: Request, res: Response, next: NextFunct
     next(error);
   }
 };
+
+// ── GET /api/qms/suppliers/rankings/:year ─────────────────────────────────────
+// Returns suppliers ranked by composite score for the given fiscal year.
+// Composite formula: passRate×50% + capaClosureRate×30% + auditScore×20%
+// If no SupplierScore row exists for the year, derives score from existing data.
+export const getSupplierRankings = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) throw new AppError('Authentication required', 401, 'UNAUTHORIZED');
+    const tenantId = req.user.tenantId;
+    const year = parseInt(req.params.year, 10);
+    if (isNaN(year)) throw new AppError('Invalid year parameter', 400, 'INVALID_PARAM');
+
+    // Fetch all active suppliers
+    const suppliers = await prisma.supplier.findMany({
+      where: { tenantId, status: { not: 'DISQUALIFIED' } },
+      select: {
+        id: true,
+        companyName: true,
+        category: true,
+        status: true,
+        qualityScore: true,
+        deliveryScore: true,
+        scores: {
+          where: { tenantId, fiscalYear: year },
+          take: 1,
+        },
+      },
+      orderBy: { companyName: 'asc' },
+    });
+
+    const prevYear = year - 1;
+
+    // Fetch previous year scores for delta calculation
+    const prevScores = await prisma.supplierScore.findMany({
+      where: { tenantId, fiscalYear: prevYear },
+      select: { supplierId: true, score: true },
+    });
+    const prevMap = new Map(prevScores.map(s => [s.supplierId, s.score]));
+
+    const ranked = suppliers.map(s => {
+      const saved = s.scores[0];
+
+      // Use saved scorecard if present, else derive from supplier fields
+      const passRate = saved?.passRate ?? Math.min(s.qualityScore, 100);
+      const capaClosureRate = saved?.capaClosureRate ?? 75; // default
+      const auditScore = saved?.auditScore ?? Math.min(s.deliveryScore, 100);
+
+      const score = saved?.score ?? Math.round(
+        passRate * 0.5 + capaClosureRate * 0.3 + auditScore * 0.2,
+      );
+
+      const grade = score >= 85 ? 'A' : score >= 70 ? 'B' : 'C';
+      const prevScore = prevMap.get(s.id);
+      const delta = prevScore !== undefined ? Math.round((score - prevScore) * 10) / 10 : null;
+
+      return {
+        id: s.id,
+        name: s.companyName,
+        category: s.category,
+        status: s.status,
+        score,
+        grade,
+        passRate: Math.round(passRate * 10) / 10,
+        capaClosureRate: Math.round(capaClosureRate * 10) / 10,
+        auditScore: Math.round(auditScore * 10) / 10,
+        delta,
+      };
+    });
+
+    ranked.sort((a, b) => b.score - a.score);
+
+    res.status(200).json({ data: ranked });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -16,6 +16,7 @@ import trainingRoutes from './training.routes.js';
 import changeControlRoutes from './changeControl.routes.js';
 import complaintRoutes from './complaint.routes.js';
 import managementReviewRoutes from './managementReview.routes.js';
+import analyticsRoutes from './analytics.routes.js';
 
 export const router = Router();
 
@@ -45,5 +46,6 @@ router.use('/lms', trainingRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/audit-log', auditLogRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/analytics', analyticsRoutes);
 
 export default router;

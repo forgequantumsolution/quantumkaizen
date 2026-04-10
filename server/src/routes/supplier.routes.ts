@@ -6,6 +6,7 @@ import {
   updateSupplier,
   updateSupplierStatus,
   addEvaluation,
+  getSupplierRankings,
 } from '../controllers/supplier.controller.js';
 import { verifyToken, requireRole } from '../middleware/auth.js';
 
@@ -14,6 +15,7 @@ const router = Router();
 router.use(verifyToken);
 
 router.get('/', listSuppliers);
+router.get('/rankings/:year', getSupplierRankings);
 router.get('/:id', getSupplierById);
 router.post('/', createSupplier);
 router.put('/:id', updateSupplier);
