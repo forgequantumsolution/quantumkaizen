@@ -39,6 +39,7 @@ export function useCalibrationRecords(filters?: { status?: string; category?: st
     queryFn: async () => {
       try {
         const { data } = await api.get('/calibration', { params: filters });
+        if (!Array.isArray(data)) throw new Error('unexpected response');
         return data as CalibrationRecord[];
       } catch {
         let r = [...mock];
@@ -54,8 +55,11 @@ export function useCalibrationRecord(id: string) {
   return useQuery({
     queryKey: ['calibration', id],
     queryFn: async () => {
-      try { const { data } = await api.get(`/calibration/${id}`); return data as CalibrationRecord; }
-      catch { return mock.find(r => r.id === id) ?? mock[0]; }
+      try {
+        const { data } = await api.get(`/calibration/${id}`);
+        if (!data?.id) throw new Error('unexpected response');
+        return data as CalibrationRecord;
+      } catch { return mock.find(r => r.id === id) ?? mock[0]; }
     },
     enabled: !!id,
   });

@@ -83,6 +83,7 @@ export function useAudits(filters?: { status?: string; type?: string }) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/audits', { params: filters });
+        if (!Array.isArray(data)) throw new Error('unexpected response');
         return data as Audit[];
       } catch {
         let result = [...mockAudits];
@@ -100,6 +101,7 @@ export function useAudit(id: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/audits/${id}`);
+        if (!data?.id) throw new Error('unexpected response');
         return data as Audit;
       } catch {
         return mockAudits.find(a => a.id === id) ?? mockAudits[0];

@@ -34,8 +34,11 @@ export function useInspectionRecords(filters?: { type?: string; result?: string 
   return useQuery({
     queryKey: ['inspections', filters],
     queryFn: async () => {
-      try { const { data } = await api.get('/inspections', { params: filters }); return data as InspectionRecord[]; }
-      catch {
+      try {
+        const { data } = await api.get('/inspections', { params: filters });
+        if (!Array.isArray(data)) throw new Error('unexpected response');
+        return data as InspectionRecord[];
+      } catch {
         let r = [...mock];
         if (filters?.type) r = r.filter(x => x.type === filters.type);
         if (filters?.result) r = r.filter(x => x.result === filters.result);
@@ -49,8 +52,11 @@ export function useInspectionRecord(id: string) {
   return useQuery({
     queryKey: ['inspections', id],
     queryFn: async () => {
-      try { const { data } = await api.get(`/inspections/${id}`); return data as InspectionRecord; }
-      catch { return mock.find(r => r.id === id) ?? mock[0]; }
+      try {
+        const { data } = await api.get(`/inspections/${id}`);
+        if (!data?.id) throw new Error('unexpected response');
+        return data as InspectionRecord;
+      } catch { return mock.find(r => r.id === id) ?? mock[0]; }
     },
     enabled: !!id,
   });
