@@ -100,6 +100,133 @@ export const mockNCs: NonConformance[] = [
     ],
     createdAt: '2026-03-08T11:00:00Z', updatedAt: '2026-03-15T14:00:00Z', closedAt: '2026-03-15T14:00:00Z', createdBy: 'Priya Sharma',
   },
+  // ── 2025 records ──
+  {
+    id: 'nc8', ncNumber: 'NC-2025-0031', title: 'Porosity defects in aluminium die castings',
+    description: 'Gas porosity detected in 8 of 50 sampled aluminium die castings in lot ADC-2025-067. X-ray inspection revealed voids exceeding acceptance criterion of 1mm diameter.',
+    type: 'PRODUCT_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Quality Control', departmentId: 'dept3',
+    productProcess: 'Die Casting', batchLot: 'ADC-2025-067',
+    assignedTo: 'Anita Desai', assignedToId: 'u3', dueDate: '2025-11-10',
+    priorityJustification: null, containmentActions: [
+      { id: 'ca11', description: 'Segregate and quarantine lot ADC-2025-067', owner: 'Anita Desai', dueDate: '2025-10-28', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-10-25T08:30:00Z', updatedAt: '2025-11-10T11:00:00Z', closedAt: '2025-11-10T11:00:00Z', createdBy: 'Priya Sharma',
+  },
+  {
+    id: 'nc9', ncNumber: 'NC-2025-0028', title: 'Thread gauging failure on stainless steel fittings',
+    description: 'Go/No-Go thread gauge failed on 12 out of 80 stainless steel pipe fittings from batch SSF-2025-055. Thread form non-conforming to BS EN 10226.',
+    type: 'OOS', severity: 'MAJOR', status: 'CLOSED',
+    source: 'In-Process Inspection', department: 'Production', departmentId: 'dept2',
+    productProcess: 'Thread Cutting', batchLot: 'SSF-2025-055',
+    assignedTo: 'Vikram Patel', assignedToId: 'u4', dueDate: '2025-09-20',
+    priorityJustification: null, containmentActions: [
+      { id: 'ca12', description: 'Stop thread cutting on CNC-04, verify tool geometry', owner: 'Vikram Patel', dueDate: '2025-09-12', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-09-10T10:00:00Z', updatedAt: '2025-09-22T15:30:00Z', closedAt: '2025-09-22T15:30:00Z', createdBy: 'Deepak Nair',
+  },
+  {
+    id: 'nc10', ncNumber: 'NC-2025-0022', title: 'Chemical composition deviation in forged billets',
+    description: 'Third-party mill test report for forged billets lot FB-2025-039 shows manganese content of 1.52% against max specification of 1.40%.',
+    type: 'DEVIATION', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'Incoming Inspection', department: 'Quality Assurance', departmentId: 'dept1',
+    productProcess: null, batchLot: 'FB-2025-039',
+    assignedTo: 'Priya Sharma', assignedToId: 'u1', dueDate: '2025-07-15',
+    priorityJustification: 'Material being used in pressure-critical components; disposition requires metallurgist sign-off.',
+    containmentActions: [
+      { id: 'ca13', description: 'Hold lot FB-2025-039 pending material review board decision', owner: 'Priya Sharma', dueDate: '2025-07-05', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-07-02T09:00:00Z', updatedAt: '2025-07-18T14:00:00Z', closedAt: '2025-07-18T14:00:00Z', createdBy: 'Rajesh Kumar',
+  },
+  {
+    id: 'nc11', ncNumber: 'NC-2025-0015', title: 'Paint adhesion failure on structural frames',
+    description: 'Cross-hatch adhesion test on painted structural frames shows 30% paint loss (Grade 4B) against requirement of ≥ Grade 4B (≤5% loss). Batch PF-2025-021.',
+    type: 'PROCESS_NC', severity: 'MINOR', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Quality Control', departmentId: 'dept3',
+    productProcess: 'Surface Coating', batchLot: 'PF-2025-021',
+    assignedTo: 'Sunita Rao', assignedToId: 'u5', dueDate: '2025-05-30',
+    priorityJustification: null, containmentActions: [
+      { id: 'ca14', description: 'Strip and re-coat affected frames', owner: 'Sunita Rao', dueDate: '2025-05-20', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-05-14T11:00:00Z', updatedAt: '2025-06-02T09:00:00Z', closedAt: '2025-06-02T09:00:00Z', createdBy: 'Anita Desai',
+  },
+  {
+    id: 'nc12', ncNumber: 'NC-2025-0008', title: 'Incorrect material substitution on flange order',
+    description: 'ASTM A105 carbon steel flanges supplied against order requiring ASTM A182 F316L stainless steel flanges for order ORD-2025-112.',
+    type: 'COMPLAINT', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'Customer Complaint', department: 'Quality Assurance', departmentId: 'dept1',
+    productProcess: null, batchLot: 'FLG-2025-012',
+    assignedTo: 'Priya Sharma', assignedToId: 'u1', dueDate: '2025-03-10',
+    priorityJustification: 'Safety-critical application — offshore piping. Customer has halted installation.',
+    containmentActions: [
+      { id: 'ca15', description: 'Expedite replacement F316L flanges from approved supplier', owner: 'Priya Sharma', dueDate: '2025-03-05', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-02-28T10:00:00Z', updatedAt: '2025-03-12T16:00:00Z', closedAt: '2025-03-12T16:00:00Z', createdBy: 'Rajesh Kumar',
+  },
+  // ── 2024 records ──
+  {
+    id: 'nc13', ncNumber: 'NC-2024-0045', title: 'Weld undercut exceeding ASME IX limits',
+    description: 'Visual inspection revealed weld undercut of 0.8mm depth on pressure vessel shell WS-2024-088, exceeding ASME Section IX limit of 0.4mm.',
+    type: 'PROCESS_NC', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'Internal Audit', department: 'Production', departmentId: 'dept2',
+    productProcess: 'Welding', batchLot: 'WS-2024-088',
+    assignedTo: 'Vikram Patel', assignedToId: 'u4', dueDate: '2024-11-20',
+    priorityJustification: 'Code-witnessed pressure vessel; radiography required before re-inspection.',
+    containmentActions: [
+      { id: 'ca16', description: 'Remove vessel from service pending NDE re-inspection', owner: 'Vikram Patel', dueDate: '2024-11-10', status: 'COMPLETED' },
+    ],
+    createdAt: '2024-11-05T14:00:00Z', updatedAt: '2024-11-22T10:00:00Z', closedAt: '2024-11-22T10:00:00Z', createdBy: 'Deepak Nair',
+  },
+  {
+    id: 'nc14', ncNumber: 'NC-2024-0038', title: 'Hardness out-of-specification on heat-treated shafts',
+    description: 'Hardness survey on lot HS-2024-072 shows average 42 HRC against spec of 45–50 HRC. Insufficient austenitising temperature identified as root cause.',
+    type: 'OOS', severity: 'MAJOR', status: 'CLOSED',
+    source: 'In-Process Inspection', department: 'Quality Control', departmentId: 'dept3',
+    productProcess: 'Heat Treatment', batchLot: 'HS-2024-072',
+    assignedTo: 'Anita Desai', assignedToId: 'u3', dueDate: '2024-09-30',
+    priorityJustification: null, containmentActions: [
+      { id: 'ca17', description: 'Re-heat-treat lot HS-2024-072 at corrected temperature', owner: 'Anita Desai', dueDate: '2024-09-25', status: 'COMPLETED' },
+    ],
+    createdAt: '2024-09-18T09:30:00Z', updatedAt: '2024-10-02T11:00:00Z', closedAt: '2024-10-02T11:00:00Z', createdBy: 'Priya Sharma',
+  },
+  {
+    id: 'nc15', ncNumber: 'NC-2024-0027', title: 'Incorrect torque applied to critical fasteners',
+    description: 'Post-assembly audit found 6 critical bolted joints on pump assembly PA-2024-055 torqued to 180 Nm against requirement of 220 Nm. Attributed to uncalibrated torque wrench.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Internal Audit', department: 'Production', departmentId: 'dept2',
+    productProcess: 'Assembly', batchLot: 'PA-2024-055',
+    assignedTo: 'Vikram Patel', assignedToId: 'u4', dueDate: '2024-07-15',
+    priorityJustification: null, containmentActions: [
+      { id: 'ca18', description: 'Re-torque all critical joints in PA-2024-055', owner: 'Vikram Patel', dueDate: '2024-07-08', status: 'COMPLETED' },
+      { id: 'ca19', description: 'Withdraw uncalibrated torque wrench TW-14 from service', owner: 'Deepak Nair', dueDate: '2024-07-06', status: 'COMPLETED' },
+    ],
+    createdAt: '2024-07-04T08:00:00Z', updatedAt: '2024-07-17T14:00:00Z', closedAt: '2024-07-17T14:00:00Z', createdBy: 'Rajesh Kumar',
+  },
+  {
+    id: 'nc16', ncNumber: 'NC-2024-0014', title: 'Surface contamination on precision ground components',
+    description: 'Corrosion spots found on 18 precision ground shafts from lot PG-2024-028 during pre-dispatch inspection. Attributed to failure of rust inhibitor application step.',
+    type: 'PRODUCT_NC', severity: 'MINOR', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Quality Control', departmentId: 'dept3',
+    productProcess: 'Grinding', batchLot: 'PG-2024-028',
+    assignedTo: 'Sunita Rao', assignedToId: 'u5', dueDate: '2024-04-20',
+    priorityJustification: null, containmentActions: [
+      { id: 'ca20', description: 'Clean, re-apply inhibitor and repack affected shafts', owner: 'Sunita Rao', dueDate: '2024-04-15', status: 'COMPLETED' },
+    ],
+    createdAt: '2024-04-10T10:00:00Z', updatedAt: '2024-04-22T09:00:00Z', closedAt: '2024-04-22T09:00:00Z', createdBy: 'Anita Desai',
+  },
+  {
+    id: 'nc17', ncNumber: 'NC-2024-0005', title: 'Substandard raw material from new supplier',
+    description: 'Tensile testing of steel bar stock from new supplier batch SB-2024-007 shows Yield Strength of 230 MPa vs. minimum requirement of 250 MPa.',
+    type: 'DEVIATION', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'Incoming Inspection', department: 'Quality Assurance', departmentId: 'dept1',
+    productProcess: null, batchLot: 'SB-2024-007',
+    assignedTo: 'Priya Sharma', assignedToId: 'u1', dueDate: '2024-02-15',
+    priorityJustification: 'Structural components; reject and return to supplier. New supplier qualification suspended.',
+    containmentActions: [
+      { id: 'ca21', description: 'Reject lot SB-2024-007 and initiate return to supplier', owner: 'Priya Sharma', dueDate: '2024-02-08', status: 'COMPLETED' },
+    ],
+    createdAt: '2024-02-05T09:00:00Z', updatedAt: '2024-02-18T11:00:00Z', closedAt: '2024-02-18T11:00:00Z', createdBy: 'Rajesh Kumar',
+  },
 ];
 
 // ── Hooks ────────────────────────────────────────────────────────────────────

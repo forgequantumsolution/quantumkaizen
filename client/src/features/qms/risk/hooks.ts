@@ -310,6 +310,109 @@ export const mockRisks: RiskRecord[] = [
     createdAt: '2026-01-05T11:00:00Z',
     updatedAt: '2026-03-01T10:00:00Z',
   },
+  // ── 2025 records ──
+  {
+    id: 'rsk-2025-001', riskNumber: 'RSK-2025-0024', title: 'Risk of single-source dependency for critical forgings',
+    category: 'OPERATIONAL', department: 'Procurement',
+    description: 'Single approved source (Mahindra Forge) for critical forged shafts creates supply disruption risk if supplier faces capacity or quality issues.',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'cm22', hierarchy: 'ADMINISTRATIVE', description: 'Qualify second source for critical forgings by Q4 2025', owner: 'Rajesh Kumar', status: 'PLANNED' },
+      { id: 'cm23', hierarchy: 'ADMINISTRATIVE', description: 'Maintain 6-week safety stock of critical forged components', owner: 'Sunita Rao', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 4, residualScore: 8, residualLevel: 'MEDIUM',
+    owner: 'Rajesh Kumar', ownerId: 'u2', reviewDate: '2025-12-31',
+    history: [
+      { id: 'rh11', timestamp: '2025-03-15T09:00:00Z', user: 'Rajesh Kumar', action: 'Risk Identified', details: 'Identified during supplier base review Q1 2025' },
+    ],
+    createdAt: '2025-03-15T09:00:00Z', updatedAt: '2025-09-01T10:00:00Z',
+  },
+  {
+    id: 'rsk-2025-002', riskNumber: 'RSK-2025-0019', title: 'Cybersecurity risk to ERP and quality management systems',
+    category: 'OPERATIONAL', department: 'IT',
+    description: 'Increasing frequency of phishing and ransomware attacks targeting manufacturing ERP systems. Potential data loss and production shutdown.',
+    likelihood: 3, consequence: 5, riskScore: 15, riskLevel: 'CRITICAL',
+    controls: [
+      { id: 'cm24', hierarchy: 'ENGINEERING', description: 'Deploy multi-factor authentication on all systems', owner: 'IT Manager', status: 'IMPLEMENTED' },
+      { id: 'cm25', hierarchy: 'ENGINEERING', description: 'Implement daily encrypted backups offsite', owner: 'IT Manager', status: 'IMPLEMENTED' },
+      { id: 'cm26', hierarchy: 'ADMINISTRATIVE', description: 'Quarterly cybersecurity awareness training for all staff', owner: 'Sunita Rao', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 4, residualScore: 8, residualLevel: 'MEDIUM',
+    owner: 'Vikram Patel', ownerId: 'u4', reviewDate: '2025-09-30',
+    history: [
+      { id: 'rh12', timestamp: '2025-01-20T10:00:00Z', user: 'Vikram Patel', action: 'Risk Identified', details: 'Prompted by industry-wide ransomware incidents reported in Q4 2024' },
+      { id: 'rh13', timestamp: '2025-06-30T11:00:00Z', user: 'Vikram Patel', action: 'Status Updated', details: 'All controls implemented; risk level reduced to MEDIUM' },
+    ],
+    createdAt: '2025-01-20T10:00:00Z', updatedAt: '2025-06-30T11:00:00Z',
+  },
+  {
+    id: 'rsk-2025-003', riskNumber: 'RSK-2025-0011', title: 'Risk of regulatory non-compliance — REACH substance declaration',
+    category: 'ENVIRONMENTAL', department: 'Quality Assurance',
+    description: 'Several purchased chemicals potentially contain SVHC (Substance of Very High Concern) above 0.1% threshold. REACH declaration obligations not fully mapped.',
+    likelihood: 3, consequence: 3, riskScore: 9, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'cm27', hierarchy: 'ADMINISTRATIVE', description: 'Complete REACH substance inventory for all purchased chemicals', owner: 'Priya Sharma', status: 'IMPLEMENTED' },
+      { id: 'cm28', hierarchy: 'ADMINISTRATIVE', description: 'Add REACH compliance clause to standard supplier agreement', owner: 'Rajesh Kumar', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 3, residualScore: 3, residualLevel: 'LOW',
+    owner: 'Priya Sharma', ownerId: 'u1', reviewDate: '2025-06-30',
+    history: [
+      { id: 'rh14', timestamp: '2025-02-10T09:00:00Z', user: 'Priya Sharma', action: 'Risk Identified', details: 'Identified during internal compliance gap analysis' },
+    ],
+    createdAt: '2025-02-10T09:00:00Z', updatedAt: '2025-05-20T10:00:00Z',
+  },
+  // ── 2024 records ──
+  {
+    id: 'rsk-2024-001', riskNumber: 'RSK-2024-0033', title: 'Fatigue crack propagation in ageing press tooling',
+    category: 'QUALITY', department: 'Production',
+    description: 'Stamping dies for part PN-A4422 showing fatigue cracking after 250,000 cycles. Risk of sudden failure causing dimensional non-conformances and potential safety hazard.',
+    likelihood: 4, consequence: 4, riskScore: 16, riskLevel: 'HIGH',
+    controls: [
+      { id: 'cm29', hierarchy: 'ENGINEERING', description: 'Replace stamping dies for PN-A4422 with upgraded H13 steel tooling', owner: 'Vikram Patel', status: 'IMPLEMENTED' },
+      { id: 'cm30', hierarchy: 'ADMINISTRATIVE', description: 'Implement 50,000-cycle inspection interval for all stamping dies', owner: 'Deepak Nair', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 3, residualScore: 3, residualLevel: 'LOW',
+    owner: 'Vikram Patel', ownerId: 'u4', reviewDate: '2025-03-31',
+    history: [
+      { id: 'rh15', timestamp: '2024-08-12T10:00:00Z', user: 'Vikram Patel', action: 'Risk Identified', details: 'Identified during tooling condition survey' },
+      { id: 'rh16', timestamp: '2024-10-20T09:00:00Z', user: 'Vikram Patel', action: 'Controls Implemented', details: 'New H13 tooling installed; inspection intervals updated in CMMS' },
+      { id: 'rh17', timestamp: '2025-01-10T10:00:00Z', user: 'Priya Sharma', action: 'Closed', details: 'Risk resolved; no fatigue issues in first 3 inspection cycles with new tooling' },
+    ],
+    createdAt: '2024-08-12T10:00:00Z', updatedAt: '2025-01-10T10:00:00Z',
+  },
+  {
+    id: 'rsk-2024-002', riskNumber: 'RSK-2024-0020', title: 'Risk of substandard incoming material from unqualified suppliers',
+    category: 'QUALITY', department: 'Quality Assurance',
+    description: 'Unqualified spot-buy suppliers used during material shortages in 2024 H1. Risk of substandard material entering production without adequate inspection.',
+    likelihood: 4, consequence: 3, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'cm31', hierarchy: 'ADMINISTRATIVE', description: 'Enforce approved supplier list — no spot buys without QA waiver', owner: 'Priya Sharma', status: 'IMPLEMENTED' },
+      { id: 'cm32', hierarchy: 'ADMINISTRATIVE', description: '100% incoming inspection with material verification for spot-buy materials', owner: 'Anita Desai', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Priya Sharma', ownerId: 'u1', reviewDate: '2024-12-31',
+    history: [
+      { id: 'rh18', timestamp: '2024-05-08T09:00:00Z', user: 'Rajesh Kumar', action: 'Risk Identified', details: 'Identified after NC-2024-0005 (substandard bar stock from new supplier)' },
+      { id: 'rh19', timestamp: '2024-06-30T10:00:00Z', user: 'Priya Sharma', action: 'Controls Implemented', details: 'Spot-buy controls and enhanced inspection procedures implemented' },
+    ],
+    createdAt: '2024-05-08T09:00:00Z', updatedAt: '2024-11-01T10:00:00Z',
+  },
+  {
+    id: 'rsk-2024-003', riskNumber: 'RSK-2024-0008', title: 'Loss of key quality personnel — succession risk',
+    category: 'OPERATIONAL', department: 'Quality Assurance',
+    description: 'Two senior quality engineers eligible for retirement within 18 months. Knowledge transfer not formalised. Risk to certification maintenance and QMS expertise.',
+    likelihood: 3, consequence: 3, riskScore: 9, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'cm33', hierarchy: 'ADMINISTRATIVE', description: 'Develop knowledge capture and cross-training plan for at-risk roles', owner: 'Sunita Rao', status: 'PLANNED' },
+      { id: 'cm34', hierarchy: 'ADMINISTRATIVE', description: 'Begin recruitment for QA Engineer position', owner: 'HR Manager', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Sunita Rao', ownerId: 'u5', reviewDate: '2024-12-31',
+    history: [
+      { id: 'rh20', timestamp: '2024-02-15T09:00:00Z', user: 'Priya Sharma', action: 'Risk Identified', details: 'Flagged during annual HR review' },
+    ],
+    createdAt: '2024-02-15T09:00:00Z', updatedAt: '2024-08-20T10:00:00Z',
+  },
 ];
 
 // ── Hooks ───────────────────────────────────────────────────────────────────
