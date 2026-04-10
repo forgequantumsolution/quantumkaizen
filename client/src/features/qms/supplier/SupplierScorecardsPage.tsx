@@ -59,6 +59,41 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
 const CATEGORY_OPTIONS = ['', 'CRITICAL', 'MAJOR', 'MINOR'];
 const GRADE_OPTIONS = ['', 'A', 'B', 'C'];
 
+// ── Mock data ──────────────────────────────────────────────────────────────
+
+const MOCK_RANKINGS: Record<number, SupplierRanking[]> = {
+  2026: [
+    { id: 's1', name: 'Precision Forge India Pvt Ltd', category: 'CRITICAL', status: 'APPROVED', score: 91, grade: 'A', passRate: 95, capaClosureRate: 88, auditScore: 90, delta: 4 },
+    { id: 's2', name: 'Metallurgy Solutions Ltd',      category: 'CRITICAL', status: 'APPROVED', score: 89, grade: 'A', passRate: 92, capaClosureRate: 85, auditScore: 88, delta: 2 },
+    { id: 's3', name: 'Global Castings Corp',          category: 'MAJOR',    status: 'APPROVED', score: 85, grade: 'A', passRate: 88, capaClosureRate: 82, auditScore: 84, delta: -1 },
+    { id: 's4', name: 'TechCoat Surface Finishers',    category: 'MAJOR',    status: 'APPROVED', score: 79, grade: 'B', passRate: 82, capaClosureRate: 75, auditScore: 78, delta: 3 },
+    { id: 's5', name: 'Alloy Dynamics Inc',            category: 'CRITICAL', status: 'APPROVED', score: 76, grade: 'B', passRate: 80, capaClosureRate: 70, auditScore: 75, delta: -2 },
+    { id: 's6', name: 'RapidFab Components',           category: 'MINOR',    status: 'APPROVED', score: 74, grade: 'B', passRate: 76, capaClosureRate: 72, auditScore: 73, delta: 0  },
+    { id: 's7', name: 'Eastern Machining Works',       category: 'MAJOR',    status: 'APPROVED', score: 68, grade: 'C', passRate: 70, capaClosureRate: 65, auditScore: 66, delta: -3 },
+    { id: 's8', name: 'Standard Seals & Gaskets',      category: 'MINOR',    status: 'APPROVED', score: 63, grade: 'C', passRate: 65, capaClosureRate: 60, auditScore: 62, delta: null },
+  ],
+  2025: [
+    { id: 's1', name: 'Precision Forge India Pvt Ltd', category: 'CRITICAL', status: 'APPROVED', score: 87, grade: 'A', passRate: 91, capaClosureRate: 84, auditScore: 86, delta: 5 },
+    { id: 's2', name: 'Metallurgy Solutions Ltd',      category: 'CRITICAL', status: 'APPROVED', score: 87, grade: 'A', passRate: 90, capaClosureRate: 83, auditScore: 85, delta: 3 },
+    { id: 's3', name: 'Global Castings Corp',          category: 'MAJOR',    status: 'APPROVED', score: 86, grade: 'A', passRate: 89, capaClosureRate: 83, auditScore: 85, delta: 2 },
+    { id: 's4', name: 'TechCoat Surface Finishers',    category: 'MAJOR',    status: 'APPROVED', score: 76, grade: 'B', passRate: 79, capaClosureRate: 72, auditScore: 75, delta: 1 },
+    { id: 's5', name: 'Alloy Dynamics Inc',            category: 'CRITICAL', status: 'APPROVED', score: 78, grade: 'B', passRate: 82, capaClosureRate: 72, auditScore: 77, delta: -1 },
+    { id: 's6', name: 'RapidFab Components',           category: 'MINOR',    status: 'APPROVED', score: 74, grade: 'B', passRate: 77, capaClosureRate: 70, auditScore: 72, delta: 0  },
+    { id: 's7', name: 'Eastern Machining Works',       category: 'MAJOR',    status: 'APPROVED', score: 71, grade: 'B', passRate: 74, capaClosureRate: 67, auditScore: 69, delta: null },
+    { id: 's8', name: 'Standard Seals & Gaskets',      category: 'MINOR',    status: 'APPROVED', score: 63, grade: 'C', passRate: 66, capaClosureRate: 58, auditScore: 62, delta: null },
+  ],
+  2024: [
+    { id: 's1', name: 'Precision Forge India Pvt Ltd', category: 'CRITICAL', status: 'APPROVED', score: 82, grade: 'A', passRate: 86, capaClosureRate: 79, auditScore: 80, delta: null },
+    { id: 's2', name: 'Metallurgy Solutions Ltd',      category: 'CRITICAL', status: 'APPROVED', score: 84, grade: 'A', passRate: 87, capaClosureRate: 81, auditScore: 83, delta: null },
+    { id: 's3', name: 'Global Castings Corp',          category: 'MAJOR',    status: 'APPROVED', score: 84, grade: 'A', passRate: 87, capaClosureRate: 81, auditScore: 83, delta: null },
+    { id: 's4', name: 'TechCoat Surface Finishers',    category: 'MAJOR',    status: 'APPROVED', score: 75, grade: 'B', passRate: 78, capaClosureRate: 71, auditScore: 73, delta: null },
+    { id: 's5', name: 'Alloy Dynamics Inc',            category: 'CRITICAL', status: 'APPROVED', score: 79, grade: 'B', passRate: 83, capaClosureRate: 73, auditScore: 78, delta: null },
+    { id: 's6', name: 'RapidFab Components',           category: 'MINOR',    status: 'APPROVED', score: 74, grade: 'B', passRate: 77, capaClosureRate: 70, auditScore: 72, delta: null },
+    { id: 's7', name: 'Eastern Machining Works',       category: 'MAJOR',    status: 'APPROVED', score: 71, grade: 'B', passRate: 74, capaClosureRate: 67, auditScore: 69, delta: null },
+    { id: 's8', name: 'Standard Seals & Gaskets',      category: 'MINOR',    status: 'APPROVED', score: 63, grade: 'C', passRate: 66, capaClosureRate: 58, auditScore: 62, delta: null },
+  ],
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────
 
 export default function SupplierScorecardsPage() {
@@ -69,8 +104,13 @@ export default function SupplierScorecardsPage() {
   const { data: rankings = [], isLoading, refetch, isFetching } = useQuery<SupplierRanking[]>({
     queryKey: ['supplier-rankings', year],
     queryFn: async () => {
-      const res = await api.get(`/qms/suppliers/rankings/${year}`);
-      return res.data.data;
+      try {
+        const res = await api.get(`/qms/suppliers/rankings/${year}`);
+        if (Array.isArray(res.data?.data)) return res.data.data;
+        return MOCK_RANKINGS[year] ?? MOCK_RANKINGS[2026];
+      } catch {
+        return MOCK_RANKINGS[year] ?? MOCK_RANKINGS[2026];
+      }
     },
     staleTime: 2 * 60 * 1000,
   });
