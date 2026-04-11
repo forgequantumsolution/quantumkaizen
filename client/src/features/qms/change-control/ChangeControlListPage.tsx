@@ -186,24 +186,28 @@ export default function ChangeControlListPage() {
           value={openCount}
           icon={GitPullRequest}
           iconColor="bg-blue-50 text-blue-600"
+          onClick={() => setStatusFilter('Under Review')}
         />
         <StatsCard
           title="Pending Approval"
           value={pendingApproval}
           icon={Clock}
           iconColor="bg-amber-50 text-amber-600"
+          onClick={() => setStatusFilter('Draft')}
         />
         <StatsCard
           title="Implemented"
           value={implementedCount}
           icon={CheckCircle2}
           iconColor="bg-emerald-50 text-emerald-600"
+          onClick={() => setStatusFilter('In Implementation')}
         />
         <StatsCard
           title="Rejected"
           value={rejectedCount}
           icon={XCircle}
           iconColor="bg-red-50 text-red-600"
+          onClick={() => setStatusFilter('Rejected')}
         />
       </div>
 

@@ -117,10 +117,14 @@ export default function InspectionListPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatsCard title="Total" value={total} icon={ClipboardList} />
-        <StatsCard title="Pass" value={passCount} icon={CheckCircle2} iconColor="bg-green-50 text-green-600" />
-        <StatsCard title="Fail" value={failCount} icon={XCircle} iconColor="bg-red-50 text-red-600" />
-        <StatsCard title="Pending" value={pendingCount} icon={Clock} iconColor="bg-gray-100 text-gray-500" />
+        <StatsCard title="Total" value={total} icon={ClipboardList}
+          onClick={() => setResultFilter('')} />
+        <StatsCard title="Pass" value={passCount} icon={CheckCircle2} iconColor="bg-green-50 text-green-600"
+          onClick={() => setResultFilter('PASS')} />
+        <StatsCard title="Fail" value={failCount} icon={XCircle} iconColor="bg-red-50 text-red-600"
+          onClick={() => setResultFilter('FAIL')} />
+        <StatsCard title="Pending" value={pendingCount} icon={Clock} iconColor="bg-gray-100 text-gray-500"
+          onClick={() => setResultFilter('PENDING')} />
       </div>
 
       {/* Filters */}

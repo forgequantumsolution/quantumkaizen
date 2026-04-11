@@ -173,24 +173,28 @@ export default function CAPAListPage() {
           value={openCount}
           icon={ShieldAlert}
           iconColor="bg-amber-50 text-amber-600"
+          onClick={() => setStatusFilter('INITIATED')}
         />
         <StatsCard
           title="Under Investigation"
           value={investigationCount}
           icon={Eye}
           iconColor="bg-sky-50 text-sky-600"
+          onClick={() => setStatusFilter('ROOT_CAUSE_ANALYSIS')}
         />
         <StatsCard
           title="Overdue"
           value={overdueCount}
           icon={Clock}
           iconColor="bg-red-50 text-red-600"
+          onClick={() => setStatusFilter('IMPLEMENTATION')}
         />
         <StatsCard
           title="Closed This Month"
           value={closedThisMonth}
           icon={CheckCircle2}
           iconColor="bg-emerald-50 text-emerald-600"
+          onClick={() => setStatusFilter('CLOSED')}
         />
       </div>
 

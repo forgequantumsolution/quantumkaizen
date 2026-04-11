@@ -193,12 +193,14 @@ export default function ComplaintListPage() {
           value={openCount}
           icon={MessageSquareWarning}
           iconColor="bg-amber-50 text-amber-600"
+          onClick={() => setStatusFilter('Received')}
         />
         <StatsCard
           title="Response Overdue"
           value={overdueCount}
           icon={AlertTriangle}
           iconColor="bg-red-50 text-red-600"
+          onClick={() => setStatusFilter('Under Investigation')}
         />
         <StatsCard
           title="Avg Resolution Time"
@@ -211,6 +213,7 @@ export default function ComplaintListPage() {
           value={`${satisfactionPercent}%`}
           icon={ThumbsUp}
           iconColor="bg-emerald-50 text-emerald-600"
+          onClick={() => setStatusFilter('Closed')}
         />
       </div>
 

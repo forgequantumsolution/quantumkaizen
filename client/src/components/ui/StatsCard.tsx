@@ -16,6 +16,8 @@ interface StatsCardProps {
   alert?: boolean;
   /** Top accent border color — defaults to gold */
   accent?: string;
+  /** When provided, card becomes clickable */
+  onClick?: () => void;
 }
 
 // KPI accent colors per card type (spec)
@@ -32,7 +34,7 @@ export const KPI_ACCENTS = {
 };
 
 export function StatsCard({
-  title, value, icon: Icon, trend, subtitle, className, iconColor, alert, accent,
+  title, value, icon: Icon, trend, subtitle, className, iconColor, alert, accent, onClick,
 }: StatsCardProps) {
   const topColor = alert ? KPI_ACCENTS.red : (accent ?? KPI_ACCENTS.gold);
 
@@ -43,13 +45,23 @@ export function StatsCard({
 
   return (
     <div
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); } : undefined}
       style={{
         backgroundColor: '#FFFFFF',
         borderRadius: '10px',
         borderTop: `3px solid ${topColor}`,
         boxShadow: '0 2px 8px 0 rgba(0,0,0,0.06)',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'box-shadow 0.15s ease, transform 0.1s ease',
       }}
-      className={cn('p-5', className)}
+      className={cn(
+        'p-5',
+        onClick && 'hover:shadow-md hover:-translate-y-px focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-[#C9A84C]',
+        className,
+      )}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">

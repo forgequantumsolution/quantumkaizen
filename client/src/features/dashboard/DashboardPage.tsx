@@ -144,21 +144,29 @@ export default function DashboardPage() {
       {/* ── KPI tiles (2×4 grid) ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
         <StatsCard title="Open NCs"           value={d.stats.openNCs}               icon={AlertTriangle}   alert={d.stats.openNCs > 10}
-          iconColor="bg-critical-50 text-critical-600" trend={{ value: 8, label: 'vs prior' }} />
+          iconColor="bg-critical-50 text-critical-600" trend={{ value: 8, label: 'vs prior' }}
+          onClick={() => navigate('/qms/non-conformances')} />
         <StatsCard title="Open CAPAs"         value={d.stats.openCAPAs}             icon={ClipboardList}
-          iconColor="bg-caution-50 text-caution-600"   trend={{ value: -12, label: 'vs prior' }} />
+          iconColor="bg-caution-50 text-caution-600"   trend={{ value: -12, label: 'vs prior' }}
+          onClick={() => navigate('/qms/capa')} />
         <StatsCard title="Pending Approvals"  value={d.stats.pendingApprovals}      icon={Clock}
-          iconColor="bg-pharma-50 text-pharma-500" />
+          iconColor="bg-pharma-50 text-pharma-500"
+          onClick={() => navigate('/qms/change-control')} />
         <StatsCard title="Expiring Docs"      value={d.stats.expiringDocuments}     icon={FileText}
-          iconColor="bg-caution-50 text-caution-600" />
+          iconColor="bg-caution-50 text-caution-600"
+          onClick={() => navigate('/dms')} />
         <StatsCard title="Overdue Actions"    value={d.stats.overdueActions}        icon={TrendingDown}    alert={d.stats.overdueActions > 5}
-          iconColor="bg-critical-50 text-critical-600" />
+          iconColor="bg-critical-50 text-critical-600"
+          onClick={() => navigate('/qms/capa')} />
         <StatsCard title="Training"           value={`${d.stats.trainingCompliance}%`} icon={GraduationCap}
-          iconColor="bg-compliant-50 text-compliant-600" trend={{ value: 3, label: 'vs prior' }} />
+          iconColor="bg-compliant-50 text-compliant-600" trend={{ value: 3, label: 'vs prior' }}
+          onClick={() => navigate('/lms/training')} />
         <StatsCard title="Supplier Score"     value={`${d.stats.supplierScore}%`}   icon={ShieldCheck}
-          iconColor="bg-pharma-50 text-pharma-500" subtitle="Avg quality rating" />
+          iconColor="bg-pharma-50 text-pharma-500" subtitle="Avg quality rating"
+          onClick={() => navigate('/qms/suppliers')} />
         <StatsCard title="Audit Compliance"   value={`${d.stats.auditCompliance}%`} icon={BarChart2}
-          iconColor="bg-compliant-50 text-compliant-600" subtitle="This period" />
+          iconColor="bg-compliant-50 text-compliant-600" subtitle="This period"
+          onClick={() => navigate('/qms/audits')} />
       </div>
 
       {/* ── Non-Conformance section ── */}

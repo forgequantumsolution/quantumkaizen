@@ -105,11 +105,16 @@ export default function CalibrationListPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <StatsCard title="Total Equipment" value={stats?.total ?? 0} icon={Wrench} />
-        <StatsCard title="Current" value={stats?.current ?? 0} icon={CheckCircle2} iconColor="bg-green-50 text-green-600" />
-        <StatsCard title="Due Soon" value={stats?.dueSoon ?? 0} icon={Clock} iconColor="bg-amber-50 text-amber-600" />
-        <StatsCard title="Overdue" value={stats?.overdue ?? 0} icon={AlertTriangle} iconColor="bg-red-50 text-red-600" />
-        <StatsCard title="Out of Service" value={stats?.outOfService ?? 0} icon={XCircle} iconColor="bg-gray-100 text-gray-500" />
+        <StatsCard title="Total Equipment" value={stats?.total ?? 0} icon={Wrench}
+          onClick={() => setStatusFilter('')} />
+        <StatsCard title="Current" value={stats?.current ?? 0} icon={CheckCircle2} iconColor="bg-green-50 text-green-600"
+          onClick={() => setStatusFilter('CURRENT')} />
+        <StatsCard title="Due Soon" value={stats?.dueSoon ?? 0} icon={Clock} iconColor="bg-amber-50 text-amber-600"
+          onClick={() => setStatusFilter('DUE_SOON')} />
+        <StatsCard title="Overdue" value={stats?.overdue ?? 0} icon={AlertTriangle} iconColor="bg-red-50 text-red-600"
+          onClick={() => setStatusFilter('OVERDUE')} />
+        <StatsCard title="Out of Service" value={stats?.outOfService ?? 0} icon={XCircle} iconColor="bg-gray-100 text-gray-500"
+          onClick={() => setStatusFilter('OUT_OF_SERVICE')} />
       </div>
 
       {/* Filters */}

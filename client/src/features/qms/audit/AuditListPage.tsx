@@ -138,10 +138,16 @@ export default function AuditListPage() {
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatsCard title="Total Audits" value={stats?.total ?? 0} icon={ClipboardCheck} />
-        <StatsCard title="Planned" value={stats?.planned ?? 0} icon={ClipboardCheck} />
-        <StatsCard title="In Progress" value={stats?.inProgress ?? 0} icon={ClipboardCheck} />
-        <StatsCard title="Open Findings" value={stats?.openFindings ?? 0} icon={ClipboardCheck} />
+        <StatsCard title="Total Audits" value={stats?.total ?? 0} icon={ClipboardCheck}
+          onClick={() => setStatusFilter('')} />
+        <StatsCard title="Planned" value={stats?.planned ?? 0} icon={ClipboardCheck}
+          iconColor="bg-blue-50 text-blue-600"
+          onClick={() => setStatusFilter('PLANNED')} />
+        <StatsCard title="In Progress" value={stats?.inProgress ?? 0} icon={ClipboardCheck}
+          iconColor="bg-amber-50 text-amber-600"
+          onClick={() => setStatusFilter('IN_PROGRESS')} />
+        <StatsCard title="Open Findings" value={stats?.openFindings ?? 0} icon={ClipboardCheck}
+          iconColor="bg-red-50 text-red-600" />
       </div>
 
       {/* Filters + View Toggle */}
