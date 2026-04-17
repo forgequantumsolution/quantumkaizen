@@ -27,11 +27,10 @@ jobs:
           fi
           echo "No merge conflicts"
 
-      - name: Check lock files committed
+      - name: Check root lock file committed
         run: |
-          [ -f "client/package-lock.json" ] || (echo "client/package-lock.json missing" && exit 1)
-          [ -f "server/package-lock.json" ] || (echo "server/package-lock.json missing" && exit 1)
-          echo "Lock files present"
+          [ -f "package-lock.json" ] || (echo "root package-lock.json missing — run 'npm install' at repo root" && exit 1)
+          echo "Root lock file present (npm workspaces)"
 
       - name: Scan for hardcoded secrets (gitleaks)
         uses: gitleaks/gitleaks-action@v2
@@ -58,19 +57,13 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: |
-            server/package-lock.json
-            client/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - run: npm ci
-        working-directory: server
-
-      - run: npm ci
-        working-directory: client
+      - name: Install workspaces
+        run: npm ci
 
       - name: Lint client
-        working-directory: client
-        run: npm run lint
+        run: npm run lint --workspace=client
 
       - name: Type-check server
         working-directory: server
@@ -91,14 +84,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: package-lock.json
 
-      - name: Audit server deps (fail on HIGH+)
-        working-directory: server
-        run: npm ci && npm audit --audit-level=high || true
+      - name: Install workspaces
+        run: npm ci
 
-      - name: Audit client deps (fail on HIGH+)
-        working-directory: client
-        run: npm ci && npm audit --audit-level=high || true
+      - name: Audit (HIGH+; non-blocking)
+        run: npm audit --audit-level=high || true
 
   # ── STAGE 4: SAST ───────────────────────────────────────────────────
   sast:
@@ -158,11 +151,15 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: server/package-lock.json
-      - run: npm ci && npx prisma generate && npx prisma migrate deploy
+          cache-dependency-path: package-lock.json
+      - name: Install workspaces
+        run: npm ci
+      - name: Prisma generate & migrate
         working-directory: server
-      - run: npm test -- --passWithNoTests
+        run: npx prisma generate && npx prisma migrate deploy
+      - name: Run server tests
         working-directory: server
+        run: npm test -- --passWithNoTests
 
   test-client:
     name: Test Client
@@ -174,11 +171,12 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: client/package-lock.json
-      - run: npm ci
+          cache-dependency-path: package-lock.json
+      - name: Install workspaces
+        run: npm ci
+      - name: Run client tests
         working-directory: client
-      - run: npx vitest run --passWithNoTests 2>/dev/null || echo "No tests yet"
-        working-directory: client
+        run: npx vitest run --passWithNoTests 2>/dev/null || echo "No tests yet"
 
   # ── STAGE 6: BUILD ───────────────────────────────────────────────────
   build:
@@ -191,17 +189,18 @@ jobs:
         with:
           node-version: '20'
           cache: npm
-          cache-dependency-path: |
-            server/package-lock.json
-            client/package-lock.json
+          cache-dependency-path: package-lock.json
+
+      - name: Install workspaces
+        run: npm ci
 
       - name: Build server
         working-directory: server
-        run: npm ci && npx prisma generate && npm run build
+        run: npx prisma generate && npm run build
 
       - name: Build client
         working-directory: client
-        run: npm ci && npm run build
+        run: npm run build
 
       - uses: actions/upload-artifact@v4
         with:
