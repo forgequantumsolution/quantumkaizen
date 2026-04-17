@@ -207,7 +207,8 @@ jobs:
       - name: Build server image for scanning
         uses: docker/build-push-action@v5
         with:
-          context: ./server
+          context: .
+          file: ./server/Dockerfile
           push: false
           tags: qk-server:scan
           load: true
@@ -217,7 +218,8 @@ jobs:
       - name: Build client image for scanning
         uses: docker/build-push-action@v5
         with:
-          context: ./client
+          context: .
+          file: ./client/Dockerfile
           push: false
           tags: qk-client:scan
           load: true

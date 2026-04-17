@@ -1,0 +1,31 @@
+**/node_modules
+**/dist
+**/.next
+**/coverage
+**/.cache
+
+# VCS / IDE
+.git
+.gitignore
+.github
+.vscode
+.idea
+
+# Env / secrets
+**/.env
+**/.env.*
+
+# Logs
+**/*.log
+**/npm-debug.log*
+
+# OS noise
+**/.DS_Store
+
+# Large prompts / docs not needed at runtime
+QuantumKaizen_Master_Prompt.html
+Compliance Prompt.txt
+docs
+
+# Lockfile-only artifacts not needed in image
+**/.npm
