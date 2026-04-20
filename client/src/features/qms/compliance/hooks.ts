@@ -282,6 +282,7 @@ export function useComplianceRequirements(standard?: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/compliance', { params: { standard } });
+        if (!Array.isArray(data?.data)) throw new Error('unexpected response');
         return data;
       } catch {
         let requirements: ComplianceRequirement[];

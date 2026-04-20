@@ -93,6 +93,7 @@ export function useDocuments(filters: DocumentFilters = {}) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/dms/documents', { params: filters });
+        if (!Array.isArray(data?.data)) throw new Error('unexpected response');
         return data;
       } catch {
         // Mock fallback
