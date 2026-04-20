@@ -1,6 +1,42 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem } from '@/lib/apiShape';
 import toast from 'react-hot-toast';
+
+// Backend supplier shape differs from the UI's expected shape in a few places:
+//   • `companyName` → `name`
+//   • `supplierCode` → `code`
+//   • `productsServices` is a delimited string → the UI expects string[]
+//   • `status` can be SUSPENDED (not in the client's badge map)
+// Normalize once at the hook boundary so every page below just works.
+function normalizeSupplier(s: any) {
+  if (!s || typeof s !== 'object') return s;
+  const rawProducts = s.productsServices;
+  let products: string[] = [];
+  if (Array.isArray(rawProducts)) products = rawProducts;
+  else if (typeof rawProducts === 'string' && rawProducts.trim())
+    products = rawProducts.split(/[,;|]/).map((p: string) => p.trim()).filter(Boolean);
+  // Backend exposes qualityScore + deliveryScore (0-100). UI expects `rating`
+  // on a 0-5 star scale. Map if absent.
+  let rating = typeof s.rating === 'number' ? s.rating : undefined;
+  if (rating == null) {
+    const q = typeof s.qualityScore === 'number' ? s.qualityScore : undefined;
+    const d = typeof s.deliveryScore === 'number' ? s.deliveryScore : undefined;
+    if (q != null || d != null) {
+      const avg100 = ((q ?? 0) + (d ?? 0)) / ((q != null && d != null) ? 2 : 1);
+      rating = Math.round((avg100 / 20) * 10) / 10; // 0-5 with one decimal
+    } else {
+      rating = 0;
+    }
+  }
+  return {
+    ...s,
+    name: s.name ?? s.companyName ?? '',
+    code: s.code ?? s.supplierCode ?? '',
+    productsServices: products,
+    rating,
+  };
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -357,8 +393,7 @@ export function useSuppliers(filters: SupplierFilters = {}) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/suppliers', { params: filters });
-        if (!Array.isArray(data?.data)) throw new Error('unexpected response');
-        return data;
+        return unwrapList<Supplier>(data, normalizeSupplier);
       } catch {
         let filtered = [...mockSuppliers];
         if (filters.status) filtered = filtered.filter((s) => s.status === filters.status);
@@ -384,8 +419,7 @@ export function useSupplier(id: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/suppliers/${id}`);
-        if (!data?.id) throw new Error('unexpected response');
-        return data;
+        return unwrapItem<Supplier>(data, normalizeSupplier);
       } catch {
         const supplier = mockSuppliers.find((s) => s.id === id);
         if (!supplier) throw new Error('Supplier not found');

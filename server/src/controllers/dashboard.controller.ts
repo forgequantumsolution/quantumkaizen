@@ -24,7 +24,7 @@ export const getStats = async (req: Request, res: Response, next: NextFunction) 
       }),
 
       prisma.cAPA.count({
-        where: { tenantId, status: { notIn: ['CLOSED', 'VERIFIED'] } },
+        where: { tenantId, status: { notIn: ['CLOSED'] } },
       }),
 
       prisma.approvalRequest.count({
@@ -47,10 +47,10 @@ export const getStats = async (req: Request, res: Response, next: NextFunction) 
         },
       }),
 
-      prisma.trainingAssignment.count({ where: { tenantId } }).catch(() => 0),
+      prisma.trainingAssignment.count({ where: { program: { tenantId } } }).catch(() => 0),
 
       prisma.trainingAssignment.count({
-        where: { tenantId, status: 'COMPLETED' },
+        where: { program: { tenantId }, status: 'COMPLETED' },
       }).catch(() => 0),
     ]);
 

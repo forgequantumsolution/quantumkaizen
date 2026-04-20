@@ -11,8 +11,11 @@ COPY package.json package-lock.json ./
 COPY server/package.json ./server/
 COPY client/package.json ./client/
 
-# Install all workspace deps
-RUN npm ci
+# Install all workspace deps (retry-resilient for flaky networks)
+RUN npm config set fetch-retries 5 \
+  && npm config set fetch-retry-mintimeout 20000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm ci --no-audit --prefer-offline
 
 # Copy client sources and build the production bundle
 COPY client ./client
@@ -45,6 +48,6 @@ RUN chown -R nginx:nginx /usr/share/nginx/html && \
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:80/ || exit 1
+  CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

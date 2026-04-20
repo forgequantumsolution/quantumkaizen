@@ -1,8 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
 import type { Document, PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
+
+const flattenDoc = (d: Record<string, unknown>) => flattenUsers(d, ['owner', 'createdBy', 'updatedBy']);
 
 // ── Mock documents ───────────────────────────────────────────────────────────
 
@@ -93,8 +96,7 @@ export function useDocuments(filters: DocumentFilters = {}) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/dms/documents', { params: filters });
-        if (!Array.isArray(data?.data)) throw new Error('unexpected response');
-        return data;
+        return unwrapList<Document>(data, flattenDoc as any);
       } catch {
         // Mock fallback
         let filtered = [...mockDocuments];
@@ -128,7 +130,7 @@ export function useDocument(id: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get(`/dms/documents/${id}`);
-        return data;
+        return unwrapItem<Document>(data, flattenDoc as any);
       } catch {
         const doc = mockDocuments.find((d) => d.id === id);
         if (!doc) throw new Error('Document not found');

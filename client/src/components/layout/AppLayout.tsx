@@ -17,7 +17,7 @@ export default function AppLayout() {
       <div
         className={cn(
           'transition-[margin-left] duration-250 ease-in-out flex flex-col min-h-screen',
-          sidebarCollapsed ? 'ml-[56px]' : 'ml-[240px]'
+          sidebarCollapsed ? 'ml-[56px]' : 'ml-[256px]'
         )}
       >
         <Header />

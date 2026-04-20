@@ -18,36 +18,43 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
+import { lookupBadge } from '@/lib/badgeMap';
 import { useSuppliers, mockSuppliers } from './hooks';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { Supplier, SupplierCategory, SupplierStatus } from './hooks';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
-function getCategoryBadge(category: SupplierCategory) {
-  const map: Record<SupplierCategory, { variant: 'danger' | 'warning' | 'default'; label: string }> = {
-    CRITICAL: { variant: 'danger', label: 'Critical' },
-    MAJOR: { variant: 'warning', label: 'Major' },
-    MINOR: { variant: 'default', label: 'Minor' },
-  };
-  const c = map[category];
-  return <Badge variant={c.variant}>{c.label}</Badge>;
+function getCategoryBadge(category: SupplierCategory | string) {
+  const c = lookupBadge(
+    {
+      CRITICAL: { variant: 'danger', label: 'Critical' },
+      MAJOR: { variant: 'warning', label: 'Major' },
+      MINOR: { variant: 'default', label: 'Minor' },
+    },
+    category,
+  );
+  return <Badge variant={c.variant as any}>{c.label}</Badge>;
 }
 
-function getStatusBadge(status: SupplierStatus) {
-  const map: Record<SupplierStatus, { variant: 'success' | 'warning' | 'info' | 'danger'; label: string }> = {
-    APPROVED: { variant: 'success', label: 'Approved' },
-    CONDITIONAL: { variant: 'warning', label: 'Conditional' },
-    PENDING: { variant: 'info', label: 'Pending' },
-    DISQUALIFIED: { variant: 'danger', label: 'Disqualified' },
-  };
-  const c = map[status];
-  return <Badge variant={c.variant}>{c.label}</Badge>;
+function getStatusBadge(status: SupplierStatus | string) {
+  const c = lookupBadge(
+    {
+      APPROVED: { variant: 'success', label: 'Approved' },
+      CONDITIONAL: { variant: 'warning', label: 'Conditional' },
+      PENDING: { variant: 'info', label: 'Pending' },
+      DISQUALIFIED: { variant: 'danger', label: 'Disqualified' },
+      SUSPENDED: { variant: 'danger', label: 'Suspended' },
+    },
+    status,
+  );
+  return <Badge variant={c.variant as any}>{c.label}</Badge>;
 }
 
-function RatingStars({ rating }: { rating: number }) {
-  if (rating === 0) return <span className="text-xs text-slate-400 italic">Not rated</span>;
-  const full = Math.floor(rating);
-  const half = rating % 1 >= 0.5;
+function RatingStars({ rating }: { rating: number | undefined | null }) {
+  const r = typeof rating === 'number' ? rating : 0;
+  if (!r) return <span className="text-xs text-slate-400 italic">Not rated</span>;
+  const full = Math.floor(r);
+  const half = r % 1 >= 0.5;
   return (
     <div className="flex items-center gap-1">
       {Array.from({ length: 5 }).map((_, i) => (
@@ -63,7 +70,7 @@ function RatingStars({ rating }: { rating: number }) {
           )}
         />
       ))}
-      <span className="ml-1 text-xs font-semibold text-slate-600">{rating.toFixed(1)}</span>
+      <span className="ml-1 text-xs font-semibold text-slate-600">{r.toFixed(1)}</span>
     </div>
   );
 }

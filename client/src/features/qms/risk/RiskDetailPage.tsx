@@ -260,7 +260,10 @@ export default function RiskDetailPage() {
                 <div className="space-y-3">
                   {risk.controls.length > 0 ? (
                     risk.controls.map((ctrl, idx) => {
-                      const meta = hierarchyBadge[ctrl.hierarchy];
+                      const meta = hierarchyBadge[ctrl.hierarchy] ?? {
+                        variant: 'default' as const,
+                        label: String(ctrl.hierarchy ?? '—'),
+                      };
                       return (
                         <div
                           key={ctrl.id}

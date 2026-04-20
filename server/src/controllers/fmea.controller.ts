@@ -19,7 +19,7 @@ function auditParams(req: Request) {
 async function generateFMEANumber(tenantId: string): Promise<string> {
   const year = new Date().getFullYear();
   const db = prisma as any;
-  const count = await db.fMEA.count({
+  const count = await db.fMEARecord.count({
     where: {
       tenantId,
       fmeaNumber: { startsWith: `FMEA-${year}-` },
@@ -49,13 +49,13 @@ export const listFMEAs = async (req: Request, res: Response, next: NextFunction)
 
     const db = prisma as any;
     const [fmeas, total] = await Promise.all([
-      db.fMEA.findMany({
+      db.fMEARecord.findMany({
         where,
         skip: pagination.skip,
         take: pagination.limit,
         orderBy: { [pagination.sortBy]: pagination.sortOrder },
       }),
-      db.fMEA.count({ where }),
+      db.fMEARecord.count({ where }),
     ]);
 
     res.status(200).json(buildPaginationResponse(fmeas, total, pagination.page, pagination.limit));
@@ -71,7 +71,7 @@ export const getFMEAById = async (req: Request, res: Response, next: NextFunctio
     const { id } = req.params;
     const db = prisma as any;
 
-    const fmea = await db.fMEA.findFirst({
+    const fmea = await db.fMEARecord.findFirst({
       where: { id, tenantId: req.user.tenantId },
       include: {
         failureModes: {
@@ -105,7 +105,7 @@ export const createFMEA = async (req: Request, res: Response, next: NextFunction
     const fmeaNumber = await generateFMEANumber(req.user.tenantId);
     const db = prisma as any;
 
-    const fmea = await db.fMEA.create({
+    const fmea = await db.fMEARecord.create({
       data: {
         tenantId: req.user.tenantId,
         fmeaNumber,
@@ -156,7 +156,7 @@ export const addFailureMode = async (req: Request, res: Response, next: NextFunc
 
     const db = prisma as any;
 
-    const existing = await db.fMEA.findFirst({
+    const existing = await db.fMEARecord.findFirst({
       where: { id, tenantId: req.user.tenantId },
     });
 
@@ -207,7 +207,7 @@ export const updateFailureMode = async (req: Request, res: Response, next: NextF
     const { id, fmId } = req.params;
     const db = prisma as any;
 
-    const existingFMEA = await db.fMEA.findFirst({
+    const existingFMEA = await db.fMEARecord.findFirst({
       where: { id, tenantId: req.user.tenantId },
     });
 

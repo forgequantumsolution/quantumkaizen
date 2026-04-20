@@ -4,7 +4,7 @@
 //   • Hashed static assets (/assets/*) → cache-first (immutable filenames, safe to cache long-term)
 //   • Everything else → network-first
 
-const CACHE = 'qk-v2';
+const CACHE = 'qk-v3';
 
 self.addEventListener('install', () => {
   self.skipWaiting(); // Activate new SW immediately on every deployment

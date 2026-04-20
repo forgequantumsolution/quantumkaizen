@@ -1,7 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
 import type { PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
+
+const flattenCAPA = (c: Record<string, unknown>) => flattenUsers(c, ['owner']);
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -595,8 +598,7 @@ export function useCAPAs(filters: CAPAFilters = {}) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/capas', { params: filters });
-        if (!Array.isArray(data?.data)) throw new Error('unexpected response');
-        return data;
+        return unwrapList<CAPARecord>(data, flattenCAPA as any);
       } catch {
         let filtered = [...mockCAPAs];
         if (filters.status) filtered = filtered.filter((c) => c.status === filters.status);
@@ -624,8 +626,7 @@ export function useCAPA(id: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/capas/${id}`);
-        if (!data?.id) throw new Error('unexpected response');
-        return data;
+        return unwrapItem<CAPARecord>(data, flattenCAPA as any);
       } catch {
         const capa = mockCAPAs.find((c) => c.id === id);
         if (!capa) throw new Error('CAPA not found');

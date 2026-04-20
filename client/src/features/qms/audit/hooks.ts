@@ -1,5 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
+
+const flattenAudit = (a: Record<string, unknown>) => flattenUsers(a, ['createdBy']);
 
 export type AuditType = 'INTERNAL' | 'EXTERNAL' | 'SUPPLIER' | 'CERTIFICATION';
 export type AuditStatus = 'PLANNED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
@@ -192,8 +195,8 @@ export function useAudits(filters?: { status?: string; type?: string }) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/audits', { params: filters });
-        if (!Array.isArray(data)) throw new Error('unexpected response');
-        return data as Audit[];
+        const unwrapped = unwrapList<Audit>(data, flattenAudit as any);
+        return unwrapped.data;
       } catch {
         let result = [...mockAudits];
         if (filters?.status) result = result.filter(a => a.status === filters.status);
@@ -210,8 +213,9 @@ export function useAudit(id: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/audits/${id}`);
-        if (!data?.id) throw new Error('unexpected response');
-        return data as Audit;
+        const item = unwrapItem<Audit>(data, flattenAudit as any);
+        if (!item?.id) throw new Error('unexpected response');
+        return item;
       } catch {
         return mockAudits.find(a => a.id === id) ?? mockAudits[0];
       }
@@ -250,21 +254,25 @@ export function useUpdateAuditStatus() {
 }
 
 export function useAuditStats() {
+  // Backend doesn't expose a /qms/audits/stats endpoint; compute from the list.
   return useQuery({
     queryKey: ['audits', 'stats'],
     queryFn: async () => {
+      let audits: Audit[] = mockAudits;
       try {
-        const { data } = await api.get('/qms/audits/stats');
-        return data;
+        const { data } = await api.get('/qms/audits');
+        const unwrapped = unwrapList<Audit>(data, flattenAudit as any).data;
+        if (unwrapped.length > 0) audits = unwrapped;
       } catch {
-        return {
-          total: mockAudits.length,
-          planned: mockAudits.filter(a => a.status === 'PLANNED').length,
-          inProgress: mockAudits.filter(a => a.status === 'IN_PROGRESS').length,
-          completed: mockAudits.filter(a => a.status === 'COMPLETED').length,
-          openFindings: mockAudits.reduce((sum, a) => sum + a.majorFindings + a.minorFindings, 0),
-        };
+        /* fall through to mockAudits */
       }
+      return {
+        total: audits.length,
+        planned: audits.filter(a => a.status === 'PLANNED').length,
+        inProgress: audits.filter(a => a.status === 'IN_PROGRESS').length,
+        completed: audits.filter(a => a.status === 'COMPLETED').length,
+        openFindings: audits.reduce((sum, a) => sum + ((a as any).majorFindings ?? 0) + ((a as any).minorFindings ?? 0), 0),
+      };
     },
   });
 }

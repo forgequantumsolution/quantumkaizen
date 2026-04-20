@@ -1,5 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem } from '@/lib/apiShape';
+
+// Backend row shape is a subset of the UI's. Default missing arrays to [] so
+// list-page `.slice()/.length/.map()` calls don't crash on real data.
+function normalizeCompliance(r: any) {
+  if (!r || typeof r !== 'object') return r;
+  return {
+    ...r,
+    linkedProcedures: Array.isArray(r.linkedProcedures) ? r.linkedProcedures : [],
+    linkedRisks: Array.isArray(r.linkedRisks) ? r.linkedRisks : [],
+    linkedAudits: Array.isArray(r.linkedAudits) ? r.linkedAudits : [],
+  };
+}
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -281,9 +294,13 @@ export function useComplianceRequirements(standard?: string) {
     queryKey: ['compliance', standard],
     queryFn: async () => {
       try {
-        const { data } = await api.get('/qms/compliance', { params: { standard } });
-        if (!Array.isArray(data?.data)) throw new Error('unexpected response');
-        return data;
+        const { data } = await api.get('/qms/compliance', {
+          // `limit=200` is well above the current 40 seeded requirements — the
+          // UI renders its own client-side tab filter, so we want the full set.
+          // Pass `standard` only when the caller asked for a specific one.
+          params: { limit: 200, ...(standard ? { standard } : {}) },
+        });
+        return unwrapList<ComplianceRequirement>(data, normalizeCompliance);
       } catch {
         let requirements: ComplianceRequirement[];
         switch (standard) {
@@ -312,7 +329,7 @@ export function useComplianceRequirement(id: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/compliance/${id}`);
-        return data;
+        return unwrapItem<ComplianceRequirement>(data, normalizeCompliance);
       } catch {
         const all = [...mockRequirements, ...mockIATFRequirements, ...mockISO14001Requirements, ...mockISO45001Requirements];
         const req = all.find((r) => r.id === id);

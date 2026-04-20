@@ -1,6 +1,9 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
 import toast from 'react-hot-toast';
+
+const flattenComplaint = (c: Record<string, unknown>) => flattenUsers(c, ['assignedTo', 'investigator']);
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -608,8 +611,7 @@ export function useComplaints(filters: ComplaintFilters = {}) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/complaints', { params: filters });
-        if (!Array.isArray(data?.data)) throw new Error('unexpected response');
-        return data;
+        return unwrapList<Complaint>(data, flattenComplaint as any);
       } catch {
         let filtered = [...mockComplaints];
         if (filters.status) filtered = filtered.filter((c) => c.status === filters.status);
@@ -636,8 +638,7 @@ export function useComplaint(id: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/complaints/${id}`);
-        if (!data?.id) throw new Error('unexpected response');
-        return data;
+        return unwrapItem<Complaint>(data, flattenComplaint as any);
       } catch {
         const complaint = mockComplaints.find((c) => c.id === id);
         if (!complaint) throw new Error('Complaint not found');
