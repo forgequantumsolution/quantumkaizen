@@ -2,8 +2,11 @@
 // Prisma Schema v1.0
 
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
+  // native          — developer laptop (mac/linux)
+  // linux-musl-*    — Alpine-based Docker image used by docker-compose
+  // debian-openssl* — Render/Railway/standard Ubuntu hosts
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
