@@ -40,7 +40,7 @@ router.use('/qms/management-review', managementReviewRoutes);
 router.use('/dms/documents', documentRoutes);
 
 // LMS Module
-router.use('/lms', trainingRoutes);
+router.use('/lms/training', trainingRoutes);
 
 // Cross-cutting
 router.use('/notifications', notificationRoutes);

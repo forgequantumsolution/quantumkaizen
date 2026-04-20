@@ -1,51 +1,64 @@
 # Build context is the REPO ROOT (npm workspaces monorepo with a single root lockfile).
-# CI passes `context: .` and `file: ./server/Dockerfile`.
+# docker-compose passes: context: . , dockerfile: server/Dockerfile
 
 # ── Stage 1: Builder ──────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
+# Prisma needs openssl + libc6-compat on Alpine to run its schema engine
+RUN apk add --no-cache openssl libc6-compat
+
 WORKDIR /app
 
-# Copy root manifests + workspace manifests for cached install
+# Root + workspace manifests (for cached install)
 COPY package.json package-lock.json ./
 COPY server/package.json ./server/
 COPY client/package.json ./client/
 COPY server/prisma ./server/prisma/
 
-# Install all workspace deps (npm honors workspaces)
-RUN npm ci
+# Retry-resilient install (network blips on the public npm registry are common)
+RUN npm config set fetch-retries 5 \
+  && npm config set fetch-retry-mintimeout 20000 \
+  && npm config set fetch-retry-maxtimeout 120000 \
+  && npm ci --no-audit --prefer-offline
 
-# Copy server sources and build
+# Build server
 COPY server ./server
 WORKDIR /app/server
-RUN npx prisma generate && (npm run build || echo "tsc reported type errors (non-blocking)") && test -f dist/index.js
+RUN npx prisma generate \
+  && (npm run build || echo "tsc reported type errors (non-blocking)") \
+  && test -f dist/index.js
 
-# Prune to production-only deps for the server workspace
-WORKDIR /app
-RUN npm prune --omit=dev --workspace=server
+# Keep all deps in the builder so prisma CLI is still available when we copy.
+# (npm prune was removed — we need prisma + tsx at runtime for db push + seed.)
 
-# ── Stage 2: Runtime (minimal) ────────────────────────────────────────
+# ── Stage 2: Runtime ──────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 
-# Security: create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 --ingroup nodejs nodeapp
+# Prisma runtime needs openssl on Alpine
+RUN apk add --no-cache openssl libc6-compat
+
+# Non-root user
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 --ingroup nodejs nodeapp
 
 WORKDIR /app
 
-# Copy only what the server needs at runtime.
-# With workspaces, hoisted modules live at /app/node_modules,
-# and workspace-local modules at /app/server/node_modules (if any).
+# Server artifacts
 COPY --from=builder --chown=nodeapp:nodejs /app/server/dist ./dist
 COPY --from=builder --chown=nodeapp:nodejs /app/server/prisma ./prisma
 COPY --from=builder --chown=nodeapp:nodejs /app/server/package.json ./
+# Hoisted monorepo node_modules (includes @prisma/client, prisma, tsx, etc.)
 COPY --from=builder --chown=nodeapp:nodejs /app/node_modules ./node_modules
+
+# Entrypoint script
+COPY --chown=nodeapp:nodejs server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 USER nodeapp
 
 EXPOSE 5000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:5000/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:5000/health >/dev/null || exit 1
 
-ENTRYPOINT ["node", "dist/index.js"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

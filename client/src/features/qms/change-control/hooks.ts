@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem } from '@/lib/apiShape';
 import toast from 'react-hot-toast';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -467,8 +468,8 @@ export function useChangeRequests(filters: CRFilters = {}) {
     queryKey: ['change-requests', filters],
     queryFn: async () => {
       try {
-        const { data } = await api.get('/qms/change-requests', { params: filters });
-        return data;
+        const { data } = await api.get('/qms/change-control', { params: filters });
+        return unwrapList<ChangeRequest>(data);
       } catch {
         let filtered = [...mockChangeRequests];
         if (filters.status) filtered = filtered.filter((cr) => cr.status === filters.status);
@@ -494,8 +495,8 @@ export function useChangeRequest(id: string) {
     queryKey: ['change-requests', id],
     queryFn: async () => {
       try {
-        const { data } = await api.get(`/qms/change-requests/${id}`);
-        return data;
+        const { data } = await api.get(`/qms/change-control/${id}`);
+        return unwrapItem<ChangeRequest>(data);
       } catch {
         const cr = mockChangeRequests.find((c) => c.id === id);
         if (!cr) throw new Error('Change request not found');

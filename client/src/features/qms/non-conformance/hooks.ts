@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
 import type { NonConformance, PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -231,6 +232,9 @@ export const mockNCs: NonConformance[] = [
 
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
+const flattenNC = (nc: Record<string, unknown>) =>
+  flattenUsers(nc, ['assignedTo', 'reportedBy']);
+
 interface NCFilters {
   status?: string;
   severity?: string;
@@ -246,8 +250,8 @@ export function useNonConformances(filters: NCFilters = {}) {
     queryKey: ['non-conformances', filters],
     queryFn: async () => {
       try {
-        const { data } = await api.get('/qms/non-conformances', { params: filters });
-        return data;
+        const { data: payload } = await api.get('/qms/non-conformances', { params: filters });
+        return unwrapList<NonConformance>(payload, flattenNC as any);
       } catch {
         let filtered = [...mockNCs];
         if (filters.status) filtered = filtered.filter((nc) => nc.status === filters.status);
@@ -274,8 +278,8 @@ export function useNonConformance(id: string) {
     queryKey: ['non-conformances', id],
     queryFn: async () => {
       try {
-        const { data } = await api.get(`/qms/non-conformances/${id}`);
-        return data;
+        const { data: payload } = await api.get(`/qms/non-conformances/${id}`);
+        return unwrapItem<NonConformance>(payload, flattenNC as any);
       } catch {
         const nc = mockNCs.find((n) => n.id === id);
         if (!nc) throw new Error('NC not found');

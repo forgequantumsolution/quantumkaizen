@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem } from '@/lib/apiShape';
 import toast from 'react-hot-toast';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -298,8 +299,8 @@ export function useFMEAs(filters: FMEAFilters = {}) {
     queryKey: ['fmeas', filters],
     queryFn: async () => {
       try {
-        const { data } = await api.get('/qms/fmeas', { params: filters });
-        return data;
+        const { data } = await api.get('/qms/fmea', { params: filters });
+        return unwrapList<FMEA>(data);
       } catch {
         let filtered = [...mockFMEAs];
         if (filters.type) filtered = filtered.filter((f) => f.type === filters.type);
@@ -324,8 +325,8 @@ export function useFMEA(id: string) {
     queryKey: ['fmeas', id],
     queryFn: async () => {
       try {
-        const { data } = await api.get(`/qms/fmeas/${id}`);
-        return data;
+        const { data } = await api.get(`/qms/fmea/${id}`);
+        return unwrapItem<FMEA>(data);
       } catch {
         const fmea = mockFMEAs.find((f) => f.id === id);
         if (!fmea) throw new Error('FMEA not found');

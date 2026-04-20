@@ -66,10 +66,12 @@ export async function getAuditLog(
     };
   }
 
+  // AuditLog has no `createdAt` column — the timestamp field is `timestampUtc`.
+  const sortBy = pagination.sortBy === 'createdAt' ? 'timestampUtc' : pagination.sortBy;
   const [data, total] = await Promise.all([
     prisma.auditLog.findMany({
       where,
-      orderBy: { [pagination.sortBy]: pagination.sortOrder },
+      orderBy: { [sortBy]: pagination.sortOrder },
       skip: pagination.skip,
       take: pagination.limit,
     }),

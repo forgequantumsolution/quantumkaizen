@@ -116,7 +116,7 @@ export default function Sidebar() {
       className={cn(
         'fixed left-0 top-0 h-screen flex flex-col z-40',
         'transition-[width] duration-250 ease-in-out',
-        sidebarCollapsed ? 'w-[56px]' : 'w-[240px]',
+        sidebarCollapsed ? 'w-[56px]' : 'w-[256px]',
       )}
     >
       {/* Brand */}
@@ -153,11 +153,11 @@ export default function Sidebar() {
                   onMouseEnter={e => { if (section.collapsible) (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
-                  <span style={{ color: hasActive ? ACCENT : SECTION_CLR, fontSize: '10px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  <span style={{ color: hasActive ? ACCENT : SECTION_CLR, fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
                     {section.title}
                   </span>
                   {section.collapsible && (
-                    <ChevronDown size={11} style={{ color: SECTION_CLR }}
+                    <ChevronDown size={13} style={{ color: SECTION_CLR }}
                       className={cn('transition-transform duration-150', isCollapsed ? '-rotate-90' : 'rotate-0')} />
                   )}
                 </button>
@@ -184,7 +184,7 @@ export default function Sidebar() {
                           display: 'flex',
                           alignItems: 'center',
                           gap: sidebarCollapsed ? 0 : '10px',
-                          padding: sidebarCollapsed ? 0 : '7px 10px 7px 8px',
+                          padding: sidebarCollapsed ? 0 : '9px 12px 9px 10px',
                           width: sidebarCollapsed ? '36px' : '100%',
                           height: sidebarCollapsed ? '36px' : undefined,
                           justifyContent: sidebarCollapsed ? 'center' : undefined,
@@ -210,10 +210,10 @@ export default function Sidebar() {
                           }
                         }}
                       >
-                        <Icon size={15} strokeWidth={isActive ? 2 : 1.5}
+                        <Icon size={17} strokeWidth={isActive ? 2 : 1.5}
                           style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
                         {!sidebarCollapsed && (
-                          <span style={{ fontSize: '13px', fontWeight: isActive ? 500 : 400, lineHeight: 1, whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '15px', fontWeight: isActive ? 500 : 400, lineHeight: 1.15, whiteSpace: 'nowrap' }}>
                             {item.label}
                           </span>
                         )}
@@ -230,12 +230,12 @@ export default function Sidebar() {
         {!sidebarCollapsed && recentItems.items.length > 0 && (
           <div style={{ borderTop: '1px solid ' + DIVIDER }} className="mt-2 px-2 pt-3">
             <div className="flex items-center justify-between mb-1.5 px-2">
-              <span style={{ color: SECTION_CLR, fontSize: '10px', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase' }}
+              <span style={{ color: SECTION_CLR, fontSize: '11px', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase' }}
                 className="flex items-center gap-1.5">
-                <Clock size={9} /> Recent
+                <Clock size={11} /> Recent
               </span>
               <button onClick={recentItems.clearItems}
-                style={{ color: SECTION_CLR, fontSize: '10px', background: 'none', border: 'none', cursor: 'pointer' }}>Clear</button>
+                style={{ color: SECTION_CLR, fontSize: '11px', background: 'none', border: 'none', cursor: 'pointer' }}>Clear</button>
             </div>
             <div className="space-y-px">
               {recentItems.items.slice(0, 4).map(item => (
@@ -248,8 +248,8 @@ export default function Sidebar() {
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR; }}
                 >
                   <div style={{ background: ACCENT }} className="w-1 h-1 rounded-full shrink-0" />
-                  <span className="text-xs truncate flex-1">{item.label}</span>
-                  <span style={{ color: SECTION_CLR }} className="text-[10px] shrink-0 font-mono">{item.type}</span>
+                  <span className="text-sm truncate flex-1">{item.label}</span>
+                  <span style={{ color: SECTION_CLR }} className="text-[11px] shrink-0 font-mono">{item.type}</span>
                 </button>
               ))}
             </div>
@@ -261,12 +261,12 @@ export default function Sidebar() {
       {!sidebarCollapsed && (
         <div style={{ borderTop: '1px solid ' + DIVIDER }} className="px-3 py-2.5 flex items-center gap-2.5 shrink-0">
           <div style={{ backgroundColor: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.25)' }}
-            className="w-7 h-7 rounded flex items-center justify-center shrink-0">
-            <span style={{ color: ACCENT }} className="text-[10px] font-bold">{initials}</span>
+            className="w-8 h-8 rounded flex items-center justify-center shrink-0">
+            <span style={{ color: ACCENT }} className="text-[11px] font-bold">{initials}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p style={{ color: ACTIVE_CLR }} className="text-[13px] font-medium truncate leading-none">{user?.name ?? '—'}</p>
-            <p style={{ color: SECTION_CLR }} className="text-[10px] truncate leading-none mt-0.5">
+            <p style={{ color: ACTIVE_CLR }} className="text-[14px] font-medium truncate leading-tight">{user?.name ?? '—'}</p>
+            <p style={{ color: SECTION_CLR }} className="text-[11px] truncate leading-tight mt-0.5">
               {user?.role?.replace(/_/g, ' ') ?? 'Unknown Role'}
             </p>
           </div>

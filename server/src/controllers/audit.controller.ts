@@ -19,7 +19,7 @@ function auditParams(req: Request) {
 async function generateAuditNumber(tenantId: string): Promise<string> {
   const year = new Date().getFullYear();
   const db = prisma as any;
-  const count = await db.auditPlan.count({
+  const count = await db.audit.count({
     where: {
       tenantId,
       auditNumber: { startsWith: `AUD-${year}-` },
@@ -56,13 +56,13 @@ export const listAudits = async (req: Request, res: Response, next: NextFunction
 
     const db = prisma as any;
     const [audits, total] = await Promise.all([
-      db.auditPlan.findMany({
+      db.audit.findMany({
         where,
         skip: pagination.skip,
         take: pagination.limit,
         orderBy: { [pagination.sortBy]: pagination.sortOrder },
       }),
-      db.auditPlan.count({ where }),
+      db.audit.count({ where }),
     ]);
 
     res.status(200).json(buildPaginationResponse(audits, total, pagination.page, pagination.limit));
@@ -78,7 +78,7 @@ export const getAuditById = async (req: Request, res: Response, next: NextFuncti
     const { id } = req.params;
     const db = prisma as any;
 
-    const audit = await db.auditPlan.findFirst({
+    const audit = await db.audit.findFirst({
       where: { id, tenantId: req.user.tenantId },
       include: {
         findings: true,
@@ -111,7 +111,7 @@ export const createAudit = async (req: Request, res: Response, next: NextFunctio
     const auditNumber = await generateAuditNumber(req.user.tenantId);
     const db = prisma as any;
 
-    const audit = await db.auditPlan.create({
+    const audit = await db.audit.create({
       data: {
         tenantId: req.user.tenantId,
         auditNumber,
@@ -152,7 +152,7 @@ export const updateAudit = async (req: Request, res: Response, next: NextFunctio
     const { id } = req.params;
     const db = prisma as any;
 
-    const existing = await db.auditPlan.findFirst({
+    const existing = await db.audit.findFirst({
       where: { id, tenantId: req.user.tenantId },
     });
 
@@ -185,7 +185,7 @@ export const updateAudit = async (req: Request, res: Response, next: NextFunctio
       }
     }
 
-    const audit = await db.auditPlan.update({
+    const audit = await db.audit.update({
       where: { id },
       data: updateData,
     });
@@ -222,7 +222,7 @@ export const addFinding = async (req: Request, res: Response, next: NextFunction
 
     const db = prisma as any;
 
-    const existing = await db.auditPlan.findFirst({
+    const existing = await db.audit.findFirst({
       where: { id, tenantId: req.user.tenantId },
     });
 
@@ -271,7 +271,7 @@ export const completeAudit = async (req: Request, res: Response, next: NextFunct
     const { summary, recommendations } = req.body;
     const db = prisma as any;
 
-    const existing = await db.auditPlan.findFirst({
+    const existing = await db.audit.findFirst({
       where: { id, tenantId: req.user.tenantId },
     });
 
@@ -283,7 +283,7 @@ export const completeAudit = async (req: Request, res: Response, next: NextFunct
       throw new AppError('Audit must be in PLANNED or IN_PROGRESS status to complete', 400, 'INVALID_STATUS');
     }
 
-    const audit = await db.auditPlan.update({
+    const audit = await db.audit.update({
       where: { id },
       data: {
         status: 'COMPLETED',
@@ -317,7 +317,7 @@ export const closeAudit = async (req: Request, res: Response, next: NextFunction
     const { closureComments } = req.body;
     const db = prisma as any;
 
-    const existing = await db.auditPlan.findFirst({
+    const existing = await db.audit.findFirst({
       where: { id, tenantId: req.user.tenantId },
     });
 
@@ -329,7 +329,7 @@ export const closeAudit = async (req: Request, res: Response, next: NextFunction
       throw new AppError('Audit must be COMPLETED before closing', 400, 'INVALID_STATUS');
     }
 
-    const audit = await db.auditPlan.update({
+    const audit = await db.audit.update({
       where: { id },
       data: {
         status: 'CLOSED',

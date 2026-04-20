@@ -1,7 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
 import type { PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
+
+const flattenRisk = (r: Record<string, unknown>) => {
+  const base = flattenUsers(r, ['owner']) as any;
+  return {
+    ...base,
+    // Backend stores control measures as a single text field; list page
+    // expects an array of control objects. Default to [] when absent.
+    controls: Array.isArray(base.controls) ? base.controls : [],
+  };
+};
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -431,7 +442,7 @@ export function useRisks(filters: RiskFilters = {}) {
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/risks', { params: filters });
-        return data;
+        return unwrapList(data, flattenRisk as any);
       } catch {
         let filtered = [...mockRisks];
         if (filters.riskLevel) filtered = filtered.filter((r) => r.riskLevel === filters.riskLevel);
@@ -457,7 +468,7 @@ export function useRisk(id: string) {
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/risks/${id}`);
-        return data;
+        return unwrapItem(data, flattenRisk as any);
       } catch {
         const risk = mockRisks.find((r) => r.id === id);
         if (!risk) throw new Error('Risk not found');

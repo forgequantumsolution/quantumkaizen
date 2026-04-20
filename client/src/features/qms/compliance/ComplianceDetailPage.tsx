@@ -18,18 +18,21 @@ import {
   StatusBadge,
 } from '@/components/ui';
 import { formatDate } from '@/lib/utils';
+import { lookupBadge } from '@/lib/badgeMap';
 import { useComplianceRequirement } from './hooks';
 import type { ComplianceStatus } from './hooks';
 
-function getStatusBadge(status: ComplianceStatus) {
-  const config: Record<ComplianceStatus, { variant: 'success' | 'danger' | 'warning' | 'default'; label: string }> = {
-    COMPLIANT: { variant: 'success', label: 'Compliant' },
-    NON_COMPLIANT: { variant: 'danger', label: 'Non-Compliant' },
-    PARTIAL: { variant: 'warning', label: 'Partial' },
-    NOT_ASSESSED: { variant: 'default', label: 'Not Assessed' },
-  };
-  const c = config[status];
-  return <Badge variant={c.variant}>{c.label}</Badge>;
+function getStatusBadge(status: ComplianceStatus | string) {
+  const c = lookupBadge(
+    {
+      COMPLIANT: { variant: 'success', label: 'Compliant' },
+      NON_COMPLIANT: { variant: 'danger', label: 'Non-Compliant' },
+      PARTIAL: { variant: 'warning', label: 'Partial' },
+      NOT_ASSESSED: { variant: 'default', label: 'Not Assessed' },
+    },
+    status,
+  );
+  return <Badge variant={c.variant as any}>{c.label}</Badge>;
 }
 
 export default function ComplianceDetailPage() {

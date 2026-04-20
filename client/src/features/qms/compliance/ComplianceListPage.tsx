@@ -18,6 +18,7 @@ import {
 import type { Column } from '@/components/ui';
 import Tabs from '@/components/ui/Tabs';
 import { formatDate } from '@/lib/utils';
+import { lookupBadge } from '@/lib/badgeMap';
 import {
   useComplianceRequirements,
   mockRequirements,
@@ -27,29 +28,21 @@ import {
 } from './hooks';
 import type { ComplianceRequirement, ComplianceStatus } from './hooks';
 
-const allRequirements = [
-  ...mockRequirements,
-  ...mockIATFRequirements,
-  ...mockISO14001Requirements,
-  ...mockISO45001Requirements,
-];
+// Mock data kept only as an offline fallback in the hook.
+// Tabs + metrics now come from live backend data (see the hook calls below).
+const ALL_TAB_ID = 'ALL';
 
-const standardTabs = [
-  { id: 'ISO 9001', label: 'ISO 9001', count: mockRequirements.length },
-  { id: 'IATF 16949', label: 'IATF 16949', count: mockIATFRequirements.length },
-  { id: 'ISO 14001', label: 'ISO 14001', count: mockISO14001Requirements.length },
-  { id: 'ISO 45001', label: 'ISO 45001', count: mockISO45001Requirements.length },
-];
-
-function getStatusBadge(status: ComplianceStatus) {
-  const config: Record<ComplianceStatus, { variant: 'success' | 'danger' | 'warning' | 'default'; label: string }> = {
-    COMPLIANT: { variant: 'success', label: 'Compliant' },
-    NON_COMPLIANT: { variant: 'danger', label: 'Non-Compliant' },
-    PARTIAL: { variant: 'warning', label: 'Partial' },
-    NOT_ASSESSED: { variant: 'default', label: 'Not Assessed' },
-  };
-  const c = config[status];
-  return <Badge variant={c.variant}>{c.label}</Badge>;
+function getStatusBadge(status: ComplianceStatus | string) {
+  const c = lookupBadge(
+    {
+      COMPLIANT: { variant: 'success', label: 'Compliant' },
+      NON_COMPLIANT: { variant: 'danger', label: 'Non-Compliant' },
+      PARTIAL: { variant: 'warning', label: 'Partial' },
+      NOT_ASSESSED: { variant: 'default', label: 'Not Assessed' },
+    },
+    status,
+  );
+  return <Badge variant={c.variant as any}>{c.label}</Badge>;
 }
 
 function ComplianceProgressBar({ requirements }: { requirements: ComplianceRequirement[] }) {
@@ -97,11 +90,28 @@ function ComplianceProgressBar({ requirements }: { requirements: ComplianceRequi
 
 export default function ComplianceListPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('ISO 9001');
+  const [activeTab, setActiveTab] = useState<string>(ALL_TAB_ID);
   const [search, setSearch] = useState('');
 
-  const { data: result, isLoading } = useComplianceRequirements(activeTab);
-  const requirements: ComplianceRequirement[] = result?.data ?? [];
+  // Always fetch the full set for totals + tab counts. The per-tab filter is
+  // applied client-side below so switching tabs is instant and counts stay
+  // accurate even when the list is paginated server-side.
+  const { data: result, isLoading } = useComplianceRequirements(undefined);
+  const allRequirements: ComplianceRequirement[] = result?.data ?? [];
+
+  const standardTabs = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of allRequirements) counts.set(r.standard, (counts.get(r.standard) ?? 0) + 1);
+    const perStandard = Array.from(counts.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([id, count]) => ({ id, label: id, count }));
+    return [{ id: ALL_TAB_ID, label: 'All', count: allRequirements.length }, ...perStandard];
+  }, [allRequirements]);
+
+  const requirements =
+    activeTab === ALL_TAB_ID
+      ? allRequirements
+      : allRequirements.filter((r) => r.standard === activeTab);
 
   const filteredRequirements = useMemo(() => {
     if (!search) return requirements;
@@ -114,11 +124,12 @@ export default function ComplianceListPage() {
   }, [requirements, search]);
 
   // Dashboard metrics (across all standards)
-  const totalReqs = allRequirements.length;
+  const totalReqs = allRequirements.length || 1;
   const compliantCount = allRequirements.filter((r) => r.status === 'COMPLIANT').length;
   const compliantPct = Math.round((compliantCount / totalReqs) * 100);
   const nonCompliantCount = allRequirements.filter((r) => r.status === 'NON_COMPLIANT').length;
   const dueForReview = allRequirements.filter((r) => {
+    if (!r.nextReview) return false;
     const next = new Date(r.nextReview);
     const now = new Date();
     const thirtyDays = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);

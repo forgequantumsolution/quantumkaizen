@@ -28,28 +28,34 @@ import {
 } from '@/components/ui';
 import Tabs from '@/components/ui/Tabs';
 import { cn, formatDate } from '@/lib/utils';
+import { lookupBadge } from '@/lib/badgeMap';
 import { useSupplier } from './hooks';
 import type { SupplierCategory, SupplierStatus } from './hooks';
 
-function getCategoryBadge(category: SupplierCategory) {
-  const map: Record<SupplierCategory, { variant: 'danger' | 'warning' | 'default'; label: string }> = {
-    CRITICAL: { variant: 'danger', label: 'Critical' },
-    MAJOR: { variant: 'warning', label: 'Major' },
-    MINOR: { variant: 'default', label: 'Minor' },
-  };
-  const c = map[category];
-  return <Badge variant={c.variant}>{c.label}</Badge>;
+function getCategoryBadge(category: SupplierCategory | string) {
+  const c = lookupBadge(
+    {
+      CRITICAL: { variant: 'danger', label: 'Critical' },
+      MAJOR: { variant: 'warning', label: 'Major' },
+      MINOR: { variant: 'default', label: 'Minor' },
+    },
+    category,
+  );
+  return <Badge variant={c.variant as any}>{c.label}</Badge>;
 }
 
-function getSupplierStatusBadge(status: SupplierStatus) {
-  const map: Record<SupplierStatus, { variant: 'success' | 'warning' | 'info' | 'danger'; label: string }> = {
-    APPROVED: { variant: 'success', label: 'Approved' },
-    CONDITIONAL: { variant: 'warning', label: 'Conditional' },
-    PENDING: { variant: 'info', label: 'Pending' },
-    DISQUALIFIED: { variant: 'danger', label: 'Disqualified' },
-  };
-  const c = map[status];
-  return <Badge variant={c.variant}>{c.label}</Badge>;
+function getSupplierStatusBadge(status: SupplierStatus | string) {
+  const c = lookupBadge(
+    {
+      APPROVED: { variant: 'success', label: 'Approved' },
+      CONDITIONAL: { variant: 'warning', label: 'Conditional' },
+      PENDING: { variant: 'info', label: 'Pending' },
+      DISQUALIFIED: { variant: 'danger', label: 'Disqualified' },
+      SUSPENDED: { variant: 'danger', label: 'Suspended' },
+    },
+    status,
+  );
+  return <Badge variant={c.variant as any}>{c.label}</Badge>;
 }
 
 const detailTabs = [
