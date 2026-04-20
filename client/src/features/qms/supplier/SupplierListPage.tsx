@@ -19,7 +19,9 @@ import {
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
 import { useSuppliers, mockSuppliers } from './hooks';
+import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { Supplier, SupplierCategory, SupplierStatus } from './hooks';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 function getCategoryBadge(category: SupplierCategory) {
   const map: Record<SupplierCategory, { variant: 'danger' | 'warning' | 'default'; label: string }> = {
@@ -81,14 +83,17 @@ export default function SupplierListPage() {
     [statusFilter, categoryFilter, search],
   );
 
+  const { year } = useFiscalYearStore();
   const { data: result, isLoading } = useSuppliers(filters);
-  const suppliers = result?.data ?? [];
+  const suppliers = (result?.data ?? [] as Supplier[]).filter((s: Supplier) => new Date((s as any).createdAt).getFullYear() === year);
+
+  const yearSuppliers = useMemo(() => mockSuppliers.filter((s) => new Date(s.createdAt).getFullYear() === year), [year]);
 
   // Summary stats
-  const totalSuppliers = mockSuppliers.length;
-  const approvedCount = mockSuppliers.filter((s) => s.status === 'APPROVED').length;
-  const conditionalCount = mockSuppliers.filter((s) => s.status === 'CONDITIONAL').length;
-  const disqualifiedCount = mockSuppliers.filter((s) => s.status === 'DISQUALIFIED').length;
+  const totalSuppliers = yearSuppliers.length;
+  const approvedCount = yearSuppliers.filter((s) => s.status === 'APPROVED').length;
+  const conditionalCount = yearSuppliers.filter((s) => s.status === 'CONDITIONAL').length;
+  const disqualifiedCount = yearSuppliers.filter((s) => s.status === 'DISQUALIFIED').length;
 
   const columns: Column<Supplier>[] = [
     {
@@ -207,6 +212,73 @@ export default function SupplierListPage() {
           icon={XOctagon}
           iconColor="bg-red-50 text-red-600"
         />
+      </div>
+
+      {/* Analytics */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">Status Breakdown</h3>
+          <ResponsiveContainer width="100%" height={140}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: 'Approved', value: yearSuppliers.filter((s) => s.status === 'APPROVED').length },
+                  { name: 'Conditional', value: yearSuppliers.filter((s) => s.status === 'CONDITIONAL').length },
+                  { name: 'Pending', value: yearSuppliers.filter((s) => s.status === 'PENDING').length },
+                  { name: 'Disqualified', value: yearSuppliers.filter((s) => s.status === 'DISQUALIFIED').length },
+                ]}
+                cx="50%" cy="50%" innerRadius={36} outerRadius={58} paddingAngle={3} dataKey="value"
+              >
+                {['#22C55E','#F59E0B','#3B82F6','#EF4444'].map((c, i) => <Cell key={i} fill={c} />)}
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap justify-center gap-2 mt-1">
+            {[{ l: 'Approved', c: '#22C55E' }, { l: 'Conditional', c: '#F59E0B' }, { l: 'Pending', c: '#3B82F6' }, { l: 'Disqualified', c: '#EF4444' }].map(({ l, c }) => (
+              <div key={l} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
+                <span className="text-[10px] text-slate-500">{l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">By Category</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { cat: 'Critical', count: yearSuppliers.filter((s) => s.category === 'CRITICAL').length },
+              { cat: 'Major', count: yearSuppliers.filter((s) => s.category === 'MAJOR').length },
+              { cat: 'Minor', count: yearSuppliers.filter((s) => s.category === 'MINOR').length },
+            ]}>
+              <XAxis dataKey="cat" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 10 }} width={22} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                <Cell fill="#EF4444" /><Cell fill="#F59E0B" /><Cell fill="#94A3B8" />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">Rating Distribution</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { range: '4–5 ★', count: yearSuppliers.filter((s) => s.rating >= 4).length },
+              { range: '3–4 ★', count: yearSuppliers.filter((s) => s.rating >= 3 && s.rating < 4).length },
+              { range: '2–3 ★', count: yearSuppliers.filter((s) => s.rating >= 2 && s.rating < 3).length },
+              { range: '<2 ★', count: yearSuppliers.filter((s) => s.rating > 0 && s.rating < 2).length },
+              { range: 'Unrated', count: yearSuppliers.filter((s) => s.rating === 0).length },
+            ]}>
+              <XAxis dataKey="range" tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 10 }} width={22} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" fill="#F59E0B" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Filters + Table */}

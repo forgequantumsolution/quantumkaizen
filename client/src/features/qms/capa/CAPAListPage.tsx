@@ -23,7 +23,9 @@ import {
 import type { Column } from '@/components/ui';
 import { cn, formatDate, daysSince } from '@/lib/utils';
 import { useCAPAs, mockCAPAs } from './hooks';
+import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { CAPARecord } from './hooks';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const STATUSES = [
   '',
@@ -67,19 +69,22 @@ export default function CAPAListPage() {
     [statusFilter, severityFilter, sourceFilter, deptFilter, search],
   );
 
+  const { year } = useFiscalYearStore();
   const { data: result, isLoading } = useCAPAs(filters);
-  const capas = result?.data ?? [];
+  const capas = (result?.data ?? []).filter((c) => new Date(c.createdAt).getFullYear() === year);
 
-  const openCount = mockCAPAs.filter((c) =>
+  const yearCAPAs = useMemo(() => mockCAPAs.filter((c) => new Date(c.createdAt).getFullYear() === year), [year]);
+
+  const openCount = yearCAPAs.filter((c) =>
     ['INITIATED', 'CONTAINMENT', 'ROOT_CAUSE_ANALYSIS', 'ACTION_DEFINITION'].includes(c.status),
   ).length;
-  const investigationCount = mockCAPAs.filter((c) =>
+  const investigationCount = yearCAPAs.filter((c) =>
     ['ROOT_CAUSE_ANALYSIS', 'ACTION_DEFINITION'].includes(c.status),
   ).length;
-  const overdueCount = mockCAPAs.filter(
+  const overdueCount = yearCAPAs.filter(
     (c) => new Date(c.dueDate) < new Date() && c.status !== 'CLOSED',
   ).length;
-  const closedThisMonth = mockCAPAs.filter((c) => {
+  const closedThisMonth = yearCAPAs.filter((c) => {
     if (!c.closedAt) return false;
     const d = new Date(c.closedAt);
     const now = new Date();
@@ -196,6 +201,75 @@ export default function CAPAListPage() {
           iconColor="bg-emerald-50 text-emerald-600"
           onClick={() => setStatusFilter('CLOSED')}
         />
+      </div>
+
+      {/* Analytics */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">Stage Pipeline</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { stage: 'Initiated', count: yearCAPAs.filter((c) => c.status === 'INITIATED').length },
+              { stage: 'Containment', count: yearCAPAs.filter((c) => c.status === 'CONTAINMENT').length },
+              { stage: 'Root Cause', count: yearCAPAs.filter((c) => c.status === 'ROOT_CAUSE_ANALYSIS').length },
+              { stage: 'Action Def.', count: yearCAPAs.filter((c) => c.status === 'ACTION_DEFINITION').length },
+              { stage: 'Implement.', count: yearCAPAs.filter((c) => c.status === 'IMPLEMENTATION').length },
+              { stage: 'Verify', count: yearCAPAs.filter((c) => c.status === 'EFFECTIVENESS_VERIFICATION').length },
+              { stage: 'Closed', count: yearCAPAs.filter((c) => c.status === 'CLOSED').length },
+            ]} layout="vertical" margin={{ left: 4 }}>
+              <XAxis type="number" tick={{ fontSize: 10 }} />
+              <YAxis dataKey="stage" type="category" tick={{ fontSize: 10 }} width={62} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" fill="#0D0E17" radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">By Source</h3>
+          <ResponsiveContainer width="100%" height={140}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: 'NC', value: yearCAPAs.filter((c) => c.source === 'NC').length },
+                  { name: 'Audit', value: yearCAPAs.filter((c) => c.source === 'AUDIT').length },
+                  { name: 'Complaint', value: yearCAPAs.filter((c) => c.source === 'COMPLAINT').length },
+                  { name: 'Proactive', value: yearCAPAs.filter((c) => c.source === 'PROACTIVE').length },
+                  { name: 'Other', value: yearCAPAs.filter((c) => !['NC','AUDIT','COMPLAINT','PROACTIVE'].includes(c.source)).length },
+                ]}
+                cx="50%" cy="50%" innerRadius={36} outerRadius={58} paddingAngle={3} dataKey="value"
+              >
+                {['#EF4444','#3B82F6','#F59E0B','#22C55E','#A855F7'].map((c, i) => <Cell key={i} fill={c} />)}
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap justify-center gap-2 mt-1">
+            {[{ l: 'NC', c: '#EF4444' }, { l: 'Audit', c: '#3B82F6' }, { l: 'Complaint', c: '#F59E0B' }, { l: 'Proactive', c: '#22C55E' }, { l: 'Other', c: '#A855F7' }].map(({ l, c }) => (
+              <div key={l} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
+                <span className="text-[10px] text-slate-500">{l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">Age Distribution</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { range: '0–7d', count: yearCAPAs.filter((c) => { const d = Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86400000); return d <= 7; }).length },
+              { range: '8–30d', count: yearCAPAs.filter((c) => { const d = Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86400000); return d > 7 && d <= 30; }).length },
+              { range: '31–90d', count: yearCAPAs.filter((c) => { const d = Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86400000); return d > 30 && d <= 90; }).length },
+              { range: '90d+', count: yearCAPAs.filter((c) => { const d = Math.floor((Date.now() - new Date(c.createdAt).getTime()) / 86400000); return d > 90; }).length },
+            ]}>
+              <XAxis dataKey="range" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} width={22} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" fill="#F59E0B" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Filters */}

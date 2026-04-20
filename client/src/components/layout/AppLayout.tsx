@@ -4,6 +4,7 @@ import Header from './Header';
 import { useUIStore } from '@/stores/uiStore';
 import { cn } from '@/lib/utils';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import ChatBot from '@/components/shared/ChatBot';
 
 export default function AppLayout() {
   const { sidebarCollapsed } = useUIStore();
@@ -26,6 +27,7 @@ export default function AppLayout() {
           </div>
         </main>
       </div>
+      <ChatBot />
     </div>
   );
 }

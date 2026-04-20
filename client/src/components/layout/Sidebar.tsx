@@ -88,14 +88,14 @@ const navigation: NavSection[] = [
 ];
 
 // Design tokens — inline to guarantee rendering
-const BG           = '#1A1A2E';
-const ACTIVE_BG    = '#2D2D44';
-const ACCENT       = '#C9A84C';
-const SECTION_CLR  = '#5A5A7A';
-const INACTIVE_CLR = '#8A8AA8';
-const ACTIVE_CLR   = '#FFFFFF';
-const DIVIDER      = 'rgba(255,255,255,0.08)';
-const HOVER_BG     = 'rgba(255,255,255,0.05)';
+const BG           = '#0D0E17';
+const ACTIVE_BG    = '#1E2035';
+const ACCENT       = '#F59E0B';
+const SECTION_CLR  = '#4A4A6A';
+const INACTIVE_CLR = '#7A7A9A';
+const ACTIVE_CLR   = '#F59E0B';
+const DIVIDER      = 'rgba(255,255,255,0.06)';
+const HOVER_BG     = 'rgba(255,255,255,0.04)';
 
 export default function Sidebar() {
   const location    = useLocation();
@@ -124,13 +124,15 @@ export default function Sidebar() {
         style={{ borderBottom: '1px solid ' + DIVIDER }}
         className={cn('flex items-center h-14 shrink-0', sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-4')}
       >
-        <div style={{ backgroundColor: ACCENT }} className="w-7 h-7 rounded flex items-center justify-center shrink-0">
-          <span className="text-white font-bold text-xs tracking-tight">Q</span>
+        <div style={{ backgroundColor: ACCENT }} className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0">
+          <span style={{ color: '#0D0E17' }} className="font-black text-sm tracking-tight">Q</span>
         </div>
         {!sidebarCollapsed && (
           <div className="overflow-hidden">
-            <p className="text-white font-semibold text-sm leading-none">Quantum Kaizen</p>
-            <p style={{ color: SECTION_CLR }} className="text-[10px] font-mono tracking-widest mt-0.5 uppercase">QMS Platform</p>
+            <p className="text-white font-bold text-sm leading-none tracking-tight">
+              Quantum <span style={{ color: ACCENT }}>Kaizen</span>
+            </p>
+            <p style={{ color: SECTION_CLR }} className="text-[9px] tracking-[0.15em] mt-0.5 uppercase font-medium">QMS Platform</p>
           </div>
         )}
       </div>

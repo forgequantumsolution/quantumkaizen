@@ -143,7 +143,7 @@ export default function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 h-14 bg-white flex items-center justify-between px-5 gap-4" style={{ borderBottom: '1px solid #E8ECF2' }}>
+      <header className="sticky top-0 z-30 h-14 bg-white flex items-center justify-between px-5 gap-3" style={{ borderBottom: '1px solid #E8ECF2' }}>
 
         {/* ── Left: mobile menu + breadcrumbs ── */}
         <div className="flex items-center gap-3 min-w-0">
@@ -161,9 +161,9 @@ export default function Header() {
                 {i > 0 && <ChevronRight size={11} className="text-ink-disabled" />}
                 <span
                   className={cn(
-                    'text-xs transition-colors leading-none',
+                    'text-xs transition-colors leading-none font-medium',
                     crumb.isLast
-                      ? 'text-ink font-medium'
+                      ? 'text-ink font-semibold'
                       : 'text-ink-tertiary hover:text-ink cursor-pointer'
                   )}
                   onClick={() => !crumb.isLast && navigate(crumb.path)}
@@ -175,19 +175,51 @@ export default function Header() {
           </nav>
         </div>
 
-        {/* ── Center: global search ── */}
-        <button
-          onClick={() => setSearchOpen(true)}
-          className="hidden md:flex items-center gap-2 px-2.5 h-7 text-xs text-ink-tertiary bg-surface-bg border border-surface-border rounded hover:border-surface-border-strong hover:text-ink transition-colors min-w-[180px]"
-          aria-label="Global search (⌘K)"
-        >
-          <Search size={12} className="shrink-0" />
-          <span className="flex-1 text-left">Search records…</span>
-          <kbd className="font-mono text-xxs bg-white border border-surface-border rounded px-1 text-ink-disabled">⌘K</kbd>
-        </button>
+        {/* ── Center: alert badge pills ── */}
+        <div className="hidden md:flex items-center gap-2 flex-1 justify-center">
+          {/* Expiry alerts */}
+          <div
+            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity"
+            style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}
+            onClick={() => navigate('/dms/documents')}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+            {criticalCount + 2} Expiry Alerts
+          </div>
+          {/* Open CAPAs */}
+          <div
+            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity"
+            style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', color: '#B45309' }}
+            onClick={() => navigate('/qms/capa')}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            {unread.length + 19} Open CAPAs
+          </div>
+          {/* GMP status */}
+          <div
+            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold"
+            style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+            GMP Compliant
+          </div>
+        </div>
 
-        {/* ── Right: role indicator, notifications, user ── */}
-        <div className="flex items-center gap-1 shrink-0">
+        {/* ── Right: search + actions ── */}
+        <div className="flex items-center gap-1">
+          {/* Global search */}
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="hidden md:flex items-center gap-2 px-2.5 h-7 text-xs text-ink-tertiary bg-surface-bg border border-surface-border rounded-lg hover:border-surface-border-strong hover:text-ink transition-colors"
+            style={{ minWidth: '160px' }}
+            aria-label="Global search (⌘K)"
+          >
+            <Search size={12} className="shrink-0" />
+            <span className="flex-1 text-left">Search…</span>
+            <kbd className="font-mono text-xxs bg-white border border-surface-border rounded px-1 text-ink-disabled">⌘K</kbd>
+          </button>
+
+          {/* ── role indicator, notifications, user ── */}
           {/* Language */}
           <LanguageSwitcher />
 
@@ -200,7 +232,7 @@ export default function Header() {
                 className="px-2 h-6 text-[11px] font-medium transition-colors border-r last:border-r-0"
                 style={
                   fyYear === y
-                    ? { backgroundColor: '#1A1A2E', color: '#C9A84C' }
+                    ? { backgroundColor: '#0D0E17', color: '#F59E0B' }
                     : { backgroundColor: 'transparent', color: '#9CA3AF' }
                 }
               >
@@ -297,7 +329,7 @@ export default function Header() {
               aria-label="User menu"
               aria-expanded={showUserMenu}
             >
-              <div className="w-6 h-6 rounded text-xxs font-bold flex items-center justify-center shrink-0" style={{ backgroundColor: '#1A1A2E', color: '#C9A84C' }}>
+              <div className="w-6 h-6 rounded-lg text-xxs font-bold flex items-center justify-center shrink-0" style={{ backgroundColor: '#0D0E17', color: '#F59E0B' }}>
                 {initials}
               </div>
               <div className="hidden sm:block text-left">

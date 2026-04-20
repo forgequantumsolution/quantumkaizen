@@ -17,7 +17,9 @@ import {
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
 import { useComplaints, mockComplaints } from './hooks';
+import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { Complaint } from './hooks';
+import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const STATUSES = ['', 'Received', 'Acknowledged', 'Under Investigation', 'Resolution Proposed', 'Closed'];
 const SEVERITIES = ['', 'Critical', 'Major', 'Minor'];
@@ -51,21 +53,24 @@ export default function ComplaintListPage() {
     [statusFilter, severityFilter, search],
   );
 
+  const { year } = useFiscalYearStore();
   const { data: result, isLoading } = useComplaints(filters);
-  const complaints = result?.data ?? [];
+  const complaints = (result?.data ?? [] as Complaint[]).filter((c: Complaint) => new Date(c.receivedDate).getFullYear() === year);
+
+  const yearComplaints = useMemo(() => mockComplaints.filter((c) => new Date(c.receivedDate).getFullYear() === year), [year]);
 
   // Summary counts
-  const openCount = mockComplaints.filter(
+  const openCount = yearComplaints.filter(
     (c) => c.status !== 'Closed',
   ).length;
-  const overdueCount = mockComplaints.filter(
+  const overdueCount = yearComplaints.filter(
     (c) =>
       c.responseDue &&
       new Date(c.responseDue) < new Date() &&
       c.status !== 'Closed',
   ).length;
   // Average resolution time for closed complaints
-  const closedComplaints = mockComplaints.filter((c) => c.status === 'Closed');
+  const closedComplaints = yearComplaints.filter((c) => c.status === 'Closed');
   const avgResolutionDays =
     closedComplaints.length > 0
       ? Math.round(
@@ -215,6 +220,75 @@ export default function ComplaintListPage() {
           iconColor="bg-emerald-50 text-emerald-600"
           onClick={() => setStatusFilter('Closed')}
         />
+      </div>
+
+      {/* Analytics */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">By Severity</h3>
+          <ResponsiveContainer width="100%" height={140}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: 'Critical', value: yearComplaints.filter((c) => c.severity === 'Critical').length },
+                  { name: 'Major', value: yearComplaints.filter((c) => c.severity === 'Major').length },
+                  { name: 'Minor', value: yearComplaints.filter((c) => c.severity === 'Minor').length },
+                ]}
+                cx="50%" cy="50%" innerRadius={38} outerRadius={60} paddingAngle={3} dataKey="value"
+              >
+                <Cell fill="#EF4444" /><Cell fill="#F59E0B" /><Cell fill="#94A3B8" />
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex justify-center gap-3 mt-1">
+            {[{ label: 'Critical', color: '#EF4444' }, { label: 'Major', color: '#F59E0B' }, { label: 'Minor', color: '#94A3B8' }].map(({ label, color }) => (
+              <div key={label} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                <span className="text-[10px] text-slate-500">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">Monthly Trend</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <AreaChart data={[
+              { month: 'Nov', received: 4, closed: 2 },
+              { month: 'Dec', received: 6, closed: 4 },
+              { month: 'Jan', received: 5, closed: 4 },
+              { month: 'Feb', received: 8, closed: 5 },
+              { month: 'Mar', received: 7, closed: 6 },
+              { month: 'Apr', received: openCount, closed: closedComplaints.length },
+            ]}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} width={22} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Area type="monotone" dataKey="received" stroke="#F59E0B" fill="#FEF3C7" strokeWidth={2} name="Received" />
+              <Area type="monotone" dataKey="closed" stroke="#22C55E" fill="#DCFCE7" strokeWidth={2} name="Closed" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">Status Breakdown</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { status: 'Received', count: yearComplaints.filter((c) => c.status === 'Received').length },
+              { status: 'Acknowledged', count: yearComplaints.filter((c) => c.status === 'Acknowledged').length },
+              { status: 'Investigating', count: yearComplaints.filter((c) => c.status === 'Under Investigation').length },
+              { status: 'Proposed', count: yearComplaints.filter((c) => c.status === 'Resolution Proposed').length },
+              { status: 'Closed', count: yearComplaints.filter((c) => c.status === 'Closed').length },
+            ]}>
+              <XAxis dataKey="status" tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 10 }} width={22} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" fill="#0D0E17" radius={[3, 3, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Filters */}

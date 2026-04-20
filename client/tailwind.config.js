@@ -39,17 +39,17 @@ export default {
         },
         // ── Sidebar / Navigation — Dark Navy ──────────────────────────────────
         navy: {
-          DEFAULT: '#1A1A2E',
+          DEFAULT: '#0D0E17',
           50:  '#EEEEF4',
           100: '#D1D1E3',
           200: '#A9A9C9',
           300: '#7A7A9F',
-          400: '#5A5A7A',
-          500: '#2D2D44',   // active item background
-          600: '#1A1A2E',   // sidebar background
-          700: '#14142A',
-          800: '#0E0E1F',
-          900: '#080816',
+          400: '#4A4A6A',
+          500: '#1E2035',   // active item background
+          600: '#0D0E17',   // sidebar background
+          700: '#0A0B13',
+          800: '#07080F',
+          900: '#04050A',
         },
         // ── Status: Success / Valid ───────────────────────────────────────────
         compliant: {
@@ -166,8 +166,8 @@ export default {
       },
 
       fontFamily: {
-        sans: ['DM Sans', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-        mono: ['IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['Outfit', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        mono: ['DM Mono', 'IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
 
       fontSize: {

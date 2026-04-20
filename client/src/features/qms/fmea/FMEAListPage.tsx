@@ -13,13 +13,9 @@ import type { Column } from '@/components/ui';
 import Tabs from '@/components/ui/Tabs';
 import { cn, formatDate } from '@/lib/utils';
 import { useFMEAs, mockFMEAs } from './hooks';
+import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { FMEA } from './hooks';
-
-const fmeaTabs = [
-  { id: 'all', label: 'All', count: mockFMEAs.length },
-  { id: 'DFMEA', label: 'DFMEA (Design)', count: mockFMEAs.filter((f) => f.type === 'DFMEA').length },
-  { id: 'PFMEA', label: 'PFMEA (Process)', count: mockFMEAs.filter((f) => f.type === 'PFMEA').length },
-];
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 export default function FMEAListPage() {
   const navigate = useNavigate();
@@ -34,14 +30,23 @@ export default function FMEAListPage() {
     [activeTab, search],
   );
 
+  const { year } = useFiscalYearStore();
   const { data: result, isLoading } = useFMEAs(filters);
-  const fmeas = result?.data ?? [];
+  const fmeas = (result?.data ?? [] as FMEA[]).filter((f: FMEA) => new Date((f as any).createdAt).getFullYear() === year);
+
+  const yearFMEAs = useMemo(() => mockFMEAs.filter((f) => new Date(f.createdAt).getFullYear() === year), [year]);
+
+  const fmeaTabs = useMemo(() => [
+    { id: 'all', label: 'All', count: yearFMEAs.length },
+    { id: 'DFMEA', label: 'DFMEA (Design)', count: yearFMEAs.filter((f) => f.type === 'DFMEA').length },
+    { id: 'PFMEA', label: 'PFMEA (Process)', count: yearFMEAs.filter((f) => f.type === 'PFMEA').length },
+  ], [yearFMEAs]);
 
   // Summary stats
-  const totalFMEAs = mockFMEAs.length;
-  const activeFMEAs = mockFMEAs.filter((f) => f.status === 'IN_PROGRESS').length;
-  const highRPNCount = mockFMEAs.filter((f) => f.maxRPN > 100).length;
-  const teamMembersCount = new Set(mockFMEAs.flatMap((f) => [f.owner, ...f.teamMembers])).size;
+  const totalFMEAs = yearFMEAs.length;
+  const activeFMEAs = yearFMEAs.filter((f) => f.status === 'IN_PROGRESS').length;
+  const highRPNCount = yearFMEAs.filter((f) => f.maxRPN > 100).length;
+  const teamMembersCount = new Set(yearFMEAs.flatMap((f) => [f.owner, ...f.teamMembers])).size;
 
   const columns: Column<FMEA>[] = [
     {
@@ -151,6 +156,75 @@ export default function FMEAListPage() {
           icon={Users}
           iconColor="bg-emerald-50 text-emerald-600"
         />
+      </div>
+
+      {/* Analytics */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">RPN Distribution</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { range: '0–50', count: yearFMEAs.filter((f) => f.maxRPN <= 50).length },
+              { range: '51–100', count: yearFMEAs.filter((f) => f.maxRPN > 50 && f.maxRPN <= 100).length },
+              { range: '101–200', count: yearFMEAs.filter((f) => f.maxRPN > 100 && f.maxRPN <= 200).length },
+              { range: '200+', count: yearFMEAs.filter((f) => f.maxRPN > 200).length },
+            ]}>
+              <XAxis dataKey="range" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} width={22} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                <Cell fill="#22C55E" />
+                <Cell fill="#F59E0B" />
+                <Cell fill="#F97316" />
+                <Cell fill="#EF4444" />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">DFMEA vs PFMEA</h3>
+          <ResponsiveContainer width="100%" height={140}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: 'DFMEA', value: yearFMEAs.filter((f) => f.type === 'DFMEA').length },
+                  { name: 'PFMEA', value: yearFMEAs.filter((f) => f.type === 'PFMEA').length },
+                ]}
+                cx="50%" cy="50%" innerRadius={40} outerRadius={62} paddingAngle={4} dataKey="value"
+              >
+                <Cell fill="#3B82F6" /><Cell fill="#A855F7" />
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex justify-center gap-4 mt-1">
+            {[{ label: 'DFMEA (Design)', color: '#3B82F6' }, { label: 'PFMEA (Process)', color: '#A855F7' }].map(({ label, color }) => (
+              <div key={label} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                <span className="text-[10px] text-slate-500">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">By Status</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { status: 'Draft', count: yearFMEAs.filter((f) => f.status === 'DRAFT').length },
+              { status: 'In Progress', count: yearFMEAs.filter((f) => f.status === 'IN_PROGRESS').length },
+              { status: 'Review', count: yearFMEAs.filter((f) => f.status === 'UNDER_REVIEW').length },
+              { status: 'Approved', count: yearFMEAs.filter((f) => f.status === 'APPROVED').length },
+              { status: 'Closed', count: yearFMEAs.filter((f) => f.status === 'CLOSED').length },
+            ]} layout="vertical" margin={{ left: 4 }}>
+              <XAxis type="number" tick={{ fontSize: 10 }} />
+              <YAxis dataKey="status" type="category" tick={{ fontSize: 10 }} width={60} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" fill="#0D0E17" radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Tabs + Search */}

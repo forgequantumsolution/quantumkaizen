@@ -18,7 +18,9 @@ import {
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
 import { useChangeRequests, mockChangeRequests } from './hooks';
+import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { ChangeRequest } from './hooks';
+import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const STATUSES = ['', 'Draft', 'Under Review', 'Approved', 'In Implementation', 'Validated', 'Closed', 'Rejected'];
 const CHANGE_TYPES = ['', 'Process', 'Product', 'System', 'Document'];
@@ -64,20 +66,23 @@ export default function ChangeControlListPage() {
     [statusFilter, typeFilter, impactFilter, search],
   );
 
+  const { year } = useFiscalYearStore();
   const { data: result, isLoading } = useChangeRequests(filters);
-  const changeRequests = result?.data ?? [];
+  const changeRequests = (result?.data ?? [] as ChangeRequest[]).filter((cr: ChangeRequest) => new Date((cr as any).createdAt).getFullYear() === year);
+
+  const yearCRs = useMemo(() => mockChangeRequests.filter((cr) => new Date(cr.createdAt).getFullYear() === year), [year]);
 
   // Summary counts
-  const openCount = mockChangeRequests.filter((cr) =>
+  const openCount = yearCRs.filter((cr) =>
     ['Draft', 'Under Review'].includes(cr.status),
   ).length;
-  const pendingApproval = mockChangeRequests.filter(
+  const pendingApproval = yearCRs.filter(
     (cr) => cr.status === 'Under Review',
   ).length;
-  const implementedCount = mockChangeRequests.filter((cr) =>
+  const implementedCount = yearCRs.filter((cr) =>
     ['Validated', 'Closed'].includes(cr.status),
   ).length;
-  const rejectedCount = mockChangeRequests.filter(
+  const rejectedCount = yearCRs.filter(
     (cr) => cr.status === 'Rejected',
   ).length;
 
@@ -209,6 +214,75 @@ export default function ChangeControlListPage() {
           iconColor="bg-red-50 text-red-600"
           onClick={() => setStatusFilter('Rejected')}
         />
+      </div>
+
+      {/* Analytics */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">By Type</h3>
+          <ResponsiveContainer width="100%" height={140}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: 'Process', value: yearCRs.filter((c) => c.changeType === 'Process').length },
+                  { name: 'Product', value: yearCRs.filter((c) => c.changeType === 'Product').length },
+                  { name: 'System', value: yearCRs.filter((c) => c.changeType === 'System').length },
+                  { name: 'Document', value: yearCRs.filter((c) => c.changeType === 'Document').length },
+                ]}
+                cx="50%" cy="50%" innerRadius={36} outerRadius={58} paddingAngle={3} dataKey="value"
+              >
+                {['#3B82F6','#A855F7','#F59E0B','#94A3B8'].map((c, i) => <Cell key={i} fill={c} />)}
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex flex-wrap justify-center gap-2 mt-1">
+            {[{ l: 'Process', c: '#3B82F6' }, { l: 'Product', c: '#A855F7' }, { l: 'System', c: '#F59E0B' }, { l: 'Document', c: '#94A3B8' }].map(({ l, c }) => (
+              <div key={l} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: c }} />
+                <span className="text-[10px] text-slate-500">{l}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">By Impact Level</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { impact: 'High', count: yearCRs.filter((c) => c.impactLevel === 'High').length },
+              { impact: 'Medium', count: yearCRs.filter((c) => c.impactLevel === 'Medium').length },
+              { impact: 'Low', count: yearCRs.filter((c) => c.impactLevel === 'Low').length },
+            ]}>
+              <XAxis dataKey="impact" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 10 }} width={22} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" radius={[3, 3, 0, 0]}>
+                <Cell fill="#EF4444" /><Cell fill="#F59E0B" /><Cell fill="#22C55E" />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">Status Flow</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { status: 'Draft', count: yearCRs.filter((c) => c.status === 'Draft').length },
+              { status: 'Review', count: yearCRs.filter((c) => c.status === 'Under Review').length },
+              { status: 'Approved', count: yearCRs.filter((c) => c.status === 'Approved').length },
+              { status: 'Impl.', count: yearCRs.filter((c) => c.status === 'In Implementation').length },
+              { status: 'Validated', count: yearCRs.filter((c) => c.status === 'Validated').length },
+              { status: 'Closed', count: yearCRs.filter((c) => c.status === 'Closed').length },
+              { status: 'Rejected', count: yearCRs.filter((c) => c.status === 'Rejected').length },
+            ]} layout="vertical" margin={{ left: 4 }}>
+              <XAxis type="number" tick={{ fontSize: 10 }} />
+              <YAxis dataKey="status" type="category" tick={{ fontSize: 10 }} width={56} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="count" fill="#0D0E17" radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* Filters */}

@@ -9,14 +9,22 @@ import {
   Button,
   Badge,
   DataTable,
+  StatsCard,
 } from '@/components/ui';
+import { Shield, AlertOctagon, TrendingUp, CalendarClock } from 'lucide-react';
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
 import { useRisks, mockRisks, riskLevelBadge, calcRiskLevel } from './hooks';
+import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { RiskRecord, RiskLevel } from './hooks';
 import {
   LineChart,
   Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -65,8 +73,9 @@ export default function RiskListPage() {
     [levelFilter, deptFilter, catFilter, search],
   );
 
+  const { year } = useFiscalYearStore();
   const { data: result, isLoading } = useRisks(filters);
-  const risks = result?.data ?? [];
+  const risks = (result?.data ?? []).filter((r) => new Date((r as any).createdAt || '').getFullYear() === year);
 
   // ── Filtered risks (with heat map cell selection) ───────────────────────
 

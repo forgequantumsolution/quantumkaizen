@@ -419,6 +419,63 @@ const RANGE_INDICES: Record<string, number[]> = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// INSPECTION PASS RATES  (monthly 2024 — Jan to Dec)
+// ─────────────────────────────────────────────────────────────────────────────
+const INSPECTION_PASS: Record<IndustryKey, number[]> = {
+  pharma:     [96,94,95,97,93,95,94,96,95,97,94,96],
+  food:       [94,93,95,96,91,89,92,94,93,95,92,94],
+  chemical:   [91,90,92,93,88,90,89,91,90,92,89,91],
+  automotive: [98,97,98,99,96,97,97,98,97,99,97,98],
+  vehicle:    [97,96,97,98,95,96,96,97,96,98,96,97],
+  machinery:  [95,94,96,97,92,93,94,95,94,96,93,95],
+};
+
+const MONTH_12_2024 = ['Jan-24','Feb-24','Mar-24','Apr-24','May-24','Jun-24','Jul-24','Aug-24','Sep-24','Oct-24','Nov-24','Dec-24'];
+
+function buildInspectionTrend(industry: IndustryKey, range: string): { month: string; passRate: number }[] {
+  const rates = INSPECTION_PASS[industry];
+  if (range === '7d') return [{ month: 'This week', passRate: rates[11] }];
+  if (range === '1y') return MONTH_12_2024.map((m, i) => ({ month: m, passRate: rates[i] }));
+  return [{ month: 'Oct-24', passRate: rates[9] }, { month: 'Nov-24', passRate: rates[10] }, { month: 'Dec-24', passRate: rates[11] }];
+}
+
+type InspResult = { result: string; count: number };
+const INSPECTION_RESULTS: Record<IndustryKey, InspResult[]> = {
+  pharma:     [{ result: 'Pass', count: 142 }, { result: 'Fail', count: 11 }, { result: 'Conditional', count: 18 }, { result: 'Pending', count: 7 }],
+  food:       [{ result: 'Pass', count: 118 }, { result: 'Fail', count: 14 }, { result: 'Conditional', count: 9  }, { result: 'Pending', count: 5 }],
+  chemical:   [{ result: 'Pass', count: 89  }, { result: 'Fail', count: 18 }, { result: 'Conditional', count: 12 }, { result: 'Pending', count: 4 }],
+  automotive: [{ result: 'Pass', count: 231 }, { result: 'Fail', count: 8  }, { result: 'Conditional', count: 14 }, { result: 'Pending', count: 3 }],
+  vehicle:    [{ result: 'Pass', count: 194 }, { result: 'Fail', count: 10 }, { result: 'Conditional', count: 12 }, { result: 'Pending', count: 4 }],
+  machinery:  [{ result: 'Pass', count: 76  }, { result: 'Fail', count: 9  }, { result: 'Conditional', count: 7  }, { result: 'Pending', count: 3 }],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CALIBRATION STATUS
+// ─────────────────────────────────────────────────────────────────────────────
+type CalibEntry = { status: string; count: number; fill: string };
+const CALIBRATION_STATUS: Record<IndustryKey, CalibEntry[]> = {
+  pharma:     [{ status: 'Current', count: 8,  fill: '#22C55E' }, { status: 'Due Soon', count: 2, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
+  food:       [{ status: 'Current', count: 12, fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 1, fill: '#EF4444' }, { status: 'Out of Service', count: 0, fill: '#94a3b8' }],
+  chemical:   [{ status: 'Current', count: 15, fill: '#22C55E' }, { status: 'Due Soon', count: 4, fill: '#F59E0B' }, { status: 'Overdue', count: 3, fill: '#EF4444' }, { status: 'Out of Service', count: 2, fill: '#94a3b8' }],
+  automotive: [{ status: 'Current', count: 22, fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
+  vehicle:    [{ status: 'Current', count: 18, fill: '#22C55E' }, { status: 'Due Soon', count: 2, fill: '#F59E0B' }, { status: 'Overdue', count: 1, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
+  machinery:  [{ status: 'Current', count: 9,  fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QUALITY KPIs  per industry
+// ─────────────────────────────────────────────────────────────────────────────
+type QualityKPI = { label: string; value: string; sub: string; color: string };
+const QUALITY_KPIS: Record<IndustryKey, QualityKPI[]> = {
+  pharma:     [{ label: 'CAPA Closure Rate', value: '87%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '94.2%', sub: 'vs 95% target', color: '#C9A84C' }, { label: 'Batch Release OT', value: '91%', sub: 'On-time release rate', color: '#22C55E' }, { label: 'OOS Rate', value: '2.3%', sub: 'Out-of-specification events', color: '#F59E0B' }],
+  food:       [{ label: 'CAPA Closure Rate', value: '83%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '91.4%', sub: 'vs 93% target', color: '#C9A84C' }, { label: 'Batch Release OT', value: '88%', sub: 'On-time release rate', color: '#C9A84C' }, { label: 'OOS Rate', value: '3.1%', sub: 'Out-of-specification events', color: '#F59E0B' }],
+  chemical:   [{ label: 'CAPA Closure Rate', value: '79%', sub: 'Within 30-day target', color: '#F59E0B' }, { label: 'First-Pass Inspection', value: '88.6%', sub: 'vs 90% target', color: '#F59E0B' }, { label: 'Batch Release OT', value: '84%', sub: 'On-time release rate', color: '#F59E0B' }, { label: 'OOS Rate', value: '4.2%', sub: 'Out-of-specification events', color: '#EF4444' }],
+  automotive: [{ label: 'CAPA Closure Rate', value: '92%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '97.1%', sub: 'vs 96% target', color: '#22C55E' }, { label: 'Batch Release OT', value: '95%', sub: 'On-time release rate', color: '#22C55E' }, { label: 'OOS Rate', value: '1.4%', sub: 'Out-of-specification events', color: '#22C55E' }],
+  vehicle:    [{ label: 'CAPA Closure Rate', value: '89%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '95.8%', sub: 'vs 95% target', color: '#22C55E' }, { label: 'Batch Release OT', value: '93%', sub: 'On-time release rate', color: '#22C55E' }, { label: 'OOS Rate', value: '1.8%', sub: 'Out-of-specification events', color: '#22C55E' }],
+  machinery:  [{ label: 'CAPA Closure Rate', value: '85%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '93.2%', sub: 'vs 92% target', color: '#22C55E' }, { label: 'Batch Release OT', value: '90%', sub: 'On-time release rate', color: '#22C55E' }, { label: 'OOS Rate', value: '2.8%', sub: 'Out-of-specification events', color: '#F59E0B' }],
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // MASTER HOOK
 // ─────────────────────────────────────────────────────────────────────────────
 export function useDashboardData(dateRange: string, industryKey: IndustryKey = 'pharma') {
@@ -487,17 +544,21 @@ export function useDashboardData(dateRange: string, industryKey: IndustryKey = '
     })).filter((t) => t.count > 0);
 
     return {
-      stats:          computeStats(industry, range),
+      stats:              computeStats(industry, range),
       ncTrends,
       ncByType,
       severityTrend,
       complaintTrend,
-      capaByStage:    scaleCapa(industry, range),
-      auditFindings:  scaleAudit(industry, range),
-      docPipeline:    scaleDoc(industry, range),
-      trainingByDept: scaleTraining(industry, range),
-      supplierRadar:  scaleSupplier(industry, range),
-      riskMatrix:     scaleRisk(industry, range),
+      capaByStage:        scaleCapa(industry, range),
+      auditFindings:      scaleAudit(industry, range),
+      docPipeline:        scaleDoc(industry, range),
+      trainingByDept:     scaleTraining(industry, range),
+      supplierRadar:      scaleSupplier(industry, range),
+      riskMatrix:         scaleRisk(industry, range),
+      inspectionPassRate: buildInspectionTrend(industry, range),
+      inspectionByResult: INSPECTION_RESULTS[industry],
+      calibrationStatus:  CALIBRATION_STATUS[industry].filter(e => e.count > 0),
+      qualityKPIs:        QUALITY_KPIS[industry],
       recentActivity: ACTIVITY[industry].slice(
         0,
         range === '7d' ? 3 : range === '30d' ? 5 : range === '90d' ? 7 : range === '1y' ? 9 : 12

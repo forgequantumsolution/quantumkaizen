@@ -15,6 +15,8 @@ import type { Column } from '@/components/ui';
 import type { NonConformance } from '@/types';
 import { cn, formatDate, daysSince } from '@/lib/utils';
 import { useNonConformances, mockNCs } from './hooks';
+import { useFiscalYearStore } from '@/stores/fiscalYearStore';
+import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
 const STATUSES = ['', 'OPEN', 'CONTAINMENT', 'INVESTIGATION', 'ROOT_CAUSE', 'CAPA_PLANNING', 'CAPA_IMPLEMENTATION', 'CLOSED'];
 const SEVERITIES = ['', 'CRITICAL', 'MAJOR', 'MINOR'];
@@ -40,18 +42,21 @@ export default function NCListPage() {
     [statusFilter, severityFilter, typeFilter, deptFilter, search],
   );
 
+  const { year } = useFiscalYearStore();
   const { data: result, isLoading } = useNonConformances(filters);
-  const ncs = result?.data ?? [];
+  const ncs = (result?.data ?? []).filter((nc) => new Date(nc.createdAt).getFullYear() === year);
+
+  const yearNCs = useMemo(() => mockNCs.filter((n) => new Date(n.createdAt).getFullYear() === year), [year]);
 
   // Summary counts (from full mock data for cards)
-  const openCount = mockNCs.filter((nc) => nc.status === 'OPEN').length;
-  const investigationCount = mockNCs.filter((nc) =>
+  const openCount = yearNCs.filter((nc) => nc.status === 'OPEN').length;
+  const investigationCount = yearNCs.filter((nc) =>
     ['INVESTIGATION', 'ROOT_CAUSE'].includes(nc.status),
   ).length;
-  const overdueCount = mockNCs.filter(
+  const overdueCount = yearNCs.filter(
     (nc) => nc.dueDate && new Date(nc.dueDate) < new Date() && nc.status !== 'CLOSED',
   ).length;
-  const closedThisMonth = mockNCs.filter((nc) => {
+  const closedThisMonth = yearNCs.filter((nc) => {
     if (!nc.closedAt) return false;
     const d = new Date(nc.closedAt);
     const now = new Date();
@@ -168,6 +173,75 @@ export default function NCListPage() {
           iconColor="bg-emerald-50 text-emerald-600"
           onClick={() => setStatusFilter('CLOSED')}
         />
+      </div>
+
+      {/* ── Analytics ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">By Severity</h3>
+          <ResponsiveContainer width="100%" height={140}>
+            <PieChart>
+              <Pie
+                data={[
+                  { name: 'Critical', value: yearNCs.filter((n) => n.severity === 'CRITICAL').length },
+                  { name: 'Major', value: yearNCs.filter((n) => n.severity === 'MAJOR').length },
+                  { name: 'Minor', value: yearNCs.filter((n) => n.severity === 'MINOR').length },
+                ]}
+                cx="50%" cy="50%" innerRadius={38} outerRadius={60} paddingAngle={3} dataKey="value"
+              >
+                <Cell fill="#EF4444" /><Cell fill="#F59E0B" /><Cell fill="#94A3B8" />
+              </Pie>
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="flex justify-center gap-3 mt-1">
+            {[{ label: 'Critical', color: '#EF4444' }, { label: 'Major', color: '#F59E0B' }, { label: 'Minor', color: '#94A3B8' }].map(({ label, color }) => (
+              <div key={label} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                <span className="text-[10px] text-slate-500">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">Monthly Trend</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <AreaChart data={[
+              { month: 'Nov', open: 5, closed: 3 },
+              { month: 'Dec', open: 7, closed: 4 },
+              { month: 'Jan', open: 6, closed: 5 },
+              { month: 'Feb', open: 9, closed: 6 },
+              { month: 'Mar', open: 8, closed: 7 },
+              { month: 'Apr', open: openCount, closed: closedThisMonth },
+            ]}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} width={22} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Area type="monotone" dataKey="open" stroke="#F59E0B" fill="#FEF3C7" strokeWidth={2} name="Opened" />
+              <Area type="monotone" dataKey="closed" stroke="#22C55E" fill="#DCFCE7" strokeWidth={2} name="Closed" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-slate-700 mb-2">By Type</h3>
+          <ResponsiveContainer width="100%" height={160}>
+            <BarChart data={[
+              { name: 'Deviation', value: yearNCs.filter((n) => n.type === 'DEVIATION').length },
+              { name: 'Product NC', value: yearNCs.filter((n) => n.type === 'PRODUCT_NC').length },
+              { name: 'Process NC', value: yearNCs.filter((n) => n.type === 'PROCESS_NC').length },
+              { name: 'OOS', value: yearNCs.filter((n) => n.type === 'OOS').length },
+              { name: 'Complaint', value: yearNCs.filter((n) => n.type === 'COMPLAINT').length },
+            ]} layout="vertical" margin={{ left: 4 }}>
+              <XAxis type="number" tick={{ fontSize: 10 }} />
+              <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={62} />
+              <Tooltip contentStyle={{ fontSize: 11 }} />
+              <Bar dataKey="value" fill="#0D0E17" radius={[0, 3, 3, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
 
       {/* ── Filters ──────────────────────────────────────────────────────── */}

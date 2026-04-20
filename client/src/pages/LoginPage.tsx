@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Eye, EyeOff, Mail, Lock, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { DEMO_ACCOUNTS } from '@/config/demoCredentials';
 import toast from 'react-hot-toast';
 
 const loginSchema = z.object({
@@ -13,15 +14,6 @@ const loginSchema = z.object({
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
-
-// Demo role quick-fill accounts
-const DEMO_ACCOUNTS = [
-  { role: 'Admin',       email: 'admin@forgequantum.com',   password: 'QuantumK@izen2026' },
-  { role: 'QA Director', email: 'qa@forgequantum.com',      password: 'QuantumK@izen2026' },
-  { role: 'Lab Head',    email: 'lab@forgequantum.com',     password: 'QuantumK@izen2026' },
-  { role: 'QC Analyst',  email: 'qc@forgequantum.com',      password: 'QuantumK@izen2026' },
-  { role: 'Partner',     email: 'partner@forgequantum.com', password: 'QuantumK@izen2026' },
-];
 
 // Feature pill
 function FeaturePill({ label }: { label: string }) {
@@ -302,39 +294,6 @@ export default function LoginPage() {
               ) : 'SIGN IN'}
             </button>
           </form>
-
-          {/* Demo accounts */}
-          <div style={{ marginTop: '28px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)', textAlign: 'center', marginBottom: '12px' }}>
-              Demo Accounts — Click to Fill
-            </p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-              {DEMO_ACCOUNTS.map(a => (
-                <button
-                  key={a.role}
-                  onClick={() => fillDemo(a)}
-                  style={{
-                    padding: '6px 14px', background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.12)', borderRadius: '6px',
-                    color: 'rgba(255,255,255,0.7)', fontSize: '12px', fontWeight: 500,
-                    cursor: 'pointer', transition: 'all 150ms',
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLElement).style.background = 'rgba(201,168,76,0.15)';
-                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(201,168,76,0.4)';
-                    (e.currentTarget as HTMLElement).style.color = '#C9A84C';
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.06)';
-                    (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)';
-                    (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.7)';
-                  }}
-                >
-                  {a.role}
-                </button>
-              ))}
-            </div>
-          </div>
 
           {/* Footer */}
           <p style={{ textAlign: 'center', marginTop: '28px', fontSize: '11px', color: 'rgba(255,255,255,0.2)', fontFamily: 'IBM Plex Mono, monospace' }}>

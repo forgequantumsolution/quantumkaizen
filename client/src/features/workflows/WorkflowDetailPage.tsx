@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, ChevronDown, ChevronUp, Clock, User,
@@ -290,6 +290,11 @@ export default function WorkflowDetailPage() {
   );
   const [expandedStep, setExpandedStep] = useState<number | null>(0);
   const [notes, setNotes] = useState<Record<number, string>>({});
+  const [localInstances, setLocalInstances] = useState<ActiveInstance[]>([]);
+  const [showNewInstanceModal, setShowNewInstanceModal] = useState(false);
+  const [newEntityRef, setNewEntityRef] = useState('');
+  const [newAssignee, setNewAssignee] = useState('');
+  const entityRefInput = useRef<HTMLInputElement>(null);
 
   if (!wf) {
     return (
@@ -300,7 +305,29 @@ export default function WorkflowDetailPage() {
     );
   }
 
-  const instances = ACTIVE_INSTANCES.filter(i => i.workflowId === wf.id);
+  const currentWf = wf;
+  const instances = [...ACTIVE_INSTANCES.filter(i => i.workflowId === currentWf.id), ...localInstances];
+
+  function handleStartInstance() {
+    if (!newEntityRef.trim()) return;
+    const inst: ActiveInstance = {
+      id: `INST-${Date.now()}`,
+      workflowId: currentWf.id,
+      name: currentWf.name,
+      industry: currentWf.industry,
+      entityRef: newEntityRef.trim(),
+      currentStep: 1,
+      totalSteps: currentWf.steps.length,
+      currentStepLabel: currentWf.steps[0]?.label ?? 'Step 1',
+      assignee: newAssignee.trim() || 'Unassigned',
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+      status: 'On Track',
+    };
+    setLocalInstances(prev => [...prev, inst]);
+    setShowNewInstanceModal(false);
+    setNewEntityRef('');
+    setNewAssignee('');
+  }
   const ind = INDUSTRY_CONFIG[wf.industry];
   const completedCount = stepStatuses.filter(s => s === 'completed').length;
   const inProgressCount = stepStatuses.filter(s => s === 'in_progress').length;
@@ -423,9 +450,61 @@ export default function WorkflowDetailPage() {
             instances.map(inst => <InstanceCard key={inst.id} inst={inst} />)
           )}
 
-          <button className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-gray-300 text-sm font-medium text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors">
+          <button
+            onClick={() => { setShowNewInstanceModal(true); setTimeout(() => entityRefInput.current?.focus(), 50); }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-dashed border-gray-300 text-sm font-medium text-gray-500 hover:text-gray-800 hover:border-gray-400 transition-colors"
+          >
             <Plus size={14} /> Start New Instance
           </button>
+
+          {/* New Instance Modal */}
+          {showNewInstanceModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.4)' }}>
+              <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-gray-200">
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Start New Instance</h3>
+                <p className="text-xs text-gray-500 mb-5">Launching workflow: <span className="font-medium text-gray-700">{currentWf.name}</span></p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Entity / Batch Reference <span className="text-red-500">*</span></label>
+                    <input
+                      ref={entityRefInput}
+                      value={newEntityRef}
+                      onChange={e => setNewEntityRef(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleStartInstance(); if (e.key === 'Escape') setShowNewInstanceModal(false); }}
+                      placeholder="e.g. B26-PA-0155, NC-2026-0050"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">Assignee</label>
+                    <input
+                      value={newAssignee}
+                      onChange={e => setNewAssignee(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleStartInstance(); if (e.key === 'Escape') setShowNewInstanceModal(false); }}
+                      placeholder="e.g. Dr. Priya Sharma"
+                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={() => { setShowNewInstanceModal(false); setNewEntityRef(''); setNewAssignee(''); }}
+                    className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleStartInstance}
+                    disabled={!newEntityRef.trim()}
+                    className="flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold text-white transition-colors"
+                    style={{ background: newEntityRef.trim() ? '#0D0E17' : '#94A3B8', cursor: newEntityRef.trim() ? 'pointer' : 'not-allowed' }}
+                  >
+                    Start Instance
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Module legend */}
           <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 mt-2">
