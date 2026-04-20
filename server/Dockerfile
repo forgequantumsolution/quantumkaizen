@@ -2,7 +2,7 @@
 # docker-compose passes: context: . , dockerfile: server/Dockerfile
 
 # ── Stage 1: Builder ──────────────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:25-alpine AS builder
 
 # Prisma needs openssl + libc6-compat on Alpine to run its schema engine
 RUN apk add --no-cache openssl libc6-compat
@@ -32,7 +32,7 @@ RUN npx prisma generate \
 # (npm prune was removed — we need prisma + tsx at runtime for db push + seed.)
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────
-FROM node:20-alpine AS runner
+FROM node:25-alpine AS runner
 
 # Prisma runtime needs openssl on Alpine
 RUN apk add --no-cache openssl libc6-compat
