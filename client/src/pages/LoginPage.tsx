@@ -15,6 +15,9 @@ const loginSchema = z.object({
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
+// Must match the backend seed in server/prisma/seed.ts.
+const TENANT_CODE = 'AURORA-PH';
+
 // Feature pill
 function FeaturePill({ label }: { label: string }) {
   return (
@@ -41,52 +44,8 @@ export default function LoginPage() {
   });
 
   const doLogin = async (email: string, password: string) => {
-    // Always try the demo fallback for known demo credentials
-    const isDemo =
-      (email === 'admin@forgequantum.com' && password === 'QuantumK@izen2026') ||
-      DEMO_ACCOUNTS.some(a => a.email === email && a.password === password);
-
-    if (isDemo) {
-      const roleMap: Record<string, string> = {
-        'admin@forgequantum.com':   'TENANT_ADMIN',
-        'qa@forgequantum.com':      'QUALITY_MANAGER',
-        'lab@forgequantum.com':     'LAB_HEAD',
-        'qc@forgequantum.com':      'QC_ANALYST',
-        'partner@forgequantum.com': 'EXTERNAL_PARTNER',
-      };
-      const nameMap: Record<string, string> = {
-        'admin@forgequantum.com':   'Ashish Pandit',
-        'qa@forgequantum.com':      'Dr. Priya Sharma',
-        'lab@forgequantum.com':     'Rajesh Kumar',
-        'qc@forgequantum.com':      'Anita Desai',
-        'partner@forgequantum.com': 'External Partner',
-      };
-      useAuthStore.setState({
-        user: {
-          id: 'demo-001',
-          tenantId: 'tenant-001',
-          email,
-          name: nameMap[email] ?? 'Demo User',
-          role: roleMap[email] ?? 'TENANT_ADMIN',
-          department: 'Management',
-          employeeId: 'EMP001',
-        },
-        token: 'demo-token',
-        isAuthenticated: true,
-      });
-      localStorage.setItem('qk_token', 'demo-token');
-      localStorage.setItem('qk_user', JSON.stringify({
-        id: 'demo-001', name: nameMap[email] ?? 'Demo User',
-        role: roleMap[email] ?? 'TENANT_ADMIN', email,
-        tenantId: 'tenant-001', department: 'Management', employeeId: 'EMP001',
-      }));
-      toast.success(`Welcome, ${nameMap[email] ?? 'Demo User'}!`);
-      navigate('/dashboard');
-      return;
-    }
-
     try {
-      await login(email, password, 'FORGE-QS');
+      await login(email, password, TENANT_CODE);
       toast.success('Welcome to Quantum Kaizen');
       navigate('/dashboard');
     } catch {

@@ -155,13 +155,13 @@ export const listMeetings = async (req: Request, res: Response, next: NextFuncti
 
     const db = prisma as any;
     const [meetings, total] = await Promise.all([
-      db.managementReviewMeeting.findMany({
+      db.managementReview.findMany({
         where,
         skip: pagination.skip,
         take: pagination.limit,
         orderBy: { [pagination.sortBy]: pagination.sortOrder },
       }),
-      db.managementReviewMeeting.count({ where }),
+      db.managementReview.count({ where }),
     ]);
 
     res.status(200).json(buildPaginationResponse(meetings, total, pagination.page, pagination.limit));
@@ -185,7 +185,7 @@ export const createMeeting = async (req: Request, res: Response, next: NextFunct
 
     const db = prisma as any;
 
-    const meeting = await db.managementReviewMeeting.create({
+    const meeting = await db.managementReview.create({
       data: {
         tenantId: req.user.tenantId,
         title,
@@ -231,7 +231,7 @@ export const addActionItem = async (req: Request, res: Response, next: NextFunct
 
     const db = prisma as any;
 
-    const existing = await db.managementReviewMeeting.findFirst({
+    const existing = await db.managementReview.findFirst({
       where: { id, tenantId: req.user.tenantId },
     });
 
@@ -253,7 +253,7 @@ export const addActionItem = async (req: Request, res: Response, next: NextFunct
 
     const updatedActions = [...existingActions, newAction];
 
-    const meeting = await db.managementReviewMeeting.update({
+    const meeting = await db.managementReview.update({
       where: { id },
       data: { actionItems: updatedActions },
     });
@@ -281,7 +281,7 @@ export const getReviewPack = async (req: Request, res: Response, next: NextFunct
     const { id } = req.params;
     const db = prisma as any;
 
-    const meeting = await db.managementReviewMeeting.findFirst({
+    const meeting = await db.managementReview.findFirst({
       where: { id, tenantId: req.user.tenantId },
     });
 

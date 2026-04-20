@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # ─── PostgreSQL Database ──────────────────────────────────────────────
   postgres:
@@ -15,19 +13,11 @@ services:
     networks:
       - backend
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres}']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-quantum_kaizen}']
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
 
   # ─── Redis Cache ─────────────────────────────────────────────────────
   redis:
@@ -40,18 +30,12 @@ services:
     networks:
       - backend
     healthcheck:
-      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-changeme}', 'ping']
+      test: ['CMD-SHELL', 'redis-cli -a "$${REDIS_PASSWORD}" ping | grep -q PONG']
       interval: 10s
       timeout: 5s
       retries: 5
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-changeme}
 
   # ─── MinIO Object Storage ───────────────────────────────────────────
   minio:
@@ -66,25 +50,19 @@ services:
       - miniodata:/data
     networks:
       - backend
+    # MinIO container ships with curl; use its built-in liveness endpoint
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
       interval: 30s
       timeout: 10s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 1G
-        reservations:
-          cpus: '0.25'
-          memory: 256M
+      start_period: 20s
 
   # ─── Quantum Kaizen API Server ──────────────────────────────────────
   server:
     build:
-      context: ./server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: server/Dockerfile
     container_name: qk-server-prod
     restart: unless-stopped
     depends_on:
@@ -114,29 +92,22 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-Quantum Kaizen <noreply@quantumkaizen.io>}
+      SEED_ON_START: ${SEED_ON_START:-1}
     networks:
       - backend
       - frontend
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:5000/health']
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:5000/health']
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 1G
-        reservations:
-          cpus: '0.5'
-          memory: 256M
+      start_period: 60s
 
   # ─── Quantum Kaizen Web Client ─────────────────────────────────────
   client:
     build:
-      context: ./client
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: client/Dockerfile
     container_name: qk-client-prod
     restart: unless-stopped
     depends_on:
@@ -147,25 +118,16 @@ services:
     networks:
       - frontend
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:80/']
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/']
       interval: 30s
       timeout: 5s
       retries: 3
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 256M
-        reservations:
-          cpus: '0.25'
-          memory: 64M
 
 networks:
   frontend:
     driver: bridge
   backend:
     driver: bridge
-    internal: true
 
 volumes:
   pgdata:

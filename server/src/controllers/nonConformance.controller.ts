@@ -81,8 +81,8 @@ export const listNonConformances = async (req: Request, res: Response, next: Nex
     if (req.query.status) where.status = req.query.status as string;
     if (req.query.severity) where.severity = req.query.severity as string;
     if (req.query.type) where.type = req.query.type as string;
-    if (req.query.department) where.department = req.query.department as string;
-    if (req.query.assigneeId) where.assigneeId = req.query.assigneeId as string;
+    if (req.query.department) where.departmentAffected = req.query.department as string;
+    if (req.query.assigneeId) where.assignedToId = req.query.assigneeId as string;
 
     if (req.query.dateFrom || req.query.dateTo) {
       where.createdAt = {
@@ -106,7 +106,7 @@ export const listNonConformances = async (req: Request, res: Response, next: Nex
         take: pagination.limit,
         include: {
           reportedBy: { select: { id: true, name: true, email: true } },
-          assignee: { select: { id: true, name: true, email: true } },
+          assignedTo: { select: { id: true, name: true, email: true } },
         },
         orderBy: { [pagination.sortBy]: pagination.sortOrder },
       }),
@@ -184,7 +184,7 @@ export const createNonConformance = async (req: Request, res: Response, next: Ne
       },
       include: {
         reportedBy: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true } },
+        assignedTo: { select: { id: true, name: true } },
       },
     });
 

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
+import { unwrapList, unwrapItem } from '@/lib/apiShape';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -215,8 +216,11 @@ export function useManagementReviews() {
     queryKey: ['management-reviews'],
     queryFn: async () => {
       try {
-        const { data } = await api.get('/qms/management-reviews');
-        return data;
+        const { data } = await api.get('/qms/management-review/meetings');
+        const { data: reviews } = unwrapList(data);
+        // Backend has no unified action-items feed yet — keep mock for that half
+        // so the page keeps rendering its action-items panel.
+        return { reviews: reviews as unknown as typeof mockReviews, actionItems: mockActionItems };
       } catch {
         return { reviews: mockReviews, actionItems: mockActionItems };
       }
@@ -230,7 +234,7 @@ export function useScheduleReview() {
   return useMutation({
     mutationFn: async (body: { title: string; date: string; time: string; agenda: string }) => {
       try {
-        const { data } = await api.post('/qms/management-reviews', body);
+        const { data } = await api.post('/qms/management-review/meetings', body);
         return data;
       } catch {
         return { id: `mr-${Date.now()}`, ...body, status: 'Scheduled' };
@@ -245,8 +249,8 @@ export function useManagementReviewSummary() {
     queryKey: ['management-review-summary'],
     queryFn: async () => {
       try {
-        const { data } = await api.get('/qms/management-reviews/summary');
-        return data;
+        const { data } = await api.get('/qms/management-review/summary');
+        return unwrapItem(data);
       } catch {
         return {
           qms: mockQMSSummary,

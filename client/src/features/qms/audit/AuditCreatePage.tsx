@@ -35,7 +35,7 @@ export default function AuditCreatePage() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center gap-3">
         <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-600 transition-colors">
           <ArrowLeft size={20} />

@@ -37,7 +37,9 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           const response = await api.post('/auth/login', { email, password, tenantCode });
-          const { user, accessToken } = response.data;
+          // Backend wraps all successful responses in { data: {...} }; axios already
+          // unwraps the HTTP body into response.data, so the payload is response.data.data.
+          const { user, accessToken } = response.data.data;
 
           localStorage.setItem('qk_token', accessToken);
           localStorage.setItem('qk_user', JSON.stringify(user));
@@ -79,6 +81,21 @@ export const useAuthStore = create<AuthState>()(
         token: state.token,
         isAuthenticated: state.isAuthenticated,
       }),
+      // Drop tokens that are clearly not real JWTs (legacy demo fallback,
+      // failed login that stored `undefined`, etc.) so the user is bounced
+      // to /login instead of silently 401-ing on every API call.
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const t = state.token;
+        const looksLikeJwt = typeof t === 'string' && t.split('.').length === 3;
+        if (!looksLikeJwt) {
+          state.token = null;
+          state.user = null;
+          state.isAuthenticated = false;
+          localStorage.removeItem('qk_token');
+          localStorage.removeItem('qk_user');
+        }
+      },
     },
   ),
 );
