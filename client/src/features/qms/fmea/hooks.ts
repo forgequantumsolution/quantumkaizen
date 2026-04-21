@@ -284,6 +284,32 @@ export const mockFMEAs: FMEA[] = [
     createdAt: '2026-02-15T11:00:00Z',
     updatedAt: '2026-03-22T15:00:00Z',
   },
+  // ── Additional records (20+ total for the demo) ──
+  ...((): FMEA[] => {
+    const extras: Array<[string, string, string, 'DFMEA' | 'PFMEA', string, string, string, string[], string, number]> = [
+      ['fmea3',  'FMEA-2026-003',  'Aseptic Vial Filling — Insulin Glargine',      'PFMEA', 'Sterile filling line F-2',  'APPROVED', 'Kavita Menon',    ['Kavita Menon','Priya Sharma','Mohammed Iqbal'], 'Filling needle, stoppering, capping, EM points', 140],
+      ['fmea4',  'FMEA-2026-004',  'Granulation — Metformin 500mg Wet Granulation','PFMEA', 'Fluid bed granulation',     'APPROVED', 'Sunita Rao',      ['Sunita Rao','Mohammed Iqbal'],                'Binder addition, drying endpoint, blend uniformity', 110],
+      ['fmea5',  'FMEA-2026-005',  'Capsule Banding & Polishing',                  'PFMEA', 'Banding machine B-01',       'DRAFT',    'Sunita Rao',      ['Sunita Rao'],                                  'Omeprazole capsule banding and polishing', 90],
+      ['fmea6',  'FMEA-2026-006',  'Terminal Sterilization — Autoclave TS-02',     'PFMEA', 'Autoclave TS-02',            'APPROVED', 'Mohammed Iqbal',  ['Mohammed Iqbal','Kavita Menon'],               'Temperature ramp, hold, cool-down', 100],
+      ['fmea7',  'FMEA-2026-007',  'Raw-Material Dispensing Booth',                'PFMEA', 'Central dispensing',         'APPROVED', 'Sunita Rao',      ['Sunita Rao','Vikram Patel'],                   'Weighing accuracy, cross-contamination', 85],
+      ['fmea8',  'FMEA-2026-008',  'WFI Generation & Distribution Loop',           'PFMEA', 'WFI generation',             'APPROVED', 'Mohammed Iqbal',  ['Mohammed Iqbal'],                              'Conductivity, TOC, bio-burden', 120],
+      ['fmea9',  'FMEA-2026-009',  'HVAC — Grade A/B Air Management',              'PFMEA', 'Sterile block HVAC',         'APPROVED', 'Mohammed Iqbal',  ['Mohammed Iqbal','Kavita Menon'],               'HEPA integrity, pressure differentials', 105],
+      ['fmea10', 'FMEA-2026-010',  'HPLC Assay Method — Paracetamol',              'DFMEA', 'HPLC method',                'APPROVED', 'Rajesh Kumar',    ['Rajesh Kumar'],                                'Method specificity, robustness, reproducibility', 75],
+      ['fmea11', 'FMEA-2026-011',  'Batch Record Review (Electronic)',             'PFMEA', 'BRR workflow',               'APPROVED', 'Dr. Priya Sharma',['Dr. Priya Sharma','Anita Desai'],              '21 CFR Part 11 audit trail verification', 60],
+      ['fmea12', 'FMEA-2026-012',  'Visual Inspection — Injection Vials',          'PFMEA', 'Brevetti AVI line',          'DRAFT',    'Kavita Menon',    ['Kavita Menon'],                                'Particle, crack, fill volume detection', 95],
+      ['fmea13', 'FMEA-2026-013',  'Packaging Line — Bottle Fill & Capping',       'PFMEA', 'Bottle line PL-05',          'APPROVED', 'Vikram Patel',    ['Vikram Patel'],                                'Fill weight, cap torque, label placement', 80],
+      ['fmea14', 'FMEA-2026-014',  'Quality Control LIMS Data Flow',               'PFMEA', 'LIMS v7.2',                  'APPROVED', 'Anita Desai',     ['Anita Desai','Rajesh Kumar'],                  'Sample login, result entry, approval chain', 55],
+      ['fmea15', 'FMEA-2026-015',  'Cold-Chain Warehousing',                       'PFMEA', 'Finished goods 2–8°C',       'APPROVED', 'Sunita Rao',      ['Sunita Rao'],                                  'Temperature mapping, power outage response', 90],
+      ['fmea16', 'FMEA-2026-016',  'Receipt & Quarantine of Incoming API',         'PFMEA', 'Goods-in / QA sampling',     'APPROVED', 'Dr. Priya Sharma',['Dr. Priya Sharma','Rajesh Kumar'],             'CoA verification, sampling plan, label transfer', 70],
+      ['fmea17', 'FMEA-2026-017',  'Change Control Execution Workflow',            'PFMEA', 'QMS change control',         'APPROVED', 'Dr. Priya Sharma',['Dr. Priya Sharma'],                            'Impact assessment, approval path, closure', 45],
+    ];
+    return extras.map(([id, fmeaNumber, title, type, pp, status, owner, team, scope, rpn]) => ({
+      id, fmeaNumber, title, type, productProcess: pp, status,
+      owner, ownerId: 'u1', teamMembers: team, scope,
+      maxRPN: rpn, failureModes: [], revisionHistory: [],
+      createdAt: '2026-01-15T10:00:00Z', updatedAt: '2026-03-01T10:00:00Z',
+    }));
+  })(),
 ];
 
 // ── Hooks ───────────────────────────────────────────────────────────────────

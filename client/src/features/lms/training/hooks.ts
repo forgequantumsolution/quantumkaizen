@@ -124,6 +124,33 @@ export const mockTrainingPrograms: TrainingProgram[] = [
     passingScore: 75, objectives: ['Perform calibration per approved procedures', 'Calculate measurement uncertainty', 'Maintain calibration records and stickers', 'Handle out-of-calibration situations'],
     prerequisites: ['GMP Fundamentals'], createdAt: '2025-03-01T10:00:00Z', updatedAt: '2026-03-15T13:30:00Z',
   },
+  // ── Additional records (20+ total for the demo) ──
+  ...((): TrainingProgram[] => {
+    const extras: Array<[string, string, string, TrainingProgram['type'], TrainingProgram['status'], string, string, number]> = [
+      ['tp9',  'TRN-GDP-009',     'GDP (Good Distribution Practice) Awareness',     'REGULATORY',            'ACTIVE', 'Distribution',     '2 hours',   48],
+      ['tp10', 'TRN-ERG-010',     'Ergonomics & Manual Handling',                    'INDUCTION',            'ACTIVE', 'EHS',              '45 min',    55],
+      ['tp11', 'TRN-EHS-011',     'Chemical Safety & Hazard Communication',          'REGULATORY',            'ACTIVE', 'EHS',              '1.5 hours', 62],
+      ['tp12', 'TRN-CSV-012',     'Computer System Validation (GAMP 5)',             'CLASSROOM',            'ACTIVE', 'IT / Validation',  '4 hours',   28],
+      ['tp13', 'TRN-APV-013',     'APR / APQR Authoring Workshop',                    'CLASSROOM',            'ACTIVE', 'Quality Assurance','3 hours',   22],
+      ['tp14', 'TRN-OOS-014',     'OOS / OOT Investigation Methodology',             'CLASSROOM',            'ACTIVE', 'Quality Control',  '2.5 hours', 38],
+      ['tp15', 'TRN-CHG-015',     'Change Control Process',                           'E_LEARNING',            'ACTIVE', 'Quality Assurance','1 hour',    65],
+      ['tp16', 'TRN-RCA-016',     'Root Cause Analysis Techniques (5-Why / Fishbone)','CLASSROOM',            'ACTIVE', 'Quality Assurance','4 hours',   42],
+      ['tp17', 'TRN-TLM-017',     'Temperature & Humidity Management',               'E_LEARNING',            'ACTIVE', 'Warehouse',        '45 min',    35],
+      ['tp18', 'TRN-ANX1-018',    'EU GMP Annex 1 — 2022 Revision',                  'REGULATORY',            'ACTIVE', 'Sterile Mfg',      '3 hours',   30],
+      ['tp19', 'TRN-DI-019',      'Data Integrity Refresher (ALCOA+)',               'REGULATORY',            'ACTIVE', 'Quality Control',  '1.5 hours', 72],
+      ['tp20', 'TRN-AS-020',      'Aseptic Technique Re-Qualification',              'REFRESHER',            'ACTIVE', 'Sterile Mfg',      '2 hours',   18],
+    ];
+    return extras.map(([id, programId, title, type, status, department, duration, enrolled]) => ({
+      id, programId, title,
+      description: title + ' — required per SOP training matrix.',
+      type, status, department, duration,
+      enrolled, completionRate: Math.round(Math.random() * 30 + 60),
+      validityPeriod: '1 year', passingScore: 80,
+      objectives: ['Demonstrate understanding of the topic', 'Apply learnings in daily work'],
+      prerequisites: [],
+      createdAt: '2026-01-15T10:00:00Z', updatedAt: '2026-03-10T10:00:00Z',
+    }));
+  })(),
 ];
 
 export const mockContentBlocks: ContentBlock[] = [

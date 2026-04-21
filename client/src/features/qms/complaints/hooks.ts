@@ -595,6 +595,35 @@ export const mockComplaints: Complaint[] = [
     createdAt: '2024-07-10T09:00:00Z',
     updatedAt: '2024-08-01T10:00:00Z',
   },
+  // ── Additional records (20+ total for the demo) ──
+  ...((): Complaint[] => {
+    const extras: Array<[
+      string, string, string, string, string,
+      Complaint['severity'], Complaint['status'],
+      string, string, string,
+    ]> = [
+      ['cmp11','CMP-2026-0017','NetMeds Online Pharmacy',        'customer.care@netmeds.example','Blister seal integrity — Atorvastatin 10mg',            'Major','Closed',               'Atorvastatin 10mg Tablets','Batch ATV-26-0311','2026-03-15'],
+      ['cmp12','CMP-2026-0016','1mg / Tata Online',              'escalation@1mg.example',      'Broken tablets in pack — Ibuprofen 400mg',               'Minor','Closed',               'Ibuprofen 400mg Tablets',  'Batch IBU-26-0208','2026-03-05'],
+      ['cmp13','CMP-2026-0015','Apollo Hospital Chennai',        'procurement@apollo-chen.example','Bottle quantity mismatch — Paracetamol 500mg',          'Major','Under Investigation',  'Paracetamol 500mg Bottle of 100','Batch PMT-26-0112','2026-03-22'],
+      ['cmp14','CMP-2026-0014','CDSCO PvPI India (ADR)',          'pvpi@cdsco.example',          'ADR — skin rash after Naproxen',                         'Major','Closed',               'Naproxen 250mg Tablets',   'Batch NAP-26-0102','2026-03-20'],
+      ['cmp15','CMP-2026-0013','Fortis Hospital Delhi',          'pharmacy@fortis-delhi.example','Hairline crack on vial neck — Insulin Glargine',         'Critical','Under Investigation','Insulin Glargine 100 IU/mL','Batch INS-26-0094','2026-03-18'],
+      ['cmp16','CMP-2026-0012','MedPlus Pharmacy',                'qa@medplus.example',          'Tablet colour variation — Metformin',                    'Minor','Closed',               'Metformin 500mg Tablets',  'Batch MET-26-0099','2026-02-28'],
+      ['cmp17','CMP-2026-0011','Internal QA',                    'qa@aurorabiopharma.example',  'Internal — wrong batch number on Amlodipine cartons',    'Major','Closed',               'Amlodipine 5mg Cartons',   'Batch AML-26-0045','2026-03-10'],
+      ['cmp18','CMP-2026-0010','Retail Pharmacy — Delhi',        'rx@delhi-rx.example',         'Patient complaint — bitter taste Amoxicillin suspension','Minor','Closed',               'Amoxicillin Suspension 250mg/5mL','Batch AMX-26-0070','2026-02-10'],
+      ['cmp19','CMP-2026-0009','Max Healthcare Bangalore',       'procurement@maxhealthcare.example','Cold-chain excursion reported by 3PL',                  'Major','Under Investigation',  'Insulin Glargine 100 IU/mL','Batch INS-26-0087','2026-03-25'],
+      ['cmp20','CMP-2026-0008','Drugs Controller General (Inspection)','dcgi@cdsco.example',    'CDSCO inspection observation — documentation gap',       'Major','Closed',               'Site-level (all batches)', '—','2026-03-12'],
+    ];
+    return extras.map(([id, complaintNumber, customerName, customerEmail, subject, severity, status, productService, batchOrderRef, receivedDate]) => ({
+      id, complaintNumber, customerName, customerContact: 'Quality Contact', customerEmail,
+      subject, description: subject + ' — detailed complaint recorded in complaint file.',
+      severity, status,
+      productService, batchOrderRef, receivedDate, responseDue: receivedDate,
+      assignedTo: 'Dr. Priya Sharma', assignedToId: 'u1',
+      containmentActions: [], investigation: null, resolution: null,
+      communications: [], linkedCAPAs: [], history: [],
+      createdAt: receivedDate + 'T09:00:00Z', updatedAt: receivedDate + 'T12:00:00Z',
+    }));
+  })(),
 ];
 
 // ── Hooks ───────────────────────────────────────────────────────────────────

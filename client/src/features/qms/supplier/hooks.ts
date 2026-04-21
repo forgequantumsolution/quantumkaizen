@@ -377,6 +377,33 @@ export const mockSuppliers: Supplier[] = [
     createdAt: '2026-03-10T10:00:00Z',
     updatedAt: '2026-03-10T10:00:00Z',
   },
+  // ── Additional records (20+ total for the demo) ──
+  ...((): Supplier[] => {
+    const extras: Array<[string, string, string, SupplierCategory, SupplierStatus, string, string, string, string, string[], number, string]> = [
+      ['sup9',  'SUP-009', 'Divis Laboratories',           'CRITICAL', 'APPROVED',     'Ramesh Kumar',   'ramesh.k@divislabs.example',   'Hyderabad',  'Telangana',   ['Naproxen API', 'Levetiracetam API', 'Custom Synthesis'],             4.7, '2027-05-09'],
+      ['sup10', 'SUP-010', "Dr. Reddy's Laboratories",     'CRITICAL', 'APPROVED',     'Arjun Mehta',    'arjun.m@drreddys.example',     'Hyderabad',  'Telangana',   ['Atorvastatin API', 'Omeprazole API'],                                 4.5, '2027-08-20'],
+      ['sup11', 'SUP-011', 'Colorcon Asia',                'MAJOR',    'APPROVED',     'Suresh Nair',    'snair@colorcon.example',       'Goa',        'Goa',         ['Opadry film-coating systems', 'HPMC'],                                4.8, '2028-01-15'],
+      ['sup12', 'SUP-012', 'Waters Corporation India',     'MAJOR',    'APPROVED',     "John D'Souza",   'service.in@waters.example',    'Bangalore',  'Karnataka',   ['HPLC/UPLC systems', 'Columns', 'Consumables'],                        4.7, '2027-11-30'],
+      ['sup13', 'SUP-013', 'Amcor India Ltd',              'MAJOR',    'CONDITIONAL',  'Ashok Patil',    'apatil@amcor.example',         'Pune',       'Maharashtra', ['Blister foil', 'Bottles', 'Closures'],                                3.9, '2027-02-28'],
+      ['sup14', 'SUP-014', 'SGS India Pvt Ltd',            'MAJOR',    'APPROVED',     'Meera Iyer',     'meera.iyer@sgs.example',       'Mumbai',     'Maharashtra', ['Contract analytical testing', 'Stability studies'],                   4.6, '2028-05-10'],
+      ['sup15', 'SUP-015', 'Praxair India',                'MINOR',    'APPROVED',     'Vivek Sharma',   'vsharma@praxair.example',      'Mumbai',     'Maharashtra', ['USP-grade nitrogen', 'Argon', 'Compressed air'],                      4.4, '2027-07-15'],
+      ['sup16', 'SUP-016', 'Ecolab India',                 'MAJOR',    'APPROVED',     'Kavitha Reddy',  'k.reddy@ecolab.example',       'Gurgaon',    'Haryana',     ['Validated cleaning chemicals', 'Sporicidal disinfectants'],           4.7, '2028-03-20'],
+      ['sup17', 'SUP-017', 'JRS Pharma India',             'MAJOR',    'APPROVED',     'Rohan Desai',    'rohan.d@jrs.example',          'Mumbai',     'Maharashtra', ['Microcrystalline cellulose', 'Binders', 'Disintegrants'],             4.6, '2027-09-10'],
+      ['sup18', 'SUP-018', 'Hetero Drugs',                 'CRITICAL', 'CONDITIONAL',  'Priya Venkat',   'priya.v@hetero.example',       'Hyderabad',  'Telangana',   ['Sitagliptin API', 'Efavirenz API'],                                   3.8, '2027-04-05'],
+      ['sup19', 'SUP-019', 'Bilcare Research',             'MINOR',    'APPROVED',     'Nitin Joshi',    'njoshi@bilcare.example',       'Pune',       'Maharashtra', ['Protective packaging', 'Track-and-trace labels'],                     4.3, '2027-12-01'],
+      ['sup20', 'SUP-020', 'Eurofins Advinus',             'MAJOR',    'APPROVED',     'Dr. Anil Kapoor','anil.k@eurofins.example',      'Bangalore',  'Karnataka',   ['Extractables & leachables', 'Toxicology studies'],                    4.6, '2028-07-22'],
+    ];
+    return extras.map(([id, code, name, category, status, contact, email, city, state, products, rating, certExpiry]) => ({
+      id, code, name, category, status,
+      contactPerson: contact, email, phone: '+91 00 0000 0000',
+      address: '—', city, state,
+      productsServices: products, rating,
+      certifications: [], audits: [],
+      performance: { quality: Math.round(rating * 20), delivery: Math.round(rating * 18), cost: 80, responsiveness: 85, innovation: 75, overallScore: Math.round(rating * 18), monthlyTrend: [] },
+      certExpiry, lastAuditDate: '2025-10-01',
+      createdAt: '2025-06-01T10:00:00Z', updatedAt: '2026-03-01T10:00:00Z',
+    }));
+  })(),
 ];
 
 // ── Hooks ───────────────────────────────────────────────────────────────────

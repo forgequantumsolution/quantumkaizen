@@ -4,7 +4,7 @@
 //   • Hashed static assets (/assets/*) → cache-first (immutable filenames, safe to cache long-term)
 //   • Everything else → network-first
 
-const CACHE = 'qk-v3';
+const CACHE = 'qk-v4';
 
 self.addEventListener('install', () => {
   self.skipWaiting(); // Activate new SW immediately on every deployment
@@ -26,6 +26,9 @@ self.addEventListener('fetch', e => {
   // Skip non-GET and cross-origin requests
   if (request.method !== 'GET' || url.origin !== location.origin) return;
 
+  // Skip API calls — never cache them. The react-query layer handles that.
+  if (url.pathname.startsWith('/api/')) return;
+
   // Hashed assets are immutable — cache-first
   if (url.pathname.startsWith('/assets/')) {
     e.respondWith(
@@ -33,7 +36,12 @@ self.addEventListener('fetch', e => {
         cache.match(request).then(cached => {
           if (cached) return cached;
           return fetch(request).then(res => {
-            cache.put(request, res.clone());
+            // Clone synchronously BEFORE returning — once the body starts
+            // streaming to the page, the original can't be cloned.
+            if (res && res.ok) {
+              const copy = res.clone();
+              cache.put(request, copy).catch(() => {});
+            }
             return res;
           });
         })
@@ -46,9 +54,11 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     fetch(request)
       .then(res => {
-        // Cache successful HTML responses for offline fallback
-        if (request.mode === 'navigate') {
-          caches.open(CACHE).then(c => c.put(request, res.clone()));
+        // Cache successful HTML responses for offline fallback.
+        // Clone immediately (sync) so the body isn't already consumed.
+        if (request.mode === 'navigate' && res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(request, copy)).catch(() => {});
         }
         return res;
       })
