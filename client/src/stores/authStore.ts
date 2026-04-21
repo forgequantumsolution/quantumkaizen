@@ -36,10 +36,17 @@ interface AuthState {
 // branch in login() succeeds and this fallback is never hit.
 
 const DEMO_USER_TEMPLATES: Record<string, Omit<AuthUser, 'email'>> = {
-  'admin@aurorabiopharma.com':        { id: 'demo-u1', tenantId: 'demo-tenant', name: 'Dr. Ashish Pandit',  role: 'TENANT_ADMIN',        department: 'Site Management',   site: 'Hyderabad — Unit I', employeeId: 'EMP001' },
-  'qa.head@aurorabiopharma.com':      { id: 'demo-u2', tenantId: 'demo-tenant', name: 'Dr. Priya Sharma',   role: 'QUALITY_MANAGER',     department: 'Quality Assurance', site: 'Hyderabad — Unit I', employeeId: 'EMP002' },
-  'qc.analyst@aurorabiopharma.com':   { id: 'demo-u3', tenantId: 'demo-tenant', name: 'Rajesh Kumar',       role: 'QUALITY_ENGINEER',    department: 'Quality Control',   site: 'Hyderabad — Unit I', employeeId: 'EMP003' },
-  'doc.controller@aurorabiopharma.com': { id: 'demo-u4', tenantId: 'demo-tenant', name: 'Anita Desai',      role: 'DOCUMENT_CONTROLLER', department: 'Document Control',  site: 'Hyderabad — Unit I', employeeId: 'EMP004' },
+  // Pharma seed (match server/prisma/seed.ts)
+  'admin@aurorabiopharma.com':          { id: 'demo-u1', tenantId: 'demo-tenant', name: 'Dr. Ashish Pandit',  role: 'TENANT_ADMIN',        department: 'Site Management',   site: 'Hyderabad — Unit I', employeeId: 'EMP001' },
+  'qa.head@aurorabiopharma.com':        { id: 'demo-u2', tenantId: 'demo-tenant', name: 'Dr. Priya Sharma',   role: 'QUALITY_MANAGER',     department: 'Quality Assurance', site: 'Hyderabad — Unit I', employeeId: 'EMP002' },
+  'qc.analyst@aurorabiopharma.com':     { id: 'demo-u3', tenantId: 'demo-tenant', name: 'Rajesh Kumar',       role: 'QUALITY_ENGINEER',    department: 'Quality Control',   site: 'Hyderabad — Unit I', employeeId: 'EMP003' },
+  'doc.controller@aurorabiopharma.com': { id: 'demo-u4', tenantId: 'demo-tenant', name: 'Anita Desai',        role: 'DOCUMENT_CONTROLLER', department: 'Document Control',  site: 'Hyderabad — Unit I', employeeId: 'EMP004' },
+  // Brand / quick-login (offline only — not seeded in the backend)
+  'admin@forgequantum.com':             { id: 'demo-b1', tenantId: 'demo-tenant', name: 'Ashish Pandit',      role: 'TENANT_ADMIN',        department: 'Management',        site: 'Headquarters',       employeeId: 'FQ-001' },
+  'qa@forgequantum.com':                { id: 'demo-b2', tenantId: 'demo-tenant', name: 'Dr. Priya Sharma',   role: 'QUALITY_MANAGER',     department: 'Quality Assurance', site: 'Headquarters',       employeeId: 'FQ-002' },
+  'lab@forgequantum.com':               { id: 'demo-b3', tenantId: 'demo-tenant', name: 'Rajesh Kumar',       role: 'QUALITY_ENGINEER',    department: 'Laboratory',        site: 'Headquarters',       employeeId: 'FQ-003' },
+  'qc@forgequantum.com':                { id: 'demo-b4', tenantId: 'demo-tenant', name: 'Anita Desai',        role: 'QUALITY_ENGINEER',    department: 'Quality Control',   site: 'Headquarters',       employeeId: 'FQ-004' },
+  'partner@forgequantum.com':           { id: 'demo-b5', tenantId: 'demo-tenant', name: 'External Partner',   role: 'READ_ONLY',           department: 'External',          site: 'Remote',             employeeId: 'FQ-005' },
 };
 
 // Base64-url encode without padding — valid JWT segment.
