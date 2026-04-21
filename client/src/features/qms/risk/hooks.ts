@@ -451,6 +451,27 @@ export const mockRisks: RiskRecord[] = [
     ],
     createdAt: '2024-08-20T14:00:00Z', updatedAt: '2025-01-10T10:00:00Z',
   },
+  // ── Additional records (20+ total for the demo) ──
+  ...((): RiskRecord[] => {
+    const extras = [
+      ['r15', 'RSK-2026-0019', 'Single-source supplier for HPMC — supply disruption risk', 'Paracetamol and Metformin coating rely on a single supplier for HPMC.', 'OPERATIONAL', 'Production', 3, 4, 'MEDIUM', 2, 3, 'LOW', 'Dr. Priya Sharma', 'u1', '2026-05-15'],
+      ['r16', 'RSK-2026-0020', 'Tablet press spare-parts lead time > 12 weeks', 'Unplanned breakdown of TP-04 could halt Paracetamol production for 3 months.', 'OPERATIONAL', 'Engineering', 2, 4, 'MEDIUM', 1, 4, 'LOW', 'Mohammed Iqbal', 'u7', '2026-07-01'],
+      ['r17', 'RSK-2026-0021', 'HVAC compressor redundancy gap — sterile block', 'Loss of sterile block HVAC compressor would fail EU GMP Annex 1 requirements.', 'SAFETY', 'Engineering', 2, 5, 'MEDIUM', 1, 5, 'MEDIUM', 'Kavita Menon', 'u10', '2026-08-01'],
+      ['r18', 'RSK-2026-0022', 'Counterfeit risk for high-value oncology SKUs', 'Grey-market activity detected on adjacent SKUs; serialization coverage extending.', 'QUALITY', 'Regulatory Affairs', 3, 4, 'HIGH', 2, 3, 'MEDIUM', 'Anita Desai', 'u3', '2026-06-30'],
+      ['r19', 'RSK-2026-0023', 'Stability chamber compressor redundancy gap', 'A single compressor failure would breach stability storage conditions.', 'QUALITY', 'Quality Control', 2, 4, 'MEDIUM', 1, 4, 'LOW', 'Rajesh Kumar', 'u2', '2026-05-20'],
+      ['r20', 'RSK-2026-0024', 'Regulatory change — USFDA DSCSA full implementation', 'Final phase DSCSA compliance; vendor cutover risk.', 'QUALITY', 'Regulatory Affairs', 3, 4, 'HIGH', 2, 2, 'LOW', 'Anita Desai', 'u3', '2026-10-01'],
+    ] as const;
+    return extras.map(([id, num, title, desc, cat, dept, L, C, level, rL, rC, rLevel, owner, oid, rev]) => ({
+      id, riskNumber: num, title, description: desc,
+      category: cat as RiskCategory, department: dept,
+      likelihood: L as number, consequence: C as number, riskScore: (L as number) * (C as number), riskLevel: level as RiskLevel,
+      controls: [],
+      residualLikelihood: rL as number, residualConsequence: rC as number, residualScore: (rL as number) * (rC as number), residualLevel: rLevel as RiskLevel,
+      owner, ownerId: oid, reviewDate: rev,
+      history: [],
+      createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-03-01T00:00:00Z',
+    }));
+  })(),
 ];
 
 // ── Hooks ───────────────────────────────────────────────────────────────────

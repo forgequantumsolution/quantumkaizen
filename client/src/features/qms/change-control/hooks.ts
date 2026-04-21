@@ -491,6 +491,33 @@ export const mockChangeRequests: ChangeRequest[] = [
     createdAt: '2024-03-10T09:00:00Z',
     updatedAt: '2024-09-30T16:00:00Z',
   },
+  // ── Additional records (20+ total for the demo) ──
+  ...((): ChangeRequest[] => {
+    const extras: Array<[string, string, string, string, ChangeRequest['changeType'], ChangeRequest['impactLevel'], ChangeRequest['status'], string, string, string]> = [
+      ['cr11', 'CR-2026-0013', 'LIMS 7.2 upgrade rollout',                 'Upgrade from v6.8 to v7.2 with enhanced e-sig module.',                            'System',   'High',   'Under Review',    'Deepak Nair',     'IT',                '2026-07-30'],
+      ['cr12', 'CR-2026-0014', 'Pack insert — digital printing method',     'Shift offset to digital printing for shorter revision cycles.',                    'Process',  'Medium', 'Approved',        'Anita Desai',     'Packaging',         '2026-06-30'],
+      ['cr13', 'CR-2026-0015', 'Warehouse racking reconfiguration',        'Reconfigure bulk storage to improve FIFO and reduce picking errors.',              'System',   'Low',    'Closed',          'Sunita Rao',      'Warehouse',         '2026-04-30'],
+      ['cr14', 'CR-2026-0016', 'Omeprazole 20mg dissolution spec update',   'Tighten Q-value from 75 to 80% to align with USP revision.',                       'Product',  'Medium', 'Under Review',    'Rajesh Kumar',    'Quality Control',   '2026-08-01'],
+      ['cr15', 'CR-2026-0017', 'Paracetamol coating formulation change',    'Shift Opadry II to II HP for supplier rationalisation.',                           'Product',  'High',   'Draft',           'Sunita Rao',      'Formulation',       '2026-09-15'],
+      ['cr16', 'CR-2026-0018', 'Add redundant –20°C freezer (retain samples)', 'Business continuity — eliminate single-point failure on retained samples.',      'System',   'Medium', 'Approved',        'Rajesh Kumar',    'Quality Control',   '2026-06-30'],
+      ['cr17', 'CR-2026-0019', 'Sporicidal supplier change — Ecolab',        'Replace current supplier with Ecolab; cleaning revalidation complete.',            'Product',  'Low',    'Closed',          'Dr. Priya Sharma','Quality Assurance', '2026-03-31'],
+      ['cr18', 'CR-2026-0020', 'CDSCO Schedule M 2024 implementation plan',  'Gap assessment + closure for revised Schedule M requirements (effective 2027).',  'Process',  'High',   'Under Review',    'Anita Desai',     'Regulatory Affairs','2026-12-31'],
+      ['cr19', 'CR-2026-0021', 'Stability chamber 4 replacement',           'Replace 12-year-old 25°C/60% RH chamber; qualification + sample transfer.',        'System',   'High',   'Approved',        'Rajesh Kumar',    'Quality Control',   '2026-07-31'],
+      ['cr20', 'CR-2026-0022', 'Ibuprofen 400mg compression-speed optimisation', 'Slow compression speed 10% to reduce dust; within validated range.',           'Process',  'Low',    'Closed',          'Sunita Rao',      'Production',        '2026-03-30'],
+    ];
+    return extras.map(([id, crNumber, title, description, changeType, impactLevel, status, requestor, department, targetDate]) => ({
+      id, crNumber, title, description,
+      reasonForChange: description,
+      changeType, impactLevel, status,
+      requestor, requestorId: 'u1', department, targetDate,
+      impactAssessment: 'Impact assessment recorded in change-control dossier.',
+      affectedDocuments: [], affectedProcesses: [],
+      riskAssessment: 'Risk assessment filed; no unmitigated residual risks.',
+      regulatoryNotification: false, notifyDepartments: [],
+      implementationTasks: [], approvalStages: [], validationResults: null, history: [],
+      createdAt: '2026-02-10T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+    }));
+  })(),
 ];
 
 // ── Hooks ───────────────────────────────────────────────────────────────────
