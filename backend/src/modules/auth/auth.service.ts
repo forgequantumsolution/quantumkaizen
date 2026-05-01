@@ -8,12 +8,38 @@ const publicUserSelect = {
   id: true,
   email: true,
   name: true,
+  employeeId: true,
+  firstName: true,
+  lastName: true,
+  designation: true,
   isActive: true,
   departmentId: true,
   roleId: true,
+  siteId: true,
   createdAt: true,
   updatedAt: true,
+  department: { select: { id: true, code: true, name: true } },
+  role: {
+    select: {
+      id: true,
+      name: true,
+      permissions: { select: { key: true } },
+    },
+  },
 } as const;
+
+type RawUser = NonNullable<
+  Awaited<ReturnType<typeof prisma.user.findUnique<{ select: typeof publicUserSelect }>>>
+>;
+
+const flatten = (user: RawUser) => {
+  const { role, ...rest } = user;
+  return {
+    ...rest,
+    role: role ? { id: role.id, name: role.name } : null,
+    permissions: role?.permissions.map((p) => p.key) ?? [],
+  };
+};
 
 export const registerUser = async (input: RegisterInput) => {
   const existing = await prisma.user.findUnique({ where: { email: input.email } });
@@ -33,20 +59,32 @@ export const registerUser = async (input: RegisterInput) => {
   });
 
   const token = signToken({ userId: user.id, email: user.email });
-  return { user, token };
+  return { user: flatten(user), token };
 };
 
 export const loginUser = async (input: LoginInput) => {
-  const user = await prisma.user.findUnique({ where: { email: input.email } });
-  if (!user || !user.isActive) throw Unauthorized('Invalid credentials');
+  const dbUser = await prisma.user.findUnique({ where: { email: input.email } });
+  if (!dbUser || !dbUser.isActive) throw Unauthorized('Invalid credentials');
 
-  const ok = await verifyPassword(input.password, user.passwordHash);
+  const ok = await verifyPassword(input.password, dbUser.passwordHash);
   if (!ok) throw Unauthorized('Invalid credentials');
 
+  const user = await prisma.user.findUnique({
+    where: { id: dbUser.id },
+    select: publicUserSelect,
+  });
+  if (!user) throw Unauthorized('Invalid credentials');
+
+  await prisma.user.update({
+    where: { id: dbUser.id },
+    data: { lastLoginAt: new Date() },
+  });
+
   const token = signToken({ userId: user.id, email: user.email });
-  const { passwordHash: _ph, ...safe } = user;
-  return { user: safe, token };
+  return { user: flatten(user), token };
 };
 
-export const getCurrentUser = (userId: string) =>
-  prisma.user.findUnique({ where: { id: userId }, select: publicUserSelect });
+export const getCurrentUser = async (userId: string) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: publicUserSelect });
+  return user ? flatten(user) : null;
+};

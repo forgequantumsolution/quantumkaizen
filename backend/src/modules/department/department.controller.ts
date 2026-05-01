@@ -1,8 +1,13 @@
 import type { Request, Response } from 'express';
 import * as service from './department.service';
+import type { ListQuery } from './department.schema';
 
 export const list = async (req: Request, res: Response) => {
-  res.json(await service.list(req.query as any));
+  res.json(await service.list(req.query as unknown as ListQuery));
+};
+
+export const tree = async (_req: Request, res: Response) => {
+  res.json(await service.tree());
 };
 
 export const get = async (req: Request, res: Response) => {

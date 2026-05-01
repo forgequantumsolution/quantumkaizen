@@ -14,7 +14,7 @@ import {
 import { Shield, AlertOctagon, TrendingUp, CalendarClock } from 'lucide-react';
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
-import { useRisks, mockRisks, riskLevelBadge, calcRiskLevel } from './hooks';
+import { useRisks, riskLevelBadge, calcRiskLevel } from './hooks';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { RiskRecord, RiskLevel } from './hooks';
 import {

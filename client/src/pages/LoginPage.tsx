@@ -1,41 +1,47 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Formik, Form, type FormikHelpers } from 'formik';
+import * as Yup from 'yup';
+import { Button as AntButton, Input as AntInput, Form as AntForm } from 'antd';
+import { Mail, Lock, AlertCircle } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import './LoginPage.css';
 
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
+interface FormValues {
+  email: string;
+  password: string;
+}
 
-type LoginFormData = z.infer<typeof loginSchema>;
+const validationSchema = Yup.object({
+  email: Yup.string().email('Invalid email address').required('Email is required'),
+  password: Yup.string().required('Password is required'),
+});
 
 const TENANT_CODE = 'AURORA-PH';
 
-const PILLS = ['Document Control', 'CAPA', 'Risk Management', 'Training & LMS', 'Audits', '21 CFR Part 11'];
+const PILLS = [
+  'Document Control',
+  'CAPA',
+  'Risk Management',
+  'Training & LMS',
+  'Audits',
+  '21 CFR Part 11',
+];
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const { login, isLoading } = useAuthStore();
-  const [showPw, setShowPw] = useState(false);
+  const { login } = useAuthStore();
   const [error, setError] = useState('');
 
-  const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
-  });
-
-  const onSubmit = async (data: LoginFormData) => {
+  const handleSubmit = async (values: FormValues, helpers: FormikHelpers<FormValues>) => {
     setError('');
     try {
-      await login(data.email, data.password, TENANT_CODE);
+      await login(values.email, values.password, TENANT_CODE);
       navigate('/dashboard');
     } catch {
       setError('Invalid credentials. Please try again.');
+    } finally {
+      helpers.setSubmitting(false);
     }
   };
 
@@ -50,19 +56,21 @@ export default function LoginPage() {
         </div>
 
         <h1 className="login-brand-headline">
-          Uncompromising Quality.<br />
+          Uncompromising Quality.
+          <br />
           <em>Continuous Improvement.</em>
         </h1>
 
         <p className="login-brand-desc">
-          Enterprise QMS for manufacturing and regulated industries — Document
-          Control, CAPA, Risk, Training, Audits and 21 CFR Part 11 e-signatures,
-          unified in a single compliance platform.
+          Enterprise QMS for manufacturing and regulated industries — Document Control, CAPA, Risk,
+          Training, Audits and 21 CFR Part 11 e-signatures, unified in a single compliance platform.
         </p>
 
         <div className="login-brand-pills">
           {PILLS.map((p) => (
-            <span key={p} className="login-brand-pill">{p}</span>
+            <span key={p} className="login-brand-pill">
+              {p}
+            </span>
           ))}
         </div>
       </div>
@@ -85,56 +93,68 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {(error || errors.email || errors.password) && (
-              <div className="login-error">
-                <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-                {error || errors.email?.message || errors.password?.message}
-              </div>
-            )}
+            <Formik<FormValues>
+              initialValues={{ email: '', password: '' }}
+              validationSchema={validationSchema}
+              onSubmit={handleSubmit}
+            >
+              {({ values, errors, touched, setFieldValue, isSubmitting, handleSubmit }) => (
+                <AntForm layout="vertical" component={false}>
+                <Form>
+                  {(error || (touched.email && errors.email) || (touched.password && errors.password)) && (
+                    <div className="login-error">
+                      <AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+                      {error ||
+                        (touched.email && errors.email) ||
+                        (touched.password && errors.password)}
+                    </div>
+                  )}
 
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <div className="login-field">
-                <label className="login-field-label">Email address</label>
-                <div className="login-field-wrap">
-                  <span className="login-field-icon"><Mail size={14} /></span>
-                  <input
-                    {...register('email')}
-                    type="email"
-                    placeholder="you@example.com"
-                    className="login-input"
-                    autoComplete="email"
-                  />
-                </div>
-              </div>
-
-              <div className="login-field">
-                <label className="login-field-label">Password</label>
-                <div className="login-field-wrap">
-                  <span className="login-field-icon"><Lock size={14} /></span>
-                  <input
-                    {...register('password')}
-                    type={showPw ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    className="login-input"
-                    style={{ paddingRight: 40 }}
-                    autoComplete="current-password"
-                  />
-                  <button
-                    type="button"
-                    className="login-pw-toggle"
-                    onClick={() => setShowPw(!showPw)}
-                    tabIndex={-1}
+                  <AntForm.Item
+                    label="Email address"
+                    validateStatus={touched.email && errors.email ? 'error' : ''}
+                    className="!mb-3"
                   >
-                    {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
-                  </button>
-                </div>
-              </div>
+                    <AntInput
+                      size="large"
+                      prefix={<Mail size={14} className="text-gray-400" />}
+                      type="email"
+                      value={values.email}
+                      onChange={(e) => setFieldValue('email', e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                    />
+                  </AntForm.Item>
 
-              <button type="submit" disabled={isLoading} className="login-submit">
-                {isLoading && <span className="login-spinner" />}
-                {isLoading ? 'Signing in…' : 'Sign In'}
-              </button>
-            </form>
+                  <AntForm.Item
+                    label="Password"
+                    validateStatus={touched.password && errors.password ? 'error' : ''}
+                    className="!mb-4"
+                  >
+                    <AntInput.Password
+                      size="large"
+                      prefix={<Lock size={14} className="text-gray-400" />}
+                      value={values.password}
+                      onChange={(e) => setFieldValue('password', e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                    />
+                  </AntForm.Item>
+
+                  <AntButton
+                    type="primary"
+                    size="large"
+                    htmlType="submit"
+                    block
+                    loading={isSubmitting}
+                    onClick={() => handleSubmit()}
+                  >
+                    Sign In
+                  </AntButton>
+                </Form>
+                </AntForm>
+              )}
+            </Formik>
           </div>
 
           <div className="login-card-footer">

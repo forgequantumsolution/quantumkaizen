@@ -62,7 +62,7 @@ const CONTENT_TYPES: { value: ContentBlock['type']; label: string; icon: React.E
 const PROGRAM_TYPES = ['INDUCTION', 'OJT', 'CLASSROOM', 'E_LEARNING', 'REGULATORY', 'REFRESHER'];
 const DEPARTMENTS = ['Quality Assurance', 'Quality Control', 'Production', 'Engineering', 'HSE'];
 const ROLES = ['Quality Manager', 'QA Inspector', 'Lab Analyst', 'Production Supervisor', 'Machine Operator', 'Welding Operator', 'Design Engineer', 'Process Engineer', 'HSE Officer', 'Document Controller'];
-const MOCK_USERS = ['Priya Sharma', 'Rajesh Kumar', 'Vikram Patel', 'Anita Desai', 'Sunita Rao', 'Deepak Nair', 'Arun Mehta', 'Kavita Singh', 'Manoj Verma', 'Neha Gupta'];
+const MOCK_USERS: string[] = [];
 
 let contentIdCounter = 0;
 let questionIdCounter = 0;

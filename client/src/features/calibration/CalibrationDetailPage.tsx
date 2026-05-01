@@ -53,11 +53,7 @@ export default function CalibrationDetailPage() {
 
   const cfg = STATUS_CONFIG[record.status];
 
-  const mockHistory: HistoryEntry[] = [
-    { id: 'h1', date: record.lastCalibrated, calibratedBy: record.calibratedBy, certificate: record.certificate, result: 'PASS', nextDue: record.nextDue },
-    { id: 'h2', date: new Date(new Date(record.lastCalibrated).getTime() - record.frequency * 86400000).toISOString().slice(0, 10), calibratedBy: record.calibratedBy, certificate: 'CERT-PREV-001', result: 'PASS', nextDue: record.lastCalibrated },
-    { id: 'h3', date: new Date(new Date(record.lastCalibrated).getTime() - record.frequency * 2 * 86400000).toISOString().slice(0, 10), calibratedBy: 'Internal Lab', certificate: 'CERT-PREV-000', result: 'PASS', nextDue: new Date(new Date(record.lastCalibrated).getTime() - record.frequency * 86400000).toISOString().slice(0, 10) },
-  ];
+  const mockHistory: HistoryEntry[] = [];
 
   const historyColumns: Column<HistoryEntry>[] = [
     { key: 'date', header: 'Date', render: (row) => <span className="text-sm">{new Date(row.date).toLocaleDateString()}</span> },

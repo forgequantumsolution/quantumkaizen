@@ -19,7 +19,7 @@ import {
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
 import { lookupBadge } from '@/lib/badgeMap';
-import { useSuppliers, mockSuppliers } from './hooks';
+import { useSuppliers } from './hooks';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { Supplier, SupplierCategory, SupplierStatus } from './hooks';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -94,7 +94,10 @@ export default function SupplierListPage() {
   const { data: result, isLoading } = useSuppliers(filters);
   const suppliers = (result?.data ?? [] as Supplier[]).filter((s: Supplier) => new Date((s as any).createdAt).getFullYear() === year);
 
-  const yearSuppliers = useMemo(() => mockSuppliers.filter((s) => new Date(s.createdAt).getFullYear() === year), [year]);
+  const yearSuppliers = useMemo(
+    () => (result?.data ?? []).filter((s) => new Date(s.createdAt).getFullYear() === year),
+    [result, year],
+  );
 
   // Summary stats
   const totalSuppliers = yearSuppliers.length;

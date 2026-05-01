@@ -50,29 +50,9 @@ const STAGE_LABELS: Record<string, string> = {
   CLOSED: 'Closed',
 };
 
-// ── Mock supplemental data ───────────────────────────────────────────────────
-
-const mockFiveWhys: FiveWhyEntry[] = [
-  { whyNumber: 1, question: 'Why was the hardness below specification?', answer: 'The furnace temperature was 20 degrees below the required range during the soak cycle.' },
-  { whyNumber: 2, question: 'Why was the furnace temperature below range?', answer: 'The temperature controller was reading inaccurately, showing 20 degrees higher than actual.' },
-  { whyNumber: 3, question: 'Why was the controller reading inaccurately?', answer: 'The thermocouple had drifted out of calibration.' },
-  { whyNumber: 4, question: 'Why had the thermocouple drifted out of calibration?', answer: 'Calibration was overdue by 2 weeks; the PM schedule was not followed.' },
-  { whyNumber: 5, question: 'Why was the PM schedule not followed?', answer: 'The calibration tracking system had no automated alerts, relying solely on manual checks.' },
-];
-
-const mockCAPAs: CAPA[] = [
-  {
-    id: 'capa1', capaNumber: 'CAPA-2026-0019', title: 'Implement automated calibration alerts',
-    type: 'CORRECTIVE', status: 'OPEN', linkedNCId: 'nc1', linkedNCNumber: 'NC-2026-0042',
-    assignedTo: 'Anita Desai', dueDate: '2026-04-30', createdAt: '2026-03-30T10:00:00Z',
-  },
-];
-
-const mockHistory: AuditLogEntry[] = [
-  { id: 'h1', timestamp: '2026-03-30T09:15:00Z', userId: 'u6', userName: 'Deepak Nair', action: 'CREATE', entityType: 'NON_CONFORMANCE', entityId: 'NC-2026-0042', changedFields: null, ipAddress: '10.0.1.30' },
-  { id: 'h2', timestamp: '2026-03-30T09:30:00Z', userId: 'u4', userName: 'Vikram Patel', action: 'ADD_CONTAINMENT', entityType: 'NON_CONFORMANCE', entityId: 'NC-2026-0042', changedFields: null, ipAddress: '10.0.1.8' },
-  { id: 'h3', timestamp: '2026-03-30T10:00:00Z', userId: 'u1', userName: 'Priya Sharma', action: 'UPDATE_STATUS', entityType: 'NON_CONFORMANCE', entityId: 'NC-2026-0042', changedFields: { status: { before: 'OPEN', after: 'CONTAINMENT' } }, ipAddress: '10.0.1.12' },
-];
+const mockFiveWhys: FiveWhyEntry[] = [];
+const mockCAPAs: CAPA[] = [];
+const mockHistory: AuditLogEntry[] = [];
 
 const TABS = ['Details', 'Containment', 'Root Cause Analysis', 'CAPA', 'History', 'Traceability'];
 

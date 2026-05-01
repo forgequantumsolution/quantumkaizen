@@ -17,7 +17,7 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
-import { useChangeRequests, mockChangeRequests } from './hooks';
+import { useChangeRequests } from './hooks';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { ChangeRequest } from './hooks';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -70,7 +70,10 @@ export default function ChangeControlListPage() {
   const { data: result, isLoading } = useChangeRequests(filters);
   const changeRequests = (result?.data ?? [] as ChangeRequest[]).filter((cr: ChangeRequest) => new Date((cr as any).createdAt).getFullYear() === year);
 
-  const yearCRs = useMemo(() => mockChangeRequests.filter((cr) => new Date(cr.createdAt).getFullYear() === year), [year]);
+  const yearCRs = useMemo(
+    () => (result?.data ?? []).filter((cr) => new Date(cr.createdAt).getFullYear() === year),
+    [result, year],
+  );
 
   // Summary counts
   const openCount = yearCRs.filter((cr) =>

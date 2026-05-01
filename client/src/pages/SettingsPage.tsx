@@ -1,38 +1,20 @@
 import { useState } from 'react';
 import {
-  Building2, Users, GitBranch, Bell, Shield,
-  Save, Upload, Plus, Trash2, Check, ChevronDown, Eye, EyeOff
+  Building2, Users, GitBranch, Bell, Shield, Layers, KeyRound, Lock,
 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
-
-// ── Mock data ────────────────────────────────────────────────
-const mockUsers = [
-  { id: '1', name: 'Admin User', email: 'admin@forgequantum.com', role: 'QMS_ADMIN', department: 'Quality', status: 'active', lastLogin: '2026-03-31' },
-  { id: '2', name: 'Sarah Johnson', email: 'sarah@forgequantum.com', role: 'QUALITY_ENGINEER', department: 'Quality', status: 'active', lastLogin: '2026-03-30' },
-  { id: '3', name: 'David Kim', email: 'david@forgequantum.com', role: 'AUDITOR', department: 'Quality', status: 'active', lastLogin: '2026-03-29' },
-  { id: '4', name: 'Emma Wilson', email: 'emma@forgequantum.com', role: 'DOCUMENT_CONTROLLER', department: 'QA', status: 'active', lastLogin: '2026-03-28' },
-  { id: '5', name: 'Tom Richards', email: 'tom@forgequantum.com', role: 'READ_ONLY', department: 'Operations', status: 'inactive', lastLogin: '2026-02-15' },
-];
-
-const ROLES = ['SUPER_ADMIN','QMS_ADMIN','QUALITY_ENGINEER','AUDITOR','DOCUMENT_CONTROLLER','NC_INITIATOR','CAPA_OWNER','RISK_OWNER','SUPPLIER_MANAGER','READ_ONLY'];
-
-const ROLE_COLORS: Record<string, string> = {
-  SUPER_ADMIN: 'bg-red-100 text-red-700',
-  QMS_ADMIN: 'bg-slate-900/10 text-slate-900',
-  QUALITY_ENGINEER: 'bg-blue-100 text-blue-700',
-  AUDITOR: 'bg-purple-100 text-purple-700',
-  DOCUMENT_CONTROLLER: 'bg-green-100 text-green-700',
-  NC_INITIATOR: 'bg-amber-100 text-amber-700',
-  CAPA_OWNER: 'bg-orange-100 text-orange-700',
-  RISK_OWNER: 'bg-red-100 text-red-600',
-  SUPPLIER_MANAGER: 'bg-teal-100 text-teal-700',
-  READ_ONLY: 'bg-gray-100 text-gray-600',
-};
+import GeneralTab from '@/features/admin/organization/GeneralTab';
+import UsersTab from '@/features/admin/users/UsersTab';
+import DepartmentsTab from '@/features/admin/departments/DepartmentsTab';
+import RolesTab from '@/features/admin/roles/RolesTab';
+import AccessControlTab from '@/features/admin/access-control/AccessControlTab';
 
 const tabs = [
   { key: 'general', label: 'General', icon: Building2 },
-  { key: 'users', label: 'Users & Roles', icon: Users },
+  { key: 'users', label: 'Users', icon: Users },
+  { key: 'departments', label: 'Departments', icon: Layers },
+  { key: 'roles', label: 'Roles', icon: KeyRound },
+  { key: 'access', label: 'Access Control', icon: Lock },
   { key: 'workflows', label: 'Workflows', icon: GitBranch },
   { key: 'notifications', label: 'Notifications', icon: Bell },
   { key: 'security', label: 'Security', icon: Shield },
@@ -42,25 +24,6 @@ type Tab = typeof tabs[number]['key'];
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
-  const [saved, setSaved] = useState(false);
-
-  // General settings state
-  const [company, setCompany] = useState({
-    name: 'Forge Quantum Solutions',
-    tenantCode: 'FORGE-QS',
-    industry: 'Automotive',
-    timezone: 'Asia/Kolkata',
-    dateFormat: 'DD/MM/YYYY',
-    standard: 'IATF 16949:2016',
-    address: '123 Industrial Zone, Pune, Maharashtra 411001',
-    website: 'https://forgequantum.com',
-  });
-
-  // Users state
-  const [users, setUsers] = useState(mockUsers);
-  const [showInviteForm, setShowInviteForm] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState('READ_ONLY');
 
   // Notification prefs
   const [notifPrefs, setNotifPrefs] = useState({
@@ -87,23 +50,12 @@ export default function SettingsPage() {
     ssoProvider: 'SAML',
   });
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  };
-
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-h1 text-gray-900">Settings</h1>
-          <p className="text-body text-gray-500 mt-0.5">Manage your organization's configuration and preferences</p>
-        </div>
-        <Button variant="primary" onClick={handleSave}>
-          {saved ? <Check size={15} /> : <Save size={15} />}
-          {saved ? 'Saved!' : 'Save Changes'}
-        </Button>
+      <div>
+        <h1 className="text-h1 text-gray-900">Settings</h1>
+        <p className="text-body text-gray-500 mt-0.5">Manage your organization's configuration and preferences</p>
       </div>
 
       <div className="flex gap-6">
@@ -135,163 +87,19 @@ export default function SettingsPage() {
         <div className="flex-1 min-w-0">
 
           {/* ── GENERAL ─────────────────────────────────── */}
-          {activeTab === 'general' && (
-            <div className="space-y-6">
-              {/* Logo */}
-              <div className="bg-white rounded-xl border border-gray-200 p-5">
-                <h2 className="text-h3 text-gray-900 mb-4">Organization Identity</h2>
-                <div className="flex items-center gap-4 mb-5">
-                  <div className="w-16 h-16 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-                    <span className="text-blue-600 font-bold text-xl">QK</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">Organization Logo</p>
-                    <p className="text-xs text-gray-500 mt-0.5">PNG or SVG, max 2MB, recommended 200×200px</p>
-                    <button className="mt-2 flex items-center gap-1.5 text-xs text-slate-900 font-medium hover:underline">
-                      <Upload size={12} /> Upload logo
-                    </button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    { label: 'Organization Name', key: 'name' as const },
-                    { label: 'Tenant Code', key: 'tenantCode' as const },
-                    { label: 'Primary Standard', key: 'standard' as const },
-                    { label: 'Industry', key: 'industry' as const },
-                    { label: 'Timezone', key: 'timezone' as const },
-                    { label: 'Date Format', key: 'dateFormat' as const },
-                  ].map(({ label, key }) => (
-                    <div key={key}>
-                      <label className="label">{label}</label>
-                      <input
-                        type="text"
-                        value={company[key]}
-                        onChange={e => setCompany(c => ({ ...c, [key]: e.target.value }))}
-                        className="input-base"
-                      />
-                    </div>
-                  ))}
-                  <div className="col-span-2">
-                    <label className="label">Address</label>
-                    <input
-                      type="text"
-                      value={company.address}
-                      onChange={e => setCompany(c => ({ ...c, address: e.target.value }))}
-                      className="input-base"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="label">Website</label>
-                    <input
-                      type="text"
-                      value={company.website}
-                      onChange={e => setCompany(c => ({ ...c, website: e.target.value }))}
-                      className="input-base"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {activeTab === 'general' && <GeneralTab />}
 
-          {/* ── USERS & ROLES ────────────────────────────── */}
-          {activeTab === 'users' && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">{users.filter(u => u.status === 'active').length} active users</p>
-                <Button variant="primary" size="sm" onClick={() => setShowInviteForm(!showInviteForm)}>
-                  <Plus size={14} />
-                  Invite User
-                </Button>
-              </div>
+          {/* ── USERS ───────────────────────────────────── */}
+          {activeTab === 'users' && <UsersTab />}
 
-              {/* Invite form */}
-              {showInviteForm && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
-                  <h3 className="text-sm font-semibold text-blue-900">Invite New User</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="label">Email Address</label>
-                      <input
-                        type="email"
-                        value={inviteEmail}
-                        onChange={e => setInviteEmail(e.target.value)}
-                        placeholder="user@company.com"
-                        className="input-base"
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Role</label>
-                      <select value={inviteRole} onChange={e => setInviteRole(e.target.value)} className="input-base">
-                        {ROLES.map(r => <option key={r} value={r}>{r.replace(/_/g, ' ')}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="primary" onClick={() => {
-                      if (inviteEmail) {
-                        setUsers(u => [...u, { id: Date.now().toString(), name: inviteEmail.split('@')[0], email: inviteEmail, role: inviteRole, department: '—', status: 'active', lastLogin: '—' }]);
-                        setInviteEmail(''); setShowInviteForm(false);
-                      }
-                    }}>Send Invite</Button>
-                    <Button size="sm" variant="outline" onClick={() => setShowInviteForm(false)}>Cancel</Button>
-                  </div>
-                </div>
-              )}
+          {/* ── DEPARTMENTS ─────────────────────────────── */}
+          {activeTab === 'departments' && <DepartmentsTab />}
 
-              {/* Users table */}
-              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-surface-secondary border-b border-gray-100">
-                    <tr>
-                      {['User', 'Role', 'Department', 'Last Login', 'Status', ''].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {users.map(user => (
-                      <tr key={user.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-full bg-slate-900/10 flex items-center justify-center">
-                              <span className="text-xs font-medium text-slate-900">
-                                {user.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                              </span>
-                            </div>
-                            <div>
-                              <p className="font-medium text-gray-900">{user.name}</p>
-                              <p className="text-xs text-gray-400">{user.email}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', ROLE_COLORS[user.role] ?? 'bg-gray-100 text-gray-600')}>
-                            {user.role.replace(/_/g, ' ')}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-gray-600">{user.department}</td>
-                        <td className="px-4 py-3 text-gray-500">{user.lastLogin}</td>
-                        <td className="px-4 py-3">
-                          <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium', user.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500')}>
-                            {user.status}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => setUsers(u => u.map(x => x.id === user.id ? { ...x, status: x.status === 'active' ? 'inactive' : 'active' } : x))}
-                            className="text-xs text-gray-400 hover:text-red-500 transition-colors"
-                          >
-                            {user.status === 'active' ? 'Deactivate' : 'Activate'}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          {/* ── ROLES ───────────────────────────────────── */}
+          {activeTab === 'roles' && <RolesTab />}
+
+          {/* ── ACCESS CONTROL ──────────────────────────── */}
+          {activeTab === 'access' && <AccessControlTab />}
 
           {/* ── WORKFLOWS ────────────────────────────────── */}
           {activeTab === 'workflows' && (

@@ -16,7 +16,7 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
-import { useComplaints, mockComplaints } from './hooks';
+import { useComplaints } from './hooks';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { Complaint } from './hooks';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -57,7 +57,10 @@ export default function ComplaintListPage() {
   const { data: result, isLoading } = useComplaints(filters);
   const complaints = (result?.data ?? [] as Complaint[]).filter((c: Complaint) => new Date(c.receivedDate).getFullYear() === year);
 
-  const yearComplaints = useMemo(() => mockComplaints.filter((c) => new Date(c.receivedDate).getFullYear() === year), [year]);
+  const yearComplaints = useMemo(
+    () => (result?.data ?? []).filter((c) => new Date(c.receivedDate).getFullYear() === year),
+    [result, year],
+  );
 
   // Summary counts
   const openCount = yearComplaints.filter(

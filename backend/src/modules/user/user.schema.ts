@@ -1,21 +1,49 @@
 import { z } from 'zod';
 
-export const UpdateUserSchema = z.object({
+const employeeIdRegex = /^[A-Z0-9_-]{2,32}$/;
+
+export const CreateUserSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  employeeId: z
+    .string()
+    .regex(employeeIdRegex, 'Employee ID: 2–32 chars A-Z 0-9 _ -')
+    .optional()
+    .nullable(),
+  firstName: z.string().min(1).max(60).optional().nullable(),
+  lastName: z.string().min(1).max(60).optional().nullable(),
   name: z.string().min(1).max(120).optional(),
+  phone: z.string().max(40).optional().nullable(),
+  designation: z.string().max(120).optional().nullable(),
+  departmentId: z.string().uuid().optional().nullable(),
+  roleId: z.string().uuid().optional().nullable(),
+  siteId: z.string().uuid().optional().nullable(),
+  managerId: z.string().uuid().optional().nullable(),
+  joinDate: z.coerce.date().optional().nullable(),
+  locale: z.string().max(10).optional(),
+  timezone: z.string().max(60).optional(),
   isActive: z.boolean().optional(),
-  departmentId: z.string().uuid().nullable().optional(),
-  roleId: z.string().uuid().nullable().optional(),
+});
+
+export const UpdateUserSchema = CreateUserSchema.omit({ password: true }).partial();
+
+export const ResetPasswordSchema = z.object({
+  password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
 export const IdParamSchema = z.object({ id: z.string().uuid() });
 
 export const ListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  pageSize: z.coerce.number().int().min(1).max(100).default(50),
   search: z.string().optional(),
   departmentId: z.string().uuid().optional(),
   roleId: z.string().uuid().optional(),
+  siteId: z.string().uuid().optional(),
+  isActive: z.enum(['true', 'false']).optional(),
 });
 
+export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type ListQuery = z.infer<typeof ListQuerySchema>;

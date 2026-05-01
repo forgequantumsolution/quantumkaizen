@@ -17,26 +17,9 @@ import { formatDate, cn } from '@/lib/utils';
 import { useDocument } from './hooks';
 import ESignatureModal from '@/components/shared/ESignatureModal';
 
-// ── Mock supplemental data ───────────────────────────────────────────────────
-
-const mockVersions: DocumentVersion[] = [
-  { id: 'v3', version: '3.1', changedBy: 'Rajesh Kumar', changedAt: '2025-06-01T08:00:00Z', changeSummary: 'Annual review — updated section 5 responsibilities.', status: 'PUBLISHED' },
-  { id: 'v2', version: '3.0', changedBy: 'Rajesh Kumar', changedAt: '2024-06-01T10:00:00Z', changeSummary: 'Major revision for ISO 9001:2015 alignment.', status: 'ARCHIVED' },
-  { id: 'v1', version: '2.0', changedBy: 'Priya Sharma', changedAt: '2023-06-01T10:00:00Z', changeSummary: 'Initial migration to digital system.', status: 'ARCHIVED' },
-];
-
-const mockApprovalSteps: ApprovalStep[] = [
-  { id: 'a1', stepOrder: 1, role: 'Author', approverName: 'Vikram Patel', status: 'APPROVED', comment: null, completedAt: '2026-03-25T10:00:00Z' },
-  { id: 'a2', stepOrder: 2, role: 'Reviewer', approverName: 'Anita Desai', status: 'APPROVED', comment: 'Reviewed and verified.', completedAt: '2026-03-27T14:00:00Z' },
-  { id: 'a3', stepOrder: 3, role: 'Quality Manager', approverName: 'Rajesh Kumar', status: 'PENDING', comment: null, completedAt: null },
-  { id: 'a4', stepOrder: 4, role: 'Department Head', approverName: null, status: 'PENDING', comment: null, completedAt: null },
-];
-
-const mockAcknowledgement = {
-  total: 24,
-  acknowledged: 18,
-  pending: 6,
-};
+const mockVersions: DocumentVersion[] = [];
+const mockApprovalSteps: ApprovalStep[] = [];
+const mockAcknowledgement = { total: 0, acknowledged: 0, pending: 0 };
 
 export default function DocumentDetailPage() {
   const { id } = useParams<{ id: string }>();

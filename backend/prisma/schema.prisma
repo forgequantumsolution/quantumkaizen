@@ -13,39 +13,126 @@ model User {
   email        String   @unique
   passwordHash String
   name         String
+
+  employeeId   String?  @unique
+  firstName    String?
+  lastName     String?
+  phone        String?
+  designation  String?
+
   isActive     Boolean  @default(true)
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
   roleId       String?
-  role         Role?    @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  role         Role?       @relation(fields: [roleId], references: [id], onDelete: SetNull)
+
+  siteId       String?
+  site         Site?       @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  managerId    String?
+  manager      User?       @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  reports      User[]      @relation("UserManager")
+
+  joinDate     DateTime?
+  lastLoginAt  DateTime?
+  avatarUrl    String?
+  locale       String   @default("en")
+  timezone     String   @default("Asia/Kolkata")
+
+  signatureMeaning    String?
+  signaturePinHash    String?
+  signatureEnrolledAt DateTime?
+
+  headOfDepartments Department[] @relation("DepartmentHead")
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([departmentId])
   @@index([roleId])
+  @@index([siteId])
+  @@index([managerId])
 }
 
 model Department {
   id          String   @id @default(uuid())
+  code        String   @unique
   name        String   @unique
   description String?
+
+  parentId    String?
+  parent      Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    Department[] @relation("DepartmentHierarchy")
+
+  headUserId  String?
+  head        User?    @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull)
+
+  costCenter  String?
+  isActive    Boolean  @default(true)
 
   users       User[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  @@index([parentId])
+  @@index([headUserId])
 }
 
 model Role {
   id          String   @id @default(uuid())
   name        String   @unique
   description String?
+  isSystem    Boolean  @default(false)
 
+  permissions Permission[] @relation("RolePermissions")
   users       User[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Permission {
+  id          String  @id @default(uuid())
+  key         String  @unique
+  module      String
+  action      String
+  description String
+
+  roles       Role[]  @relation("RolePermissions")
+
+  createdAt   DateTime @default(now())
+
+  @@index([module])
+}
+
+model Site {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  address   String?
+  isActive  Boolean  @default(true)
+
+  users     User[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Organization {
+  id              String   @id @default(uuid())
+  name            String
+  tenantCode      String   @unique
+  industry        String
+  website         String?
+  address         String?
+  standards       String[]
+  timezone        String   @default("Asia/Kolkata")
+  dateFormat      String   @default("DD/MM/YYYY")
+  logoUrl         String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

@@ -31,8 +31,6 @@ import {
   useManagementReviews,
   useManagementReviewSummary,
   useScheduleReview,
-  mockActionItems,
-  mockReviews,
 } from './hooks';
 import type { ActionItem, ManagementReview } from './hooks';
 
@@ -60,8 +58,8 @@ export default function ManagementReviewPage() {
   const { data: reviewData } = useManagementReviews();
   const { data: summaryData } = useManagementReviewSummary();
 
-  const reviews = reviewData?.reviews ?? mockReviews;
-  const actionItems = reviewData?.actionItems ?? mockActionItems;
+  const reviews = reviewData?.reviews ?? [];
+  const actionItems = reviewData?.actionItems ?? [];
   const qms = summaryData?.qms;
   const dms = summaryData?.dms;
   const lms = summaryData?.lms;

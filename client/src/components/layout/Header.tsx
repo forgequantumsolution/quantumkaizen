@@ -13,50 +13,7 @@ import { cn } from '@/lib/utils';
 import GlobalSearch from '@/components/shared/GlobalSearch';
 import { useFiscalYearStore, FISCAL_YEARS } from '@/stores/fiscalYearStore';
 
-const MOCK_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'n1', type: 'APPROVAL_REQUEST', title: 'Approval required',
-    message: 'SOP-2026-003 awaiting your review and sign-off.',
-    entityType: 'Document', entityId: 'SOP-2026-003',
-    link: '/dms/documents', isRead: false,
-    createdAt: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'n2', type: 'OVERDUE', title: 'CAPA action overdue',
-    message: 'Root cause analysis for CAPA-2026-007 is 3 days past due.',
-    entityType: 'CAPA', entityId: 'CAPA-2026-007',
-    link: '/qms/capa', isRead: false,
-    createdAt: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'n3', type: 'OVERDUE', title: 'NC overdue for closure',
-    message: 'NC-2026-011 is 5 days past its target closure date.',
-    entityType: 'Non-Conformance', entityId: 'NC-2026-011',
-    link: '/qms/non-conformances', isRead: false,
-    createdAt: new Date(Date.now() - 86400 * 1000).toISOString(),
-  },
-  {
-    id: 'n4', type: 'EXPIRING', title: 'Document expiring in 7 days',
-    message: 'ISO Procedures Manual (DOC-ISO-001) — schedule review.',
-    entityType: 'Document', entityId: 'DOC-ISO-001',
-    link: '/dms/documents', isRead: false,
-    createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'n5', type: 'APPROVAL_REQUEST', title: 'Risk assessment review',
-    message: 'RA-2026-004 (High) requires your sign-off.',
-    entityType: 'Risk', entityId: 'RA-2026-004',
-    link: '/qms/risks', isRead: false,
-    createdAt: new Date(Date.now() - 6 * 3600 * 1000).toISOString(),
-  },
-  {
-    id: 'n6', type: 'TASK_ASSIGNED', title: 'Audit Q2 assigned',
-    message: 'Internal audit AUD-2026-Q2 has been assigned to you.',
-    entityType: 'Audit', entityId: 'AUD-2026-Q2',
-    link: '/qms/audits', isRead: true,
-    createdAt: new Date(Date.now() - 2 * 86400 * 1000).toISOString(),
-  },
-];
+const MOCK_NOTIFICATIONS: AppNotification[] = [];
 
 const breadcrumbMap: Record<string, string> = {
   dashboard: 'Dashboard', qms: 'Quality', dms: 'Documents',

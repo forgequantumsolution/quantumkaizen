@@ -22,7 +22,7 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import { cn, formatDate, daysSince } from '@/lib/utils';
-import { useCAPAs, mockCAPAs } from './hooks';
+import { useCAPAs } from './hooks';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { CAPARecord } from './hooks';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -73,7 +73,10 @@ export default function CAPAListPage() {
   const { data: result, isLoading } = useCAPAs(filters);
   const capas = (result?.data ?? []).filter((c) => new Date(c.createdAt).getFullYear() === year);
 
-  const yearCAPAs = useMemo(() => mockCAPAs.filter((c) => new Date(c.createdAt).getFullYear() === year), [year]);
+  const yearCAPAs = useMemo(
+    () => (result?.data ?? []).filter((c) => new Date(c.createdAt).getFullYear() === year),
+    [result, year],
+  );
 
   const openCount = yearCAPAs.filter((c) =>
     ['INITIATED', 'CONTAINMENT', 'ROOT_CAUSE_ANALYSIS', 'ACTION_DEFINITION'].includes(c.status),

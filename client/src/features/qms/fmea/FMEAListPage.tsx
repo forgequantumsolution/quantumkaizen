@@ -12,7 +12,7 @@ import {
 import type { Column } from '@/components/ui';
 import Tabs from '@/components/ui/Tabs';
 import { cn, formatDate } from '@/lib/utils';
-import { useFMEAs, mockFMEAs } from './hooks';
+import { useFMEAs } from './hooks';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { FMEA } from './hooks';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -34,7 +34,10 @@ export default function FMEAListPage() {
   const { data: result, isLoading } = useFMEAs(filters);
   const fmeas = (result?.data ?? [] as FMEA[]).filter((f: FMEA) => new Date((f as any).createdAt).getFullYear() === year);
 
-  const yearFMEAs = useMemo(() => mockFMEAs.filter((f) => new Date(f.createdAt).getFullYear() === year), [year]);
+  const yearFMEAs = useMemo(
+    () => (result?.data ?? []).filter((f) => new Date(f.createdAt).getFullYear() === year),
+    [result, year],
+  );
 
   const fmeaTabs = useMemo(() => [
     { id: 'all', label: 'All', count: yearFMEAs.length },

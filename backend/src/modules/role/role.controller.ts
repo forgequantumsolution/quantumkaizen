@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
 import * as service from './role.service';
+import type { ListQuery } from './role.schema';
 
 export const list = async (req: Request, res: Response) => {
-  res.json(await service.list(req.query as any));
+  res.json(await service.list(req.query as unknown as ListQuery));
 };
 
 export const get = async (req: Request, res: Response) => {
@@ -15,6 +16,10 @@ export const create = async (req: Request, res: Response) => {
 
 export const patch = async (req: Request, res: Response) => {
   res.json(await service.update(req.params.id as string, req.body));
+};
+
+export const setPermissions = async (req: Request, res: Response) => {
+  res.json(await service.setPermissions(req.params.id as string, req.body));
 };
 
 export const remove = async (req: Request, res: Response) => {

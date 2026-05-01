@@ -19,17 +19,10 @@ import type { Column } from '@/components/ui';
 import Tabs from '@/components/ui/Tabs';
 import { formatDate } from '@/lib/utils';
 import { lookupBadge } from '@/lib/badgeMap';
-import {
-  useComplianceRequirements,
-  mockRequirements,
-  mockIATFRequirements,
-  mockISO14001Requirements,
-  mockISO45001Requirements,
-} from './hooks';
+import { useComplianceRequirements } from './hooks';
 import type { ComplianceRequirement, ComplianceStatus } from './hooks';
 
-// Mock data kept only as an offline fallback in the hook.
-// Tabs + metrics now come from live backend data (see the hook calls below).
+// Tabs + metrics come from live backend data (see the hook calls below).
 const ALL_TAB_ID = 'ALL';
 
 function getStatusBadge(status: ComplianceStatus | string) {
