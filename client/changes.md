@@ -322,3 +322,70 @@ On a 1920-wide monitor that capped the content column at 1440px and centered it,
 ### Knock-on cleanup deferred
 - `client/src/pages/SettingsPage.tsx` still imports `Trash2`, `ChevronDown`, `Eye`, `EyeOff` from `lucide-react` — none are used after the tabs/header refactor (TS hint `6133`). Left in place this round; can be cleaned up in a follow-up.
 - `tailwind.config.js` `maxWidth.dashboard` (`1440px`) now has zero consumers but was left in place to avoid touching tokens that other developers may still reference.
+
+---
+
+## Session 5 — Typography rebase to web-standard 16px + semantic scale
+
+**Goal:** the UI was rendering noticeably small. Restore the web-standard 16px rem baseline, add a clear semantic font-size scale, and migrate inline-styled headings to the global tokens.
+
+### Root cause
+
+`client/src/index.css:35` had `html { font-size: 14px }`, which shrinks every Tailwind `rem`-based token by ~14% from its advertised value. Effective sizes were:
+- `text-base` (1rem) → 14px (advertised 16px)
+- `text-sm` (0.875rem) → 12.25px (advertised 14px)
+- `text-xs` (0.75rem) → 10.5px (advertised 12px)
+
+Bumping individual tokens without fixing this would just paper over the symptom. The codebase has 634 `text-xs` and 612 `text-sm` usages — the right move was to fix the rem base once and let everything snap to its proper size.
+
+### `client/src/index.css` — rem baseline restored
+- `html { font-size: 14px }` → `16px`. Single line. Auto-corrects all 1200+ `text-*` usages in one shot.
+
+### `client/tailwind.config.js` — typography scale rewritten
+- Reorganised the `fontSize` block into raw + semantic groups with px reference comments next to each token.
+- **Raw** (Tailwind-style): `xxs` 11, `xs` 12, `sm` 14, `base` 16, `md` 16, `lg` 18.
+  - Note: `lg` was 22px (custom override). Bringing it back to the standard 18px is a small breaking change for the few callers using `text-lg`, but matches the rest of the Tailwind ecosystem and removes the typography-drift trap. Old 22px callers should switch to `text-h1` if they wanted a heading.
+- **Semantic — headings**: `display` 28 / 700, `h1` 24 / 700, `h2` 18 / 600, `h3` 16 / 600, `h4` 14 / 600 (new).
+- **Semantic — body**: `body-lg` 16 (new), `body` 14, `body-md` 14 / 500 (medium weight), `body-sm` 13 (new), `caption` 12 (new).
+- **Form labels**: `label` 12 / 500 / 0.06em tracking (unchanged token, larger effective size after rem fix).
+- **Mono**: `mono-sm` 12, `mono-xs` 11 (unchanged tokens).
+- Inline comment block in the config explains the system so future edits stay consistent.
+
+### `client/src/features/dashboard/DashboardPage.tsx` — inline `<h1>` style dropped
+- Old: `<h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0D0E17', letterSpacing: '-0.025em', lineHeight: 1.1 }}>Executive Dashboard</h1>`. Hardcoded inline values that bypassed the design tokens.
+- New: `<h1 className="text-h1 text-gray-900">Executive Dashboard</h1>`. Same visual hierarchy as Settings and AuditLog page titles, now driven by the global `h1` token (24px / 700 / -0.015em).
+- Net effect: the dashboard heading is 2px smaller than before but is now consistent with every other page title and any future scale tweak applies uniformly.
+
+### `client/src/components/layout/Header.tsx` — knock-on layout fix
+After the rem bump, the sticky top header broke on routes with deep breadcrumbs (e.g. `/qms/suppliers/scorecards` → `Quality > Suppliers > Scorecards`). The three center pills wrapped their text inside their fixed 28px height, the language flag and user-name wrapped to two lines, and the FY year toggle was clipped.
+
+Three coordinated changes fixed the layout:
+
+1. **Pills no longer wrap**: each of the three center pills (`Expiry Alerts`, `Open CAPAs`, `GMP Compliant`) got `whitespace-nowrap shrink-0`. They now render single-line at their natural width, regardless of how much horizontal space the section receives.
+2. **Pills section won't expand or collapse**: the center container changed from `hidden md:flex flex-1 justify-center` to `hidden xl:flex justify-center min-w-0 shrink-0`. It only shows at ≥1280px (where there's room for both deep breadcrumbs and pills) and takes its natural width when shown — neither growing nor shrinking. (Below 1280, pills are hidden; the route-level alerts they reflect are still reachable via the relevant pages.)
+3. **Right section won't shrink**: the search/EN-flag/year-toggle/role/notifications/user-menu cluster got `shrink-0` on its container. The flag, name, and toggle now stay on one line at every viewport.
+4. **Breadcrumb truncates instead of pushing**: each breadcrumb segment got `truncate` and `min-w-0`, and the chevron got `shrink-0`. On deep paths at 1440 viewport the segments truncate to short ellipses (e.g. `Q… > Su… > Sco…`), keeping the whole header on one line. The full label is still in the DOM (and could be exposed via a tooltip in a future pass).
+
+### Verification
+
+Playwright (`scripts/scratch/analyze-pages.mjs`, gitignored) at 1440 × 900 across:
+- `/dashboard`, `/settings`, `/audit-log`
+- `/analytics`, `/qms/non-conformances`, `/qms/capa`, `/qms/risks`
+- `/qms/suppliers/scorecards` (deep breadcrumb worst-case)
+- `/lms/competency`, `/workflows`, `/dms/documents`
+
+Results across all 11 routes:
+- `document.documentElement.scrollWidth === innerWidth` → no horizontal overflow.
+- Header pill heights all 28px → no internal text wrapping.
+- StatsCard / DataTable / Card layouts unchanged (no overflow into adjacent cards).
+
+Visual confirmation (screenshots in `scripts/scratch/snapshots/`):
+- Body copy is comfortably readable (14px effective) — was 12.25px.
+- Page-title hierarchy is clearer: `text-h1` at 24px is visibly heavier than `text-h2` at 18px and `text-h3` at 16px.
+- KPI card labels (e.g. `CAPA CLOSURE RATE`, `TRAINING COMPLIANCE`) stay on one line; sub-card labels (e.g. `PENDING APPROVALS`) wrap exactly the same way they did before — no new wrapping introduced.
+- Header pills, FY toggle, and user menu all single-line on every tested route, including the worst-case `/qms/suppliers/scorecards`.
+
+### Knock-on cleanup deferred
+- 57 places in feature code use `text-2xl font-bold` (or `text-xl font-bold`) for page titles — they should be migrated to `text-h1` for consistency with PageHeader. Not done in this round; would touch ~25 files and is best handled as a sweep in a separate session.
+- The `text-lg` value changed from 22px to 18px. 18 callers exist; if any of them were leaning on the 22px size as a stand-in heading, they'll now look smaller and should switch to `text-h1` or `text-h2`. None spotted as broken in Playwright verification, but worth a manual sweep.
+- DashboardPage's description (`Quality Management · GMP Compliance · Updated 22:24`) still uses `text-xs` — could be standardised to `text-body-sm` (13px) for consistency with the rest of the app's secondary-text convention. Tiny ergonomic tweak, deferred.

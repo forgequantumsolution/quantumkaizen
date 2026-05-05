@@ -130,9 +130,7 @@ export default function DashboardPage() {
       {/* ── Executive Dashboard Header ── */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0D0E17', letterSpacing: '-0.025em', lineHeight: 1.1 }}>
-            Executive Dashboard
-          </h1>
+          <h1 className="text-h1 text-gray-900">Executive Dashboard</h1>
           <p className="text-xs text-ink-tertiary mt-1 flex items-center gap-1.5">
             <span>Quality Management</span>
             <span className="text-surface-border">·</span>
