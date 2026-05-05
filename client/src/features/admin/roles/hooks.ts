@@ -36,14 +36,39 @@ export interface UpdateRoleInput {
   permissionIds?: string[];
 }
 
-export function useRoles(search?: string) {
+export interface RoleFilters {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface RoleListResponse {
+  items: Role[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export function useRoles(filters: RoleFilters = {}) {
   return useQuery({
-    queryKey: ['roles', search],
+    queryKey: ['roles', filters],
     queryFn: async () => {
       const params: Record<string, string> = {};
-      if (search) params.search = search;
+      if (filters.search) params.search = filters.search;
+      if (filters.page) params.page = String(filters.page);
+      if (filters.pageSize) params.pageSize = String(filters.pageSize);
       const { data } = await api.get('/roles', { params });
-      return Array.isArray(data) ? (data as Role[]) : [];
+      const safe = data && typeof data === 'object' && !Array.isArray(data)
+        ? (data as RoleListResponse)
+        : null;
+      return (
+        safe ?? {
+          items: [] as Role[],
+          total: 0,
+          page: filters.page ?? 1,
+          pageSize: filters.pageSize ?? 20,
+        }
+      );
     },
   });
 }

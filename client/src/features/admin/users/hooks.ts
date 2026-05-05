@@ -59,6 +59,8 @@ export interface UserFilters {
   roleId?: string;
   siteId?: string;
   isActive?: boolean;
+  page?: number;
+  pageSize?: number;
 }
 
 export function useAdminUsers(filters: UserFilters = {}) {
@@ -71,10 +73,17 @@ export function useAdminUsers(filters: UserFilters = {}) {
       if (filters.roleId) params.roleId = filters.roleId;
       if (filters.siteId) params.siteId = filters.siteId;
       if (filters.isActive !== undefined) params.isActive = String(filters.isActive);
+      if (filters.page) params.page = String(filters.page);
+      if (filters.pageSize) params.pageSize = String(filters.pageSize);
       const { data } = await api.get('/users', { params });
       const safe = data && typeof data === 'object' ? (data as UserListResponse) : null;
       return (
-        safe ?? { items: [] as AdminUser[], total: 0, page: 1, pageSize: 50 }
+        safe ?? {
+          items: [] as AdminUser[],
+          total: 0,
+          page: filters.page ?? 1,
+          pageSize: filters.pageSize ?? 20,
+        }
       );
     },
   });

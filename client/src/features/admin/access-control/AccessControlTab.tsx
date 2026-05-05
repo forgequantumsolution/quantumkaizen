@@ -11,7 +11,8 @@ import { useHasPermission } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
 
 export default function AccessControlTab() {
-  const { data: roles = [], isLoading: rolesLoading } = useRoles();
+  const { data: rolesResp, isLoading: rolesLoading } = useRoles({ pageSize: 200 });
+  const roles = rolesResp?.items ?? [];
   const { data: permGroups = [], isLoading: permsLoading } = usePermissionsGrouped();
   const setPermissions = useSetRolePermissions();
   const canEdit = useHasPermission('role.update');

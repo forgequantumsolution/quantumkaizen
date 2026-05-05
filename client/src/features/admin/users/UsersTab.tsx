@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Formik, Form, type FormikHelpers } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -103,6 +103,8 @@ export default function UsersTab() {
   const [departmentFilter, setDepartmentFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const filters = useMemo(
     () => ({
@@ -110,15 +112,26 @@ export default function UsersTab() {
       departmentId: departmentFilter || undefined,
       roleId: roleFilter || undefined,
       isActive: statusFilter === 'all' ? undefined : statusFilter === 'active',
+      page,
+      pageSize,
     }),
-    [search, departmentFilter, roleFilter, statusFilter],
+    [search, departmentFilter, roleFilter, statusFilter, page, pageSize],
   );
 
   const { data: usersResponse, isLoading } = useAdminUsers(filters);
   const users = usersResponse?.items ?? [];
-  const { data: departments = [] } = useDepartments({ isActive: true });
-  const { data: roles = [] } = useRoles();
-  const { data: managerPool } = useAdminUsers({ isActive: true });
+  const total = usersResponse?.total ?? 0;
+
+  // Filter changes invalidate the current page index.
+  useEffect(() => {
+    setPage(1);
+  }, [search, departmentFilter, roleFilter, statusFilter]);
+  // Dropdowns need full lists, not just one page.
+  const { data: deptResp } = useDepartments({ isActive: true, pageSize: 200 });
+  const departments = deptResp?.items ?? [];
+  const { data: rolesResp } = useRoles({ pageSize: 200 });
+  const roles = rolesResp?.items ?? [];
+  const { data: managerPool } = useAdminUsers({ isActive: true, pageSize: 200 });
 
   const create = useCreateUser();
   const update = useUpdateUser();
@@ -361,7 +374,18 @@ export default function UsersTab() {
           columns={columns}
           dataSource={users}
           loading={isLoading}
-          pagination={false}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            showTotal: (t, range) => `${range[0]}–${range[1]} of ${t}`,
+            onChange: (next, nextSize) => {
+              setPage(next);
+              if (nextSize !== pageSize) setPageSize(nextSize);
+            },
+          }}
           rowClassName={(record) => (!record.isActive ? 'opacity-60' : '')}
           locale={{
             emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No users found" />,

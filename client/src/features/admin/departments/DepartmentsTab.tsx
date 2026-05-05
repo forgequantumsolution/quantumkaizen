@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Formik, Form, type FormikHelpers } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -69,16 +69,29 @@ const extractApiError = (err: unknown, fallback = 'Save failed'): string =>
 export default function DepartmentsTab() {
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   const filters = useMemo(
     () => ({
       search: search.trim() || undefined,
       isActive: activeFilter === 'all' ? undefined : activeFilter === 'active',
+      page,
+      pageSize,
     }),
-    [search, activeFilter],
+    [search, activeFilter, page, pageSize],
   );
 
-  const { data: departments = [], isLoading } = useDepartments(filters);
+  useEffect(() => {
+    setPage(1);
+  }, [search, activeFilter]);
+
+  const { data: deptResp, isLoading } = useDepartments(filters);
+  const departments = deptResp?.items ?? [];
+  const total = deptResp?.total ?? 0;
+  // Parent-department dropdown needs every department, not just the current page.
+  const { data: allDeptResp } = useDepartments({ pageSize: 200 });
+  const allDepartments = allDeptResp?.items ?? [];
   const create = useCreateDepartment();
   const update = useUpdateDepartment();
   const remove = useDeleteDepartment();
@@ -275,7 +288,18 @@ export default function DepartmentsTab() {
           columns={columns}
           dataSource={departments}
           loading={isLoading}
-          pagination={false}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            showTotal: (t, range) => `${range[0]}–${range[1]} of ${t}`,
+            onChange: (next, nextSize) => {
+              setPage(next);
+              if (nextSize !== pageSize) setPageSize(nextSize);
+            },
+          }}
           locale={{
             emptyText: (
               <Empty
@@ -295,7 +319,7 @@ export default function DepartmentsTab() {
         onSubmit={handleSubmit}
       >
         {({ values, errors, touched, setFieldValue, handleSubmit, isSubmitting, resetForm }) => {
-          const parentOptions = departments
+          const parentOptions = allDepartments
             .filter((d) => !editing || d.id !== editing.id)
             .map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }));
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Formik, Form, type FormikHelpers } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -49,8 +49,20 @@ const extractApiError = (err: unknown, fallback = 'Save failed'): string =>
 
 export default function RolesTab() {
   const [search, setSearch] = useState('');
-  const { data: roles = [], isLoading } = useRoles(search.trim() || undefined);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const filters = useMemo(
+    () => ({ search: search.trim() || undefined, page, pageSize }),
+    [search, page, pageSize],
+  );
+  const { data: rolesResp, isLoading } = useRoles(filters);
+  const roles = rolesResp?.items ?? [];
+  const total = rolesResp?.total ?? 0;
   const { data: permGroups = [] } = usePermissionsGrouped();
+
+  useEffect(() => {
+    setPage(1);
+  }, [search]);
   const create = useCreateRole();
   const update = useUpdateRole();
   const remove = useDeleteRole();
@@ -228,7 +240,18 @@ export default function RolesTab() {
           columns={columns}
           dataSource={roles}
           loading={isLoading}
-          pagination={false}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            showTotal: (t, range) => `${range[0]}–${range[1]} of ${t}`,
+            onChange: (next, nextSize) => {
+              setPage(next);
+              if (nextSize !== pageSize) setPageSize(nextSize);
+            },
+          }}
           locale={{
             emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No roles" />,
           }}

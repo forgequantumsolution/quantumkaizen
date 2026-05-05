@@ -23,7 +23,7 @@ const baseSelect = {
   _count: { select: { users: true, children: true } },
 } as const;
 
-export const list = async ({ search, isActive, parentId }: ListQuery) => {
+export const list = async ({ page, pageSize, search, isActive, parentId }: ListQuery) => {
   const where: Prisma.DepartmentWhereInput = {};
   if (search) {
     where.OR = [
@@ -34,11 +34,17 @@ export const list = async ({ search, isActive, parentId }: ListQuery) => {
   if (isActive !== undefined) where.isActive = isActive === 'true';
   if (parentId) where.parentId = parentId;
 
-  return prisma.department.findMany({
-    where,
-    select: baseSelect,
-    orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
-  });
+  const [items, total] = await Promise.all([
+    prisma.department.findMany({
+      where,
+      select: baseSelect,
+      orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.department.count({ where }),
+  ]);
+  return { items, total, page, pageSize };
 };
 
 export const tree = async () => {

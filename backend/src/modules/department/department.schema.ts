@@ -17,6 +17,8 @@ export const UpdateDepartmentSchema = CreateDepartmentSchema.partial();
 export const IdParamSchema = z.object({ id: z.string().uuid() });
 
 export const ListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(200).default(20),
   search: z.string().optional(),
   isActive: z.enum(['true', 'false']).optional(),
   parentId: z.string().uuid().optional(),

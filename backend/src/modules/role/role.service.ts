@@ -23,15 +23,21 @@ const baseSelect = {
   _count: { select: { users: true } },
 } as const;
 
-export const list = async ({ search }: ListQuery) => {
+export const list = async ({ page, pageSize, search }: ListQuery) => {
   const where: Prisma.RoleWhereInput = search
     ? { name: { contains: search, mode: 'insensitive' } }
     : {};
-  return prisma.role.findMany({
-    where,
-    select: baseSelect,
-    orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
-  });
+  const [items, total] = await Promise.all([
+    prisma.role.findMany({
+      where,
+      select: baseSelect,
+      orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.role.count({ where }),
+  ]);
+  return { items, total, page, pageSize };
 };
 
 export const getById = async (id: string) => {

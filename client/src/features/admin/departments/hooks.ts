@@ -31,15 +31,41 @@ export interface CreateDepartmentInput {
 
 export type UpdateDepartmentInput = Partial<CreateDepartmentInput>;
 
-export function useDepartments(filters?: { search?: string; isActive?: boolean }) {
+export interface DepartmentFilters {
+  search?: string;
+  isActive?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface DepartmentListResponse {
+  items: Department[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export function useDepartments(filters: DepartmentFilters = {}) {
   return useQuery({
     queryKey: ['departments', filters],
     queryFn: async () => {
       const params: Record<string, string> = {};
-      if (filters?.search) params.search = filters.search;
-      if (filters?.isActive !== undefined) params.isActive = String(filters.isActive);
+      if (filters.search) params.search = filters.search;
+      if (filters.isActive !== undefined) params.isActive = String(filters.isActive);
+      if (filters.page) params.page = String(filters.page);
+      if (filters.pageSize) params.pageSize = String(filters.pageSize);
       const { data } = await api.get('/departments', { params });
-      return Array.isArray(data) ? (data as Department[]) : [];
+      const safe = data && typeof data === 'object' && !Array.isArray(data)
+        ? (data as DepartmentListResponse)
+        : null;
+      return (
+        safe ?? {
+          items: [] as Department[],
+          total: 0,
+          page: filters.page ?? 1,
+          pageSize: filters.pageSize ?? 20,
+        }
+      );
     },
   });
 }
