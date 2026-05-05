@@ -103,7 +103,7 @@ export default function Header() {
       <header className="sticky top-0 z-30 h-14 bg-white flex items-center justify-between px-5 gap-3" style={{ borderBottom: '1px solid #E8ECF2' }}>
 
         {/* ── Left: mobile menu + breadcrumbs ── */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-3 min-w-0 shrink">
           <button
             className="lg:hidden text-ink-tertiary hover:text-ink transition-colors p-1 rounded"
             onClick={() => setSidebarOpen(true)}
@@ -112,13 +112,13 @@ export default function Header() {
             <Menu size={16} />
           </button>
 
-          <nav className="hidden sm:flex items-center gap-1" aria-label="Breadcrumb">
+          <nav className="hidden sm:flex items-center gap-1 min-w-0" aria-label="Breadcrumb">
             {breadcrumbs.map((crumb, i) => (
-              <div key={crumb.path} className="flex items-center gap-1">
-                {i > 0 && <ChevronRight size={11} className="text-ink-disabled" />}
+              <div key={crumb.path} className="flex items-center gap-1 min-w-0">
+                {i > 0 && <ChevronRight size={11} className="text-ink-disabled shrink-0" />}
                 <span
                   className={cn(
-                    'text-xs transition-colors leading-none font-medium',
+                    'text-xs transition-colors leading-none font-medium truncate',
                     crumb.isLast
                       ? 'text-ink font-semibold'
                       : 'text-ink-tertiary hover:text-ink cursor-pointer'
@@ -133,10 +133,10 @@ export default function Header() {
         </div>
 
         {/* ── Center: alert badge pills ── */}
-        <div className="hidden md:flex items-center gap-2 flex-1 justify-center">
+        <div className="hidden xl:flex items-center gap-2 justify-center min-w-0 shrink-0">
           {/* Expiry alerts */}
           <div
-            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity"
+            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap shrink-0"
             style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}
             onClick={() => navigate('/dms/documents')}
           >
@@ -145,7 +145,7 @@ export default function Header() {
           </div>
           {/* Open CAPAs */}
           <div
-            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity"
+            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap shrink-0"
             style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', color: '#B45309' }}
             onClick={() => navigate('/qms/capa')}
           >
@@ -154,7 +154,7 @@ export default function Header() {
           </div>
           {/* GMP status */}
           <div
-            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold"
+            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold whitespace-nowrap shrink-0"
             style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -163,7 +163,7 @@ export default function Header() {
         </div>
 
         {/* ── Right: search + actions ── */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {/* Global search */}
           <button
             onClick={() => setSearchOpen(true)}

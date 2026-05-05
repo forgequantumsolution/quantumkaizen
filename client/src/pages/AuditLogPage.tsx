@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { Card, CardHeader, CardTitle, Button, DataTable, Badge } from '@/components/ui';
+import PageHeader from '@/components/layout/PageHeader';
 import type { Column } from '@/components/ui';
 import type { AuditLogEntry } from '@/types';
 import { formatDateTime } from '@/lib/utils';
@@ -98,19 +99,16 @@ export default function AuditLogPage() {
 
   return (
     <div className="space-y-6">
-      {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Audit Trail</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Complete, immutable record of all system actions for 21 CFR Part 11 compliance
-          </p>
-        </div>
-        <Button variant="outline">
-          <Download className="h-4 w-4" />
-          Export
-        </Button>
-      </div>
+      <PageHeader
+        title="Audit Trail"
+        description="Complete, immutable record of all system actions for 21 CFR Part 11 compliance"
+        actions={
+          <Button variant="outline">
+            <Download className="h-4 w-4" />
+            Export
+          </Button>
+        }
+      />
 
       {/* ── Filters ──────────────────────────────────────────────────────── */}
       <Card>

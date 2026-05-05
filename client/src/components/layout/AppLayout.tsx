@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import PageContainer from './PageContainer';
 import { useUIStore } from '@/stores/uiStore';
 import { cn } from '@/lib/utils';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -21,10 +22,10 @@ export default function AppLayout() {
         )}
       >
         <Header />
-        <main className="flex-1 p-5 max-w-dashboard mx-auto w-full">
-          <div className="page-enter">
+        <main className="flex-1 w-full">
+          <PageContainer>
             <Outlet />
-          </div>
+          </PageContainer>
         </main>
       </div>
       <ChatBot />

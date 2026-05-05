@@ -21,7 +21,17 @@ const queryClient = new QueryClient({
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    if (import.meta.env.PROD) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    } else {
+      // Dev: unregister any SW left over from a previous prod build / earlier
+      // session. The SW intercepts Vite's /src/* and /@vite/* module requests
+      // and serves cached index.html on any miss, breaking HMR with a MIME
+      // type error.
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((r) => r.unregister());
+      });
+    }
   });
 }
 

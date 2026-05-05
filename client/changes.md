@@ -189,3 +189,203 @@ Vorvex does not use React Router — its unauthenticated view was controlled by 
 - No component outside of login was restyled — the broader dashboard/internal pages are unchanged.
 - No dependency versions changed.
 - No auth logic / API contract changed; only presentation + route default.
+
+---
+
+## Session 2 — Backend wiring + env cleanup (commit `d6f1405`)
+
+Author: Abhishek Kumar — *"feat: update environment variables and add database check scripts; modify API base URL and service worker registration logic"*
+
+### `backend/.env.example`
+- Reworked the example env file: clarified comments and added the variables the new Express + Prisma stack reads at boot.
+
+### `backend/scripts/check-db.mjs` (new)
+- Quick connectivity probe: connects to the Postgres URL in `DATABASE_URL`, runs a trivial query, prints success / failure with a sane error message. Useful after bringing the stack up locally to confirm Prisma can reach the DB before running migrations.
+
+### `backend/scripts/check-password.mjs` (new)
+- One-off helper to verify a bcrypt hash against a plaintext password (e.g. when debugging seeded credentials). Reads the user's hash from the DB and `bcrypt.compare`s.
+
+### `client/src/lib/api.ts` — base URL alignment
+- Default `baseURL` changed from `/api/v1` → `/api`. The new backend mounts routes at `/api/*` (see `backend/src/app.ts`), so the v1 prefix no longer matches anything.
+- Comment updated to reflect the new convention; cross-origin deploys should set `VITE_API_BASE_URL=https://…/api` (no `/v1`).
+- The SPA-fallback detection comment was updated for the same reason.
+
+### `client/src/main.tsx` — service-worker dev hygiene
+- In production: same as before (`navigator.serviceWorker.register('/sw.js')`).
+- In dev: actively *unregisters* any leftover SW from a prior prod build. The SW was intercepting Vite's `/src/*` and `/@vite/*` requests and serving cached `index.html` on misses, which broke HMR with a MIME-type error. Without this, devs had to manually clear site data after every prod→dev switch.
+
+### `client/src/stores/authStore.ts` — login response shape
+- Old code expected `response.data.data.{user, accessToken}` (a wrapped envelope from the previous backend).
+- New backend returns `{ user, token }` directly in the response body. Code now reads `response.data.{user, token}` and stores `token` (not `accessToken`).
+- Token key in `localStorage` (`qk_token`) is unchanged so existing sessions don't break.
+
+### `client/vite.config.ts` — dev proxy port
+- `/api` proxy target: `localhost:5000` → `localhost:4000`. The new Express backend defaults to port 4000.
+
+### `package-lock.json`
+- A single lockfile churn line (no real package change).
+
+---
+
+## Session 3 — Settings page tabs + login 401 handling
+
+### `client/src/pages/SettingsPage.tsx` — sidebar → top tabs
+- The settings page previously rendered a 192px-wide left rail (`w-48 shrink-0`) with five vertically stacked nav buttons (`General`, `Users & Roles`, `Workflows`, `Notifications`, `Security`) sitting beside the content. With the global app sidebar already on the left, this produced two stacked nav columns and squeezed the form/table area to roughly 870px on a 1440-wide viewport.
+- Replaced that inner sidebar with a **horizontal tab bar** placed above the content:
+  - Container: `border-b border-gray-200`, tabs in a `flex gap-1 overflow-x-auto -mb-px` row.
+  - Tab style: `border-b-2 border-transparent` by default, `border-slate-900 text-slate-900` when active (underline indicator, no dark pill). Hover lifts to `text-gray-900` + light gray underline.
+  - Each tab still shows its lucide icon (16px) next to the label.
+  - Accessibility: added `role="tablist"`, `role="tab"`, and `aria-selected` on each tab.
+- Content column lost its flex constraint, so forms and the users table now span ~1100px on a 1440-wide viewport.
+- Verified with Playwright (login → /settings → screenshot before & after, then click "Users & Roles" → confirm `aria-selected="true"` follows the click). Screenshots in `scripts/scratch/snapshots/` (gitignored).
+
+### `client/src/lib/api.ts` — don't redirect on login 401
+- The 401 interceptor was redirecting to `/login` on every 401, including the 401 returned by `POST /auth/login` itself when credentials are wrong.
+- Effect: bad-credential submits triggered a full-page reload to `/login`, wiping the form's error banner before the user could read it.
+- Fix: detect login requests by URL (`error.config.url.includes('/auth/login')`) and skip the redirect for them, so the form can surface the auth error inline. Existing demo-token bypass and the redirect for *other* 401s are unchanged.
+
+### `scripts/scratch/` (new, gitignored)
+- One-off Playwright analysis script (`analyze-settings.mjs`) and its full-page screenshots (`snapshots/`) used to verify the settings tab redesign. Lives under `scripts/scratch/` to keep it separate from the real project scripts (`security-audit.sh`, `smoke-test.sh`, `validate-env.sh`).
+- Added `scripts/scratch/` to `.gitignore` — these artifacts aren't needed past the one-off verification and shouldn't enter version control.
+
+---
+
+## Session 4 — Central page wrapper + reusable page header
+
+**Goal:** unify the per-page chrome (outer container, side padding, heading typography) so every dashboard route looks consistent, and stop capping content at 1440px on wider monitors.
+
+### Problem with the old layout
+
+`AppLayout` rendered every route inside:
+```tsx
+<main className="flex-1 p-5 max-w-dashboard mx-auto w-full">
+  <div className="page-enter"><Outlet /></div>
+</main>
+```
+On a 1920-wide monitor that capped the content column at 1440px and centered it, leaving ~240px of empty surface on each side of the content (the visible "empty bands" the user was complaining about). Every page also re-implemented its own header (`<h1>` + description + actions on the right) with slightly different typography — `text-h1` on Settings vs `text-2xl font-bold` on AuditLog, etc.
+
+### `client/src/components/layout/PageContainer.tsx` (new)
+- Single, centralized wrapper for every dashboard route.
+- `w-full px-6 lg:px-8 xl:px-10 py-6` — full width with responsive side padding (24 / 32 / 40 px) so content always fills the available column with breathing room from the screen edge, regardless of viewport.
+- Owns the `page-enter` fade-in animation that used to live inline in `AppLayout`.
+- Optional `className` prop so an individual page can extend or override (e.g. swap the vertical padding on a special-case full-bleed canvas).
+
+### `client/src/components/layout/PageHeader.tsx` (new)
+- Opt-in component for the standard "title + description + actions row" pattern. Pages compose it; nothing forces them.
+- Props: `title` (string), `description` (optional `ReactNode`), `actions` (optional `ReactNode` slot for buttons), `className`.
+- Uses the canonical design tokens from `tailwind.config.js`: `text-h1` (1.375rem / bold / -0.015em tracking) for the title, `text-body` (0.875rem) `text-gray-500` for the description.
+- Layout: `flex items-start justify-between gap-4`, with `min-w-0` on the text column so long titles truncate cleanly and `shrink-0 flex items-center gap-2` on the actions slot so buttons hug the right edge.
+- Pages with non-standard headers (icons inline with the title, decorated subtitles with separators, breadcrumbs, etc.) are free to skip `PageHeader` entirely — see DashboardPage below.
+
+### `client/src/components/layout/AppLayout.tsx`
+- Removed `max-w-dashboard mx-auto p-5` from `<main>`. Result: content fills the full available width inside the sidebar offset (1184px at 1440 viewport, 1664px at 1920 viewport) with no centered-with-empty-sides effect.
+- Replaced `<div className="page-enter"><Outlet /></div>` with `<PageContainer><Outlet /></PageContainer>`. The `page-enter` animation now lives inside `PageContainer` so the behavior is identical, just centralized.
+- `<main>` is now just `flex-1 w-full`. The wrapper owns the padding.
+
+### `client/src/pages/SettingsPage.tsx` — migrated to `PageHeader`
+- Old: bespoke `<div className="flex items-center justify-between"><div><h1 className="text-h1 …">Settings</h1><p className="text-body …">…</p></div><Button …>Save Changes</Button></div>`.
+- New:
+  ```tsx
+  <PageHeader
+    title="Settings"
+    description="Manage your organization's configuration and preferences"
+    actions={
+      <Button variant="primary" onClick={handleSave}>
+        {saved ? <Check size={15} /> : <Save size={15} />}
+        {saved ? 'Saved!' : 'Save Changes'}
+      </Button>
+    }
+  />
+  ```
+- Save button behavior (the `saved` toggle, icon swap, label flip) is preserved verbatim.
+
+### `client/src/pages/AuditLogPage.tsx` — migrated to `PageHeader`
+- Old: `<h1 className="text-2xl font-bold text-slate-900">Audit Trail</h1>` + `<p className="mt-1 text-sm text-slate-500">…</p>` + Export `<Button>`. The typography (`text-2xl`, `text-slate-500`) drifted from Settings's (`text-h1`, `text-gray-500`).
+- New: same `<PageHeader …>` call shape as Settings — heading typography is now identical across the two pages.
+- Side benefit: the description text style now matches the rest of the app (`text-body text-gray-500` instead of the one-off `text-sm text-slate-500`).
+
+### `client/src/features/dashboard/DashboardPage.tsx` — intentionally NOT migrated
+- The dashboard's header is custom: inline-styled `<h1>` at 26px / weight 800 (heavier than `text-h1`'s 22/700), and a description with dot separators (`Quality Management · GMP Compliance · Updated 22:11`) plus a date-range pill group on the right.
+- These are deliberate visual differentiators for the executive landing page and don't fit the `title + description + actions` shape cleanly.
+- Per the "PageHeader is opt-in" design, dashboard keeps its bespoke header. PageContainer still wraps it via `AppLayout`, so it benefits from the consistent outer padding and the dropped width cap.
+
+### Verification
+- Playwright (`scripts/scratch/analyze-pages.mjs`, gitignored) captures `/settings`, `/audit-log`, `/dashboard` at 1440 × 900 and 1920 × 1080. Metrics confirm:
+  - 1440 viewport → main content = 1184px (= 1440 − 256 sidebar). ✓
+  - 1920 viewport → main content = 1664px (= 1920 − 256 sidebar). Previously capped at 1184px with ~480px empty surface on the right.
+  - `document.documentElement.scrollWidth === viewport.width` on every run → no horizontal overflow at any breakpoint.
+- Visual check (screenshots in `scripts/scratch/snapshots/`):
+  - `settings-1920.png`: form fields and the Organization Identity card stretch across the full width; Save button hugs the right edge.
+  - `audit-1920.png`: filter row and table fill the available width; heading typography matches Settings.
+  - `dashboard-1440.png`: KPI cards still flow correctly across the wider column; bespoke 26px heading is preserved.
+
+### Knock-on cleanup deferred
+- `client/src/pages/SettingsPage.tsx` still imports `Trash2`, `ChevronDown`, `Eye`, `EyeOff` from `lucide-react` — none are used after the tabs/header refactor (TS hint `6133`). Left in place this round; can be cleaned up in a follow-up.
+- `tailwind.config.js` `maxWidth.dashboard` (`1440px`) now has zero consumers but was left in place to avoid touching tokens that other developers may still reference.
+
+---
+
+## Session 5 — Typography rebase to web-standard 16px + semantic scale
+
+**Goal:** the UI was rendering noticeably small. Restore the web-standard 16px rem baseline, add a clear semantic font-size scale, and migrate inline-styled headings to the global tokens.
+
+### Root cause
+
+`client/src/index.css:35` had `html { font-size: 14px }`, which shrinks every Tailwind `rem`-based token by ~14% from its advertised value. Effective sizes were:
+- `text-base` (1rem) → 14px (advertised 16px)
+- `text-sm` (0.875rem) → 12.25px (advertised 14px)
+- `text-xs` (0.75rem) → 10.5px (advertised 12px)
+
+Bumping individual tokens without fixing this would just paper over the symptom. The codebase has 634 `text-xs` and 612 `text-sm` usages — the right move was to fix the rem base once and let everything snap to its proper size.
+
+### `client/src/index.css` — rem baseline restored
+- `html { font-size: 14px }` → `16px`. Single line. Auto-corrects all 1200+ `text-*` usages in one shot.
+
+### `client/tailwind.config.js` — typography scale rewritten
+- Reorganised the `fontSize` block into raw + semantic groups with px reference comments next to each token.
+- **Raw** (Tailwind-style): `xxs` 11, `xs` 12, `sm` 14, `base` 16, `md` 16, `lg` 18.
+  - Note: `lg` was 22px (custom override). Bringing it back to the standard 18px is a small breaking change for the few callers using `text-lg`, but matches the rest of the Tailwind ecosystem and removes the typography-drift trap. Old 22px callers should switch to `text-h1` if they wanted a heading.
+- **Semantic — headings**: `display` 28 / 700, `h1` 24 / 700, `h2` 18 / 600, `h3` 16 / 600, `h4` 14 / 600 (new).
+- **Semantic — body**: `body-lg` 16 (new), `body` 14, `body-md` 14 / 500 (medium weight), `body-sm` 13 (new), `caption` 12 (new).
+- **Form labels**: `label` 12 / 500 / 0.06em tracking (unchanged token, larger effective size after rem fix).
+- **Mono**: `mono-sm` 12, `mono-xs` 11 (unchanged tokens).
+- Inline comment block in the config explains the system so future edits stay consistent.
+
+### `client/src/features/dashboard/DashboardPage.tsx` — inline `<h1>` style dropped
+- Old: `<h1 style={{ fontSize: '26px', fontWeight: 800, color: '#0D0E17', letterSpacing: '-0.025em', lineHeight: 1.1 }}>Executive Dashboard</h1>`. Hardcoded inline values that bypassed the design tokens.
+- New: `<h1 className="text-h1 text-gray-900">Executive Dashboard</h1>`. Same visual hierarchy as Settings and AuditLog page titles, now driven by the global `h1` token (24px / 700 / -0.015em).
+- Net effect: the dashboard heading is 2px smaller than before but is now consistent with every other page title and any future scale tweak applies uniformly.
+
+### `client/src/components/layout/Header.tsx` — knock-on layout fix
+After the rem bump, the sticky top header broke on routes with deep breadcrumbs (e.g. `/qms/suppliers/scorecards` → `Quality > Suppliers > Scorecards`). The three center pills wrapped their text inside their fixed 28px height, the language flag and user-name wrapped to two lines, and the FY year toggle was clipped.
+
+Three coordinated changes fixed the layout:
+
+1. **Pills no longer wrap**: each of the three center pills (`Expiry Alerts`, `Open CAPAs`, `GMP Compliant`) got `whitespace-nowrap shrink-0`. They now render single-line at their natural width, regardless of how much horizontal space the section receives.
+2. **Pills section won't expand or collapse**: the center container changed from `hidden md:flex flex-1 justify-center` to `hidden xl:flex justify-center min-w-0 shrink-0`. It only shows at ≥1280px (where there's room for both deep breadcrumbs and pills) and takes its natural width when shown — neither growing nor shrinking. (Below 1280, pills are hidden; the route-level alerts they reflect are still reachable via the relevant pages.)
+3. **Right section won't shrink**: the search/EN-flag/year-toggle/role/notifications/user-menu cluster got `shrink-0` on its container. The flag, name, and toggle now stay on one line at every viewport.
+4. **Breadcrumb truncates instead of pushing**: each breadcrumb segment got `truncate` and `min-w-0`, and the chevron got `shrink-0`. On deep paths at 1440 viewport the segments truncate to short ellipses (e.g. `Q… > Su… > Sco…`), keeping the whole header on one line. The full label is still in the DOM (and could be exposed via a tooltip in a future pass).
+
+### Verification
+
+Playwright (`scripts/scratch/analyze-pages.mjs`, gitignored) at 1440 × 900 across:
+- `/dashboard`, `/settings`, `/audit-log`
+- `/analytics`, `/qms/non-conformances`, `/qms/capa`, `/qms/risks`
+- `/qms/suppliers/scorecards` (deep breadcrumb worst-case)
+- `/lms/competency`, `/workflows`, `/dms/documents`
+
+Results across all 11 routes:
+- `document.documentElement.scrollWidth === innerWidth` → no horizontal overflow.
+- Header pill heights all 28px → no internal text wrapping.
+- StatsCard / DataTable / Card layouts unchanged (no overflow into adjacent cards).
+
+Visual confirmation (screenshots in `scripts/scratch/snapshots/`):
+- Body copy is comfortably readable (14px effective) — was 12.25px.
+- Page-title hierarchy is clearer: `text-h1` at 24px is visibly heavier than `text-h2` at 18px and `text-h3` at 16px.
+- KPI card labels (e.g. `CAPA CLOSURE RATE`, `TRAINING COMPLIANCE`) stay on one line; sub-card labels (e.g. `PENDING APPROVALS`) wrap exactly the same way they did before — no new wrapping introduced.
+- Header pills, FY toggle, and user menu all single-line on every tested route, including the worst-case `/qms/suppliers/scorecards`.
+
+### Knock-on cleanup deferred
+- 57 places in feature code use `text-2xl font-bold` (or `text-xl font-bold`) for page titles — they should be migrated to `text-h1` for consistency with PageHeader. Not done in this round; would touch ~25 files and is best handled as a sweep in a separate session.
+- The `text-lg` value changed from 22px to 18px. 18 callers exist; if any of them were leaning on the 22px size as a stand-in heading, they'll now look smaller and should switch to `text-h1` or `text-h2`. None spotted as broken in Playwright verification, but worth a manual sweep.
+- DashboardPage's description (`Quality Management · GMP Compliance · Updated 22:24`) still uses `text-xs` — could be standardised to `text-body-sm` (13px) for consistency with the rest of the app's secondary-text convention. Tiny ergonomic tweak, deferred.

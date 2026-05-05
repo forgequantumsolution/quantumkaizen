@@ -67,9 +67,9 @@ export const useAuthStore = create<AuthState>()(
       login: async (email, password) => {
         set({ isLoading: true });
         try {
-          const response = await api.post('/auth/login', { email, password });
-          const { user: rawUser, token } = response.data as { user: BackendUser; token: string };
-          const user = mapBackendUser(rawUser);
+          const response = await api.post('/auth/login', { email, password, tenantCode });
+          // Backend returns the body as { user, token } (see backend/src/modules/auth/auth.controller.ts).
+          const { user, token } = response.data;
 
           localStorage.setItem('qk_token', token);
           localStorage.setItem('qk_user', JSON.stringify(user));

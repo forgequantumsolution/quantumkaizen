@@ -170,22 +170,39 @@ export default {
         mono: ['DM Mono', 'IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
 
+      // ── Typography scale ────────────────────────────────────────────────
+      // Sizes are in rem against html { font-size: 16px } (web standard).
+      // Use semantic tokens (text-h1, text-body, etc.) for design consistency.
+      // Raw tokens (text-xs, text-sm, …) keep their default Tailwind values
+      // and inherit the corrected 16px base automatically.
       fontSize: {
-        'xxs':    ['0.6875rem', { lineHeight: '1.4',  fontWeight: '500' }],
-        'xs':     ['0.75rem',   { lineHeight: '1.5',  fontWeight: '400' }],
-        'sm':     ['0.8125rem', { lineHeight: '1.55', fontWeight: '400' }],
-        'base':   ['0.875rem',  { lineHeight: '1.6',  fontWeight: '400' }],
-        'md':     ['1rem',      { lineHeight: '1.5',  fontWeight: '400' }],
-        'lg':     ['1.375rem',  { lineHeight: '1.3',  fontWeight: '600' }],
-        'label':  ['0.75rem',   { lineHeight: '1.4',  fontWeight: '500', letterSpacing: '0.06em' }],
-        'mono-xs':['0.6875rem', { lineHeight: '1.4',  fontWeight: '400' }],
-        'mono-sm':['0.75rem',   { lineHeight: '1.45', fontWeight: '400' }],
-        'display':['1.625rem',  { lineHeight: '1.2',  fontWeight: '700', letterSpacing: '-0.02em' }],
-        'h1':     ['1.375rem',  { lineHeight: '1.2',  fontWeight: '700', letterSpacing: '-0.015em' }],
-        'h2':     ['1rem',      { lineHeight: '1.35', fontWeight: '600', letterSpacing: '-0.01em' }],
-        'h3':     ['0.9375rem', { lineHeight: '1.4',  fontWeight: '600' }],
-        'body':   ['0.875rem',  { lineHeight: '1.6',  fontWeight: '400' }],
-        'body-md':['0.875rem',  { lineHeight: '1.6',  fontWeight: '500' }],
+        'xxs':     ['0.6875rem', { lineHeight: '1.4',  fontWeight: '500' }], // 11px
+        'xs':      ['0.75rem',   { lineHeight: '1.5',  fontWeight: '400' }], // 12px
+        'sm':      ['0.875rem',  { lineHeight: '1.5',  fontWeight: '400' }], // 14px
+        'base':    ['1rem',      { lineHeight: '1.6',  fontWeight: '400' }], // 16px
+        'md':      ['1rem',      { lineHeight: '1.5',  fontWeight: '400' }], // 16px (alias)
+        'lg':      ['1.125rem',  { lineHeight: '1.5',  fontWeight: '500' }], // 18px
+
+        // Semantic — headings
+        'display': ['1.75rem',   { lineHeight: '1.15', fontWeight: '700', letterSpacing: '-0.02em' }],  // 28px
+        'h1':      ['1.5rem',    { lineHeight: '1.2',  fontWeight: '700', letterSpacing: '-0.015em' }], // 24px
+        'h2':      ['1.125rem',  { lineHeight: '1.3',  fontWeight: '600', letterSpacing: '-0.01em' }],  // 18px
+        'h3':      ['1rem',      { lineHeight: '1.4',  fontWeight: '600' }], // 16px
+        'h4':      ['0.875rem',  { lineHeight: '1.4',  fontWeight: '600' }], // 14px
+
+        // Semantic — body
+        'body-lg': ['1rem',      { lineHeight: '1.6',  fontWeight: '400' }], // 16px
+        'body':    ['0.875rem',  { lineHeight: '1.55', fontWeight: '400' }], // 14px
+        'body-md': ['0.875rem',  { lineHeight: '1.55', fontWeight: '500' }], // 14px (medium weight)
+        'body-sm': ['0.8125rem', { lineHeight: '1.5',  fontWeight: '400' }], // 13px
+        'caption': ['0.75rem',   { lineHeight: '1.45', fontWeight: '400' }], // 12px
+
+        // Form labels (uppercase, tracked)
+        'label':   ['0.75rem',   { lineHeight: '1.4',  fontWeight: '500', letterSpacing: '0.06em' }], // 12px
+
+        // Mono
+        'mono-xs': ['0.6875rem', { lineHeight: '1.4',  fontWeight: '400' }], // 11px
+        'mono-sm': ['0.75rem',   { lineHeight: '1.45', fontWeight: '400' }], // 12px
       },
 
       spacing: {
