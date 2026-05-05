@@ -1,7 +1,15 @@
 import { useEffect, type ReactNode } from 'react';
 import { ConfigProvider } from 'antd';
-import { useAppearanceStore, type AppearanceColors, type AppearanceTypography, type Mode } from '@/stores/appearanceStore';
+import {
+  useAppearanceStore,
+  defaultFontSizes,
+  type AppearanceColors,
+  type AppearanceFontSizes,
+  type AppearanceTypography,
+  type Mode,
+} from '@/stores/appearanceStore';
 import { buildAntdTheme } from '@/lib/antdTheme';
+import { defaultColors } from '@/components/theme/presets';
 
 /**
  * Bridge between the Zustand appearance store and the live document.
@@ -48,21 +56,47 @@ const COLOR_VAR: Record<keyof AppearanceColors, string> = {
   ink3:     '--color-ink-3',
 };
 
-function applyColors(root: HTMLElement, colors: AppearanceColors) {
+// Same idea for the typography scale tokens.
+const FONT_SIZE_VAR: Record<keyof AppearanceFontSizes, string> = {
+  display: '--font-size-display',
+  h1:      '--font-size-h1',
+  h2:      '--font-size-h2',
+  h3:      '--font-size-h3',
+  h4:      '--font-size-h4',
+  bodyLg:  '--font-size-body-lg',
+  body:    '--font-size-body',
+  bodySm:  '--font-size-body-sm',
+  caption: '--font-size-caption',
+};
+
+function applyColors(root: HTMLElement, colors: AppearanceColors | undefined) {
+  // Belt-and-braces — a stale persisted blob could in principle land here
+  // before the store's migrate runs. Falling back to defaults beats throwing.
+  const safe = colors ?? defaultColors;
   (Object.keys(COLOR_VAR) as (keyof AppearanceColors)[]).forEach((key) => {
-    root.style.setProperty(COLOR_VAR[key], colors[key]);
+    root.style.setProperty(COLOR_VAR[key], safe[key] ?? defaultColors[key]);
   });
 }
 
-function applyTypography(root: HTMLElement, t: AppearanceTypography) {
-  root.style.setProperty('--font-sans', SANS_FAMILIES[t.sansFamily]);
-  root.style.setProperty('--font-mono', MONO_FAMILIES[t.monoFamily]);
-  root.style.setProperty('--font-heading-weight', String(t.headingWeight));
+function applyTypography(root: HTMLElement, t: AppearanceTypography | undefined) {
+  if (!t) return;
+  root.style.setProperty('--font-sans', SANS_FAMILIES[t.sansFamily] ?? SANS_FAMILIES.outfit);
+  root.style.setProperty('--font-mono', MONO_FAMILIES[t.monoFamily] ?? MONO_FAMILIES['dm-mono']);
+  root.style.setProperty('--font-heading-weight', String(t.headingWeight ?? 700));
   // Drives every rem-sized element across the app.
-  root.style.fontSize = `${t.baseFontPx}px`;
+  root.style.fontSize = `${t.baseFontPx ?? 16}px`;
+
+  // Per-token sizes. Stored as numeric rem; written as `${value}rem` so they
+  // remain proportional to the base-font-px slider. Falls back per-key to
+  // defaults so a partially-migrated blob can't crash the provider.
+  const sizes = t.fontSizes ?? defaultFontSizes;
+  (Object.keys(FONT_SIZE_VAR) as (keyof AppearanceFontSizes)[]).forEach((key) => {
+    const v = sizes[key] ?? defaultFontSizes[key];
+    root.style.setProperty(FONT_SIZE_VAR[key], `${v}rem`);
+  });
 
   root.classList.remove('density-compact', 'density-comfortable', 'density-spacious');
-  root.classList.add(`density-${t.density}`);
+  root.classList.add(`density-${t.density ?? 'comfortable'}`);
 }
 
 function applyMode(root: HTMLElement, mode: Mode) {

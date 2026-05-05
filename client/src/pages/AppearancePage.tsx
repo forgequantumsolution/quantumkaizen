@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import {
   useAppearanceStore,
+  defaultFontSizes,
   type AppearanceColors,
+  type AppearanceFontSizes,
   type AppearanceTypography,
   type Mode,
   type Density,
@@ -60,11 +62,17 @@ export default function AppearancePage() {
 
   // Staged copy — edits live here until Save. This keeps the preview accurate
   // and lets users walk away with Reset without polluting the live theme.
+  // Defaults guard against a partial persisted blob from a previous schema
+  // version landing here before the store's migrate runs.
   const [staged, setStaged] = useState({
-    mode: store.mode,
-    preset: store.preset,
-    colors: store.colors,
-    typography: store.typography,
+    mode:   store.mode   ?? 'light' as Mode,
+    preset: store.preset ?? 'default',
+    colors: store.colors ?? presetList[0].colors,
+    typography: {
+      ...{ baseFontPx: 16, density: 'comfortable' as Density, sansFamily: 'outfit' as SansFamily, monoFamily: 'dm-mono' as MonoFamily, headingWeight: 700 as HeadingWeight, fontSizes: defaultFontSizes },
+      ...(store.typography ?? {}),
+      fontSizes: { ...defaultFontSizes, ...(store.typography?.fontSizes ?? {}) },
+    },
   });
 
   const [activeTab, setActiveTab] = useState<Tab>('theme');
@@ -111,7 +119,14 @@ export default function AppearancePage() {
       mode: 'light',
       preset: 'default',
       colors: presetList[0].colors,
-      typography: { baseFontPx: 16, density: 'comfortable', sansFamily: 'outfit', monoFamily: 'dm-mono', headingWeight: 700 },
+      typography: {
+        baseFontPx: 16,
+        density: 'comfortable',
+        sansFamily: 'outfit',
+        monoFamily: 'dm-mono',
+        headingWeight: 700,
+        fontSizes: defaultFontSizes,
+      },
     });
   };
 
@@ -204,16 +219,21 @@ export default function AppearancePage() {
         </nav>
       </div>
 
-      {/* Two-column: form on the left, live preview on the right */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+      {/* Two-column: form on the left, live preview on the right.
+          The right column is wide enough that the preview sidebar mirrors
+          the real app's proportions and body type renders at readable size. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(520px,560px)] gap-8 items-start">
         <div className="min-w-0">
           {activeTab === 'theme'      && <ThemeTab    mode={staged.mode}    preset={staged.preset} setMode={setMode} setPreset={setPreset} />}
           {activeTab === 'colors'     && <ColorsTab   colors={staged.colors} patchColor={patchColor} showAdvanced={showAdvanced} setShowAdvanced={setShowAdvanced} />}
           {activeTab === 'typography' && <TypographyTab typography={staged.typography} patch={patchType} />}
         </div>
 
-        <aside className="lg:sticky lg:top-4 space-y-2">
-          <div className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-1">Live preview</div>
+        <aside className="xl:sticky xl:top-4 space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Live preview</div>
+            <div className="text-[10px] font-mono text-gray-400">staged · not saved</div>
+          </div>
           <AppearancePreview colors={staged.colors} typography={staged.typography} />
           <div className="text-[11px] text-gray-500 px-1 leading-relaxed">
             Edits show here immediately. Press <strong>Save</strong> to apply across the site.
@@ -379,12 +399,94 @@ interface TypographyTabProps {
   patch: (p: Partial<AppearanceTypography>) => void;
 }
 
+// ── Font-size scale metadata ────────────────────────────────────────────────
+// Order matches visual hierarchy. Tailwind class names are shown so users can
+// see which utility each token drives.
+
+interface SizeRow {
+  key: keyof AppearanceFontSizes;
+  label: string;
+  hint: string;
+  min: number;   // rem
+  max: number;
+}
+
+const HEADING_ROWS: SizeRow[] = [
+  { key: 'display', label: 'Display',  hint: '.text-display — largest hero title', min: 1.25, max: 3.5 },
+  { key: 'h1',      label: 'Heading 1', hint: '.text-h1 — page titles',             min: 1.0,  max: 2.5 },
+  { key: 'h2',      label: 'Heading 2', hint: '.text-h2 — section titles',          min: 0.875, max: 2.0 },
+  { key: 'h3',      label: 'Heading 3', hint: '.text-h3 — subsections',             min: 0.8125, max: 1.5 },
+  { key: 'h4',      label: 'Heading 4', hint: '.text-h4 — minor titles',            min: 0.75, max: 1.25 },
+];
+
+const BODY_ROWS: SizeRow[] = [
+  { key: 'bodyLg',  label: 'Body — large', hint: '.text-body-lg — long-form copy',           min: 0.875, max: 1.25 },
+  { key: 'body',    label: 'Body',         hint: '.text-body / .text-body-md — default body', min: 0.75, max: 1.125 },
+  { key: 'bodySm',  label: 'Body — small', hint: '.text-body-sm — secondary text',           min: 0.6875, max: 1.0 },
+  { key: 'caption', label: 'Caption',      hint: '.text-caption — fine print, labels',       min: 0.625, max: 0.875 },
+];
+
+interface FontSizeSliderProps {
+  row: SizeRow;
+  value: number;          // rem
+  baseFontPx: number;     // for px preview
+  onChange: (v: number) => void;
+  onReset: () => void;
+  isDefault: boolean;
+}
+
+function FontSizeSlider({ row, value, baseFontPx, onChange, onReset, isDefault }: FontSizeSliderProps) {
+  const px = Math.round(value * baseFontPx);
+  return (
+    <div className="grid grid-cols-[160px_1fr_120px] items-center gap-3 py-2">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-gray-900">{row.label}</div>
+        <div className="text-[11px] font-mono text-gray-500 truncate">{row.hint}</div>
+      </div>
+      <input
+        type="range"
+        min={row.min}
+        max={row.max}
+        step={0.0625}        /* 1px steps at 16px base */
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-[color:var(--color-gold)]"
+        aria-label={`${row.label} size`}
+      />
+      <div className="flex items-center justify-end gap-2">
+        <span className="text-xs font-mono text-gray-700 tabular-nums whitespace-nowrap">
+          {value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')}rem · {px}px
+        </span>
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={isDefault}
+          title="Reset to default"
+          className={cn(
+            'p-1 rounded hover:bg-gray-100 transition-colors',
+            isDefault ? 'opacity-30 cursor-not-allowed' : 'text-gray-500 hover:text-gray-900',
+          )}
+        >
+          <RotateCcw size={12} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function TypographyTab({ typography: t, patch }: TypographyTabProps) {
   const densities: { value: Density; label: string; hint: string }[] = [
     { value: 'compact',     label: 'Compact',     hint: 'Tight spacing, more on screen' },
     { value: 'comfortable', label: 'Comfortable', hint: 'Default — balanced readability' },
     { value: 'spacious',    label: 'Spacious',    hint: 'Roomier — easier scanning' },
   ];
+
+  const setSize = (key: keyof AppearanceFontSizes, value: number) =>
+    patch({ fontSizes: { ...t.fontSizes, [key]: value } });
+  const resetSize = (key: keyof AppearanceFontSizes) =>
+    setSize(key, defaultFontSizes[key]);
+  const resetAllSizes = () =>
+    patch({ fontSizes: defaultFontSizes });
 
   const sansOptions: { value: SansFamily; label: string }[] = [
     { value: 'outfit', label: 'Outfit (default)' },
@@ -422,8 +524,57 @@ function TypographyTab({ typography: t, patch }: TypographyTabProps) {
         </div>
         <p className="text-xs text-gray-500 mt-2">
           Drives every <code className="font-mono text-[11px]">rem</code>-sized
-          element across the app.
+          element across the app — including the heading and body sizes below.
         </p>
+      </section>
+
+      {/* Heading scale */}
+      <section>
+        <div className="flex items-baseline justify-between mb-2">
+          <h3 className="text-sm font-semibold text-gray-900">Heading sizes</h3>
+          <button
+            type="button"
+            onClick={resetAllSizes}
+            className="text-xs text-gray-500 hover:text-gray-900 underline-offset-2 hover:underline"
+          >
+            Reset all sizes
+          </button>
+        </div>
+        <p className="text-xs text-gray-500 mb-2">
+          Stored in <code className="font-mono text-[11px]">rem</code>; px preview
+          is <em>{`size × ${t.baseFontPx}`}</em>.
+        </p>
+        <div className="divide-y divide-gray-100 border border-gray-200 rounded-md px-3">
+          {HEADING_ROWS.map((row) => (
+            <FontSizeSlider
+              key={row.key}
+              row={row}
+              value={t.fontSizes[row.key]}
+              baseFontPx={t.baseFontPx}
+              onChange={(v) => setSize(row.key, v)}
+              onReset={() => resetSize(row.key)}
+              isDefault={t.fontSizes[row.key] === defaultFontSizes[row.key]}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* Body scale */}
+      <section>
+        <h3 className="text-sm font-semibold text-gray-900 mb-2">Body & caption sizes</h3>
+        <div className="divide-y divide-gray-100 border border-gray-200 rounded-md px-3">
+          {BODY_ROWS.map((row) => (
+            <FontSizeSlider
+              key={row.key}
+              row={row}
+              value={t.fontSizes[row.key]}
+              baseFontPx={t.baseFontPx}
+              onChange={(v) => setSize(row.key, v)}
+              onReset={() => resetSize(row.key)}
+              isDefault={t.fontSizes[row.key] === defaultFontSizes[row.key]}
+            />
+          ))}
+        </div>
       </section>
 
       {/* Density */}

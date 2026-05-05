@@ -487,3 +487,178 @@ Adds a user-facing **Appearance** page in the System section of the sidebar that
 - **Dark mode is partial.** Only variable-driven surfaces flip; gold-branded buttons and many Tailwind-class-styled components remain in their light styling. Full dark mode would require a `dark:` variant sweep across the codebase.
 - **No cross-device sync.** Per-user, per-browser via `localStorage`. Adding a backend `userPreferences` blob is the natural next step.
 - **No org-wide / admin-set theme.** All users get their own theme. A "lock theme to org" toggle would need an org-scoped Prisma field plus permission gating.
+
+### 7.1 — Per-token font sizes (follow-up)
+
+The first cut only exposed a single base-font-px slider, which scales every `rem` proportionally but doesn't let users tune the heading-vs-body relationship. Added explicit controls for each token in the Tailwind semantic typography scale.
+
+#### Files modified
+
+- **`src/stores/appearanceStore.ts`**
+  - New `AppearanceFontSizes` interface — 9 numeric rem values: `display`, `h1`, `h2`, `h3`, `h4`, `bodyLg`, `body`, `bodySm`, `caption`. Mirrors the keys in `tailwind.config.js`'s `fontSize` block.
+  - `AppearanceTypography` extended with a `fontSizes: AppearanceFontSizes` field.
+  - New exported `defaultFontSizes` constant — values match the rem defaults in the Tailwind config (28/24/18/16/14 px headings; 16/14/13/12 px body+caption at 16 px base).
+  - `defaultTypography` updated to include `fontSizes: defaultFontSizes`.
+  - `importConfig` now deep-merges `fontSizes` (one level) so a partial override doesn't blank the rest of the scale.
+
+- **`src/components/theme/AppearanceProvider.tsx`**
+  - Imported `AppearanceFontSizes` type.
+  - New `FONT_SIZE_VAR` map: `display → --font-size-display`, `h1 → --font-size-h1`, etc.
+  - `applyTypography` extended to write `--font-size-*` variables as `${value}rem`. Storing as numeric rem (rather than absolute px) keeps the per-token sizes proportional to the base-font-px slider — users get global *and* per-token control without conflict.
+
+- **`src/index.css`**
+  - Added 9 `--font-size-*` declarations in `:root` with values mirroring the Tailwind defaults.
+  - Added override rules for the matching Tailwind utility classes:
+    - `.text-display`, `.text-h1`, `.text-h2`, `.text-h3`, `.text-h4`
+    - `.text-body-lg`, `.text-body`, `.text-body-md` (mapped to `--font-size-body` since it shares the body px and only differs in weight), `.text-body-sm`, `.text-caption`
+  - Each rule sets only `font-size` from the corresponding variable. CSS resolves each property independently, so `line-height`, `font-weight`, and `letter-spacing` keep coming from the original Tailwind utility — we only override the size.
+  - Specificity is a tie (single class selector); our rules are placed AFTER `@tailwind utilities;` in the cascade, so they win on tie-break.
+
+- **`src/pages/AppearancePage.tsx`**
+  - Imported `defaultFontSizes` and `AppearanceFontSizes` from the store.
+  - `handleReset` extended to seed `fontSizes: defaultFontSizes` in the staged copy.
+  - New `SizeRow` interface and metadata arrays `HEADING_ROWS` (display + h1–h4) and `BODY_ROWS` (body-lg, body, body-sm, caption) — each row carries label, hint string showing the underlying Tailwind class (`.text-h1`, etc.), and a min/max rem range.
+  - New `FontSizeSlider` row component — 3-column grid: label + Tailwind class hint │ slider │ rem · px readout + per-row reset button. Step is `0.0625rem` (≈1px at 16px base). Reset button is dimmed and disabled when the value matches the default.
+  - Inside `TypographyTab`:
+    - Helpers `setSize`, `resetSize`, `resetAllSizes` that patch `t.fontSizes` while preserving the rest of the typography object.
+    - New "Heading sizes" section — bordered card containing display + h1–h4 sliders, with a "Reset all sizes" link in the section header.
+    - New "Body & caption sizes" section — bordered card containing body-lg, body, body-sm, caption sliders.
+    - Footnote on the existing base-font-px slider updated to call out that it scales the heading/body sizes below.
+
+- **`src/components/theme/AppearancePreview.tsx`**
+  - Now reads from `typography.fontSizes` (aliased as `fs`) and renders representative tokens at their staged sizes:
+    - h1 (page title) and h2 (section heading) with the staged heading weight and original letter-spacing.
+    - h3 inside the surface card, body for the main copy, body-sm for supporting text.
+    - Sidebar nav rows render at body-sm; status pills and buttons at caption / body sizes.
+  - Effect: editing any heading or body slider on the page now visibly resizes the matching element in the preview before Save.
+
+#### How the override actually applies
+
+CSS cascade resolution for `<h1 class="text-h1">`:
+
+1. `@tailwind utilities` expands to `.text-h1 { font-size: 1.5rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.015em; }`.
+2. Our later rule `.text-h1 { font-size: var(--font-size-h1); }` has equal specificity but appears later — wins for `font-size`.
+3. The other three properties (line-height, weight, tracking) keep the Tailwind values because our rule doesn't restate them.
+4. AppearanceProvider writes `--font-size-h1: 1.625rem` (etc.) at runtime — `font-size` resolves to that value.
+
+Net: zero changes to consumer code. Every existing `text-h1`/`text-body-sm`/etc. usage in the app picks up the new size automatically.
+
+#### Verification
+
+- `npx tsc --noEmit` — exit 0, no errors.
+- Per-token sliders are stored as `rem`, so the existing base-font-px slider continues to scale them proportionally — both controls compose without conflict.
+
+#### Known limitations (still)
+
+- **Raw Tailwind size utilities** (`text-xs`, `text-sm`, `text-base`, `text-lg`, `text-xxs`, `text-label`, `text-mono-*`) are not exposed as configurable. They're intended for fine-grained one-offs and stay rem-based against the html font-size, so the base-px slider still scales them. Promoting them to per-token controls would just clutter the UI.
+
+### 7.2 — Hotfix: persisted-blob crash on rehydrate
+
+#### Symptom
+
+```
+chunk-NT5JDPQU.js?v=…:16718 Uncaught TypeError: Cannot read properties of undefined (reading 'display')
+    at AppearanceProvider.tsx:80:53
+    at Array.forEach (<anonymous>)
+    at applyTypography (AppearanceProvider.tsx:79:65)
+```
+
+Threw on first render after upgrading to 7.1, before the page mounted — so users with a `qk-appearance` blob in `localStorage` from the 7.0 era were greeted by a blank screen.
+
+#### Root cause
+
+Zustand's `persist` middleware does a **shallow** merge on rehydrate. When the persisted blob is `{ typography: { baseFontPx: 16, density: 'comfortable', sansFamily: 'outfit', monoFamily: 'dm-mono', headingWeight: 700 } }` (no `fontSizes` — the v7.0 shape), rehydrate replaces the in-memory default `typography` (which *does* include `fontSizes: defaultFontSizes`) with the persisted shape verbatim. `t.fontSizes` is then `undefined`, and `applyTypography` calls `Object.keys(FONT_SIZE_VAR).forEach(k => root.style.setProperty(…, t.fontSizes[k]))` — explodes on the first iteration.
+
+Anyone adding a nested field to a persisted Zustand store hits this — the canonical fix is a `version` bump plus a `migrate` function (or a custom `merge`).
+
+#### Files modified
+
+- **`src/stores/appearanceStore.ts`** — added persist `version` and `migrate`:
+  - `version: 2`. The pre-7.1 blobs were unversioned, so Zustand treats them as v0 and routes them through `migrate(persisted, 0 | undefined)`.
+  - `migrate(persisted, _from)` returns a canonical v2 `AppearanceConfig` by spreading `defaultColors`/`defaultTypography`/`defaultFontSizes` *underneath* the persisted values:
+    ```ts
+    typography: {
+      ...defaultTypography,
+      ...(p.typography ?? {}),
+      fontSizes: { ...defaultFontSizes, ...(p.typography?.fontSizes ?? {}) },
+    }
+    ```
+    Persisted user values still win where present; defaults backfill anything missing.
+  - `onRehydrateStorage` belt-and-braces callback that force-fills `state.colors`, `state.typography`, and `state.typography.fontSizes` if any are still missing after `migrate`. Cheap insurance for cache-mid-state edge cases (HMR, partial DevTools deletes).
+
+- **`src/components/theme/AppearanceProvider.tsx`** — defensive guards in `applyColors` / `applyTypography`:
+  - Both accept `undefined` and early-return / fall back to defaults instead of crashing.
+  - Imported `defaultFontSizes` and `defaultColors`. Every key access uses `?? defaults[key]` so a partially-shaped object can't produce `undefined → setProperty(…, undefined)`.
+  - Specifically: `t.fontSizes ?? defaultFontSizes`, `t.baseFontPx ?? 16`, `t.density ?? 'comfortable'`, `t.headingWeight ?? 700`, `SANS_FAMILIES[t.sansFamily] ?? SANS_FAMILIES.outfit`, etc.
+
+- **`src/pages/AppearancePage.tsx`** — staged-state initializer now spread-merges defaults under `store.typography`:
+  ```ts
+  typography: {
+    ...{ baseFontPx: 16, density: 'comfortable', /* … */, fontSizes: defaultFontSizes },
+    ...(store.typography ?? {}),
+    fontSizes: { ...defaultFontSizes, ...(store.typography?.fontSizes ?? {}) },
+  }
+  ```
+  Means even if a render slips in *before* migrate, the page's `staged.typography.fontSizes` is always populated, so the new `FontSizeSlider` rows can render without throwing.
+
+- **`src/components/theme/AppearancePreview.tsx`** — `typography.fontSizes ?? defaultFontSizes` and `typography.baseFontPx ?? 16` for the same reason.
+
+#### Behavior after fix
+
+1. First load after deploying the fix: `migrate` runs once, rewrites the persisted blob from `version: undefined` to `version: 2` with `typography.fontSizes` populated.
+2. All subsequent loads: `migrate` is a no-op (already at v2). Provider reads a fully-formed object. Page renders normally.
+3. If a future schema change is needed, bump to `version: 3` and add a v2→v3 branch in `migrate`.
+
+#### Verification
+
+- `npx tsc --noEmit` — exit 0.
+- The defensive guards mean the failure mode is now "renders with defaults" instead of "blank screen" if any future shape mismatch occurs.
+
+#### Lesson for future store changes
+
+Whenever adding a nested field to a Zustand `persist` store, you must either:
+- Bump `version` and write a `migrate` that backfills the new field, or
+- Pass a custom `merge` function that deep-merges (the default is `Object.assign`-shallow), or
+- Both, plus per-call defensive `?? default` guards on read sites.
+
+The crash here was a textbook example — the addition in 7.1 (`fontSizes` field added to `AppearanceTypography`) needed exactly this treatment from the start.
+
+### 7.3 — Larger live preview on the Appearance page
+
+The preview pane in 7.0 was 360 px wide with a 280 px min-height — readable but cramped, especially because the inner sidebar+body grid (140 / 1fr) made the body column tiny. Made the preview much more legible.
+
+#### Files modified
+
+- **`src/pages/AppearancePage.tsx`** — wider right column with a higher breakpoint:
+  - Old: `grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start`
+  - New: `grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(520px,560px)] gap-8 items-start`
+  - Side-by-side now kicks in at the `xl:` breakpoint (1280 px) instead of `lg:` (1024 px). Below that, preview stacks under the form full-width — better than squeezing it into 360 px on a laptop.
+  - Right column: 520–560 px instead of fixed 360 px (44–56 % more horizontal room).
+  - `gap-6` → `gap-8` so the preview doesn't crowd the form.
+  - The "Live preview" label row now also shows a `staged · not saved` mono caption on the right so users have a visual cue that they're looking at uncommitted edits.
+  - Sticky behavior moved from `lg:sticky` to `xl:sticky` to match the new breakpoint.
+
+- **`src/components/theme/AppearancePreview.tsx`** — bigger and more representative:
+  - Outer card: `shadow-sm` → `shadow-md`.
+  - Inner grid: `grid-cols-[140px_1fr] min-h-[280px]` → `grid-cols-[180px_1fr] min-h-[480px]`. Sidebar 28 % wider, total height 71 % taller — closer to a real screen's proportions.
+  - Sidebar:
+    - Padding `p-3` → `p-4`, gap `gap-2` → `gap-1.5` (tighter rows).
+    - Brand row: logo `w-6 h-6` → `w-7 h-7`, font 0.75rem → 0.875rem, bottom margin `mb-2` → `mb-3`.
+    - New uppercase "Overview" section header above the nav rows so the preview matches the real sidebar's grouping convention.
+    - Nav rows: padding `px-2 py-1.5` → `px-3 py-2`. Added a 5th row (Analytics) so users can see active vs. inactive contrast against more rows.
+  - Body column:
+    - Padding `p-4` → `p-6`, gap `gap-3` → `gap-4`.
+    - Card: `rounded p-3` → `rounded-md p-4`, body text now has explicit `lineHeight: 1.55` and a slightly longer sample sentence so heading-vs-body proportion is honest.
+    - Status pills relabeled `Success/Warning/Danger` → `Approved/Pending/Overdue` to match the platform's domain language; padding `px-1.5 py-0.5` → `px-2 py-0.5`.
+    - Buttons: `px-3 py-1.5` → `px-4 py-2`.
+
+#### Why these specific numbers
+
+- **520–560 px** — wide enough that the inner 180 px sidebar leaves ~340 px for the body column at minimum, which is enough to render `text-h1` (24 px default) on a single line without pushing the layout.
+- **480 px min-height** — fits all three preview sections (heading group, surface card, button row) without scroll while still being shorter than typical viewport heights, so the sticky positioning still works.
+- **`xl:` breakpoint (1280 px)** — keeps the full-width stack on standard laptops where 1024–1279 px is common, avoiding a cramped two-column on small screens.
+
+#### Verification
+
+- `npx tsc --noEmit` — exit 0.
+- Side-by-side preview kicks in at 1280 px viewport width and above; at 1024–1279 px the preview stacks below the form full-width.
