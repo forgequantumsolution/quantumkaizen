@@ -8,6 +8,8 @@ import {
   Layers,
   KeyRound,
   Lock,
+  Save,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import PageHeader from "@/components/layout/PageHeader";
@@ -33,6 +35,12 @@ type Tab = (typeof tabs)[number]["key"];
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("general");
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
 
   // Notification prefs
   const [notifPrefs, setNotifPrefs] = useState({

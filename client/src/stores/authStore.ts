@@ -64,12 +64,14 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
       isLoading: false,
 
-      login: async (email, password) => {
+      login: async (email, password, tenantCode) => {
         set({ isLoading: true });
         try {
           const response = await api.post('/auth/login', { email, password, tenantCode });
           // Backend returns the body as { user, token } (see backend/src/modules/auth/auth.controller.ts).
-          const { user, token } = response.data;
+          // role/department arrive as objects — map them to the flat AuthUser shape.
+          const { user: backendUser, token } = response.data;
+          const user = mapBackendUser(backendUser);
 
           localStorage.setItem('qk_token', token);
           localStorage.setItem('qk_user', JSON.stringify(user));
@@ -118,12 +120,17 @@ export const useAuthStore = create<AuthState>()(
         if (!state) return;
         const t = state.token;
         const looksLikeJwt = typeof t === 'string' && t.split('.').length === 3;
-        if (!looksLikeJwt) {
+        // Reject persisted users from older builds where `role` was still the
+        // raw backend object — Sidebar etc. assume role is a string.
+        const hasFlatUserShape =
+          !!state.user && typeof (state.user as { role?: unknown }).role === 'string';
+        if (!looksLikeJwt || !hasFlatUserShape) {
           state.token = null;
           state.user = null;
           state.isAuthenticated = false;
           localStorage.removeItem('qk_token');
           localStorage.removeItem('qk_user');
+          localStorage.removeItem('qk-auth');
         }
       },
     },
