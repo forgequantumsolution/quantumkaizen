@@ -112,16 +112,16 @@ export default function Header() {
             <Menu size={16} />
           </button>
 
-          <nav className="hidden sm:flex items-center gap-1 min-w-0" aria-label="Breadcrumb">
+          <nav className="hidden sm:flex items-center gap-1.5 min-w-0" aria-label="Breadcrumb">
             {breadcrumbs.map((crumb, i) => (
-              <div key={crumb.path} className="flex items-center gap-1 min-w-0">
-                {i > 0 && <ChevronRight size={11} className="text-ink-disabled shrink-0" />}
+              <div key={crumb.path} className="flex items-center gap-1.5 min-w-0">
+                {i > 0 && <ChevronRight size={12} className="text-ink-tertiary shrink-0" />}
                 <span
                   className={cn(
                     'text-xs transition-colors leading-none font-medium truncate',
                     crumb.isLast
                       ? 'text-ink font-semibold'
-                      : 'text-ink-tertiary hover:text-ink cursor-pointer'
+                      : 'text-ink-secondary hover:text-ink cursor-pointer'
                   )}
                   onClick={() => !crumb.isLast && navigate(crumb.path)}
                 >

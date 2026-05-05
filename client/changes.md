@@ -389,3 +389,101 @@ Visual confirmation (screenshots in `scripts/scratch/snapshots/`):
 - 57 places in feature code use `text-2xl font-bold` (or `text-xl font-bold`) for page titles — they should be migrated to `text-h1` for consistency with PageHeader. Not done in this round; would touch ~25 files and is best handled as a sweep in a separate session.
 - The `text-lg` value changed from 22px to 18px. 18 callers exist; if any of them were leaning on the 22px size as a stand-in heading, they'll now look smaller and should switch to `text-h1` or `text-h2`. None spotted as broken in Playwright verification, but worth a manual sweep.
 - DashboardPage's description (`Quality Management · GMP Compliance · Updated 22:24`) still uses `text-xs` — could be standardised to `text-body-sm` (13px) for consistency with the rest of the app's secondary-text convention. Tiny ergonomic tweak, deferred.
+
+### Follow-up — breadcrumb color contrast (Header.tsx)
+- Non-active breadcrumb segments were `text-ink-tertiary` (`#718096`) on white → **4.12:1** contrast. Fails WCAG AA for normal text (4.5:1).
+- The chevron separator was `text-ink-disabled` (`#A0ADB8`) → **2.69:1**. Fails non-text contrast for icons (3:1).
+- Fix: non-active segments → `text-ink-secondary` (`#4A5568`, **6.4:1**, passes AA). Chevron → `text-ink-tertiary` (`#718096`, **4.12:1**, passes for icons). Bumped chevron size 11 → 12 and the inter-crumb gap `gap-1` → `gap-1.5` so the path reads with more breathing room.
+- The active (last) segment stays `text-ink` `font-semibold` — already had strong contrast.
+
+---
+
+## 7. Appearance settings page (color scheme + typography config)
+
+Adds a user-facing **Appearance** page in the System section of the sidebar that drives global color and typography tokens at runtime via CSS custom properties. No backend work — config persists to `localStorage` per user via Zustand `persist`.
+
+### Goal
+- One place to configure color scheme and font sizing for the entire site.
+- Theme changes propagate live to anything using the `--color-*` CSS variables, including the sidebar (after a small de-hardcoding fix) and antd widgets (via a dynamic `ConfigProvider`).
+- Tailwind utilities like `bg-pharma`/`text-gold` continue to bake at build time — out of scope this round, called out as known limitation.
+
+### Files created
+
+- **`src/stores/appearanceStore.ts`** — Zustand store with `persist` middleware (`qk-appearance` key).
+  - State shape: `mode` (`'light' | 'dark' | 'system'`), `preset` (`'default' | 'sapphire' | 'emerald' | 'slate' | 'custom'`), `colors` (13 tokens), `typography` (5 tokens: `baseFontPx`, `density`, `sansFamily`, `monoFamily`, `headingWeight`).
+  - Actions: `setMode`, `applyPreset`, `patchColors` (auto-flips `preset` to `'custom'`), `patchTypography`, `resetAll`, `importConfig`, `exportConfig`.
+
+- **`src/components/theme/presets.ts`** — Four named palettes:
+  - `Default Gold` — original Quantum Kaizen palette, mirrors `:root` in `index.css`.
+  - `Sapphire` — blue accent on deep navy chrome.
+  - `Emerald` — green accent on forest sidebar.
+  - `Slate` — monochrome, slate-500 accent.
+  - Exports `defaultColors` and a `presetList` array for the page UI.
+
+- **`src/components/theme/AppearanceProvider.tsx`** — bridge between the store and the live document. Mounted at the top of `App.tsx`. On every store change:
+  1. Writes 13 color tokens onto `:root` as `--color-*` (`gold`, `goldDark` → `--color-gold`, `--color-gold-dark`, etc.).
+  2. Writes typography tokens (`--font-sans`, `--font-mono`, `--font-heading-weight`) and sets `html.style.fontSize = "${baseFontPx}px"`.
+  3. Toggles `html.dark` based on `mode`, including `(prefers-color-scheme: dark)` listener for `'system'`.
+  4. Toggles `html.density-{compact|comfortable|spacious}` for future spacing hooks.
+  5. Re-emits an inner `<ConfigProvider>` from antd with `buildAntdTheme(state)` so antd widgets follow the theme (nearest `ConfigProvider` wins).
+
+- **`src/components/theme/ColorField.tsx`** — combined `<input type="color">` + hex text input. Keeps a local draft so users can mid-type partial hex values without immediate state thrash; commits on blur or Enter, reverts on Escape or invalid hex.
+
+- **`src/components/theme/AppearancePreview.tsx`** — pure presentational mini sidebar + page-body preview. Reads from props (the *staged* state on the page), not the store, so users see uncommitted edits before pressing Save.
+
+- **`src/pages/AppearancePage.tsx`** — the page itself. Tab-based, modeled on `SettingsPage.tsx`:
+  - **Theme** tab — Light/Dark/System mode tri-toggle; preset cards with swatch rows.
+  - **Colors** tab — 10 base color tokens with `ColorField`; 3 status colors (success/warning/danger) gated behind a "Show advanced" toggle to discourage accidentally inverting traffic-light semantics.
+  - **Typography** tab — base font size slider (12–18px), density tri-toggle, sans family dropdown (Outfit / Inter / System), mono family dropdown (DM Mono / JetBrains Mono / System), heading weight (600/700/800).
+  - **Header actions** — Import (file picker for JSON), Export (downloads `qk-appearance-YYYY-MM-DD.json`), Reset (factory defaults), Save (disabled until staged differs from store).
+  - **Live preview pane** — sticky on `lg:` breakpoints, renders entirely from staged state.
+  - All edits live in a *staged* local copy (`useState`); only `Save` writes to the store.
+
+### Files modified
+
+- **`src/App.tsx`**
+  - Imported `AppearancePage` from `@/pages/AppearancePage` (System section import block).
+  - Imported `AppearanceProvider` from `@/components/theme/AppearanceProvider`.
+  - Wrapped the entire `<Routes>` tree in `<AppearanceProvider>` so the bridge runs once for the whole app and the inner antd `ConfigProvider` overrides the bootstrap one in `main.tsx`.
+  - Added `<Route path="/appearance" element={<AppearancePage />} />` inside the System block.
+
+- **`src/components/layout/Sidebar.tsx`**
+  - Added `Palette` to the `lucide-react` import.
+  - Added `{ label: 'Appearance', path: '/appearance', icon: Palette }` to the System nav section, between Audit Log and Settings.
+  - Replaced the hardcoded design-token JS constants with CSS-variable references:
+    - `BG = '#0D0E17'` → `'var(--color-navy)'`
+    - `ACTIVE_BG = '#1E2035'` → `'var(--color-navy-mid)'`
+    - `ACCENT = '#F59E0B'` → `'var(--color-gold)'` *(also fixes a long-standing mismatch — the constant was set to amber-500 but the actual brand gold is `#C9A84C`; via the variable the sidebar now uses true brand gold)*
+    - `ACTIVE_CLR = '#F59E0B'` → `'var(--color-gold)'`
+  - Section/inactive/hover colors stay hardcoded — they're cosmetic neutrals that don't need to track the user's preset.
+  - All inline `style={{ backgroundColor: ACCENT, ... }}` / `style={{ borderLeft: '3px solid ' + ACCENT }}` usages still work — strings serialize to valid CSS and the browser resolves the variable.
+
+- **`src/lib/antdTheme.ts`** — refactored from a static export into `buildAntdTheme({ colors, typography })`:
+  - Pulls `colorPrimary` from `colors.gold`, `colorSuccess`/`colorWarning`/`colorError` from corresponding store tokens, `colorBgLayout` from `colors.bg`, and `fontFamily` from the resolved sans-family string.
+  - Static export `antdTheme` retained — equals `buildAntdTheme()` (default palette) — so the bootstrap `<ConfigProvider>` in `main.tsx` keeps working before the store hydrates.
+
+- **`src/index.css`**
+  - Extended the Google Fonts `@import` to also load Inter and JetBrains Mono, since the typography options expose them.
+  - Added `--font-heading-weight: 700;` to `:root` for AppearanceProvider to overwrite.
+  - Added a comment noting that AppearanceProvider rewrites these properties at runtime.
+  - Added an `html.dark { ... }` block that overrides `--color-bg`, `--color-surface`, `--color-border`, `--color-ink`, `--color-ink-2`, `--color-ink-3` for dark mode. Minimal scope — only flips variable-driven surfaces, not every Tailwind utility (deep dark mode is a separate larger effort).
+
+### Architecture notes
+
+- **Why CSS variables, not a Tailwind config rebuild.** Tailwind classes resolve at build time; rewriting them at runtime would require a full theme runtime. The existing CSS in `index.css` already references `var(--color-...)` everywhere it matters for chrome (bg, surfaces, ink, sidebar via the now-fixed constants). Rewriting the variables retroactively re-themes most of the app for free.
+- **Why staged state on the page.** Lets users walk away with Reset without polluting the live theme, and the preview is honest about whether changes are committed.
+- **Why disable Save when not dirty.** Cheap UX signal; computed via JSON-stringify equality on `colors`/`typography` plus shallow check on `mode`/`preset`.
+- **Why inner `ConfigProvider` instead of replacing the one in `main.tsx`.** The bootstrap provider has to render before the React tree mounts (and before the Zustand store rehydrates). Stacking a second provider inside `App` is the antd-idiomatic way to override theme reactively without timing risk.
+- **Persistence is local-only.** No backend endpoint, no `User.appearancePrefs` column. Per-user across devices would need a `/users/me/preferences` endpoint — flagged as a follow-up but out of scope.
+
+### Verification
+
+- `npx tsc --noEmit` in `client/` — exit 0, no errors.
+- All new files conform to the project's existing TS/React patterns (Zustand for state, lucide-react for icons, `@/` path alias, `cn` utility for class merging, inline `style` for guaranteed render).
+
+### Known limitations / out of scope
+
+- **Tailwind utility classes** (`bg-pharma`, `text-gold`, status pill colors via `bg-status-*`) don't re-theme. They bake at build time.
+- **Dark mode is partial.** Only variable-driven surfaces flip; gold-branded buttons and many Tailwind-class-styled components remain in their light styling. Full dark mode would require a `dark:` variant sweep across the codebase.
+- **No cross-device sync.** Per-user, per-browser via `localStorage`. Adding a backend `userPreferences` blob is the natural next step.
+- **No org-wide / admin-set theme.** All users get their own theme. A "lock theme to org" toggle would need an org-scoped Prisma field plus permission gating.

@@ -78,9 +78,13 @@ import WorkflowDetailPage from '@/features/workflows/WorkflowDetailPage';
 import AuditLogPage from '@/pages/AuditLogPage';
 import SettingsPage from '@/pages/SettingsPage';
 import ApiDocsPage from '@/pages/ApiDocsPage';
+import AppearancePage from '@/pages/AppearancePage';
+// Theme bridge — applies appearance store to the live document
+import AppearanceProvider from '@/components/theme/AppearanceProvider';
 
 export default function App() {
   return (
+    <AppearanceProvider>
     <Routes>
       {/* Public */}
       {/* <Route path="/" element={<LandingPage />} /> */}
@@ -174,11 +178,13 @@ export default function App() {
           <Route path="/compliance/regulatory-changes" element={<RegulatoryChangesPage />} />
 
           {/* System */}
-          <Route path="/audit-log" element={<AuditLogPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/api-docs" element={<ApiDocsPage />} />
+          <Route path="/audit-log"  element={<AuditLogPage />} />
+          <Route path="/appearance" element={<AppearancePage />} />
+          <Route path="/settings"   element={<SettingsPage />} />
+          <Route path="/api-docs"   element={<ApiDocsPage />} />
         </Route>
       </Route>
     </Routes>
+    </AppearanceProvider>
   );
 }
