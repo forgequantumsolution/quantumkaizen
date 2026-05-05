@@ -4,6 +4,7 @@ import {
   Save, Upload, Plus, Trash2, Check, ChevronDown, Eye, EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import PageHeader from '@/components/layout/PageHeader';
 import { cn } from '@/lib/utils';
 
 // ── Mock data ────────────────────────────────────────────────
@@ -94,17 +95,16 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-h1 text-gray-900">Settings</h1>
-          <p className="text-body text-gray-500 mt-0.5">Manage your organization's configuration and preferences</p>
-        </div>
-        <Button variant="primary" onClick={handleSave}>
-          {saved ? <Check size={15} /> : <Save size={15} />}
-          {saved ? 'Saved!' : 'Save Changes'}
-        </Button>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Manage your organization's configuration and preferences"
+        actions={
+          <Button variant="primary" onClick={handleSave}>
+            {saved ? <Check size={15} /> : <Save size={15} />}
+            {saved ? 'Saved!' : 'Save Changes'}
+          </Button>
+        }
+      />
 
       {/* Top tabs */}
       <div className="border-b border-gray-200">

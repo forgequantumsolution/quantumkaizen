@@ -247,3 +247,78 @@ Author: Abhishek Kumar — *"feat: update environment variables and add database
 ### `scripts/scratch/` (new, gitignored)
 - One-off Playwright analysis script (`analyze-settings.mjs`) and its full-page screenshots (`snapshots/`) used to verify the settings tab redesign. Lives under `scripts/scratch/` to keep it separate from the real project scripts (`security-audit.sh`, `smoke-test.sh`, `validate-env.sh`).
 - Added `scripts/scratch/` to `.gitignore` — these artifacts aren't needed past the one-off verification and shouldn't enter version control.
+
+---
+
+## Session 4 — Central page wrapper + reusable page header
+
+**Goal:** unify the per-page chrome (outer container, side padding, heading typography) so every dashboard route looks consistent, and stop capping content at 1440px on wider monitors.
+
+### Problem with the old layout
+
+`AppLayout` rendered every route inside:
+```tsx
+<main className="flex-1 p-5 max-w-dashboard mx-auto w-full">
+  <div className="page-enter"><Outlet /></div>
+</main>
+```
+On a 1920-wide monitor that capped the content column at 1440px and centered it, leaving ~240px of empty surface on each side of the content (the visible "empty bands" the user was complaining about). Every page also re-implemented its own header (`<h1>` + description + actions on the right) with slightly different typography — `text-h1` on Settings vs `text-2xl font-bold` on AuditLog, etc.
+
+### `client/src/components/layout/PageContainer.tsx` (new)
+- Single, centralized wrapper for every dashboard route.
+- `w-full px-6 lg:px-8 xl:px-10 py-6` — full width with responsive side padding (24 / 32 / 40 px) so content always fills the available column with breathing room from the screen edge, regardless of viewport.
+- Owns the `page-enter` fade-in animation that used to live inline in `AppLayout`.
+- Optional `className` prop so an individual page can extend or override (e.g. swap the vertical padding on a special-case full-bleed canvas).
+
+### `client/src/components/layout/PageHeader.tsx` (new)
+- Opt-in component for the standard "title + description + actions row" pattern. Pages compose it; nothing forces them.
+- Props: `title` (string), `description` (optional `ReactNode`), `actions` (optional `ReactNode` slot for buttons), `className`.
+- Uses the canonical design tokens from `tailwind.config.js`: `text-h1` (1.375rem / bold / -0.015em tracking) for the title, `text-body` (0.875rem) `text-gray-500` for the description.
+- Layout: `flex items-start justify-between gap-4`, with `min-w-0` on the text column so long titles truncate cleanly and `shrink-0 flex items-center gap-2` on the actions slot so buttons hug the right edge.
+- Pages with non-standard headers (icons inline with the title, decorated subtitles with separators, breadcrumbs, etc.) are free to skip `PageHeader` entirely — see DashboardPage below.
+
+### `client/src/components/layout/AppLayout.tsx`
+- Removed `max-w-dashboard mx-auto p-5` from `<main>`. Result: content fills the full available width inside the sidebar offset (1184px at 1440 viewport, 1664px at 1920 viewport) with no centered-with-empty-sides effect.
+- Replaced `<div className="page-enter"><Outlet /></div>` with `<PageContainer><Outlet /></PageContainer>`. The `page-enter` animation now lives inside `PageContainer` so the behavior is identical, just centralized.
+- `<main>` is now just `flex-1 w-full`. The wrapper owns the padding.
+
+### `client/src/pages/SettingsPage.tsx` — migrated to `PageHeader`
+- Old: bespoke `<div className="flex items-center justify-between"><div><h1 className="text-h1 …">Settings</h1><p className="text-body …">…</p></div><Button …>Save Changes</Button></div>`.
+- New:
+  ```tsx
+  <PageHeader
+    title="Settings"
+    description="Manage your organization's configuration and preferences"
+    actions={
+      <Button variant="primary" onClick={handleSave}>
+        {saved ? <Check size={15} /> : <Save size={15} />}
+        {saved ? 'Saved!' : 'Save Changes'}
+      </Button>
+    }
+  />
+  ```
+- Save button behavior (the `saved` toggle, icon swap, label flip) is preserved verbatim.
+
+### `client/src/pages/AuditLogPage.tsx` — migrated to `PageHeader`
+- Old: `<h1 className="text-2xl font-bold text-slate-900">Audit Trail</h1>` + `<p className="mt-1 text-sm text-slate-500">…</p>` + Export `<Button>`. The typography (`text-2xl`, `text-slate-500`) drifted from Settings's (`text-h1`, `text-gray-500`).
+- New: same `<PageHeader …>` call shape as Settings — heading typography is now identical across the two pages.
+- Side benefit: the description text style now matches the rest of the app (`text-body text-gray-500` instead of the one-off `text-sm text-slate-500`).
+
+### `client/src/features/dashboard/DashboardPage.tsx` — intentionally NOT migrated
+- The dashboard's header is custom: inline-styled `<h1>` at 26px / weight 800 (heavier than `text-h1`'s 22/700), and a description with dot separators (`Quality Management · GMP Compliance · Updated 22:11`) plus a date-range pill group on the right.
+- These are deliberate visual differentiators for the executive landing page and don't fit the `title + description + actions` shape cleanly.
+- Per the "PageHeader is opt-in" design, dashboard keeps its bespoke header. PageContainer still wraps it via `AppLayout`, so it benefits from the consistent outer padding and the dropped width cap.
+
+### Verification
+- Playwright (`scripts/scratch/analyze-pages.mjs`, gitignored) captures `/settings`, `/audit-log`, `/dashboard` at 1440 × 900 and 1920 × 1080. Metrics confirm:
+  - 1440 viewport → main content = 1184px (= 1440 − 256 sidebar). ✓
+  - 1920 viewport → main content = 1664px (= 1920 − 256 sidebar). Previously capped at 1184px with ~480px empty surface on the right.
+  - `document.documentElement.scrollWidth === viewport.width` on every run → no horizontal overflow at any breakpoint.
+- Visual check (screenshots in `scripts/scratch/snapshots/`):
+  - `settings-1920.png`: form fields and the Organization Identity card stretch across the full width; Save button hugs the right edge.
+  - `audit-1920.png`: filter row and table fill the available width; heading typography matches Settings.
+  - `dashboard-1440.png`: KPI cards still flow correctly across the wider column; bespoke 26px heading is preserved.
+
+### Knock-on cleanup deferred
+- `client/src/pages/SettingsPage.tsx` still imports `Trash2`, `ChevronDown`, `Eye`, `EyeOff` from `lucide-react` — none are used after the tabs/header refactor (TS hint `6133`). Left in place this round; can be cleaned up in a follow-up.
+- `tailwind.config.js` `maxWidth.dashboard` (`1440px`) now has zero consumers but was left in place to avoid touching tokens that other developers may still reference.
