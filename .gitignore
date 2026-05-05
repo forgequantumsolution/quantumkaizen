@@ -55,3 +55,6 @@ temp/
 
 # ── Claude ───────────────────────────────────────────────────────────
 .claude/settings.local.json
+
+# ── Scratch (one-off analysis scripts, screenshots, debug artifacts) ─
+scripts/scratch/

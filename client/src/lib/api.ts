@@ -59,13 +59,18 @@ api.interceptors.response.use(
     // request fails — we MUST NOT redirect in those cases — the hooks'
     // catch{} blocks fall back to mock data and the app stays usable.
     const status = error.response?.status;
+    // The login endpoint itself returns 401 on bad credentials — that's a
+    // form-validation failure, not a session expiry. Don't redirect or the
+    // page reloads and the user loses the error message.
+    const requestUrl = (error.config?.url ?? '') as string;
+    const isLoginRequest = requestUrl.includes('/auth/login');
     const isDemoToken =
       typeof localStorage !== 'undefined' &&
       (() => {
         try { return JSON.parse(atob(localStorage.getItem('qk_token')?.split('.')[0] ?? '')).demo === true; }
         catch { return false; }
       })();
-    if (status === 401 && !isDemoToken) {
+    if (status === 401 && !isDemoToken && !isLoginRequest) {
       localStorage.removeItem('qk_token');
       localStorage.removeItem('qk_user');
       window.location.href = '/login';

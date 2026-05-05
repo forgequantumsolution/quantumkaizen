@@ -189,3 +189,61 @@ Vorvex does not use React Router — its unauthenticated view was controlled by 
 - No component outside of login was restyled — the broader dashboard/internal pages are unchanged.
 - No dependency versions changed.
 - No auth logic / API contract changed; only presentation + route default.
+
+---
+
+## Session 2 — Backend wiring + env cleanup (commit `d6f1405`)
+
+Author: Abhishek Kumar — *"feat: update environment variables and add database check scripts; modify API base URL and service worker registration logic"*
+
+### `backend/.env.example`
+- Reworked the example env file: clarified comments and added the variables the new Express + Prisma stack reads at boot.
+
+### `backend/scripts/check-db.mjs` (new)
+- Quick connectivity probe: connects to the Postgres URL in `DATABASE_URL`, runs a trivial query, prints success / failure with a sane error message. Useful after bringing the stack up locally to confirm Prisma can reach the DB before running migrations.
+
+### `backend/scripts/check-password.mjs` (new)
+- One-off helper to verify a bcrypt hash against a plaintext password (e.g. when debugging seeded credentials). Reads the user's hash from the DB and `bcrypt.compare`s.
+
+### `client/src/lib/api.ts` — base URL alignment
+- Default `baseURL` changed from `/api/v1` → `/api`. The new backend mounts routes at `/api/*` (see `backend/src/app.ts`), so the v1 prefix no longer matches anything.
+- Comment updated to reflect the new convention; cross-origin deploys should set `VITE_API_BASE_URL=https://…/api` (no `/v1`).
+- The SPA-fallback detection comment was updated for the same reason.
+
+### `client/src/main.tsx` — service-worker dev hygiene
+- In production: same as before (`navigator.serviceWorker.register('/sw.js')`).
+- In dev: actively *unregisters* any leftover SW from a prior prod build. The SW was intercepting Vite's `/src/*` and `/@vite/*` requests and serving cached `index.html` on misses, which broke HMR with a MIME-type error. Without this, devs had to manually clear site data after every prod→dev switch.
+
+### `client/src/stores/authStore.ts` — login response shape
+- Old code expected `response.data.data.{user, accessToken}` (a wrapped envelope from the previous backend).
+- New backend returns `{ user, token }` directly in the response body. Code now reads `response.data.{user, token}` and stores `token` (not `accessToken`).
+- Token key in `localStorage` (`qk_token`) is unchanged so existing sessions don't break.
+
+### `client/vite.config.ts` — dev proxy port
+- `/api` proxy target: `localhost:5000` → `localhost:4000`. The new Express backend defaults to port 4000.
+
+### `package-lock.json`
+- A single lockfile churn line (no real package change).
+
+---
+
+## Session 3 — Settings page tabs + login 401 handling
+
+### `client/src/pages/SettingsPage.tsx` — sidebar → top tabs
+- The settings page previously rendered a 192px-wide left rail (`w-48 shrink-0`) with five vertically stacked nav buttons (`General`, `Users & Roles`, `Workflows`, `Notifications`, `Security`) sitting beside the content. With the global app sidebar already on the left, this produced two stacked nav columns and squeezed the form/table area to roughly 870px on a 1440-wide viewport.
+- Replaced that inner sidebar with a **horizontal tab bar** placed above the content:
+  - Container: `border-b border-gray-200`, tabs in a `flex gap-1 overflow-x-auto -mb-px` row.
+  - Tab style: `border-b-2 border-transparent` by default, `border-slate-900 text-slate-900` when active (underline indicator, no dark pill). Hover lifts to `text-gray-900` + light gray underline.
+  - Each tab still shows its lucide icon (16px) next to the label.
+  - Accessibility: added `role="tablist"`, `role="tab"`, and `aria-selected` on each tab.
+- Content column lost its flex constraint, so forms and the users table now span ~1100px on a 1440-wide viewport.
+- Verified with Playwright (login → /settings → screenshot before & after, then click "Users & Roles" → confirm `aria-selected="true"` follows the click). Screenshots in `scripts/scratch/snapshots/` (gitignored).
+
+### `client/src/lib/api.ts` — don't redirect on login 401
+- The 401 interceptor was redirecting to `/login` on every 401, including the 401 returned by `POST /auth/login` itself when credentials are wrong.
+- Effect: bad-credential submits triggered a full-page reload to `/login`, wiping the form's error banner before the user could read it.
+- Fix: detect login requests by URL (`error.config.url.includes('/auth/login')`) and skip the redirect for them, so the form can surface the auth error inline. Existing demo-token bypass and the redirect for *other* 401s are unchanged.
+
+### `scripts/scratch/` (new, gitignored)
+- One-off Playwright analysis script (`analyze-settings.mjs`) and its full-page screenshots (`snapshots/`) used to verify the settings tab redesign. Lives under `scripts/scratch/` to keep it separate from the real project scripts (`security-audit.sh`, `smoke-test.sh`, `validate-env.sh`).
+- Added `scripts/scratch/` to `.gitignore` — these artifacts aren't needed past the one-off verification and shouldn't enter version control.
