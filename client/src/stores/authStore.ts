@@ -91,13 +91,12 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true });
         try {
           const response = await api.post('/auth/login', { email, password, tenantCode });
-          // Backend wraps successful responses in { data: {...} }; axios unwraps
-          // the HTTP body into response.data, so the payload is response.data.data.
-          const { user, accessToken } = response.data.data;
+          // Backend returns the body as { user, token } (see backend/src/modules/auth/auth.controller.ts).
+          const { user, token } = response.data;
 
-          localStorage.setItem('qk_token', accessToken);
+          localStorage.setItem('qk_token', token);
           localStorage.setItem('qk_user', JSON.stringify(user));
-          set({ user, token: accessToken, isAuthenticated: true, isLoading: false });
+          set({ user, token, isAuthenticated: true, isLoading: false });
         } catch (error) {
           // Backend unavailable or returned an error — try the offline demo path.
           const offline = tryOfflineLogin(email, password);

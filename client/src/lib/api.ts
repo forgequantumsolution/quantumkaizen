@@ -1,10 +1,9 @@
 import axios from 'axios';
 
-// In local Docker the nginx sidecar proxies /api/* to the backend, so '/api/v1'
-// is correct. In deploys where the frontend and backend live on different
-// origins (e.g. Vercel + Render), set VITE_API_BASE_URL at build time to an
-// absolute URL like 'https://quantumkaizen-api.onrender.com/api/v1'.
-const baseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api/v1';
+// Backend mounts routes at /api/* (see backend/src/app.ts). For cross-origin
+// deploys (e.g. Vercel + Render), set VITE_API_BASE_URL at build time to an
+// absolute URL like 'https://quantumkaizen-api.onrender.com/api'.
+const baseURL = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || '/api';
 
 export const api = axios.create({
   baseURL,
@@ -28,7 +27,7 @@ api.interceptors.request.use((config) => {
 // ── Detect SPA-fallback responses ────────────────────────────────────────
 //
 // Vercel (and similar static hosts) rewrites every unknown path — including
-// /api/v1/* — to /index.html with status 200. Axios happily returns that
+// /api/* — to /index.html with status 200. Axios happily returns that
 // HTML as `response.data`, which means the hook's `try` branch succeeds with
 // nonsense, the `catch` block never runs, and the list page shows nothing.
 //
