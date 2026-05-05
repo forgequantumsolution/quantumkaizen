@@ -4,6 +4,7 @@ import {
   Save, Upload, Plus, Trash2, Check, ChevronDown, Eye, EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import PageHeader from '@/components/layout/PageHeader';
 import { cn } from '@/lib/utils';
 
 // ── Mock data ────────────────────────────────────────────────
@@ -94,45 +95,46 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-h1 text-gray-900">Settings</h1>
-          <p className="text-body text-gray-500 mt-0.5">Manage your organization's configuration and preferences</p>
-        </div>
-        <Button variant="primary" onClick={handleSave}>
-          {saved ? <Check size={15} /> : <Save size={15} />}
-          {saved ? 'Saved!' : 'Save Changes'}
-        </Button>
+      <PageHeader
+        title="Settings"
+        description="Manage your organization's configuration and preferences"
+        actions={
+          <Button variant="primary" onClick={handleSave}>
+            {saved ? <Check size={15} /> : <Save size={15} />}
+            {saved ? 'Saved!' : 'Save Changes'}
+          </Button>
+        }
+      />
+
+      {/* Top tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="flex gap-1 overflow-x-auto -mb-px" role="tablist">
+          {tabs.map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-175',
+                  isActive
+                    ? 'border-slate-900 text-slate-900'
+                    : 'border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300'
+                )}
+              >
+                <Icon size={16} className={isActive ? 'text-slate-900' : 'text-gray-400'} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      <div className="flex gap-6">
-        {/* Sidebar tabs */}
-        <div className="w-48 shrink-0">
-          <nav className="space-y-1">
-            {tabs.map(tab => {
-              const Icon = tab.icon;
-              return (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={cn(
-                    'w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-175',
-                    activeTab === tab.key
-                      ? 'bg-slate-900 text-white shadow-sm'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                  )}
-                >
-                  <Icon size={16} className={activeTab === tab.key ? 'text-blue-600-light' : 'text-gray-400'} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
+      {/* Content */}
+      <div className="min-w-0">
 
           {/* ── GENERAL ─────────────────────────────────── */}
           {activeTab === 'general' && (
@@ -492,7 +494,6 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-        </div>
       </div>
     </div>
   );
