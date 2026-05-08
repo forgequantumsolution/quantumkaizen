@@ -6,7 +6,7 @@ import {
   ChevronRight, Truck, GitBranch, MessageSquareWarning,
   BarChart3, Gauge, ClipboardList, Clock, FileCode,
   ShieldCheck, BookOpen, RefreshCw, Network, ChevronDown,
-  TrendingUp, Trophy, Palette,
+  TrendingUp, Trophy, Palette, Ticket,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
@@ -24,6 +24,7 @@ const navigation: NavSection[] = [
       { label: 'Dashboard',  path: '/dashboard',  icon: LayoutDashboard },
       { label: 'Analytics',  path: '/analytics',  icon: TrendingUp },
       { label: 'Workflows',  path: '/workflows',  icon: Network },
+      { label: 'Tickets',    path: '/tickets',    icon: Ticket },
     ],
   },
   {
@@ -82,6 +83,7 @@ const navigation: NavSection[] = [
     items: [
       { label: 'Audit Log',  path: '/audit-log',  icon: History },
       { label: 'Appearance', path: '/appearance', icon: Palette },
+      { label: 'Workflow Lookups', path: '/admin/workflow-lookups', icon: Settings },
       { label: 'Settings',   path: '/settings',   icon: Settings },
       { label: 'API Docs',   path: '/api-docs',   icon: FileCode },
     ],

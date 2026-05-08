@@ -10,7 +10,7 @@ const router = Router();
 
 router.use(requireAuth);
 
-router.get('/industries', asyncHandler(ctrl.industries));
+router.get('/industries', ctrl.industries);
 router.get('/', requirePermission('org.read'), asyncHandler(ctrl.get));
 router.put('/', requirePermission('org.update'), validate(UpdateOrganizationSchema), asyncHandler(ctrl.put));
 

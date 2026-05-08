@@ -74,6 +74,11 @@ import RegulatoryTrainingPage from '@/features/lms/regulatory/RegulatoryTraining
 // Workflows
 import WorkflowsPage from '@/features/workflows/WorkflowsPage';
 import WorkflowDetailPage from '@/features/workflows/WorkflowDetailPage';
+import WorkflowBuilderPage from '@/features/workflows/builder/WorkflowBuilderPage';
+import WorkflowLookupsPage from '@/features/admin/workflow-lookups/WorkflowLookupsPage';
+// Tickets
+import TicketsPage from '@/features/tickets/TicketsPage';
+import TicketDetailPage from '@/features/tickets/TicketDetailPage';
 // System
 import AuditLogPage from '@/pages/AuditLogPage';
 import SettingsPage from '@/pages/SettingsPage';
@@ -98,6 +103,10 @@ export default function App() {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/workflows" element={<WorkflowsPage />} />
           <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+          <Route path="/workflows/:id/builder" element={<WorkflowBuilderPage />} />
+          <Route path="/admin/workflow-lookups" element={<WorkflowLookupsPage />} />
+          <Route path="/tickets" element={<TicketsPage />} />
+          <Route path="/tickets/:id" element={<TicketDetailPage />} />
 
           {/* QMS — Non-Conformance */}
           <Route path="/qms/non-conformances" element={<NCListPage />} />

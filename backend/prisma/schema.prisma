@@ -9,37 +9,37 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String @id @default(uuid())
+  email        String @unique
   passwordHash String
   name         String
 
-  employeeId   String?  @unique
-  firstName    String?
-  lastName     String?
-  phone        String?
-  designation  String?
+  employeeId  String? @unique
+  firstName   String?
+  lastName    String?
+  phone       String?
+  designation String?
 
-  isActive     Boolean  @default(true)
+  isActive Boolean @default(true)
 
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
 
-  roleId       String?
-  role         Role?       @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  roleId String?
+  role   Role?   @relation(fields: [roleId], references: [id], onDelete: SetNull)
 
-  siteId       String?
-  site         Site?       @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  siteId String?
+  site   Site?   @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
-  managerId    String?
-  manager      User?       @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
-  reports      User[]      @relation("UserManager")
+  managerId String?
+  manager   User?   @relation("UserManager", fields: [managerId], references: [id], onDelete: SetNull)
+  reports   User[]  @relation("UserManager")
 
-  joinDate     DateTime?
-  lastLoginAt  DateTime?
-  avatarUrl    String?
-  locale       String   @default("en")
-  timezone     String   @default("Asia/Kolkata")
+  joinDate    DateTime?
+  lastLoginAt DateTime?
+  avatarUrl   String?
+  locale      String    @default("en")
+  timezone    String    @default("Asia/Kolkata")
 
   signatureMeaning    String?
   signaturePinHash    String?
@@ -47,8 +47,19 @@ model User {
 
   headOfDepartments Department[] @relation("DepartmentHead")
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  workflowsCreated Workflow[]            @relation("WorkflowCreatedBy")
+  workflowsDeleted Workflow[]            @relation("WorkflowDeletedBy")
+  stageActions     WorkflowStageAction[] @relation("StageActionAllowedUsers")
+
+  ticketsCreated         Ticket[]              @relation("TicketCreatedBy")
+  ticketsDeleted         Ticket[]              @relation("TicketDeletedBy")
+  ticketsHeld            Ticket[]              @relation("TicketHeldBy")
+  commentsAuthored       TicketComment[]       @relation("TicketCommentAuthor")
+  docsUploaded           TicketDoc[]           @relation("TicketDocUploadedBy")
+  stageTrackingPerformed TicketStageTracking[] @relation("TicketStageTrackingPerformedBy")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([departmentId])
   @@index([roleId])
@@ -57,82 +68,567 @@ model User {
 }
 
 model Department {
-  id          String   @id @default(uuid())
-  code        String   @unique
-  name        String   @unique
+  id          String  @id @default(uuid())
+  code        String  @unique
+  name        String  @unique
   description String?
 
-  parentId    String?
-  parent      Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
-  children    Department[] @relation("DepartmentHierarchy")
+  parentId String?
+  parent   Department?  @relation("DepartmentHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children Department[] @relation("DepartmentHierarchy")
 
-  headUserId  String?
-  head        User?    @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull)
+  headUserId String?
+  head       User?   @relation("DepartmentHead", fields: [headUserId], references: [id], onDelete: SetNull)
 
-  costCenter  String?
-  isActive    Boolean  @default(true)
+  costCenter String?
+  isActive   Boolean @default(true)
 
-  users       User[]
+  users   User[]
+  tickets Ticket[] @relation("TicketDepartment")
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([parentId])
   @@index([headUserId])
 }
 
 model Role {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id          String  @id @default(uuid())
+  name        String  @unique
   description String?
-  isSystem    Boolean  @default(false)
+  isSystem    Boolean @default(false)
 
   permissions Permission[] @relation("RolePermissions")
   users       User[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  stageActions WorkflowStageAction[] @relation("StageActionAllowedRoles")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Permission {
-  id          String  @id @default(uuid())
-  key         String  @unique
+  id          String @id @default(uuid())
+  key         String @unique
   module      String
   action      String
   description String
 
-  roles       Role[]  @relation("RolePermissions")
+  roles Role[] @relation("RolePermissions")
 
-  createdAt   DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([module])
 }
 
 model Site {
-  id        String   @id @default(uuid())
-  code      String   @unique
-  name      String
-  address   String?
-  isActive  Boolean  @default(true)
+  id       String  @id @default(uuid())
+  code     String  @unique
+  name     String
+  address  String?
+  isActive Boolean @default(true)
 
-  users     User[]
+  users   User[]
+  tickets Ticket[] @relation("TicketSite")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model Organization {
-  id              String   @id @default(uuid())
-  name            String
-  tenantCode      String   @unique
-  industry        String
-  website         String?
-  address         String?
-  standards       String[]
-  timezone        String   @default("Asia/Kolkata")
-  dateFormat      String   @default("DD/MM/YYYY")
-  logoUrl         String?
+  id         String   @id @default(uuid())
+  name       String
+  tenantCode String   @unique
+  industry   String
+  website    String?
+  address    String?
+  standards  String[]
+  timezone   String   @default("Asia/Kolkata")
+  dateFormat String   @default("DD/MM/YYYY")
+  logoUrl    String?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workflow domain (Phase 1 — builder layer only; engine/SLA/forms in later phases)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum WorkflowApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum WorkflowLifecycleStatus {
+  ACTIVE
+  INACTIVE
+  DRAFT
+  DRAFT_UPDATE
+}
+
+enum StageType {
+  STAGE
+  FORK
+  JOIN
+  DECISION
+  AUDIT_FORMS
+}
+
+enum SplitType {
+  AND
+  OR
+  XOR
+}
+
+enum JoinType {
+  AND
+  OR
+}
+
+enum StageActionBehavior {
+  FORWARD
+  REJECT
+  HOLD
+  UNHOLD
+  RETURN
+  REASSIGN
+}
+
+model WorkflowType {
+  id         String  @id @default(uuid())
+  name       String  @unique
+  codePrefix String?
+  isDeleted  Boolean @default(false)
+
+  workflows  Workflow[]
+  iconConfig WorkflowIconConfig?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WorkflowIconConfig {
+  id             String       @id @default(uuid())
+  workflowTypeId String       @unique
+  workflowType   WorkflowType @relation(fields: [workflowTypeId], references: [id], onDelete: Cascade)
+  iconName       String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WorkflowStageStatus {
+  id        String              @id @default(uuid())
+  name      String              @unique
+  behavior  StageActionBehavior @default(FORWARD)
+  isDeleted Boolean             @default(false)
+
+  stageActions WorkflowStageAction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActionType {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  isDeleted Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActionCriteria {
+  id        String  @id @default(uuid())
+  name      String
+  isDeleted Boolean @default(false)
+
+  stageActions WorkflowStageAction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Priority {
+  id   String @id @default(uuid())
+  name String @unique
+
+  tickets Ticket[]
+}
+
+model Workflow {
+  id   String @id @default(uuid())
+  name String
+
+  typeId String?
+  type   WorkflowType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+
+  status         WorkflowApprovalStatus  @default(PENDING)
+  workflowStatus WorkflowLifecycleStatus @default(DRAFT)
+
+  totalExecutions      Int       @default(0)
+  successfulExecutions Int       @default(0)
+  failedExecutions     Int       @default(0)
+  lastExecutedAt       DateTime?
+  maxExecutionsPerDay  Int?
+  timeoutSeconds       Int?
+
+  version         Int     @default(1)
+  isLatestVersion Boolean @default(true)
+
+  previousVersionId String?
+  previousVersion   Workflow?  @relation("WorkflowVersionChain", fields: [previousVersionId], references: [id], onDelete: SetNull)
+  nextVersions      Workflow[] @relation("WorkflowVersionChain")
+
+  parentWorkflowId String?
+  parentWorkflow   Workflow?  @relation("WorkflowLineage", fields: [parentWorkflowId], references: [id], onDelete: SetNull)
+  childWorkflows   Workflow[] @relation("WorkflowLineage")
+
+  draftOfId String?
+  draftOf   Workflow?  @relation("WorkflowDraftOf", fields: [draftOfId], references: [id], onDelete: Cascade)
+  drafts    Workflow[] @relation("WorkflowDraftOf")
+
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  deletedById String?
+  deletedBy   User?     @relation("WorkflowDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?   @relation("WorkflowCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  stages      WorkflowStage[]
+  transitions WorkflowTransition[]
+  temporary   TemporaryWorkflow?
+
+  flows         TicketFlow[]
+  childTriggers ChildWorkflowTrigger[] @relation("WorkflowChildTriggers")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isLatestVersion, isDeleted])
+  @@index([typeId])
+  @@index([parentWorkflowId])
+  @@index([draftOfId])
+}
+
+model WorkflowStage {
+  id         String   @id @default(uuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  name           String
+  canonicalId    String  @default("")
+  isInitialStage Boolean @default(false)
+  position       Json?
+  sendEmail      Boolean @default(false)
+  additionalData Json?
+
+  stageType StageType  @default(STAGE)
+  splitType SplitType?
+  joinType  JoinType?
+
+  joinPointId String?
+  joinPoint   WorkflowStage?  @relation("StageForkJoin", fields: [joinPointId], references: [id], onDelete: SetNull)
+  forkPoints  WorkflowStage[] @relation("StageForkJoin")
+
+  actions             WorkflowStageAction[]
+  outgoingTransitions WorkflowTransition[]  @relation("FromStage")
+  incomingTransitions WorkflowTransition[]  @relation("ToStage")
+
+  currentForFlows      TicketFlow[]             @relation("TicketFlowCurrentStages")
+  stageTracking        TicketStageTracking[]
+  parentTickets        Ticket[]                 @relation("TicketParentStage")
+  forkBranches         ParallelBranchTracking[] @relation("ForkBranchTracking")
+  joinBranches         ParallelBranchTracking[] @relation("JoinBranchTracking")
+  childTriggers        ChildWorkflowTrigger[]   @relation("StageChildTriggers")
+  docs                 TicketDoc[]              @relation("TicketDocStage")
+  returnedFromTracking TicketStageTracking[]    @relation("StageTrackingReturnedFrom")
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([workflowId, isInitialStage])
+  @@index([canonicalId])
+}
+
+model WorkflowStageAction {
+  id              String        @id @default(uuid())
+  workflowStageId String
+  workflowStage   WorkflowStage @relation(fields: [workflowStageId], references: [id], onDelete: Cascade)
+
+  workflowActionId String
+  workflowAction   WorkflowStageStatus @relation(fields: [workflowActionId], references: [id], onDelete: Cascade)
+
+  criteriaId String?
+  criteria   ActionCriteria? @relation(fields: [criteriaId], references: [id], onDelete: SetNull)
+
+  isPrimary Boolean @default(true)
+
+  allowedRoles Role[] @relation("StageActionAllowedRoles")
+  allowedUsers User[] @relation("StageActionAllowedUsers")
+
+  postActionsTracking TicketStageTracking[] @relation("StageTrackingPostAction")
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([workflowStageId, workflowActionId])
+}
+
+model WorkflowTransition {
+  id         String   @id @default(uuid())
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  fromStageId String
+  fromStage   WorkflowStage @relation("FromStage", fields: [fromStageId], references: [id], onDelete: Cascade)
+
+  toStageId String
+  toStage   WorkflowStage @relation("ToStage", fields: [toStageId], references: [id], onDelete: Cascade)
+
+  sourcePort  String?
+  targetPort  String?
+  branchName  String?
+  condition   String?
+  branchOrder Int     @default(0)
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([fromStageId])
+  @@index([toStageId])
+  @@index([workflowId])
+}
+
+model TemporaryWorkflow {
+  id         String   @id @default(uuid())
+  workflowId String   @unique
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  flowJson   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ticket domain (Phase 2 — execution; engine layers in src/modules/workflow/engine)
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum DocType {
+  ATTACHMENT
+  EVIDENCE
+  REPORT
+  FORM_SUBMISSION
+  OTHER
+}
+
+enum ChildTriggerMode {
+  MANUAL
+  AUTO
+}
+
+enum ParallelBranchStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+model Ticket {
+  id           String  @id @default(uuid())
+  uniqueId     String  @unique
+  title        String
+  description  String?
+  ticketReason String?
+
+  parentTicketId String?
+  parentTicket   Ticket?  @relation("TicketParent", fields: [parentTicketId], references: [id], onDelete: SetNull)
+  childTickets   Ticket[] @relation("TicketParent")
+
+  parentTicketStageId String?
+  parentTicketStage   WorkflowStage? @relation("TicketParentStage", fields: [parentTicketStageId], references: [id], onDelete: SetNull)
+
+  priorityId String?
+  priority   Priority? @relation(fields: [priorityId], references: [id], onDelete: SetNull)
+
+  departmentId String?
+  department   Department? @relation("TicketDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+
+  siteId String?
+  site   Site?   @relation("TicketSite", fields: [siteId], references: [id], onDelete: SetNull)
+
+  customFields Json?
+
+  isOnHold   Boolean   @default(false)
+  holdReason String?
+  heldAt     DateTime?
+  heldById   String?
+  heldBy     User?     @relation("TicketHeldBy", fields: [heldById], references: [id], onDelete: SetNull)
+
+  isDeleted   Boolean   @default(false)
+  deletedAt   DateTime?
+  deletedById String?
+  deletedBy   User?     @relation("TicketDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?   @relation("TicketCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  flows            TicketFlow[]
+  comments         TicketComment[]
+  docs             TicketDoc[]
+  stageTracking    TicketStageTracking[]
+  parallelTracking ParallelBranchTracking[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([uniqueId])
+  @@index([createdById, createdAt])
+  @@index([priorityId, createdAt])
+  @@index([isDeleted, createdAt])
+  @@index([parentTicketId, isDeleted])
+}
+
+model TicketFlow {
+  id         String   @id @default(uuid())
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  workflowId String
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Restrict)
+
+  workflowName    String
+  workflowVersion Int
+
+  isCompleted     Boolean   @default(false)
+  completedAt     DateTime?
+  statusUpdatedAt DateTime  @default(now())
+
+  currentStages WorkflowStage[] @relation("TicketFlowCurrentStages")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ticketId, workflowId])
+  @@index([workflowId, isCompleted])
+  @@index([ticketId, isCompleted])
+}
+
+model TicketStageTracking {
+  id       String         @id @default(uuid())
+  ticketId String
+  ticket   Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  stageId  String?
+  stage    WorkflowStage? @relation(fields: [stageId], references: [id], onDelete: SetNull)
+
+  stageName       String
+  stageWorkflowId String
+
+  enteredAt   DateTime  @default(now())
+  exitedAt    DateTime?
+  durationSec Int?
+
+  isActive   Boolean @default(true)
+  isOnHold   Boolean @default(false)
+  holdReason String?
+
+  performedById String?
+  performedBy   User?   @relation("TicketStageTrackingPerformedBy", fields: [performedById], references: [id], onDelete: SetNull)
+
+  postActionId String?
+  postAction   WorkflowStageAction? @relation("StageTrackingPostAction", fields: [postActionId], references: [id], onDelete: SetNull)
+
+  returnedFromStageId String?
+  returnedFromStage   WorkflowStage? @relation("StageTrackingReturnedFrom", fields: [returnedFromStageId], references: [id], onDelete: SetNull)
+
+  remarks String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId, stageId, isActive])
+  @@index([ticketId, isActive])
+  @@index([stageWorkflowId, isActive])
+  @@index([enteredAt])
+}
+
+model TicketComment {
+  id       String @id @default(uuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  body     String
+  authorId String?
+  author   User?   @relation("TicketCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId, createdAt])
+}
+
+model TicketDoc {
+  id       String         @id @default(uuid())
+  ticketId String
+  ticket   Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  stageId  String?
+  stage    WorkflowStage? @relation("TicketDocStage", fields: [stageId], references: [id], onDelete: SetNull)
+
+  fileUrl       String
+  fileName      String
+  mimeType      String?
+  fileSizeBytes Int?
+  docType       DocType @default(ATTACHMENT)
+
+  uploadedById String?
+  uploadedBy   User?   @relation("TicketDocUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId, createdAt])
+}
+
+model ChildWorkflowTrigger {
+  id              String           @id @default(uuid())
+  parentStageId   String
+  parentStage     WorkflowStage    @relation("StageChildTriggers", fields: [parentStageId], references: [id], onDelete: Cascade)
+  childWorkflowId String
+  childWorkflow   Workflow         @relation("WorkflowChildTriggers", fields: [childWorkflowId], references: [id], onDelete: Restrict)
+  triggerMode     ChildTriggerMode @default(MANUAL)
+  isBlocking      Boolean          @default(false)
+  allowMultiple   Boolean          @default(false)
+  order           Int              @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ParallelBranchTracking {
+  id          String         @id @default(uuid())
+  ticketId    String
+  ticket      Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  forkStageId String
+  forkStage   WorkflowStage  @relation("ForkBranchTracking", fields: [forkStageId], references: [id], onDelete: Cascade)
+  joinStageId String?
+  joinStage   WorkflowStage? @relation("JoinBranchTracking", fields: [joinStageId], references: [id], onDelete: SetNull)
+
+  branchPath  Json
+  status      ParallelBranchStatus @default(ACTIVE)
+  startedAt   DateTime             @default(now())
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId, forkStageId, status])
 }

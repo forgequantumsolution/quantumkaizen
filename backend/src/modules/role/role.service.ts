@@ -21,7 +21,7 @@ const baseSelect = {
     orderBy: [{ module: 'asc' }, { action: 'asc' }],
   },
   _count: { select: { users: true } },
-} as const;
+} satisfies Prisma.RoleSelect;
 
 export const list = async ({ page, pageSize, search }: ListQuery) => {
   const where: Prisma.RoleWhereInput = search
