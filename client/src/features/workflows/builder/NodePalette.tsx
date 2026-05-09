@@ -16,7 +16,7 @@ interface Props {
 
 export default function NodePalette({ onAdd }: Props) {
   return (
-    <Card className="!p-3">
+    <Card className="!p-3 h-full flex flex-col">
       <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2 px-1">
         Node palette
       </h3>
@@ -42,7 +42,7 @@ export default function NodePalette({ onAdd }: Props) {
           </button>
         ))}
       </div>
-      <p className="text-[10px] text-gray-400 mt-3 px-1 leading-relaxed">
+      <p className="text-[10px] text-gray-400 mt-auto pt-3 px-1 leading-relaxed">
         Click a palette item to add it to the canvas. Drag handles between nodes to connect them.
       </p>
     </Card>

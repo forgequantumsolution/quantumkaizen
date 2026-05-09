@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -10,6 +10,7 @@ import ReactFlow, {
   type Connection,
   type Edge,
   type Node,
+  type ReactFlowInstance,
   useEdgesState,
   useNodesState,
 } from 'reactflow';
@@ -70,6 +71,7 @@ export default function WorkflowBuilderPage() {
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowReactFlowEdge['data']>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const rfInstance = useRef<ReactFlowInstance | null>(null);
 
   // Load workflow → canvas
   useEffect(() => {
@@ -112,8 +114,9 @@ export default function WorkflowBuilderPage() {
 
   const handleAddNode = (kind: NodeKind) => {
     const id = newNodeId();
-    // Place new node below the lowest existing node, so vertical flows stack naturally
-    const NODE_GAP = 180;
+    // Place new node below the lowest existing node, so vertical flows stack naturally.
+    // Gap = approx node height (~90px) + comfortable breathing room.
+    const NODE_GAP = 140;
     const baseX = 250;
     const baseY = 100;
     const lowest = nodes.reduce<number | null>(
@@ -129,6 +132,17 @@ export default function WorkflowBuilderPage() {
     };
     setNodes((ns) => [...ns, newNode]);
     setSelectedId(id);
+    // Pan the canvas so the new node is visible immediately. Defer a frame so
+    // ReactFlow has had a chance to commit the new node before we ask it to focus.
+    requestAnimationFrame(() => {
+      const inst = rfInstance.current;
+      if (!inst) return;
+      // Approximate node center: stage cards are ~110×45 in their default state.
+      const targetX = baseX + 110;
+      const targetY = y + 45;
+      const zoom = Math.max(inst.getZoom(), 0.85);
+      inst.setCenter(targetX, targetY, { duration: 350, zoom });
+    });
   };
 
   const handleNodeUpdate = (nodeId: string, newData: WorkflowNodeData) => {
@@ -220,22 +234,26 @@ export default function WorkflowBuilderPage() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 grid gap-3 p-3 overflow-hidden" style={{ gridTemplateColumns: '200px 1fr 320px' }}>
-        <div className="overflow-auto">
+      <div className="flex-1 grid gap-2 p-2 overflow-hidden" style={{ gridTemplateColumns: '180px 1fr 296px' }}>
+        <div className="h-full min-h-0 overflow-auto">
           <NodePalette onAdd={handleAddNode} />
         </div>
 
-        <Card noPadding className="relative overflow-hidden">
+        <Card noPadding className="relative overflow-hidden h-full">
           <ReactFlow
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onInit={(inst) => {
+              rfInstance.current = inst;
+            }}
             onNodeClick={(_e, node) => setSelectedId(node.id)}
             onPaneClick={() => setSelectedId(null)}
             nodeTypes={nodeTypes}
             fitView
+            fitViewOptions={{ padding: 0.18, maxZoom: 1, minZoom: 0.4 }}
             proOptions={{ hideAttribution: true }}
             connectionLineStyle={{ stroke: '#C9A84C', strokeWidth: 2 }}
             defaultEdgeOptions={{
@@ -254,7 +272,7 @@ export default function WorkflowBuilderPage() {
           />
         </Card>
 
-        <div className="overflow-auto">
+        <div className="h-full min-h-0 overflow-auto">
           <InspectorPanel
             selectedNode={selectedNode as Node<WorkflowNodeData> | null}
             onNodeUpdate={handleNodeUpdate}
