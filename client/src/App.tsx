@@ -74,13 +74,22 @@ import RegulatoryTrainingPage from '@/features/lms/regulatory/RegulatoryTraining
 // Workflows
 import WorkflowsPage from '@/features/workflows/WorkflowsPage';
 import WorkflowDetailPage from '@/features/workflows/WorkflowDetailPage';
+import WorkflowBuilderPage from '@/features/workflows/builder/WorkflowBuilderPage';
+import WorkflowLookupsPage from '@/features/admin/workflow-lookups/WorkflowLookupsPage';
+// Tickets
+import TicketsPage from '@/features/tickets/TicketsPage';
+import TicketDetailPage from '@/features/tickets/TicketDetailPage';
 // System
 import AuditLogPage from '@/pages/AuditLogPage';
 import SettingsPage from '@/pages/SettingsPage';
 import ApiDocsPage from '@/pages/ApiDocsPage';
+import AppearancePage from '@/pages/AppearancePage';
+// Theme bridge — applies appearance store to the live document
+import AppearanceProvider from '@/components/theme/AppearanceProvider';
 
 export default function App() {
   return (
+    <AppearanceProvider>
     <Routes>
       {/* Public */}
       {/* <Route path="/" element={<LandingPage />} /> */}
@@ -94,6 +103,10 @@ export default function App() {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/workflows" element={<WorkflowsPage />} />
           <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
+          <Route path="/workflows/:id/builder" element={<WorkflowBuilderPage />} />
+          <Route path="/admin/workflow-lookups" element={<WorkflowLookupsPage />} />
+          <Route path="/tickets" element={<TicketsPage />} />
+          <Route path="/tickets/:id" element={<TicketDetailPage />} />
 
           {/* QMS — Non-Conformance */}
           <Route path="/qms/non-conformances" element={<NCListPage />} />
@@ -174,11 +187,13 @@ export default function App() {
           <Route path="/compliance/regulatory-changes" element={<RegulatoryChangesPage />} />
 
           {/* System */}
-          <Route path="/audit-log" element={<AuditLogPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/api-docs" element={<ApiDocsPage />} />
+          <Route path="/audit-log"  element={<AuditLogPage />} />
+          <Route path="/appearance" element={<AppearancePage />} />
+          <Route path="/settings"   element={<SettingsPage />} />
+          <Route path="/api-docs"   element={<ApiDocsPage />} />
         </Route>
       </Route>
     </Routes>
+    </AppearanceProvider>
   );
 }

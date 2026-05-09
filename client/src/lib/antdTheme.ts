@@ -1,34 +1,59 @@
 import type { ThemeConfig } from 'antd';
+import type { AppearanceColors, AppearanceTypography } from '@/stores/appearanceStore';
+import { defaultColors } from '@/components/theme/presets';
+import { defaultTypography } from '@/stores/appearanceStore';
 
-// Match the existing slate / blue palette so antd widgets blend with the
-// rest of the Tailwind-styled UI.
-export const antdTheme: ThemeConfig = {
-  cssVar: true,
-  hashed: false,
-  token: {
-    fontFamily: 'Outfit, system-ui, -apple-system, sans-serif',
-    colorPrimary: '#0f172a',           // slate-900
-    colorInfo: '#2563eb',              // blue-600
-    colorSuccess: '#16a34a',           // green-600
-    colorWarning: '#d97706',           // amber-600
-    colorError: '#dc2626',             // red-600
-    colorBgLayout: '#f8fafc',          // slate-50
-    borderRadius: 8,
-    borderRadiusSM: 6,
-    borderRadiusLG: 12,
-    fontSize: 14,
-    controlHeight: 38,
-  },
-  components: {
-    Button: {
-      controlHeight: 38,
-      borderRadius: 8,
-      fontWeight: 500,
-    },
-    Input: { borderRadius: 8 },
-    Select: { borderRadius: 8 },
-    DatePicker: { borderRadius: 8 },
-    Modal: { borderRadiusLG: 12, paddingContentHorizontal: 24 },
-    Form: { itemMarginBottom: 16 },
-  },
+const SANS_FAMILIES: Record<string, string> = {
+  outfit:  'Outfit, system-ui, -apple-system, sans-serif',
+  inter:   'Inter, system-ui, -apple-system, sans-serif',
+  system:  'system-ui, -apple-system, "Segoe UI", sans-serif',
 };
+
+interface BuildArgs {
+  colors?: AppearanceColors;
+  typography?: AppearanceTypography;
+}
+
+/**
+ * Build an antd ThemeConfig from the appearance store's state.
+ *
+ * Called from AppearanceProvider on every store change. The static export
+ * `antdTheme` below preserves the original behaviour for the bootstrap
+ * ConfigProvider in main.tsx (which renders before the store hydrates).
+ */
+export function buildAntdTheme({ colors = defaultColors, typography = defaultTypography }: BuildArgs = {}): ThemeConfig {
+  const fontFamily = SANS_FAMILIES[typography.sansFamily] ?? SANS_FAMILIES.outfit;
+
+  return {
+    cssVar: true,
+    hashed: false,
+    token: {
+      fontFamily,
+      colorPrimary: colors.gold,
+      colorInfo:    '#2563eb',
+      colorSuccess: colors.success,
+      colorWarning: colors.warning,
+      colorError:   colors.danger,
+      colorBgLayout: colors.bg,
+      borderRadius: 8,
+      borderRadiusSM: 6,
+      borderRadiusLG: 12,
+      fontSize: 14,
+      controlHeight: 38,
+    },
+    components: {
+      Button:     { controlHeight: 38, borderRadius: 8, fontWeight: 500 },
+      Input:      { borderRadius: 8 },
+      Select:     { borderRadius: 8 },
+      DatePicker: { borderRadius: 8 },
+      Modal:      { borderRadiusLG: 12, paddingContentHorizontal: 24 },
+      Form:       { itemMarginBottom: 16 },
+    },
+  };
+}
+
+/**
+ * Bootstrap theme used by the outermost ConfigProvider in main.tsx, before
+ * AppearanceProvider has mounted. Equals the default-palette build.
+ */
+export const antdTheme: ThemeConfig = buildAntdTheme();

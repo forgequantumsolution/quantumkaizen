@@ -1,13 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 /* ── CSS custom properties ─────────────────────────────────────────────────── */
+/* AppearanceProvider rewrites these at runtime from the appearance store.
+   Values here are the bootstrap defaults used before the store hydrates. */
 :root {
   --font-sans: 'Outfit', system-ui, -apple-system, sans-serif;
   --font-mono: 'DM Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-heading-weight: 700;
 
   /* Core palette */
   --color-gold:      #C9A84C;
@@ -23,6 +26,50 @@
   --color-ink:       #0D0E17;
   --color-ink-2:     #4A5568;
   --color-ink-3:     #718096;
+
+  /* Typography scale — defaults mirror the rem values in tailwind.config.js's
+     `fontSize` block. AppearanceProvider rewrites these from the store so
+     users can tune individual heading/body sizes. */
+  --font-size-display:  1.75rem;   /* 28px */
+  --font-size-h1:       1.5rem;    /* 24px */
+  --font-size-h2:       1.125rem;  /* 18px */
+  --font-size-h3:       1rem;      /* 16px */
+  --font-size-h4:       0.875rem;  /* 14px */
+  --font-size-body-lg:  1rem;      /* 16px */
+  --font-size-body:     0.875rem;  /* 14px */
+  --font-size-body-sm:  0.8125rem; /* 13px */
+  --font-size-caption:  0.75rem;   /* 12px */
+}
+
+/* ── Per-token font-size overrides ─────────────────────────────────────────── */
+/* Re-declares the matching Tailwind text-* utilities to read from the runtime
+   variable. Same single-class specificity, but later in the cascade than the
+   @tailwind utilities expansion above, so on tie-break our rule wins. We only
+   override `font-size`; line-height, font-weight and letter-spacing keep
+   coming from the Tailwind utility (cascade resolves each property
+   independently). */
+.text-display { font-size: var(--font-size-display); }
+.text-h1      { font-size: var(--font-size-h1); }
+.text-h2      { font-size: var(--font-size-h2); }
+.text-h3      { font-size: var(--font-size-h3); }
+.text-h4      { font-size: var(--font-size-h4); }
+.text-body-lg { font-size: var(--font-size-body-lg); }
+.text-body    { font-size: var(--font-size-body); }
+.text-body-md { font-size: var(--font-size-body); }   /* same px as body, weight differs */
+.text-body-sm { font-size: var(--font-size-body-sm); }
+.text-caption { font-size: var(--font-size-caption); }
+
+/* ── Dark-mode overrides ───────────────────────────────────────────────────── */
+/* Activated by AppearanceProvider toggling `html.dark`. Keep this minimal —
+   it only flips the variable-driven surfaces; deep dark-mode for every
+   Tailwind utility is a separate, larger effort. */
+html.dark {
+  --color-bg:      #0F1117;
+  --color-surface: #1A1D25;
+  --color-border:  #2A2F3A;
+  --color-ink:     #F5F6F8;
+  --color-ink-2:   #B8BDC9;
+  --color-ink-3:   #7A8294;
 }
 
 /* ── Base layer ────────────────────────────────────────────────────────────── */

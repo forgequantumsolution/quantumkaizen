@@ -58,3 +58,6 @@ temp/
 
 # ── Scratch (one-off analysis scripts, screenshots, debug artifacts) ─
 scripts/scratch/
+
+# ── Playwright MCP (browser-driven screenshots & page snapshots) ─────
+.playwright-mcp/

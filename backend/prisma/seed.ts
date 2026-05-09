@@ -1,7 +1,20 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, StageActionBehavior } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+const WORKFLOW_STAGE_STATUSES: { name: string; behavior: StageActionBehavior }[] = [
+  { name: 'Approve / Forward', behavior: 'FORWARD'  },
+  { name: 'Reject',            behavior: 'REJECT'   },
+  { name: 'Hold',              behavior: 'HOLD'     },
+  { name: 'Resume',            behavior: 'UNHOLD'   },
+  { name: 'Return',            behavior: 'RETURN'   },
+  { name: 'Reassign',          behavior: 'REASSIGN' },
+];
+
+const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
+
+const ACTION_CRITERIA = ['Anyone'];
 
 const PERMISSIONS = [
   // ── Admin ────────────────────────────────────────────
@@ -44,6 +57,19 @@ const PERMISSIONS = [
   { key: 'inspection.write',  module: 'INSPECTION', action: 'WRITE',   description: 'Record inspections' },
   { key: 'calibration.read',  module: 'CALIBRATION',action: 'READ',    description: 'View calibration records' },
   { key: 'calibration.write', module: 'CALIBRATION',action: 'WRITE',   description: 'Record calibrations' },
+  // ── Workflow ─────────────────────────────────────────
+  { key: 'workflow.read',           module: 'WORKFLOW', action: 'READ',   description: 'View workflows' },
+  { key: 'workflow.create',         module: 'WORKFLOW', action: 'CREATE', description: 'Create workflow shells' },
+  { key: 'workflow.update',         module: 'WORKFLOW', action: 'UPDATE', description: 'Edit/version workflows' },
+  { key: 'workflow.delete',         module: 'WORKFLOW', action: 'DELETE', description: 'Soft-delete workflows' },
+  { key: 'workflow.lookups.read',   module: 'WORKFLOW', action: 'READ',   description: 'View workflow lookup tables' },
+  { key: 'workflow.lookups.manage', module: 'WORKFLOW', action: 'MANAGE', description: 'Manage workflow lookup tables (types, statuses, criteria)' },
+  // ── Ticket ───────────────────────────────────────────
+  { key: 'ticket.read',       module: 'TICKET', action: 'READ',       description: 'View tickets' },
+  { key: 'ticket.create',     module: 'TICKET', action: 'CREATE',     description: 'Raise tickets' },
+  { key: 'ticket.update',     module: 'TICKET', action: 'UPDATE',     description: 'Edit ticket fields, comments, docs' },
+  { key: 'ticket.delete',     module: 'TICKET', action: 'DELETE',     description: 'Soft-delete tickets' },
+  { key: 'ticket.transition', module: 'TICKET', action: 'TRANSITION', description: 'Perform stage actions on tickets' },
 ];
 
 const ROLES = [
@@ -77,6 +103,8 @@ const ROLES = [
       'training.read',
       'inspection.read', 'inspection.write',
       'calibration.read', 'calibration.write',
+      'workflow.read', 'workflow.lookups.read',
+      'ticket.read', 'ticket.create', 'ticket.update', 'ticket.transition',
     ],
   },
   {
@@ -89,6 +117,8 @@ const ROLES = [
       'audit.read', 'audit.write', 'audit.approve',
       'fmea.read', 'risk.read', 'supplier.read',
       'training.read', 'inspection.read', 'calibration.read',
+      'workflow.read', 'workflow.lookups.read',
+      'ticket.read', 'ticket.transition',
     ],
   },
   {
@@ -100,6 +130,8 @@ const ROLES = [
       'doc.read', 'doc.write', 'doc.approve',
       'capa.read', 'nc.read', 'audit.read',
       'training.read',
+      'workflow.read', 'workflow.lookups.read',
+      'ticket.read', 'ticket.transition',
     ],
   },
   {
@@ -310,6 +342,115 @@ async function main() {
   if (docHead) await prisma.department.update({ where: { code: 'DOC' }, data: { headUserId: docHead.id } });
   if (mgtHead) await prisma.department.update({ where: { code: 'MGT' }, data: { headUserId: mgtHead.id } });
 
+  console.log('🌱  Seeding Workflow Stage Statuses...');
+  for (const s of WORKFLOW_STAGE_STATUSES) {
+    await prisma.workflowStageStatus.upsert({
+      where: { name: s.name },
+      update: { behavior: s.behavior },
+      create: s,
+    });
+  }
+
+  console.log('🌱  Seeding Priorities...');
+  for (const name of PRIORITIES) {
+    await prisma.priority.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
+
+  console.log('🌱  Seeding Action Criteria...');
+  for (const name of ACTION_CRITERIA) {
+    const existing = await prisma.actionCriteria.findFirst({ where: { name } });
+    if (!existing) await prisma.actionCriteria.create({ data: { name } });
+  }
+
+  console.log('🌱  Seeding sample Workflow ("Document Review v1")...');
+  const docType = await prisma.workflowType.upsert({
+    where: { name: 'Document Review' },
+    update: {},
+    create: {
+      name: 'Document Review',
+      codePrefix: 'DOC',
+      iconConfig: { create: { iconName: 'file-text' } },
+    },
+  });
+  const approveStatus = await prisma.workflowStageStatus.findUnique({
+    where: { name: 'Approve / Forward' },
+  });
+  const rejectStatus = await prisma.workflowStageStatus.findUnique({
+    where: { name: 'Reject' },
+  });
+  const adminUser = await prisma.user.findUnique({
+    where: { email: 'info@forgequantumsolution.com' },
+  });
+
+  if (approveStatus && rejectStatus) {
+    const existingSample = await prisma.workflow.findFirst({
+      where: { name: 'Document Review v1', typeId: docType.id, isLatestVersion: true },
+    });
+    if (!existingSample) {
+      await prisma.$transaction(async (tx) => {
+        const wf = await tx.workflow.create({
+          data: {
+            name: 'Document Review v1',
+            typeId: docType.id,
+            status: 'APPROVED',
+            workflowStatus: 'ACTIVE',
+            createdById: adminUser?.id ?? null,
+          },
+        });
+        const submit = await tx.workflowStage.create({
+          data: {
+            workflowId: wf.id,
+            name: 'Submit',
+            canonicalId: 'sample-submit',
+            isInitialStage: true,
+            position: { x: 50, y: 100 },
+            stageType: 'STAGE',
+          },
+        });
+        const review = await tx.workflowStage.create({
+          data: {
+            workflowId: wf.id,
+            name: 'Review',
+            canonicalId: 'sample-review',
+            position: { x: 300, y: 100 },
+            stageType: 'STAGE',
+          },
+        });
+        const approve = await tx.workflowStage.create({
+          data: {
+            workflowId: wf.id,
+            name: 'Approve',
+            canonicalId: 'sample-approve',
+            position: { x: 550, y: 100 },
+            stageType: 'STAGE',
+          },
+        });
+        await tx.workflowStageAction.create({
+          data: { workflowStageId: submit.id, workflowActionId: approveStatus.id, isPrimary: true },
+        });
+        await tx.workflowStageAction.create({
+          data: { workflowStageId: review.id, workflowActionId: approveStatus.id, isPrimary: true },
+        });
+        await tx.workflowStageAction.create({
+          data: { workflowStageId: review.id, workflowActionId: rejectStatus.id, isPrimary: false },
+        });
+        await tx.workflowStageAction.create({
+          data: { workflowStageId: approve.id, workflowActionId: approveStatus.id, isPrimary: true },
+        });
+        await tx.workflowTransition.create({
+          data: { workflowId: wf.id, fromStageId: submit.id, toStageId: review.id, branchOrder: 0 },
+        });
+        await tx.workflowTransition.create({
+          data: { workflowId: wf.id, fromStageId: review.id, toStageId: approve.id, branchOrder: 0 },
+        });
+      }, { timeout: 30_000, maxWait: 5_000 });
+    }
+  }
+
   console.log('\n✅  Seed complete');
   console.log(`    permissions:  ${PERMISSIONS.length}`);
   console.log(`    roles:        ${ROLES.length}`);
@@ -317,6 +458,9 @@ async function main() {
   console.log(`    departments:  ${DEPARTMENTS.length}`);
   console.log(`    users:        ${USERS.length}`);
   console.log(`    organization: ${ORGANIZATION.name}`);
+  console.log(`    wf statuses:  ${WORKFLOW_STAGE_STATUSES.length}`);
+  console.log(`    priorities:   ${PRIORITIES.length}`);
+  console.log(`    criteria:     ${ACTION_CRITERIA.length}`);
   console.log(`\n    All seeded users login with password:  ${SEED_PASSWORD}`);
 }
 

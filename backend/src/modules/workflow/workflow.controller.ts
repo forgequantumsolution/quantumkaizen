@@ -1,0 +1,72 @@
+import type { Request, Response } from 'express';
+import * as service from './workflow.service';
+import { WorkflowValidationError } from './workflow.service';
+import { saveLayout } from './workflow.layout';
+import type {
+  CreateWorkflowShellInput,
+  ListWorkflowsQuery,
+  SaveLayoutBody,
+  SaveWorkflowBody,
+} from './workflow.schema';
+
+const userId = (req: Request): string | null => req.user?.userId ?? null;
+
+export const list = async (req: Request, res: Response) => {
+  res.json(await service.list(req.query as unknown as ListWorkflowsQuery));
+};
+
+export const get = async (req: Request, res: Response) => {
+  res.json(await service.getById(req.params.id as string));
+};
+
+export const create = async (req: Request, res: Response) => {
+  const body = req.body as CreateWorkflowShellInput;
+  res.status(201).json(await service.createShell(body, userId(req)));
+};
+
+export const save = async (req: Request, res: Response) => {
+  try {
+    const result = await service.save(
+      req.params.id as string,
+      req.body as SaveWorkflowBody,
+      userId(req)
+    );
+    res.json(result);
+  } catch (err) {
+    if (err instanceof WorkflowValidationError) {
+      res.status(400).json({
+        status: false,
+        msg: 'Workflow validation failed',
+        validation_errors: err.errors,
+        error_count: err.errors.length,
+        details: 'Please fix the validation errors listed above and try again.',
+      });
+      return;
+    }
+    throw err;
+  }
+};
+
+export const remove = async (req: Request, res: Response) => {
+  await service.softDelete(req.params.id as string, userId(req));
+  res.status(204).send();
+};
+
+export const layoutSave = async (req: Request, res: Response) => {
+  res.json(
+    await saveLayout(req.params.id as string, req.body as SaveLayoutBody)
+  );
+};
+
+export const draftSave = async (req: Request, res: Response) => {
+  res.json(
+    await service.upsertDraft(
+      req.params.id as string,
+      (req.body as { flow_json: unknown }).flow_json
+    )
+  );
+};
+
+export const draftGet = async (req: Request, res: Response) => {
+  res.json(await service.getDraft(req.params.id as string));
+};

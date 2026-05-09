@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { signToken } from '../../lib/jwt';
@@ -26,11 +27,9 @@ const publicUserSelect = {
       permissions: { select: { key: true } },
     },
   },
-} as const;
+} satisfies Prisma.UserSelect;
 
-type RawUser = NonNullable<
-  Awaited<ReturnType<typeof prisma.user.findUnique<{ select: typeof publicUserSelect }>>>
->;
+type RawUser = Prisma.UserGetPayload<{ select: typeof publicUserSelect }>;
 
 const flatten = (user: RawUser) => {
   const { role, ...rest } = user;

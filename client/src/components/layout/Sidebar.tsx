@@ -6,7 +6,7 @@ import {
   ChevronRight, Truck, GitBranch, MessageSquareWarning,
   BarChart3, Gauge, ClipboardList, Clock, FileCode,
   ShieldCheck, BookOpen, RefreshCw, Network, ChevronDown,
-  TrendingUp, Trophy,
+  TrendingUp, Trophy, Palette, Ticket,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
@@ -24,6 +24,7 @@ const navigation: NavSection[] = [
       { label: 'Dashboard',  path: '/dashboard',  icon: LayoutDashboard },
       { label: 'Analytics',  path: '/analytics',  icon: TrendingUp },
       { label: 'Workflows',  path: '/workflows',  icon: Network },
+      { label: 'Tickets',    path: '/tickets',    icon: Ticket },
     ],
   },
   {
@@ -80,20 +81,24 @@ const navigation: NavSection[] = [
   {
     title: 'System',
     items: [
-      { label: 'Audit Log', path: '/audit-log', icon: History },
-      { label: 'Settings',  path: '/settings',  icon: Settings },
-      { label: 'API Docs',  path: '/api-docs',  icon: FileCode },
+      { label: 'Audit Log',  path: '/audit-log',  icon: History },
+      { label: 'Appearance', path: '/appearance', icon: Palette },
+      { label: 'Workflow Lookups', path: '/admin/workflow-lookups', icon: Settings },
+      { label: 'Settings',   path: '/settings',   icon: Settings },
+      { label: 'API Docs',   path: '/api-docs',   icon: FileCode },
     ],
   },
 ];
 
-// Design tokens — inline to guarantee rendering
-const BG           = '#0D0E17';
-const ACTIVE_BG    = '#1E2035';
-const ACCENT       = '#F59E0B';
+// Design tokens — pulled from CSS custom properties (set by AppearanceProvider)
+// so the sidebar tracks the user's color preset. Section/inactive/hover stay
+// hardcoded because they're cosmetic neutrals that don't need theming.
+const BG           = 'var(--color-navy)';
+const ACTIVE_BG    = 'var(--color-navy-mid)';
+const ACCENT       = 'var(--color-gold)';
+const ACTIVE_CLR   = 'var(--color-gold)';
 const SECTION_CLR  = '#4A4A6A';
 const INACTIVE_CLR = '#7A7A9A';
-const ACTIVE_CLR   = '#F59E0B';
 const DIVIDER      = 'rgba(255,255,255,0.06)';
 const HOVER_BG     = 'rgba(255,255,255,0.04)';
 

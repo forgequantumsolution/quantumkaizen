@@ -38,7 +38,19 @@
       "Bash(grep -v \"^--$\")",
       "Bash(git push *)",
       "Bash(git pull *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Read(//home/abhishek-nexgensis/Desktop/Projects/neww/kaizen/core-prod-scaling/backend/workflows/**)",
+      "Read(//home/abhishek-nexgensis/Desktop/Projects/neww/kaizen/core-prod-scaling/backend/**)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_snapshot",
+      "mcp__playwright__browser_take_screenshot",
+      "Read(//home/abhishek-nexgensis/**)",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_handle_dialog",
+      "mcp__playwright__browser_drag"
     ]
   }
 }

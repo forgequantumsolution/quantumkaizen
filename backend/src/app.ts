@@ -10,6 +10,9 @@ import departmentRoutes from './modules/department/department.routes';
 import roleRoutes from './modules/role/role.routes';
 import permissionRoutes from './modules/permission/permission.routes';
 import organizationRoutes from './modules/organization/organization.routes';
+import workflowRoutes from './modules/workflow/workflow.routes';
+import workflowLookupRoutes from './modules/workflow/lookups/lookups.routes';
+import ticketRoutes from './modules/ticket/ticket.routes';
 import { mountOpenApi } from './openapi';
 import { prisma } from './lib/prisma';
 import { asyncHandler } from './lib/asyncHandler';
@@ -37,6 +40,9 @@ export const buildApp = () => {
   app.use('/api/roles', roleRoutes);
   app.use('/api/permissions', permissionRoutes);
   app.use('/api/organization', organizationRoutes);
+  app.use('/api/workflows', workflowRoutes);
+  app.use('/api/workflow-lookups', workflowLookupRoutes);
+  app.use('/api/tickets', ticketRoutes);
 
   // OpenAPI / Swagger UI — public, mounted under /api so the Vite proxy serves
   // it through the frontend dev server too (http://localhost:3000/api/docs).
