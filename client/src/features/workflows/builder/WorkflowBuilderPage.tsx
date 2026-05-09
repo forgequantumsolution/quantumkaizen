@@ -197,7 +197,7 @@ export default function WorkflowBuilderPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col">
+    <div className="h-[calc(100vh-56px)] flex flex-col">
       {/* Toolbar */}
       <div className="flex items-center justify-between gap-3 px-6 py-3 border-b bg-white">
         <div className="flex items-center gap-3 min-w-0">

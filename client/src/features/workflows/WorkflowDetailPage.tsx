@@ -11,7 +11,6 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card, Button, Spinner, EmptyState } from '@/components/ui';
-import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -57,24 +56,20 @@ export default function WorkflowDetailPage() {
 
   if (isLoading) {
     return (
-      <PageContainer>
-        <div className="flex justify-center py-16">
-          <Spinner />
-        </div>
-      </PageContainer>
+      <div className="flex justify-center py-16">
+        <Spinner />
+      </div>
     );
   }
   if (error || !data) {
     return (
-      <PageContainer>
-        <Card>
-          <p className="text-sm text-red-600">Workflow not found.</p>
-          <Button variant="ghost" size="sm" onClick={() => navigate('/workflows')} className="mt-3">
-            <ArrowLeft size={14} />
-            <span className="ml-1">Back to workflows</span>
-          </Button>
-        </Card>
-      </PageContainer>
+      <Card>
+        <p className="text-sm text-red-600">Workflow not found.</p>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/workflows')} className="mt-3">
+          <ArrowLeft size={14} />
+          <span className="ml-1">Back to workflows</span>
+        </Button>
+      </Card>
     );
   }
 
@@ -89,7 +84,7 @@ export default function WorkflowDetailPage() {
     }));
 
   return (
-    <PageContainer>
+    <>
       <Button variant="ghost" size="sm" onClick={() => navigate('/workflows')} className="mb-3">
         <ArrowLeft size={14} />
         <span className="ml-1">Workflows</span>
@@ -209,6 +204,6 @@ export default function WorkflowDetailPage() {
           </div>
         </div>
       )}
-    </PageContainer>
+    </>
   );
 }

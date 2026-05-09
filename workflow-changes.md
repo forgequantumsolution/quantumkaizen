@@ -322,6 +322,61 @@ User flagged that the original side-handle layout looked off and the small defau
 
 Hot-reload picked up both files automatically; no migration needed.
 
+## FE.P1.8 — Builder UX fixes: auto-pan + tighter layout (post-launch, 2026-05-09)
+
+User reported two issues with the builder UI: (1) clicking a palette item to add a new stage placed it at `lowestY + 180` but didn't move the viewport, so once the stack grew past the visible canvas the new node was added off-screen; (2) the page felt sparse — side panels left empty space below them and the inter-node gap was larger than necessary.
+
+### Changes
+
+| File | Change |
+|---|---|
+| `builder/WorkflowBuilderPage.tsx` | Imported `ReactFlowInstance` type and added a `useRef<ReactFlowInstance>` captured via `<ReactFlow onInit={...}>`. After `setNodes` in `handleAddNode`, a `requestAnimationFrame` callback calls `inst.setCenter(targetX, targetY, { duration: 350, zoom })` to smoothly pan the viewport to the freshly-added node. Current zoom is preserved with a 0.85 floor. `NODE_GAP` reduced 180→**140** (matches the actual ~90px node height). Added `fitViewOptions={{ padding: 0.18, maxZoom: 1, minZoom: 0.4 }}` so the initial fit on workflows with few nodes doesn't over-zoom. Body grid: `gap-3 p-3` → `gap-2 p-2`; `gridTemplateColumns` `200px 1fr 320px` → `180px 1fr 296px` (~44px more horizontal canvas room). Side wrapper divs gained `h-full min-h-0` so they cap to the column height. Canvas `<Card>` gained `h-full`. |
+| `builder/NodePalette.tsx` | Card class `!p-3` → `!p-3 h-full flex flex-col`. Footer help text margin changed `mt-3` → `mt-auto pt-3` so it pins to the bottom of the now-stretched card instead of leaving empty space below. |
+| `builder/inspector/InspectorPanel.tsx` | Both branches (empty-state Card and selected-node Card) gained `h-full` so the inspector fills the right column instead of floating at the top. |
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | EXIT=0, no output |
+| Reasoning check: add 5+ stages → each one pans into view at center | Pending visual verification |
+| Reasoning check: side panels visually anchor to full column height | Pending visual verification |
+
+No backend changes, no migration. Hot-reload picks up all three files.
+
+## FE.P1.9 — Page-wrapper / spacing fix (post-launch, 2026-05-09)
+
+User reported that the workflow pages had inconsistent spacing on the sides compared to the rest of the app. Investigation revealed two distinct pre-existing layout bugs:
+
+1. **Double `PageContainer` wrap.** `AppLayout` already wraps `<Outlet />` in `<PageContainer>` (`px-6 lg:px-8 xl:px-10 py-6`). The 5 newer feature pages — `WorkflowsPage`, `WorkflowDetailPage`, `TicketsPage`, `TicketDetailPage`, `WorkflowLookupsPage` — also self-wrap in `<PageContainer>`, producing **double padding** (~48-80px on sides, ~96px vertical). The other 51 pages don't self-wrap, so workflow pages were visibly wider-guttered than every QMS/DMS/LMS page.
+2. **Builder height/padding mismatch.** `WorkflowBuilderPage` doesn't self-wrap, but `AppLayout`'s `PageContainer` still applied — pushing the toolbar inward and eating 48px of vertical space. The page's own `h-[calc(100vh-64px)]` also assumed a 64px header, but `Header.tsx` is `h-14` (56px) — the body overflowed the viewport by ~40px.
+
+Per user's scope, fix is limited to workflow pages; tickets and lookups still have bug #1.
+
+### Changes
+
+| File | Change |
+|---|---|
+| `components/layout/AppLayout.tsx` | Imported `useLocation` from `react-router-dom`. Added `FULL_BLEED_PATTERNS: RegExp[] = [/^\/workflows\/[^/]+\/builder\/?$/]` and a derived `isFullBleed` flag. The `<main>` now conditionally renders either `<Outlet />` directly (full-bleed) or `<PageContainer><Outlet /></PageContainer>` (default). The exact-match regex avoids accidentally stripping padding from sibling/nested routes. |
+| `features/workflows/WorkflowsPage.tsx` | Removed the redundant inner `<PageContainer>` wrap (replaced with `<>...</>`). Removed the now-unused `import PageContainer from '@/components/layout/PageContainer';`. The page now relies solely on `AppLayout`'s outer `PageContainer`, matching the convention used by 51 other pages. |
+| `features/workflows/WorkflowDetailPage.tsx` | Removed **all 3** inner `<PageContainer>` wraps — loading state (now bare `<div>`), error state (now bare `<Card>`), and main return (now `<>`). Removed the now-unused import. |
+| `features/workflows/builder/WorkflowBuilderPage.tsx` | `h-[calc(100vh-64px)]` → `h-[calc(100vh-56px)]` to match the actual `Header h-14` (56px). Combined with the `AppLayout` opt-out, the builder body now fills exactly viewport-height-minus-header with no overflow and no inherited PageContainer padding. |
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | EXIT=0, no output |
+| Visual: `/workflows` list-page side gutter matches `/dashboard`, `/qms/*` | Pending visual confirmation |
+| Visual: `/workflows/:id` detail-page side gutter matches list page | Pending visual confirmation |
+| Visual: `/workflows/:id/builder` toolbar starts at content left edge, canvas reaches right edge, body fits viewport without scroll | Pending visual confirmation |
+
+### Known follow-ups (not addressed this turn)
+
+- `TicketsPage`, `TicketDetailPage`, `WorkflowLookupsPage` still self-wrap in `<PageContainer>` and therefore still have the double-padding bug. Same one-line removal each — defer until intentionally scoped.
+
+No backend changes, no migration. Hot-reload picks up all four files.
+
 ---
 
 # Phase 2 — Backend — Tickets + Engine

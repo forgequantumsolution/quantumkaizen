@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Card, Button, EmptyState, Spinner, Input, Select } from '@/components/ui';
-import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
 import { cn, formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -76,7 +75,7 @@ export default function WorkflowsPage() {
   const total = data?.total ?? 0;
 
   return (
-    <PageContainer>
+    <>
       <PageHeader
         title="Workflows"
         description={
@@ -169,7 +168,7 @@ export default function WorkflowsPage() {
       </div>
 
       <CreateWorkflowModal isOpen={createOpen} onClose={() => setCreateOpen(false)} />
-    </PageContainer>
+    </>
   );
 }
 
