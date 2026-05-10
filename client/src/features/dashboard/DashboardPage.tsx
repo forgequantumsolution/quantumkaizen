@@ -226,28 +226,28 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
         <StatsCard title="Open NCs"           value={d.stats.openNCs}               icon={AlertTriangle}   alert={d.stats.openNCs > 10}
           trend={{ value: 8, label: 'vs prior' }} sparkline={SPARKLINES.openNCs} sparklineInvert
-          onClick={() => navigate('/qms/non-conformances')} />
+          onClick={() => navigate('/forms')} />
         <StatsCard title="Open CAPAs"         value={d.stats.openCAPAs}             icon={ClipboardList}
           accent="#F59E0B" trend={{ value: -12, label: 'vs prior' }} sparkline={SPARKLINES.openCAPAs} sparklineInvert
-          onClick={() => navigate('/qms/capa')} />
+          onClick={() => navigate('/forms')} />
         <StatsCard title="Pending Approvals"  value={d.stats.pendingApprovals}      icon={Clock}
           accent="#8B5CF6" sparkline={SPARKLINES.pending}
-          onClick={() => navigate('/qms/change-control')} />
+          onClick={() => navigate('/forms')} />
         <StatsCard title="Expiring Docs"      value={d.stats.expiringDocuments}     icon={FileText}
           accent="#F97316" sparkline={SPARKLINES.expiring} sparklineInvert
-          onClick={() => navigate('/dms')} />
+          onClick={() => navigate('/forms')} />
         <StatsCard title="Overdue Actions"    value={d.stats.overdueActions}        icon={TrendingDown}    alert={d.stats.overdueActions > 5}
           sparkline={SPARKLINES.overdue} sparklineInvert
-          onClick={() => navigate('/qms/capa')} />
+          onClick={() => navigate('/forms')} />
         <StatsCard title="Training"           value={`${d.stats.trainingCompliance}%`} icon={GraduationCap}
           accent="#22C55E" trend={{ value: 3, label: 'vs prior' }} sparkline={SPARKLINES.training}
-          onClick={() => navigate('/lms/training')} />
+          onClick={() => navigate('/forms')} />
         <StatsCard title="Supplier Score"     value={`${d.stats.supplierScore}%`}   icon={ShieldCheck}
           accent="#06B6D4" subtitle="Avg quality rating" sparkline={SPARKLINES.supplier}
-          onClick={() => navigate('/qms/suppliers')} />
+          onClick={() => navigate('/forms')} />
         <StatsCard title="Audit Compliance"   value={`${d.stats.auditCompliance}%`} icon={BarChart2}
           accent="#3B82F6" subtitle="This period" sparkline={SPARKLINES.audit}
-          onClick={() => navigate('/qms/audits')} />
+          onClick={() => navigate('/forms')} />
       </div>
 
       {/* ── Non-Conformance section ── */}
@@ -629,7 +629,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between px-5 py-3 border-b border-surface-border">
           <CardTitle>Audit Log</CardTitle>
           <button
-            onClick={() => navigate('/audit-log')}
+            onClick={() => navigate('/dashboard')}
             className="flex items-center gap-1 text-xxs text-pharma-600 hover:text-pharma-700 font-medium transition-colors"
           >
             View full log <ArrowRight size={11} />
@@ -645,23 +645,23 @@ export default function DashboardPage() {
 
       {/* ── Quick Actions ── */}
       <div className="flex flex-wrap gap-2 pb-4">
-        <Button size="sm" onClick={() => navigate('/qms/non-conformances/new')}>
+        <Button size="sm" onClick={() => navigate('/forms')}>
           <Plus className="h-3.5 w-3.5" />
           Report NC
         </Button>
-        <Button size="sm" variant="outline" onClick={() => navigate('/dms/documents/new')}>
+        <Button size="sm" variant="outline" onClick={() => navigate('/forms')}>
           <FileText className="h-3.5 w-3.5" />
           Create Document
         </Button>
-        <Button size="sm" variant="outline" onClick={() => navigate('/qms/audits')}>
+        <Button size="sm" variant="outline" onClick={() => navigate('/forms')}>
           <CalendarCheck className="h-3.5 w-3.5" />
           Schedule Audit
         </Button>
-        <Button size="sm" variant="outline" onClick={() => navigate('/qms/capa/new')}>
+        <Button size="sm" variant="outline" onClick={() => navigate('/forms')}>
           <ClipboardList className="h-3.5 w-3.5" />
           New CAPA
         </Button>
-        <Button size="sm" variant="outline" onClick={() => navigate('/qms/complaints/new')}>
+        <Button size="sm" variant="outline" onClick={() => navigate('/forms')}>
           <MessageSquare className="h-3.5 w-3.5" />
           Log Complaint
         </Button>

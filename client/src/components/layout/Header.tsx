@@ -132,35 +132,8 @@ export default function Header() {
           </nav>
         </div>
 
-        {/* ── Center: alert badge pills ── */}
-        <div className="hidden xl:flex items-center gap-2 justify-center min-w-0 shrink-0">
-          {/* Expiry alerts */}
-          <div
-            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap shrink-0"
-            style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', color: '#DC2626' }}
-            onClick={() => navigate('/dms/documents')}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            {criticalCount + 2} Expiry Alerts
-          </div>
-          {/* Open CAPAs */}
-          <div
-            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition-opacity whitespace-nowrap shrink-0"
-            style={{ backgroundColor: '#FFFBEB', border: '1px solid #FDE68A', color: '#B45309' }}
-            onClick={() => navigate('/qms/capa')}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            {unread.length + 19} Open CAPAs
-          </div>
-          {/* GMP status */}
-          <div
-            className="flex items-center gap-1.5 px-3 h-7 rounded-full text-xs font-semibold whitespace-nowrap shrink-0"
-            style={{ backgroundColor: '#F0FDF4', border: '1px solid #BBF7D0', color: '#15803D' }}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            GMP Compliant
-          </div>
-        </div>
+        {/* ── Center: spacer (former alert pills removed) ── */}
+        <div className="hidden xl:flex flex-1 min-w-0" />
 
         {/* ── Right: search + actions ── */}
         <div className="flex items-center gap-1 shrink-0">
@@ -263,7 +236,7 @@ export default function Header() {
                   </div>
                   <div className="px-4 py-2 border-t border-surface-border bg-surface-bg">
                     <button
-                      onClick={() => { navigate('/audit-log'); setShowNotifDropdown(false); }}
+                      onClick={() => { navigate('/dashboard'); setShowNotifDropdown(false); }}
                       className="text-xxs font-medium transition-colors" style={{ color: '#A88937' }}
                     >
                       View all in Audit Log →

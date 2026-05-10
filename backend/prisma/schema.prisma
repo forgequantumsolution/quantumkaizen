@@ -58,6 +58,11 @@ model User {
   docsUploaded           TicketDoc[]           @relation("TicketDocUploadedBy")
   stageTrackingPerformed TicketStageTracking[] @relation("TicketStageTrackingPerformedBy")
 
+  formsCreated     Form[]           @relation("FormCreatedBy")
+  formDraftsSaved  FormDraft[]      @relation("FormDraftSavedBy")
+  formSubmissions  FormSubmission[] @relation("FormSubmissionSubmittedBy")
+  auditSchedules   AuditSchedule[]  @relation("AuditScheduleCreatedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -631,4 +636,270 @@ model ParallelBranchTracking {
   updatedAt DateTime @updatedAt
 
   @@index([ticketId, forkStageId, status])
+}
+
+// =====================================================================
+// Dynamic Form Builder
+// =====================================================================
+
+enum FormStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum FormSubmissionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+// User-extensible field type registry. Built-ins (text, number, select,
+// table, signature, ...) are seeded; users can add their own via
+// FieldTypeManager.
+model FieldType {
+  id          String  @id @default(uuid())
+  name        String  @unique // machine name e.g. "text", "select"
+  label       String  // display name
+  description String?
+  dataType    String? // primitive: string|number|boolean|date|json|file
+  isSystem    Boolean @default(false)
+  isActive    Boolean @default(true)
+  config      Json?   // default validation/options blob
+
+  fields FormField[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Checklist categories: Audit, Inspection, Calibration, etc.
+model FormType {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  versionId String  @unique // immutable identifier per version, exposed to FE
+  isActive  Boolean @default(true)
+
+  forms Form[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A versioned form template. Each version is a separate row sharing a
+// templateKey so the FE can list `all_versions`.
+model Form {
+  id          String     @id @default(uuid())
+  templateKey String     // groups versions of the same logical form
+  title       String
+  description String?
+  version     Int        @default(1)
+  versionId   String     @unique // immutable per version
+  status      FormStatus @default(DRAFT)
+  isCompleted Boolean    @default(false)
+
+  formTypeId String?
+  formType   FormType? @relation(fields: [formTypeId], references: [id], onDelete: SetNull)
+
+  // Optional PDCA / audit context
+  location    String?
+  mainProcess String?
+  criteria    String?
+  pdcaApproved Boolean @default(false)
+
+  workflowName String?
+  workflowType String?
+
+  createdById String?
+  createdBy   User?   @relation("FormCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  sections    FormSection[]
+  draft       FormDraft?
+  submissions FormSubmission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateKey, version])
+  @@index([formTypeId])
+  @@index([status])
+}
+
+model FormSection {
+  id          String  @id @default(uuid())
+  sectionId   String  // FE-side identifier
+  name        String
+  position    Int     @default(0)
+  dependency  Json?   // conditional visibility rules
+
+  formId String
+  form   Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  fields FormField[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([formId, position])
+}
+
+model FormField {
+  id        String @id @default(uuid())
+  fieldId   String // FE-side identifier used in submission payloads
+  name      String // unique within section, used as JSON key
+  label     String
+  position  Int    @default(0)
+  width     String @default("100") // 25/33/50/66/75/100 grid
+  required  Boolean @default(false)
+
+  // Field type — by id (preferred) or by name string for legacy/built-in
+  typeId String?
+  type   FieldType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  typeName String?
+
+  defaultValue Json?
+  options      Json? // [{label, value}]
+  validation   Json? // arbitrary validation blob (see FE validationRules)
+  dependency   Json? // conditional visibility
+
+  // Dynamic / API-driven options
+  dynamic      Boolean @default(false)
+  endpoint     String?
+
+  // Auto-generate from API
+  autoGenerate         Boolean @default(false)
+  autoGenerateEndpoint String?
+  autoGenerateMappings Json?
+
+  sectionId String
+  section   FormSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  // Nested fields for table-type (parent has type=table)
+  parentFieldId String?
+  parentField   FormField?  @relation("FormFieldChildren", fields: [parentFieldId], references: [id], onDelete: Cascade)
+  children      FormField[] @relation("FormFieldChildren")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sectionId, position])
+  @@index([parentFieldId])
+}
+
+// Single freeform draft snapshot per form (overwritten on every save).
+model FormDraft {
+  id        String @id @default(uuid())
+  formId    String @unique
+  form      Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  draftData    Json
+  formDetails  Json
+  versionId    String?
+
+  savedById String?
+  savedBy   User?   @relation("FormDraftSavedBy", fields: [savedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A filled-in form response.
+model FormSubmission {
+  id        String @id @default(uuid())
+  formId    String
+  form      Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  versionId String
+
+  status    FormSubmissionStatus @default(IN_PROGRESS)
+  responses Json   // { sectionName: { fieldName: value } }
+  meta      Json?  // arbitrary attachments / context
+
+  submittedById String?
+  submittedBy   User?   @relation("FormSubmissionSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  submittedAt   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([formId, status])
+  @@index([submittedById])
+}
+
+// =====================================================================
+// ISO standards / audit checklists
+// =====================================================================
+
+model IsoStandard {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  remarks   String?
+  isActive  Boolean @default(true)
+
+  clauses IsoClause[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model IsoClause {
+  id            String @id @default(uuid())
+  clauseNumber  String
+  clauseTitle   String
+  position      Int    @default(0)
+
+  standardId String
+  standard   IsoStandard @relation(fields: [standardId], references: [id], onDelete: Cascade)
+
+  subClauses IsoSubClause[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([standardId, position])
+}
+
+model IsoSubClause {
+  id              String  @id @default(uuid())
+  subClauseNumber String
+  subClauseTitle  String
+  requirementText String?
+  position        Int     @default(0)
+
+  clauseId String
+  clause   IsoClause @relation(fields: [clauseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clauseId, position])
+}
+
+model AuditSchedule {
+  id              String   @id @default(uuid())
+  title           String
+  plant           String?
+  description     String?
+  auditDate       DateTime
+  previousAuditDate DateTime?
+  financialYear   String?
+  auditMethod     String?
+  isActive        Boolean  @default(true)
+
+  // Free-form arrays of {id, name} kept as JSON to avoid coupling to other modules
+  locations   Json?
+  mainProcesses Json?
+  subProcesses Json?
+  criteria    Json?
+  departments Json?
+  focusAreas  Json?
+
+  createdById String?
+  createdBy   User?   @relation("AuditScheduleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([financialYear])
+  @@index([auditDate])
 }

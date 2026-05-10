@@ -70,6 +70,55 @@ const PERMISSIONS = [
   { key: 'ticket.update',     module: 'TICKET', action: 'UPDATE',     description: 'Edit ticket fields, comments, docs' },
   { key: 'ticket.delete',     module: 'TICKET', action: 'DELETE',     description: 'Soft-delete tickets' },
   { key: 'ticket.transition', module: 'TICKET', action: 'TRANSITION', description: 'Perform stage actions on tickets' },
+  // ── Dynamic Forms ────────────────────────────────────
+  { key: 'form.read',             module: 'FORM',            action: 'READ',   description: 'View form templates' },
+  { key: 'form.create',           module: 'FORM',            action: 'CREATE', description: 'Create form templates' },
+  { key: 'form.update',           module: 'FORM',            action: 'UPDATE', description: 'Edit/save form templates' },
+  { key: 'form.delete',           module: 'FORM',            action: 'DELETE', description: 'Delete form templates' },
+  { key: 'form_type.create',      module: 'FORM_TYPE',       action: 'CREATE', description: 'Create form/checklist types' },
+  { key: 'form_type.update',      module: 'FORM_TYPE',       action: 'UPDATE', description: 'Edit form/checklist types' },
+  { key: 'form_type.delete',      module: 'FORM_TYPE',       action: 'DELETE', description: 'Delete form/checklist types' },
+  { key: 'field_type.create',     module: 'FIELD_TYPE',      action: 'CREATE', description: 'Create custom field types' },
+  { key: 'field_type.update',     module: 'FIELD_TYPE',      action: 'UPDATE', description: 'Edit custom field types' },
+  { key: 'field_type.delete',     module: 'FIELD_TYPE',      action: 'DELETE', description: 'Delete custom field types' },
+  { key: 'form_submission.read',  module: 'FORM_SUBMISSION', action: 'READ',   description: 'View form submissions' },
+  { key: 'form_submission.create',module: 'FORM_SUBMISSION', action: 'CREATE', description: 'Submit form responses' },
+  { key: 'form_submission.update',module: 'FORM_SUBMISSION', action: 'UPDATE', description: 'Update submission status (approve/reject)' },
+  { key: 'form_submission.delete',module: 'FORM_SUBMISSION', action: 'DELETE', description: 'Delete form submissions' },
+  // ── Audit (ISO standards & schedules) ────────────────
+  { key: 'iso_standard.read',     module: 'ISO_STANDARD',    action: 'READ',   description: 'View ISO standards / audit checklists' },
+  { key: 'iso_standard.create',   module: 'ISO_STANDARD',    action: 'CREATE', description: 'Create ISO standards' },
+  { key: 'iso_standard.update',   module: 'ISO_STANDARD',    action: 'UPDATE', description: 'Edit ISO standards' },
+  { key: 'iso_standard.delete',   module: 'ISO_STANDARD',    action: 'DELETE', description: 'Delete ISO standards' },
+  { key: 'audit_schedule.read',   module: 'AUDIT_SCHEDULE',  action: 'READ',   description: 'View audit schedules' },
+  { key: 'audit_schedule.create', module: 'AUDIT_SCHEDULE',  action: 'CREATE', description: 'Create audit schedules' },
+  { key: 'audit_schedule.update', module: 'AUDIT_SCHEDULE',  action: 'UPDATE', description: 'Edit audit schedules' },
+  { key: 'audit_schedule.delete', module: 'AUDIT_SCHEDULE',  action: 'DELETE', description: 'Delete audit schedules' },
+];
+
+// 20 built-in field types — seeded so the form builder has a baseline registry.
+const FIELD_TYPES = [
+  { name: 'text',        label: 'Text',             dataType: 'string'  },
+  { name: 'number',      label: 'Number',           dataType: 'number'  },
+  { name: 'textarea',    label: 'Long Text',        dataType: 'string'  },
+  { name: 'password',    label: 'Password',         dataType: 'string'  },
+  { name: 'checkbox',    label: 'Checkbox Group',   dataType: 'json'    },
+  { name: 'radio',       label: 'Radio Group',      dataType: 'string'  },
+  { name: 'select',      label: 'Dropdown',         dataType: 'string'  },
+  { name: 'multi_text',  label: 'Multi Text',       dataType: 'json'    },
+  { name: 'date',        label: 'Date',             dataType: 'date'    },
+  { name: 'date_range',  label: 'Date Range',       dataType: 'json'    },
+  { name: 'time',        label: 'Time',             dataType: 'string'  },
+  { name: 'time_range',  label: 'Time Range',       dataType: 'json'    },
+  { name: 'file',        label: 'File Upload',      dataType: 'file'    },
+  { name: 'image',       label: 'Image Upload',     dataType: 'file'    },
+  { name: 'switch',      label: 'Toggle / Switch',  dataType: 'boolean' },
+  { name: 'slider',      label: 'Slider',           dataType: 'number'  },
+  { name: 'range',       label: 'Number Range',     dataType: 'json'    },
+  { name: 'color',       label: 'Color Picker',     dataType: 'string'  },
+  { name: 'signature',   label: 'Signature',        dataType: 'string'  },
+  { name: 'richtext',    label: 'Rich Text',        dataType: 'string'  },
+  { name: 'table',       label: 'Table / Grid',     dataType: 'json'    },
 ];
 
 const ROLES = [
@@ -461,6 +510,17 @@ async function main() {
   console.log(`    wf statuses:  ${WORKFLOW_STAGE_STATUSES.length}`);
   console.log(`    priorities:   ${PRIORITIES.length}`);
   console.log(`    criteria:     ${ACTION_CRITERIA.length}`);
+
+  console.log('🌱  Seeding built-in Field Types...');
+  for (const ft of FIELD_TYPES) {
+    await prisma.fieldType.upsert({
+      where: { name: ft.name },
+      update: { label: ft.label, dataType: ft.dataType, isSystem: true, isActive: true },
+      create: { name: ft.name, label: ft.label, dataType: ft.dataType, isSystem: true, isActive: true },
+    });
+  }
+  console.log(`    field types:  ${FIELD_TYPES.length}`);
+
   console.log(`\n    All seeded users login with password:  ${SEED_PASSWORD}`);
 }
 
