@@ -1,4 +1,5 @@
-import type { Prisma, PrismaClient, StageType, SplitType, JoinType } from '@prisma/client';
+import { Prisma, type PrismaClient, type StageType, type SplitType, type JoinType } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { BadRequest } from '../../lib/httpError';
 import type { WorkflowEdge, WorkflowNode, WorkflowSettings } from './workflow.schema';
 
@@ -92,10 +93,22 @@ export const buildWorkflowGraph = async (
     defaultCriteriaId = anyone?.id;
   }
 
-  // ─── PASS 1: stages + actions ─────────────────────────────────────────
+  // ─── BUILD PHASE — collect every row in memory, no DB calls yet ───────
+  //
+  // Pre-generating UUIDs lets us use Prisma `createMany` (which doesn't return
+  // generated IDs) for the bulk inserts. Postgres accepts any RFC4122 v4 UUID
+  // for a `String @id @default(uuid())` column, so this is safe.
   const stageByNodeId = new Map<string, { id: string; nodeType: string }>();
+  const stageRows: Prisma.WorkflowStageCreateManyInput[] = [];
+  const actionRows: Prisma.WorkflowStageActionCreateManyInput[] = [];
+  const roleConnects: { actionId: string; roleId: string }[] = [];
+  const userConnects: { actionId: string; userId: string }[] = [];
+  const forkUpdates: { stageId: string; joinPointId: string }[] = [];
+  const transitionRows: Prisma.WorkflowTransitionCreateManyInput[] = [];
+
   let initialStageSeen = false;
 
+  // Pass 1 (in-memory): build stage + action rows
   for (const node of nodes) {
     const isInitial = node.data.basic_details?.is_initial_stage === true;
     if (isInitial) {
@@ -110,28 +123,24 @@ export const buildWorkflowGraph = async (
     const cfg = node.data.parallelConfig;
     const splitType = (cfg?.splitType ?? null) as SplitType | null;
     const joinType = (cfg?.joinType ?? null) as JoinType | null;
-
     const additionalData = stripWorkflowTypesKey(node.data.additional_data);
 
-    const stage = await tx.workflowStage.create({
-      data: {
-        workflowId,
-        name: node.data.label,
-        canonicalId: node.id,
-        isInitialStage: isInitial,
-        position: node.position as unknown as Prisma.InputJsonValue,
-        sendEmail: node.data.basic_details?.email_notification === true,
-        additionalData: additionalData as Prisma.InputJsonValue | undefined,
-        stageType,
-        splitType,
-        joinType,
-      },
-      select: { id: true },
+    const stageId = randomUUID();
+    stageRows.push({
+      id: stageId,
+      workflowId,
+      name: node.data.label,
+      canonicalId: node.id,
+      isInitialStage: isInitial,
+      position: node.position as unknown as Prisma.InputJsonValue,
+      sendEmail: node.data.basic_details?.email_notification === true,
+      additionalData: additionalData as Prisma.InputJsonValue | undefined,
+      stageType,
+      splitType,
+      joinType,
     });
+    stageByNodeId.set(node.id, { id: stageId, nodeType });
 
-    stageByNodeId.set(node.id, { id: stage.id, nodeType });
-
-    // Actions — primary + secondary, with `secondary` flag derived from `type`
     const primary = node.data.primary_actions ?? [];
     const secondary = (node.data.secondary_actions ?? []).map((a) => ({
       ...(a as object),
@@ -149,23 +158,17 @@ export const buildWorkflowGraph = async (
       };
       const isPrimary = (a.type ?? 'primary') !== 'secondary';
 
-      const roleIds = toIdList(a.roles_id);
-      const userIds = toIdList(a.employees_id);
-
-      await tx.workflowStageAction.create({
-        data: {
-          workflowStageId: stage.id,
-          workflowActionId: a.stage_status_id,
-          criteriaId: a.action_criteria_id ?? defaultCriteriaId ?? null,
-          isPrimary,
-          allowedRoles: roleIds.length
-            ? { connect: roleIds.map((id) => ({ id })) }
-            : undefined,
-          allowedUsers: userIds.length
-            ? { connect: userIds.map((id) => ({ id })) }
-            : undefined,
-        },
+      const actionId = randomUUID();
+      actionRows.push({
+        id: actionId,
+        workflowStageId: stageId,
+        workflowActionId: a.stage_status_id,
+        criteriaId: a.action_criteria_id ?? defaultCriteriaId ?? null,
+        isPrimary,
       });
+
+      for (const roleId of toIdList(a.roles_id)) roleConnects.push({ actionId, roleId });
+      for (const userId of toIdList(a.employees_id)) userConnects.push({ actionId, userId });
     }
 
     // Phase 1: silently warn if forms / sla / dependency / child triggers / form rules present
@@ -185,7 +188,7 @@ export const buildWorkflowGraph = async (
       );
   }
 
-  // ─── PASS 2: fork → join wiring ───────────────────────────────────────
+  // Pass 2 (in-memory): fork → join validation + collect updates
   for (const node of nodes) {
     if (getNodeType(node) !== 'fork') continue;
     const fork = stageByNodeId.get(node.id);
@@ -203,13 +206,10 @@ export const buildWorkflowGraph = async (
         `Fork '${node.data.label}' references stage '${joinNodeId}' that is not a join node`
       );
     }
-    await tx.workflowStage.update({
-      where: { id: fork.id },
-      data: { joinPointId: join.id },
-    });
+    forkUpdates.push({ stageId: fork.id, joinPointId: join.id });
   }
 
-  // ─── PASS 3: transitions ──────────────────────────────────────────────
+  // Pass 3 (in-memory): transition rows
   for (let idx = 0; idx < edges.length; idx++) {
     const edge = edges[idx]!;
     const from = stageByNodeId.get(edge.source);
@@ -219,18 +219,56 @@ export const buildWorkflowGraph = async (
         `Transition references unknown stage(s): ${edge.source} → ${edge.target}`
       );
     }
-    await tx.workflowTransition.create({
-      data: {
-        workflowId,
-        fromStageId: from.id,
-        toStageId: to.id,
-        sourcePort: edge.sourceHandle ?? null,
-        targetPort: edge.targetHandle ?? null,
-        branchName: edge.branchInfo?.branchName ?? edge.label ?? null,
-        condition: edge.branchInfo?.condition ?? null,
-        branchOrder: edge.branchInfo?.order ?? idx,
-      },
+    transitionRows.push({
+      id: randomUUID(),
+      workflowId,
+      fromStageId: from.id,
+      toStageId: to.id,
+      sourcePort: edge.sourceHandle ?? null,
+      targetPort: edge.targetHandle ?? null,
+      branchName: edge.branchInfo?.branchName ?? edge.label ?? null,
+      condition: edge.branchInfo?.condition ?? null,
+      branchOrder: edge.branchInfo?.order ?? idx,
     });
+  }
+
+  // ─── EXECUTE PHASE — at most ~6 round-trips regardless of graph size ──
+  if (stageRows.length > 0) {
+    await tx.workflowStage.createMany({ data: stageRows });
+  }
+
+  if (actionRows.length > 0) {
+    await tx.workflowStageAction.createMany({ data: actionRows });
+  }
+
+  // Bulk-insert into the implicit m2m join tables. Table/column names match
+  // the migration in 20260508112732_workflow_phase1: `_StageActionAllowedRoles`
+  // (A=Role.id, B=WorkflowStageAction.id) and `_StageActionAllowedUsers`
+  // (A=User.id, B=WorkflowStageAction.id).
+  if (roleConnects.length > 0) {
+    const values = roleConnects.map((c) => Prisma.sql`(${c.roleId}, ${c.actionId})`);
+    await tx.$executeRaw`INSERT INTO "_StageActionAllowedRoles" ("A", "B") VALUES ${Prisma.join(values)}`;
+  }
+  if (userConnects.length > 0) {
+    const values = userConnects.map((c) => Prisma.sql`(${c.userId}, ${c.actionId})`);
+    await tx.$executeRaw`INSERT INTO "_StageActionAllowedUsers" ("A", "B") VALUES ${Prisma.join(values)}`;
+  }
+
+  // Fork updates fan out in parallel — Prisma pipelines them on the same
+  // transaction connection, so wall-clock cost is ~1 round-trip total.
+  if (forkUpdates.length > 0) {
+    await Promise.all(
+      forkUpdates.map((f) =>
+        tx.workflowStage.update({
+          where: { id: f.stageId },
+          data: { joinPointId: f.joinPointId },
+        }),
+      ),
+    );
+  }
+
+  if (transitionRows.length > 0) {
+    await tx.workflowTransition.createMany({ data: transitionRows });
   }
 
   return { warnings };
