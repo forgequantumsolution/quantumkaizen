@@ -16,6 +16,12 @@ import ticketRoutes from './modules/ticket/ticket.routes';
 import dynamicFormRoutes from './modules/dynamic-form/dynamic-form.routes';
 import formSubmissionRoutes from './modules/dynamic-form/submission.routes';
 import auditRoutes from './modules/audit/audit.routes';
+import {
+  workflowScopedPolicyRouter as approvalWorkflowScopedRouter,
+  policyRouter as approvalPolicyRouter,
+  instanceRouter as approvalInstanceRouter,
+  ticketScopedInstanceRouter as approvalTicketScopedRouter,
+} from './modules/approval/approval.routes';
 import { mountOpenApi } from './openapi';
 import { prisma } from './lib/prisma';
 import { asyncHandler } from './lib/asyncHandler';
@@ -49,6 +55,13 @@ export const buildApp = () => {
   app.use('/api/forms', dynamicFormRoutes);
   app.use('/api/form-submissions', formSubmissionRoutes);
   app.use('/api', auditRoutes); // ISO standards + audit schedules
+
+  // Phase 3 — Approval module. Mounted as four routers so we don't have to
+  // collide path-namespaces with the existing workflow + ticket routers.
+  app.use('/api/workflows', approvalWorkflowScopedRouter);   // /:id/approval-policies (LIST + POST)
+  app.use('/api/approval-policies', approvalPolicyRouter);    // /:id (GET, PATCH, DELETE)
+  app.use('/api/approvals', approvalInstanceRouter);          // /:instanceId (GET)
+  app.use('/api/tickets', approvalTicketScopedRouter);        // /:id/approvals (GET)
 
   // OpenAPI / Swagger UI — public, mounted under /api so the Vite proxy serves
   // it through the frontend dev server too (http://localhost:3000/api/docs).
