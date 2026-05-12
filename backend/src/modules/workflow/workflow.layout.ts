@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound } from '../../lib/httpError';
 import type { SaveLayoutBody } from './workflow.schema';
@@ -9,10 +9,11 @@ import type { SaveLayoutBody } from './workflow.schema';
  * Updates only `position` for stages matched by `canonicalId`. Skips entries
  * that don't resolve to an existing stage; returns the count of updated stages.
  *
- * Performance: positions are dispatched in parallel via Promise.all so the
- * total wall-clock cost is ~one round-trip regardless of node count, instead
- * of N sequential round-trips. Autosave fires every 1.5s on drag, so this
- * matters a lot on a remote DB.
+ * Performance: dispatched as a SINGLE bulk SQL statement using
+ * `UPDATE … FROM (VALUES …)` — one round-trip regardless of node count.
+ * (An earlier Promise.all-of-updateMany version still serialized in practice
+ * on Neon's pooler, so we drop to raw SQL for guaranteed parallelism.)
+ * Autosave fires every 1.5s on drag, so this matters a lot on a remote DB.
  */
 export const saveLayout = async (
   workflowId: string,
@@ -27,14 +28,19 @@ export const saveLayout = async (
 
   if (body.positions.length === 0) return { updated: 0 };
 
-  const results = await Promise.all(
-    body.positions.map((entry) =>
-      prisma.workflowStage.updateMany({
-        where: { workflowId, canonicalId: entry.canonicalId },
-        data: { position: entry.position as Prisma.InputJsonValue },
-      }),
-    ),
+  // Build a (canonicalId, position-jsonb) tuple list and run one UPDATE
+  // joining the workflow's stages against it. Postgres' VALUES form lets us
+  // ship N updates in one statement.
+  const valueRows = body.positions.map(
+    (entry) =>
+      Prisma.sql`(${entry.canonicalId}, ${JSON.stringify(entry.position)}::jsonb)`,
   );
-  const updated = results.reduce((sum, r) => sum + r.count, 0);
+  const updated = await prisma.$executeRaw`
+    UPDATE "WorkflowStage" AS s
+    SET "position" = v.pos
+    FROM (VALUES ${Prisma.join(valueRows)}) AS v(cid, pos)
+    WHERE s."workflowId" = ${workflowId}
+      AND s."canonicalId" = v.cid
+  `;
   return { updated };
 };

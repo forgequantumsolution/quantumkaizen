@@ -5,6 +5,8 @@ export { Card, CardHeader, CardTitle } from './Card';
 export { Badge, StatusBadge, SeverityBadge, TypeBadge } from './Badge';
 export type { BadgeVariant } from './Badge';
 export { StatsCard } from './StatsCard';
+export { KpiCard } from './KpiCard';
+export type { KpiAccent, KpiCardProps, KpiTrend } from './KpiCard';
 export { DataTable } from './DataTable';
 export type { Column } from './DataTable';
 

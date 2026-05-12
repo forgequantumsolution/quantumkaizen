@@ -61,3 +61,7 @@ scripts/scratch/
 
 # ── Playwright MCP (browser-driven screenshots & page snapshots) ─────
 .playwright-mcp/
+
+# ── Playwright test artifacts ────────────────────────────────────────
+playwright-report/
+test-results/

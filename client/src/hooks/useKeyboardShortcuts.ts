@@ -3,13 +3,9 @@ import { useNavigate } from 'react-router-dom';
 
 const ROUTE_MAP: Record<string, string> = {
   'g d': '/dashboard',
-  'g a': '/qms/audits',
-  'g c': '/qms/capa',
-  'g r': '/qms/risks',
-  'g n': '/qms/non-conformances',
-  'g s': '/qms/suppliers',
-  'g f': '/qms/fmea',
-  'g t': '/lms/training',
+  'g f': '/forms',
+  'g w': '/workflows',
+  'g t': '/tickets',
 };
 
 export function useKeyboardShortcuts() {

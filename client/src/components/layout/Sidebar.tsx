@@ -1,12 +1,9 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, AlertTriangle, CheckCircle2, Shield,
-  ClipboardCheck, Activity, Scale, FileText, FolderOpen,
-  GraduationCap, Grid3X3, History, Settings, ChevronLeft,
-  ChevronRight, Truck, GitBranch, MessageSquareWarning,
-  BarChart3, Gauge, ClipboardList, Clock, FileCode,
-  ShieldCheck, BookOpen, RefreshCw, Network, ChevronDown,
-  TrendingUp, Trophy, Palette, Ticket,
+  LayoutDashboard, Settings, ChevronLeft,
+  ChevronRight, ClipboardList, Clock,
+  Network, ChevronDown,
+  Palette, Ticket,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
@@ -22,70 +19,17 @@ const navigation: NavSection[] = [
     title: 'Overview',
     items: [
       { label: 'Dashboard',  path: '/dashboard',  icon: LayoutDashboard },
-      { label: 'Analytics',  path: '/analytics',  icon: TrendingUp },
       { label: 'Workflows',  path: '/workflows',  icon: Network },
+      { label: 'Forms',      path: '/forms',      icon: ClipboardList },
       { label: 'Tickets',    path: '/tickets',    icon: Ticket },
-    ],
-  },
-  {
-    title: 'Quality (QMS)',
-    collapsible: true,
-    items: [
-      { label: 'Non-Conformances', path: '/qms/non-conformances',  icon: AlertTriangle },
-      { label: 'CAPA',             path: '/qms/capa',              icon: CheckCircle2 },
-      { label: 'Risk Register',    path: '/qms/risks',             icon: Shield },
-      { label: 'Audits',           path: '/qms/audits',            icon: ClipboardCheck },
-      { label: 'FMEA',             path: '/qms/fmea',              icon: Activity },
-      { label: 'Compliance',       path: '/qms/compliance',        icon: Scale },
-      { label: 'Suppliers',        path: '/qms/suppliers',         icon: Truck },
-      { label: 'Scorecards',       path: '/qms/suppliers/scorecards', icon: Trophy },
-      { label: 'Change Control',   path: '/qms/change-control',    icon: GitBranch },
-      { label: 'Complaints',       path: '/qms/complaints',        icon: MessageSquareWarning },
-      { label: 'Mgmt Review',      path: '/qms/management-review', icon: BarChart3 },
-    ],
-  },
-  {
-    title: 'Documents (DMS)',
-    collapsible: true,
-    items: [
-      { label: 'All Documents', path: '/dms/documents', icon: FileText },
-      { label: 'Templates',     path: '/dms/templates', icon: FolderOpen },
-    ],
-  },
-  {
-    title: 'Learning (LMS)',
-    collapsible: true,
-    items: [
-      { label: 'Training Programs',   path: '/lms/training',            icon: GraduationCap },
-      { label: 'Competency Matrix',   path: '/lms/competency',          icon: Grid3X3 },
-      { label: 'Regulatory Training', path: '/lms/regulatory-training', icon: BookOpen },
-    ],
-  },
-  {
-    title: 'Regulatory',
-    collapsible: true,
-    items: [
-      { label: 'Compliance Hub',       path: '/compliance/hub',                  icon: ShieldCheck },
-      { label: 'Inspection Readiness', path: '/compliance/inspection-readiness', icon: ClipboardCheck },
-      { label: 'Regulatory Changes',   path: '/compliance/regulatory-changes',   icon: RefreshCw },
-    ],
-  },
-  {
-    title: 'Operations',
-    collapsible: true,
-    items: [
-      { label: 'Calibration', path: '/calibration', icon: Gauge },
-      { label: 'Inspection',  path: '/inspection',  icon: ClipboardList },
     ],
   },
   {
     title: 'System',
     items: [
-      { label: 'Audit Log',  path: '/audit-log',  icon: History },
       { label: 'Appearance', path: '/appearance', icon: Palette },
       { label: 'Workflow Lookups', path: '/admin/workflow-lookups', icon: Settings },
       { label: 'Settings',   path: '/settings',   icon: Settings },
-      { label: 'API Docs',   path: '/api-docs',   icon: FileCode },
     ],
   },
 ];

@@ -70,6 +70,75 @@ const PERMISSIONS = [
   { key: 'ticket.update',     module: 'TICKET', action: 'UPDATE',     description: 'Edit ticket fields, comments, docs' },
   { key: 'ticket.delete',     module: 'TICKET', action: 'DELETE',     description: 'Soft-delete tickets' },
   { key: 'ticket.transition', module: 'TICKET', action: 'TRANSITION', description: 'Perform stage actions on tickets' },
+  // ── Dynamic Forms ────────────────────────────────────
+  { key: 'form.read',             module: 'FORM',            action: 'READ',   description: 'View form templates' },
+  { key: 'form.create',           module: 'FORM',            action: 'CREATE', description: 'Create form templates' },
+  { key: 'form.update',           module: 'FORM',            action: 'UPDATE', description: 'Edit/save form templates' },
+  { key: 'form.delete',           module: 'FORM',            action: 'DELETE', description: 'Delete form templates' },
+  { key: 'form_type.create',      module: 'FORM_TYPE',       action: 'CREATE', description: 'Create form/checklist types' },
+  { key: 'form_type.update',      module: 'FORM_TYPE',       action: 'UPDATE', description: 'Edit form/checklist types' },
+  { key: 'form_type.delete',      module: 'FORM_TYPE',       action: 'DELETE', description: 'Delete form/checklist types' },
+  { key: 'field_type.create',     module: 'FIELD_TYPE',      action: 'CREATE', description: 'Create custom field types' },
+  { key: 'field_type.update',     module: 'FIELD_TYPE',      action: 'UPDATE', description: 'Edit custom field types' },
+  { key: 'field_type.delete',     module: 'FIELD_TYPE',      action: 'DELETE', description: 'Delete custom field types' },
+  { key: 'form_submission.read',  module: 'FORM_SUBMISSION', action: 'READ',   description: 'View form submissions' },
+  { key: 'form_submission.create',module: 'FORM_SUBMISSION', action: 'CREATE', description: 'Submit form responses' },
+  { key: 'form_submission.update',module: 'FORM_SUBMISSION', action: 'UPDATE', description: 'Update submission status (approve/reject)' },
+  { key: 'form_submission.delete',module: 'FORM_SUBMISSION', action: 'DELETE', description: 'Delete form submissions' },
+  // ── Audit (ISO standards & schedules) ────────────────
+  { key: 'iso_standard.read',     module: 'ISO_STANDARD',    action: 'READ',   description: 'View ISO standards / audit checklists' },
+  { key: 'iso_standard.create',   module: 'ISO_STANDARD',    action: 'CREATE', description: 'Create ISO standards' },
+  { key: 'iso_standard.update',   module: 'ISO_STANDARD',    action: 'UPDATE', description: 'Edit ISO standards' },
+  { key: 'iso_standard.delete',   module: 'ISO_STANDARD',    action: 'DELETE', description: 'Delete ISO standards' },
+  { key: 'audit_schedule.read',   module: 'AUDIT_SCHEDULE',  action: 'READ',   description: 'View audit schedules' },
+  { key: 'audit_schedule.create', module: 'AUDIT_SCHEDULE',  action: 'CREATE', description: 'Create audit schedules' },
+  { key: 'audit_schedule.update', module: 'AUDIT_SCHEDULE',  action: 'UPDATE', description: 'Edit audit schedules' },
+  { key: 'audit_schedule.delete', module: 'AUDIT_SCHEDULE',  action: 'DELETE', description: 'Delete audit schedules' },
+  // ── Phase 3 — Approvals ─────────────────────────────
+  { key: 'approval.read',          module: 'APPROVAL', action: 'READ',    description: 'View approval instances on tickets' },
+  { key: 'approval.decide',        module: 'APPROVAL', action: 'DECIDE',  description: 'Approve or reject a pending approval instance' },
+  { key: 'approval.policy.read',   module: 'APPROVAL', action: 'READ',    description: 'View approval policies on workflows' },
+  { key: 'approval.policy.create', module: 'APPROVAL', action: 'CREATE',  description: 'Create approval policies' },
+  { key: 'approval.policy.update', module: 'APPROVAL', action: 'UPDATE',  description: 'Edit approval policies' },
+  { key: 'approval.policy.delete', module: 'APPROVAL', action: 'DELETE',  description: 'Delete approval policies' },
+  // ── Phase 3 — SLA ────────────────────────────────────
+  { key: 'sla.policy.read',         module: 'SLA', action: 'READ',    description: 'View SLA policies' },
+  { key: 'sla.policy.create',       module: 'SLA', action: 'CREATE',  description: 'Create SLA policies' },
+  { key: 'sla.policy.update',       module: 'SLA', action: 'UPDATE',  description: 'Edit SLA policies' },
+  { key: 'sla.policy.delete',       module: 'SLA', action: 'DELETE',  description: 'Delete SLA policies' },
+  { key: 'sla.timer.read',          module: 'SLA', action: 'READ',    description: 'View SLA timers and events' },
+  { key: 'sla.timer.extend',        module: 'SLA', action: 'UPDATE',  description: 'Request SLA timer extensions' },
+  { key: 'sla.timer.extend.approve',module: 'SLA', action: 'APPROVE', description: 'Approve or reject SLA extension requests' },
+  // ── Phase 3 — Business calendars ─────────────────────
+  { key: 'business-calendar.read',   module: 'BUSINESS_CALENDAR', action: 'READ',   description: 'View business calendars' },
+  { key: 'business-calendar.create', module: 'BUSINESS_CALENDAR', action: 'CREATE', description: 'Create business calendars' },
+  { key: 'business-calendar.update', module: 'BUSINESS_CALENDAR', action: 'UPDATE', description: 'Edit business calendars' },
+  { key: 'business-calendar.delete', module: 'BUSINESS_CALENDAR', action: 'DELETE', description: 'Delete business calendars' },
+];
+
+// 20 built-in field types — seeded so the form builder has a baseline registry.
+const FIELD_TYPES = [
+  { name: 'text',        label: 'Text',             dataType: 'string'  },
+  { name: 'number',      label: 'Number',           dataType: 'number'  },
+  { name: 'textarea',    label: 'Long Text',        dataType: 'string'  },
+  { name: 'password',    label: 'Password',         dataType: 'string'  },
+  { name: 'checkbox',    label: 'Checkbox Group',   dataType: 'json'    },
+  { name: 'radio',       label: 'Radio Group',      dataType: 'string'  },
+  { name: 'select',      label: 'Dropdown',         dataType: 'string'  },
+  { name: 'multi_text',  label: 'Multi Text',       dataType: 'json'    },
+  { name: 'date',        label: 'Date',             dataType: 'date'    },
+  { name: 'date_range',  label: 'Date Range',       dataType: 'json'    },
+  { name: 'time',        label: 'Time',             dataType: 'string'  },
+  { name: 'time_range',  label: 'Time Range',       dataType: 'json'    },
+  { name: 'file',        label: 'File Upload',      dataType: 'file'    },
+  { name: 'image',       label: 'Image Upload',     dataType: 'file'    },
+  { name: 'switch',      label: 'Toggle / Switch',  dataType: 'boolean' },
+  { name: 'slider',      label: 'Slider',           dataType: 'number'  },
+  { name: 'range',       label: 'Number Range',     dataType: 'json'    },
+  { name: 'color',       label: 'Color Picker',     dataType: 'string'  },
+  { name: 'signature',   label: 'Signature',        dataType: 'string'  },
+  { name: 'richtext',    label: 'Rich Text',        dataType: 'string'  },
+  { name: 'table',       label: 'Table / Grid',     dataType: 'json'    },
 ];
 
 const ROLES = [
@@ -105,6 +174,10 @@ const ROLES = [
       'calibration.read', 'calibration.write',
       'workflow.read', 'workflow.lookups.read',
       'ticket.read', 'ticket.create', 'ticket.update', 'ticket.transition',
+      // Phase 3 — approve as participant + read everything + extend timers
+      'approval.read', 'approval.decide', 'approval.policy.read',
+      'sla.policy.read', 'sla.timer.read', 'sla.timer.extend',
+      'business-calendar.read',
     ],
   },
   {
@@ -119,6 +192,10 @@ const ROLES = [
       'training.read', 'inspection.read', 'calibration.read',
       'workflow.read', 'workflow.lookups.read',
       'ticket.read', 'ticket.transition',
+      // Phase 3 — read-only on governance primitives
+      'approval.read', 'approval.policy.read',
+      'sla.policy.read', 'sla.timer.read',
+      'business-calendar.read',
     ],
   },
   {
@@ -132,6 +209,10 @@ const ROLES = [
       'training.read',
       'workflow.read', 'workflow.lookups.read',
       'ticket.read', 'ticket.transition',
+      // Phase 3 — read + decide as approver
+      'approval.read', 'approval.decide', 'approval.policy.read',
+      'sla.policy.read', 'sla.timer.read',
+      'business-calendar.read',
     ],
   },
   {
@@ -451,6 +532,122 @@ async function main() {
     }
   }
 
+  // ─── Phase 3 — Business calendars ────────────────────────────────────
+  // 5-day Mon-Fri 09:00-18:00 schedule, no holidays. Used as the default for
+  // every SlaPolicy that doesn't explicitly choose another calendar.
+  const default24x7 = await prisma.businessCalendar.upsert({
+    where: { name: 'default-24x7' },
+    update: {},
+    create: {
+      name: 'default-24x7',
+      timezone: 'Asia/Kolkata',
+      weeklySchedule: {
+        mon: { start: '09:00', end: '18:00' },
+        tue: { start: '09:00', end: '18:00' },
+        wed: { start: '09:00', end: '18:00' },
+        thu: { start: '09:00', end: '18:00' },
+        fri: { start: '09:00', end: '18:00' },
+        sat: null,
+        sun: null,
+      },
+      holidays: [],
+    },
+  });
+  await prisma.businessCalendar.upsert({
+    where: { name: 'support-24x7' },
+    update: {},
+    create: {
+      name: 'support-24x7',
+      timezone: 'Asia/Kolkata',
+      weeklySchedule: {
+        mon: { start: '00:00', end: '24:00' },
+        tue: { start: '00:00', end: '24:00' },
+        wed: { start: '00:00', end: '24:00' },
+        thu: { start: '00:00', end: '24:00' },
+        fri: { start: '00:00', end: '24:00' },
+        sat: { start: '00:00', end: '24:00' },
+        sun: { start: '00:00', end: '24:00' },
+      },
+      holidays: [],
+    },
+  });
+
+  // ─── Phase 3 — Sample SLA + approval policy on Document Review ───────
+  // Wires the seeded "Document Review v1" workflow with realistic governance
+  // so the FE has data to render: 4-hour SLA on Submit (75% threshold), and
+  // a 2-of-2 QE approval requirement on Review's Approve / Forward action.
+  const sampleWorkflow = await prisma.workflow.findFirst({
+    where: { name: 'Document Review v1', typeId: docType.id, isLatestVersion: true },
+  });
+  const qeRole = await prisma.role.findUnique({ where: { name: 'QUALITY_ENGINEER' } });
+
+  if (sampleWorkflow && qeRole) {
+    const submitStage = await prisma.workflowStage.findFirst({
+      where: { workflowId: sampleWorkflow.id, canonicalId: 'sample-submit' },
+    });
+    const reviewStage = await prisma.workflowStage.findFirst({
+      where: { workflowId: sampleWorkflow.id, canonicalId: 'sample-review' },
+    });
+
+    if (submitStage) {
+      const existingSla = await prisma.slaPolicy.findUnique({
+        where: { parentStageId: submitStage.id },
+      });
+      if (!existingSla) {
+        const slaPolicy = await prisma.slaPolicy.create({
+          data: {
+            parentStageId: submitStage.id,
+            duration: 4 * 60 * 60, // 4 hours in seconds
+            calendarId: default24x7.id,
+            pauseOnHold: true,
+            responsibleRoles: { connect: [{ id: qeRole.id }] },
+          },
+        });
+        await prisma.slaThreshold.create({
+          data: {
+            policyId: slaPolicy.id,
+            percentage: 75,
+            notifyRoles: { connect: [{ id: qeRole.id }] },
+          },
+        });
+      }
+    }
+
+    if (reviewStage && approveStatus) {
+      const reviewApproveAction = await prisma.workflowStageAction.findFirst({
+        where: {
+          workflowStageId: reviewStage.id,
+          workflowActionId: approveStatus.id,
+          isPrimary: true,
+        },
+      });
+      if (reviewApproveAction) {
+        const existingApproval = await prisma.approvalPolicy.findUnique({
+          where: {
+            stageId_actionId: {
+              stageId: reviewStage.id,
+              actionId: reviewApproveAction.id,
+            },
+          },
+        });
+        if (!existingApproval) {
+          await prisma.approvalPolicy.create({
+            data: {
+              workflowId: sampleWorkflow.id,
+              stageId: reviewStage.id,
+              actionId: reviewApproveAction.id,
+              mode: 'ALL_REQUIRED',
+              requiredCount: 2,
+              allowSelfApproval: false,
+              approvalSlaHours: 24,
+              approverRoles: { connect: [{ id: qeRole.id }] },
+            },
+          });
+        }
+      }
+    }
+  }
+
   console.log('\n✅  Seed complete');
   console.log(`    permissions:  ${PERMISSIONS.length}`);
   console.log(`    roles:        ${ROLES.length}`);
@@ -461,6 +658,18 @@ async function main() {
   console.log(`    wf statuses:  ${WORKFLOW_STAGE_STATUSES.length}`);
   console.log(`    priorities:   ${PRIORITIES.length}`);
   console.log(`    criteria:     ${ACTION_CRITERIA.length}`);
+
+  console.log('🌱  Seeding built-in Field Types...');
+  for (const ft of FIELD_TYPES) {
+    await prisma.fieldType.upsert({
+      where: { name: ft.name },
+      update: { label: ft.label, dataType: ft.dataType, isSystem: true, isActive: true },
+      create: { name: ft.name, label: ft.label, dataType: ft.dataType, isSystem: true, isActive: true },
+    });
+  }
+  console.log(`    field types:  ${FIELD_TYPES.length}`);
+  console.log(`    calendars:    2 (default-24x7, support-24x7)`);
+  console.log(`    sample SLA + approval policy on Document Review v1`);
   console.log(`\n    All seeded users login with password:  ${SEED_PASSWORD}`);
 }
 

@@ -16,6 +16,7 @@
     "db:generate": "npm run db:generate --workspace=backend"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "concurrently": "^8.2.2"
   }
 }

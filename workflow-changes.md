@@ -203,6 +203,74 @@ Per user request, the workflow versioning feature was removed entirely from the 
 | Existing tickets (DOC-NEX-001/002/003) still link to workflow by snapshot | ✅ |
 | Raise new ticket DOC-NEX-004 against simplified workflow | ✅ |
 
+## P1.9 — Performance fixes + Playwright perf harness (post-launch, 2026-05-10)
+
+User reported the workflow APIs felt slow. Investigation revealed two N+1 patterns in Phase 1 code path that made `Save` and the drag-time layout autosave painful on a remote DB. Diagnosis confirmed by direct curl timing:
+
+- `GET /health` (1 RTT to Neon `us-east-1`) ≈ **480 ms** — i.e. every round-trip costs nearly half a second from this dev box.
+- A 10-stage save was issuing ~50 sequential round-trips through Prisma (`tx.workflowStage.create` per node, `tx.workflowStageAction.create` per action, `tx.workflowTransition.create` per edge), so save wall-clock = ~24 s.
+- Layout autosave (fires every 1.5 s while dragging) was looping `prisma.workflowStage.updateMany` once per node — 10 nodes ≈ 11 round-trips ≈ 5.3 s.
+
+### Fix #1 — `workflow.layout.ts` bulk SQL UPDATE
+
+| File | Change |
+|---|---|
+| `backend/src/modules/workflow/workflow.layout.ts` | Replaced the `for (const entry of body.positions)` loop with a single `prisma.$executeRaw` of `UPDATE "WorkflowStage" SET position = v.pos FROM (VALUES …) AS v(cid, pos) WHERE workflowId = $1 AND canonicalId = v.cid`. One round-trip regardless of node count. (An earlier `Promise.all` of `updateMany`s also helped but still serialized in practice on Neon's pooler — confirmed by timing — so we dropped to raw SQL for guaranteed parallelism.) |
+
+### Fix #2 — `workflow.builder.ts` BUILD/EXECUTE batching
+
+| File | Change |
+|---|---|
+| `backend/src/modules/workflow/workflow.builder.ts` | Split `buildWorkflowGraph` into two phases: an in-memory BUILD pass (no DB) that pre-generates UUIDs via `node:crypto.randomUUID()` and accumulates rows for stages, actions, fork-join updates, transitions, and m2m connect tuples; then an EXECUTE pass that ships everything in ~6 calls — `tx.workflowStage.createMany`, `tx.workflowStageAction.createMany`, two `tx.$executeRaw` bulk INSERTs into `_StageActionAllowedRoles` / `_StageActionAllowedUsers`, `Promise.all` of fork updates, and `tx.workflowTransition.createMany`. Behaviour unchanged: same validation order, same error messages, same `@@unique([workflowStageId, workflowActionId])` enforcement. |
+
+Implicit m2m table names (`_StageActionAllowedRoles` with `A`=Role.id `B`=Action.id; `_StageActionAllowedUsers` with `A`=User.id `B`=Action.id) verified against [migration `20260508112732_workflow_phase1`](backend/prisma/migrations/20260508112732_workflow_phase1/migration.sql).
+
+### Fix #3 — `getById` deep-include flatten — **attempted, reverted**
+
+Tried two approaches to collapse the workflow detail tree (`workflow → stages → actions → m2m roles/users + transitions → from/toStage`) into one round-trip:
+
+1. **`relationLoadStrategy: 'join'`** — Prisma 5.10+ runtime-GA on PostgreSQL, but the generated TypeScript types are gated behind the `relationJoins` previewFeature flag in the generator block. Adding the flag and running `npx prisma generate` failed with `EPERM` because `tsx watch` in the running backend process holds `query_engine-windows.dll.node` open.
+2. **Raw `prisma.$queryRaw` with Postgres `jsonb_agg` / `jsonb_build_object`** — direct probe showed warm-state ~2.4 s for getById (still ~5 RTTs on Neon, not the targeted 1–2). Marginal improvement that didn't justify replacing the readable Prisma deep-select with a 60-line SQL block.
+
+Reverted both. `workflow.service.ts:getById` is back to the original `prisma.workflow.findUnique({ select: workflowDetailSelect })`. Schema generator is back to the default (no preview features). To revisit later: stop the backend → `prisma generate` with `previewFeatures = ["relationJoins"]` → restart → re-add `relationLoadStrategy: 'join'`. Or wait for Prisma to expose the type without the preview flag.
+
+### Test harness — Playwright perf suite
+
+New top-level dev infrastructure for verifying these and future perf fixes:
+
+| File | Purpose |
+|---|---|
+| `playwright.config.ts` | Single-worker Playwright config, points at `./e2e/`, no `webServer` (assumes dev servers already running). |
+| `e2e/perf.spec.ts` | 3 perf tests + 1 UI smoke. Uses Playwright's `request` fixture for timing-critical paths (no browser overhead). UI smoke gracefully `test.skip()`s when the frontend dev server isn't responding so the harness still passes when only the backend is up. |
+| `e2e/probe.mjs` | Standalone Node script (no Playwright dependency) for ad-hoc API timing. Useful for `is it the network or the code?` diagnostics — has its own login + workflow-create + save + save-layout-x3 flow with timing prints. |
+| `package.json` | `@playwright/test` added to devDependencies. |
+| `.gitignore` | `playwright-report/` and `test-results/` added. |
+
+### Verification
+
+Final perf-suite numbers, three consecutive runs against Neon `us-east-1`:
+
+| Test (assertion) | Run 1 | Run 2 | Run 3 | Threshold | Pre-fix estimate |
+|---|---|---|---|---|---|
+| Save 10-stage / 1-action / 9-edge workflow | 4314 ms | 4456 ms | 4430 ms | < 8 s | ~24 s |
+| Save 6-node fork+join workflow | 4096 ms | 4232 ms | 6047 ms | < 7 s | ~14 s |
+| Layout autosave with 10 positions | 3054 ms | 1166 ms | 1166 ms | < 4 s | ~5.3 s |
+| `tsc --noEmit` (backend) | EXIT=0 | — | — | — | — |
+| UI smoke | skipped (frontend :3000 not up) | — | — | — | — |
+
+Speedups: **~6× on save**, **~3–4× on layout autosave**. Residual time is pure network latency (RTT × number of round-trips left); to push further we'd either need to reduce remaining RTTs (a `SELECT FOR UPDATE` could fold the wf-existence check into the same statement as the body, saving 1 RTT in `save()`) or move the DB closer (Neon region change, or a local Postgres for dev).
+
+### Phase 3 plan docs drafted
+
+Same session, separate from the perf fixes:
+
+| File | Lines | Scope |
+|---|---|---|
+| `docs/WORKFLOW_PHASE_3_PLAN.md` | 660 | Backend: 6 enums + 9 tables (approval policy/instance/record + SLA policy/threshold/timer/event/extension + business calendar), engine `performAction` intercept, `engine/sla.handler.ts`, `engine/calendar.ts`, BullMQ + Redis worker process with 3 cron sweeps, full API surface, sample seed, ~7 days / ~4,000 LoC. 18 cross-cutting decisions tabled for sign-off (Q1–Q18). |
+| `docs/WORKFLOW_PHASE_3_FRONTEND_PLAN.md` | 388 | Frontend: SLA progress ring + countdown + extend modal on ticket detail, approval-awaiting card + decide modal + records timeline, two new builder-inspector tabs (approval policy + SLA policy editors) with autosave, `/admin/business-calendars` page (week-grid + holidays input), SLA breach tile on `/tickets`, ~5 days / ~2,500 LoC. No new runtime deps. 9 FE decisions tabled (FE.Q1–FE.Q9). |
+
+`workflow-changes.md` Phase 3 backend + frontend section headers updated with one-line scope summary and doc links so the index is navigable.
+
 ---
 
 # Phase 1 — Frontend — Builder UI integration
@@ -617,11 +685,18 @@ Tickets raised against a workflow before that workflow is edited in-place will e
 
 # Phase 3 — Backend — Approvals + SLA
 
-**Status:** ⏳ Not started
+**Status:** ⏳ Not started — plan drafted
+**Plan doc:** [`docs/WORKFLOW_PHASE_3_PLAN.md`](docs/WORKFLOW_PHASE_3_PLAN.md)
+**Master plan:** [`docs/WORKFLOW_MASTER_PLAN.md`](docs/WORKFLOW_MASTER_PLAN.md) §5
+
+Scope: 6 enums, 9 tables (approval policy/instance/record + SLA policy/threshold/timer/event/extension + business calendar), engine intercept on `performAction`, BullMQ worker process with 3 cron sweeps, ~7 days, ~4,000 LoC. Sign-off needed on Q1–Q18 in §2 of the plan before code generation.
 
 # Phase 3 — Frontend — Approval & SLA UI
 
-**Status:** ⏳ Not started
+**Status:** ⏳ Not started — plan drafted
+**Plan doc:** [`docs/WORKFLOW_PHASE_3_FRONTEND_PLAN.md`](docs/WORKFLOW_PHASE_3_FRONTEND_PLAN.md)
+
+Scope: SLA progress ring + countdown on ticket detail, approval-awaiting card + decide modal, two new inspector tabs (approval policy + SLA policy) on the workflow builder, business-calendar admin page, SLA breach tile on `/tickets`, ~5 days, ~2,500 LoC. No new runtime deps. Sign-off needed on FE.Q1–FE.Q9 in §3 of the plan.
 
 ---
 

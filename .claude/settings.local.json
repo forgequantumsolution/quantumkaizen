@@ -50,7 +50,25 @@
       "mcp__playwright__browser_wait_for",
       "mcp__playwright__browser_click",
       "mcp__playwright__browser_handle_dialog",
-      "mcp__playwright__browser_drag"
+      "mcp__playwright__browser_drag",
+      "Bash(npm run *)",
+      "Bash(kill 32360)",
+      "Bash(npx prisma *)",
+      "Bash(node -e ' *)",
+      "Bash(pkill -f \"tsx watch\")",
+      "Bash(pkill -f \"vite\")",
+      "Bash(echo \"exit=$?\")",
+      "Bash(curl -s http://localhost:4000/forms/field_types/)",
+      "Bash(curl -s http://localhost:4000/api/forms/field_types/)",
+      "Bash(curl -s -o /dev/null -w \"field_types: %{http_code} \\(%{time_total}s\\)\\\\n\" http://localhost:4000/api/forms/field_types/)",
+      "Bash(curl -s -o /dev/null -w \"form_types:  %{http_code} \\(%{time_total}s\\)\\\\n\" http://localhost:4000/api/forms/form_types/)",
+      "Bash(lsof -i :5173 -i :4000 -sTCP:LISTEN)",
+      "Bash(grep -n '$transaction' /Users/shriyanshkumar/Desktop/Ashish/quantumkaizen/repo/backend/src/modules/dynamic-form/dynamic-form.service.ts)",
+      "Bash(echo \"client_exit=$?\")",
+      "Bash(echo \"backend_exit=$?\")",
+      "Bash(grep -rn 'SELECT 1\\\\|prisma.$queryRaw\\\\|$connect\\\\|isAlive\\\\|ping' /Users/shriyanshkumar/Desktop/Ashish/quantumkaizen/repo/backend/src '--include=*.ts')",
+      "Bash(curl -s -o /dev/null -w \"ping: %{time_total}s \\(resolve %{time_namelookup}s, connect %{time_connect}s, tls %{time_appconnect}s\\)\\\\n\" \"https://ep-restless-hat-amtkx32f-pooler.c-5.us-east-1.aws.neon.tech/\")",
+      "Bash(ping -c 3 ep-restless-hat-amtkx32f-pooler.c-5.us-east-1.aws.neon.tech)"
     ]
   }
 }
