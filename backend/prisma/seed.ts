@@ -606,6 +606,9 @@ async function main() {
         await prisma.slaThreshold.create({
           data: {
             policyId: slaPolicy.id,
+            // `name` was added in the Django-alignment revision — required, unique
+            // per policy. Use a stable label so re-runs are idempotent.
+            name: 'warning',
             percentage: 75,
             notifyRoles: { connect: [{ id: qeRole.id }] },
           },

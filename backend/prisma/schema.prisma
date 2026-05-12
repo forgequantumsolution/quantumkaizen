@@ -63,6 +63,15 @@ model User {
   formSubmissions  FormSubmission[] @relation("FormSubmissionSubmittedBy")
   auditSchedules   AuditSchedule[]  @relation("AuditScheduleCreatedBy")
 
+  // Phase 3 — Approvals + SLA
+  approverOnPolicies      ApprovalPolicy[] @relation("ApprovalPolicyApproverUsers")
+  approvalRecords         ApprovalRecord[] @relation("UserApprovalRecords")
+  slaPolicyResponsibleFor SlaPolicy[]      @relation("SlaPolicyResponsibleUsers")
+  slaThresholdNotifyFor   SlaThreshold[]   @relation("SlaThresholdNotifyUsers")
+  slaExtensionsRequested  SlaExtension[]   @relation("SlaExtensionRequestedBy")
+  slaExtensionsApproved   SlaExtension[]   @relation("SlaExtensionApprover")
+  slaTimerEventsTriggered SlaTimerEvent[]  @relation("SlaTimerEventTriggeredBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -108,6 +117,12 @@ model Role {
   users       User[]
 
   stageActions WorkflowStageAction[] @relation("StageActionAllowedRoles")
+
+  // Phase 3 — Approvals + SLA
+  approverOnPolicies      ApprovalPolicy[] @relation("ApprovalPolicyApproverRoles")
+  approvalRecordsAsRole   ApprovalRecord[] @relation("ApprovalRecordRole")
+  slaPolicyResponsibleFor SlaPolicy[]      @relation("SlaPolicyResponsibleRoles")
+  slaThresholdNotifyFor   SlaThreshold[]   @relation("SlaThresholdNotifyRoles")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -311,6 +326,10 @@ model Workflow {
   flows         TicketFlow[]
   childTriggers ChildWorkflowTrigger[] @relation("WorkflowChildTriggers")
 
+  // Phase 3 — Approvals + SLA escalation
+  approvalPolicies ApprovalPolicy[] @relation("WorkflowApprovalPolicies")
+  usedAsSlaEscalation SlaPolicy[]   @relation("WorkflowAsSlaEscalation")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -353,6 +372,12 @@ model WorkflowStage {
   docs                 TicketDoc[]              @relation("TicketDocStage")
   returnedFromTracking TicketStageTracking[]    @relation("StageTrackingReturnedFrom")
 
+  // Phase 3 — Approvals + SLA
+  approvalPolicies    ApprovalPolicy[] @relation("StageApprovalPolicies")
+  slaPolicy           SlaPolicy?       @relation("StageSlaPolicy")
+  slaTimers           SlaTimer[]       @relation("StageSlaTimers")
+  slaThresholdTargets SlaThreshold[]   @relation("SlaThresholdTargetStage")
+
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -378,6 +403,10 @@ model WorkflowStageAction {
   allowedUsers User[] @relation("StageActionAllowedUsers")
 
   postActionsTracking TicketStageTracking[] @relation("StageTrackingPostAction")
+
+  // Phase 3 — Approvals
+  approvalPolicies           ApprovalPolicy[]   @relation("ActionApprovalPolicies")
+  triggeredApprovalInstances ApprovalInstance[] @relation("ActionTriggeringInstances")
 
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -489,6 +518,13 @@ model Ticket {
   docs             TicketDoc[]
   stageTracking    TicketStageTracking[]
   parallelTracking ParallelBranchTracking[]
+
+  // Phase 3 — Approvals + SLA
+  approvalInstances     ApprovalInstance[] @relation("TicketApprovalInstances")
+  slaTimers             SlaTimer[]         @relation("TicketSlaTimers")
+  // Back-relation for SlaTimer.escalationTicket — set when this ticket IS the
+  // spawned escalation child (so we can query "is this an SLA-escalation ticket?").
+  slaTimersAsEscalation SlaTimer[]         @relation("TicketAsSlaEscalation")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -902,4 +938,346 @@ model AuditSchedule {
 
   @@index([financialYear])
   @@index([auditDate])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 3 — Approvals + SLA
+// Plan: docs/WORKFLOW_PHASE_3_PLAN.md
+// Migration: 20260512161347_workflow_phase3_approvals_sla
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ApprovalMode {
+  SINGLE
+  ALL_REQUIRED
+  QUORUM
+  SEQUENTIAL
+  ANY
+}
+
+// Match Django's instance lifecycle: a policy is "SATISFIED" when its mode's
+// quorum/sequence rule is met (not just one approval). `INVALIDATED` lets
+// admins void an in-flight instance when the policy itself is edited, with
+// reason captured on the instance.
+enum ApprovalInstanceStatus {
+  PENDING
+  SATISFIED
+  REJECTED
+  EXPIRED
+  INVALIDATED
+  CANCELLED
+}
+
+enum ApprovalDecision {
+  APPROVED
+  REJECTED
+}
+
+// `RUNNING` = clock active, no extensions granted; `EXTENDED` = clock active
+// and at least one extension has been granted (distinct so the UI can badge it).
+enum SlaTimerStatus {
+  RUNNING
+  PAUSED
+  EXTENDED
+  COMPLETED
+  BREACHED
+}
+
+// `SLA_TRANSITION` = the escalation ticket was auto-advanced by the threshold
+// sweep (the parent ticket is never moved by SLA cron — see SlaPolicy.escalationWorkflow).
+// `COMPLETED_LATE` = parent stage exited *after* deadline passed (status went
+// BREACHED first, then exited cleanly).
+enum SlaEventType {
+  STARTED
+  PAUSED
+  RESUMED
+  THRESHOLD_HIT
+  SLA_TRANSITION
+  EXTENDED
+  COMPLETED
+  COMPLETED_LATE
+  BREACHED
+}
+
+enum ExtensionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// ─── Approvals (3 tables) ──────────────────────────────────────────────────
+
+model ApprovalPolicy {
+  id         String   @id @default(uuid())
+  workflowId String
+  workflow   Workflow @relation("WorkflowApprovalPolicies", fields: [workflowId], references: [id], onDelete: Cascade)
+  stageId    String
+  stage      WorkflowStage @relation("StageApprovalPolicies", fields: [stageId], references: [id], onDelete: Cascade)
+  actionId   String
+  action     WorkflowStageAction @relation("ActionApprovalPolicies", fields: [actionId], references: [id], onDelete: Cascade)
+
+  mode                   ApprovalMode
+  requiredCount          Int     @default(1)
+  // `strictRoleMatch=true` means "approver's role must be exactly in approverRoles"
+  // (ignore role hierarchy). Default false = honor hierarchy (head-of-dept can
+  // approve for an underling's role).
+  strictRoleMatch        Boolean @default(false)
+  allowSelfApproval      Boolean @default(false)
+  requireUniqueApprovers Boolean @default(true)
+  // For mode=SEQUENTIAL — ordered list of `{ order, role_id | user_id, label }`.
+  approvalSequence       Json?
+  approvalSlaHours       Int?
+
+  // `isActive=false` retires a policy without deleting it (preserves history
+  // via existing ApprovalInstance rows). `isDeleted` is the soft-delete tombstone.
+  isActive Boolean @default(true)
+
+  approverRoles Role[] @relation("ApprovalPolicyApproverRoles")
+  approverUsers User[] @relation("ApprovalPolicyApproverUsers")
+
+  instances ApprovalInstance[]
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([stageId, actionId])
+  @@index([workflowId])
+}
+
+model ApprovalInstance {
+  id                 String         @id @default(uuid())
+  ticketId           String
+  ticket             Ticket         @relation("TicketApprovalInstances", fields: [ticketId], references: [id], onDelete: Cascade)
+  policyId           String
+  policy             ApprovalPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  triggeringActionId String?
+  triggeringAction   WorkflowStageAction? @relation("ActionTriggeringInstances", fields: [triggeringActionId], references: [id], onDelete: SetNull)
+
+  status      ApprovalInstanceStatus @default(PENDING)
+  startedAt   DateTime               @default(now())
+  completedAt DateTime?
+  deadlineAt  DateTime?
+  // For SEQUENTIAL mode: which step in the approval_sequence we're waiting on.
+  currentSequenceOrder Int @default(1)
+
+  // When status=INVALIDATED — captures who/why so audit can explain why an
+  // in-flight instance was voided (typically because the underlying policy
+  // changed mid-approval and a fresh instance had to be opened).
+  invalidatedAt     DateTime?
+  invalidatedReason String?
+
+  records ApprovalRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId, status])
+  @@index([policyId, status])
+  @@index([deadlineAt])
+}
+
+model ApprovalRecord {
+  id         String           @id @default(uuid())
+  instanceId String
+  instance   ApprovalInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  approverId String
+  approver   User             @relation("UserApprovalRecords", fields: [approverId], references: [id], onDelete: Restrict)
+
+  // Audit trail of which role the approver acted under — matters when a user
+  // holds multiple roles and the policy allows any of them.
+  approvedAsRoleId String?
+  approvedAsRole   Role?   @relation("ApprovalRecordRole", fields: [approvedAsRoleId], references: [id], onDelete: SetNull)
+
+  decision  ApprovalDecision
+  comment   String?
+  decidedAt DateTime         @default(now())
+
+  // For SEQUENTIAL mode — which step in the sequence this record satisfied.
+  sequenceOrder Int @default(0)
+
+  // Phase-4 e-signature link (no FK target yet — the WorkflowStageSignature
+  // model lands in Phase 4. Field reserved so Phase 4 can attach without
+  // re-migrating this table).
+  stageSignatureId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([instanceId, approverId])
+  @@index([instanceId])
+}
+
+// ─── SLA (6 tables) ────────────────────────────────────────────────────────
+
+model BusinessCalendar {
+  id             String  @id @default(uuid())
+  name           String  @unique
+  timezone       String  @default("Asia/Kolkata")
+  weeklySchedule Json
+  holidays       Json
+  isActive       Boolean @default(true)
+  isDeleted      Boolean @default(false)
+
+  policies SlaPolicy[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SlaPolicy {
+  id            String         @id @default(uuid())
+  parentStageId String         @unique
+  parentStage   WorkflowStage  @relation("StageSlaPolicy", fields: [parentStageId], references: [id], onDelete: Cascade)
+
+  duration                Int
+  calendarId              String?
+  calendar                BusinessCalendar? @relation(fields: [calendarId], references: [id], onDelete: SetNull)
+  pauseOnHold             Boolean @default(true)
+  pauseOnExtensionPending Boolean @default(false)
+
+  // Escalation workflow that gets spawned as a CHILD ticket when the parent
+  // ticket enters this stage. The threshold cron only ever advances that
+  // child — the parent ticket is never auto-moved by SLA. If null, no
+  // escalation ticket is spawned (thresholds fire events only, for notifications).
+  escalationWorkflowId String?
+  escalationWorkflow   Workflow? @relation("WorkflowAsSlaEscalation", fields: [escalationWorkflowId], references: [id], onDelete: SetNull)
+
+  responsibleRoles Role[] @relation("SlaPolicyResponsibleRoles")
+  responsibleUsers User[] @relation("SlaPolicyResponsibleUsers")
+
+  thresholds SlaThreshold[]
+  timers     SlaTimer[]
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([calendarId])
+  @@index([escalationWorkflowId])
+}
+
+model SlaThreshold {
+  id       String    @id @default(uuid())
+  policyId String
+  policy   SlaPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  // Human-readable name surfaced in UI/events (e.g. 'warning', 'critical', 'breach').
+  // Required so events can be queried by name regardless of percentage tweaks.
+  name       String
+  // Float instead of Int — Django uses float so fractional thresholds like 33.3% work.
+  percentage Float
+
+  // Target stage in the ESCALATION workflow (not the parent workflow). When
+  // the threshold fires, the spawned escalation ticket is moved to this stage.
+  // If null, the threshold only fires an event (notification-only).
+  targetSlaStageId String?
+  targetSlaStage   WorkflowStage? @relation("SlaThresholdTargetStage", fields: [targetSlaStageId], references: [id], onDelete: SetNull)
+
+  notifyRoles Role[] @relation("SlaThresholdNotifyRoles")
+  notifyUsers User[] @relation("SlaThresholdNotifyUsers")
+
+  events SlaTimerEvent[] @relation("ThresholdFireEvents")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([policyId, name])
+}
+
+model SlaTimer {
+  id       String        @id @default(uuid())
+  ticketId String
+  ticket   Ticket        @relation("TicketSlaTimers", fields: [ticketId], references: [id], onDelete: Cascade)
+  stageId  String
+  stage    WorkflowStage @relation("StageSlaTimers", fields: [stageId], references: [id], onDelete: Cascade)
+  policyId String
+  policy   SlaPolicy     @relation(fields: [policyId], references: [id], onDelete: Restrict)
+
+  // The spawned escalation ticket (running policy.escalationWorkflow). Null if
+  // policy.escalationWorkflowId was null at timer-start time. Threshold cron
+  // advances this ticket, never the parent.
+  escalationTicketId String?
+  escalationTicket   Ticket? @relation("TicketAsSlaEscalation", fields: [escalationTicketId], references: [id], onDelete: SetNull)
+
+  status      SlaTimerStatus @default(RUNNING)
+  startedAt   DateTime       @default(now())
+  deadline    DateTime
+  completedAt DateTime?
+
+  // Elapsed-time accounting (matches Django's elapsed_before_pause + last_resumed_at
+  // pattern): tracks WORKING time elapsed, not paused time. Computed elapsed =
+  // elapsedBeforePauseSec + (status in [RUNNING, EXTENDED] ? now() - lastResumedAt : 0).
+  // Pause: elapsedBeforePauseSec += (now - lastResumedAt); status=PAUSED; lastResumedAt=null.
+  // Resume: lastResumedAt=now(); status=RUNNING (or EXTENDED if extensionCount>0).
+  elapsedBeforePauseSec Int       @default(0)
+  lastResumedAt         DateTime?
+
+  // Extensions accumulate; status flips RUNNING → EXTENDED on first granted extension.
+  totalExtensionsSec Int @default(0)
+  extensionCount     Int @default(0)
+
+  events     SlaTimerEvent[]
+  extensions SlaExtension[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, deadline])
+  @@index([ticketId, status])
+  @@index([stageId, status])
+  @@index([escalationTicketId])
+}
+
+model SlaTimerEvent {
+  id          String        @id @default(uuid())
+  timerId     String
+  timer       SlaTimer      @relation(fields: [timerId], references: [id], onDelete: Cascade)
+  eventType   SlaEventType
+  thresholdId String?
+  threshold   SlaThreshold? @relation("ThresholdFireEvents", fields: [thresholdId], references: [id], onDelete: SetNull)
+
+  // Duplicated from threshold (when applicable) so events stay queryable even
+  // if the threshold is later renamed/deleted. `thresholdPercentage` is the
+  // ACTUAL elapsed% at fire time, not the configured threshold % — lets the
+  // audit log distinguish "fired at 75.3% (threshold was 75%)".
+  thresholdName       String?
+  thresholdPercentage Float?
+
+  // For EXTENDED events.
+  extensionAmountSec Int?
+  newDeadline        DateTime?
+
+  // For audit: who caused the event (null for system-driven cron events).
+  triggeredById String?
+  triggeredBy   User?   @relation("SlaTimerEventTriggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
+
+  eventData   Json?
+  occurredAt  DateTime      @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@index([timerId, occurredAt])
+  @@index([timerId, eventType])
+}
+
+model SlaExtension {
+  id      String   @id @default(uuid())
+  timerId String
+  timer   SlaTimer @relation(fields: [timerId], references: [id], onDelete: Cascade)
+
+  requestedById String
+  requestedBy   User   @relation("SlaExtensionRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  approverId String?
+  approver   User?   @relation("SlaExtensionApprover", fields: [approverId], references: [id], onDelete: SetNull)
+
+  status       ExtensionStatus @default(PENDING)
+  reason       String
+  extensionSec Int
+  decidedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([timerId, status])
 }

@@ -685,11 +685,87 @@ Tickets raised against a workflow before that workflow is edited in-place will e
 
 # Phase 3 — Backend — Approvals + SLA
 
-**Status:** ⏳ Not started — plan drafted
+**Status:** 🟡 In progress — P3.1 (schema + seed) shipped + Django-aligned; P3.2 (Approval module) next
 **Plan doc:** [`docs/WORKFLOW_PHASE_3_PLAN.md`](docs/WORKFLOW_PHASE_3_PLAN.md)
 **Master plan:** [`docs/WORKFLOW_MASTER_PLAN.md`](docs/WORKFLOW_MASTER_PLAN.md) §5
 
-Scope: 6 enums, 9 tables (approval policy/instance/record + SLA policy/threshold/timer/event/extension + business calendar), engine intercept on `performAction`, BullMQ worker process with 3 cron sweeps, ~7 days, ~4,000 LoC. Sign-off needed on Q1–Q18 in §2 of the plan before code generation.
+Scope: 6 enums, 9 tables (approval policy/instance/record + SLA policy/threshold/timer/event/extension + business calendar), engine intercept on `performAction`, BullMQ worker process — single combined 15-min sweep (revised from 3 jobs per Q11 sign-off), spawn-separate-escalation-ticket pattern (Q13 sign-off), ~7 days, ~4,000 LoC. Q5/Q11/Q13 decisions locked after Django reference verification.
+
+## P3.1 — Schema + seed + Django-aligned revision (2026-05-12)
+
+Initial Phase 3 schema landed, then revised against the Django reference at `core-prod-scaling/backend/workflows/` once the user merged in companion code (Forms / ISO / AuditSchedule) that revealed the full target shape.
+
+### Two migrations applied to Neon
+
+| Migration | Tables / changes | How applied |
+|---|---|---|
+| `20260512161347_workflow_phase3_approvals_sla` | 6 enums + 9 tables (`ApprovalPolicy`, `ApprovalInstance`, `ApprovalRecord`, `BusinessCalendar`, `SlaPolicy`, `SlaThreshold`, `SlaTimer`, `SlaTimerEvent`, `SlaExtension`) + 6 m2m join tables (approver roles/users, responsible roles/users, threshold notify roles/users) + back-relations on `User`/`Role`/`Workflow`/`WorkflowStage`/`WorkflowStageAction`/`Ticket`. | `prisma migrate dev` failed with **P1017/P3016** (Neon pooler dropped the shadow-DB connection); fell back to `prisma migrate diff` → `awk`-filter unrelated drops → `prisma db execute --file` → `prisma migrate resolve --applied`. Generated migration includes only additive `CREATE` statements; 11 unrelated tables (Forms / ISO / AuditSchedule) that exist in Neon but weren't tracked were **preserved** by filtering out their `DROP TABLE` lines. |
+| `20260512171857_workflow_phase3_django_alignment` | Field/enum revisions after Django source verification. See deltas table below. | Same pipeline — diff → filter → `db execute` → `resolve --applied`. The existing `SlaThreshold` row was backfilled with `name='warning'` via temporary `DEFAULT` then `DROP DEFAULT`. |
+
+### Django-alignment revisions (R1–R12 in plan doc §3a)
+
+Direct source verification at `core-prod-scaling/backend/workflows/{models/approval.py:70-258, models/sla_timer.py:26-296, engine/engines/approval_handler.py:194-239, engine/services/sla_scheduler.py:57-201}` revealed three architectural divergences in the initial draft that required signed-off corrections:
+
+| Decision | Initial draft | Django-verified resolution | Schema impact |
+|---|---|---|---|
+| **Approval rejection (Q5)** | Auto-fire `REJECT` behavior on rejection (walks ticket back) | **Stay in stage** — mark instance `REJECTED`, fire `APPROVAL_REJECTED` audit + hook, return rejected status. User must explicitly invoke a `REJECT`-behavior action to move the ticket. | None (engine behavior only) |
+| **Threshold auto-transition (Q13)** | Move "the ticket" to `targetSlaStageId` (ambiguous → would have moved the parent) | **Spawn a separate escalation child ticket** on `SlaPolicy.escalationWorkflowId` when parent enters SLA-tracked stage. Threshold cron only advances the **child** — parent is never auto-moved by SLA. Mirrors Django's `_advance_sla_ticket()` pattern. | + `SlaPolicy.escalationWorkflowId` (FK Workflow), + `SlaTimer.escalationTicketId` (FK Ticket), back-relations on Workflow + Ticket |
+| **Cron architecture (Q11)** | 3 separate jobs at 5min thresholds / 15min breaches / 30min approval-deadline | **Single combined 15-min sweep** `checkSlaTimers` does thresholds → escalation-transitions → breaches in one run. Approval-deadline stays separate at 30min (different domain). | None (job layout only) |
+
+Schema field-level deltas (Migration B):
+
+| Model | Change |
+|---|---|
+| `ApprovalPolicy` | + `isActive Boolean @default(true)` (separate from `isDeleted`) |
+| `ApprovalInstance` | status enum: − `APPROVED`, + `SATISFIED`/`EXPIRED`/`INVALIDATED`. + `currentSequenceOrder Int @default(1)`, + `invalidatedAt DateTime?`, + `invalidatedReason String?` |
+| `ApprovalRecord` | + `approvedAsRoleId String?` (FK Role, audit trail for multi-role users), + `sequenceOrder Int @default(0)` (SEQUENTIAL mode), + `stageSignatureId String?` (Phase-4 e-sig placeholder) |
+| `SlaPolicy` | + `escalationWorkflowId String?` (FK Workflow) per R1 |
+| `SlaThreshold` | + `name String` required (e.g. 'warning', 'critical'); `percentage Int → Float`; unique swapped `(policy, percentage) → (policy, name)` |
+| `SlaTimer` | DROPPED `totalPausedSec`, `lastFiredPercentage`, `pausedAt`, `resumedAt`. ADDED `elapsedBeforePauseSec Int @default(0)`, `lastResumedAt DateTime?`, `totalExtensionsSec Int @default(0)`, `extensionCount Int @default(0)`, `escalationTicketId String?` (FK Ticket). Status enum: `ACTIVE → RUNNING`, + `EXTENDED`. Elapsed-time accounting now matches Django: track working time, not paused time. Threshold latch moved from `lastFiredPercentage` column → query against `SlaTimerEvent` rows by `thresholdName`. |
+| `SlaTimerEvent` | + `thresholdName String?`, `thresholdPercentage Float?` (actual % at fire time), `extensionAmountSec Int?`, `newDeadline DateTime?`, `triggeredById String?` (FK User). Event types: `THRESHOLD_FIRED → THRESHOLD_HIT`, + `SLA_TRANSITION`, + `COMPLETED_LATE`. |
+| `SlaExtension` | **Kept as-drafted** — intentional divergence. Django has no extension-request approval workflow; QMS audit posture justifies the richer model. |
+
+### Seed data
+
+| Object | Source | Count |
+|---|---|---|
+| Permissions | New keys: `approval.*` (6), `sla.*` (7), `business-calendar.*` (4) | 17 new (66 total after seed) |
+| `QUALITY_ENGINEER` role grants | + `approval.read/decide/policy.read`, `sla.policy.read/timer.read/timer.extend`, `business-calendar.read` | 7 keys added |
+| `AUDITOR` role grants | + `approval.read/policy.read`, `sla.policy.read/timer.read`, `business-calendar.read` | 5 keys added |
+| `DOCUMENT_CONTROLLER` role grants | + `approval.read/decide/policy.read`, `sla.policy.read/timer.read`, `business-calendar.read` | 6 keys added |
+| `BusinessCalendar` | `default-24x7` (Mon-Fri 09:00-18:00 IST), `support-24x7` (24×7) | 2 |
+| `SlaPolicy` | Sample policy on `Document Review v1` Submit stage: 4h duration, default-24x7 calendar, pauseOnHold | 1 |
+| `SlaThreshold` | Sample threshold: 75% warning, notify QE role | 1 (`name='warning'` after Migration B backfill) |
+| `ApprovalPolicy` | Sample policy on `Document Review v1` Review stage "Approve / Forward" action: mode `ALL_REQUIRED`, 2 QEs required, no self-approval, 24h SLA | 1 |
+
+### Files touched
+
+| File | Change |
+|---|---|
+| [`backend/prisma/schema.prisma`](backend/prisma/schema.prisma) | + 6 enums, + 9 models, + back-relations on `User`/`Role`/`Workflow`/`WorkflowStage`/`WorkflowStageAction`/`Ticket`. Two waves — initial then Django-alignment revision. |
+| [`backend/prisma/seed.ts`](backend/prisma/seed.ts) | + 17 permissions; updated explicit role grants for QE/AUDITOR/DOC_CONTROLLER; + sample calendar/SLA/approval-policy seeding block at end of `main()`; `SlaThreshold.name='warning'` for the seeded row. |
+| [`backend/prisma/migrations/20260512161347_workflow_phase3_approvals_sla/migration.sql`](backend/prisma/migrations/20260512161347_workflow_phase3_approvals_sla/migration.sql) | Initial Phase 3 migration (filter-cleaned via `awk` to drop the unrelated `DROP TABLE` lines from `prisma migrate diff`). |
+| [`backend/prisma/migrations/20260512171857_workflow_phase3_django_alignment/migration.sql`](backend/prisma/migrations/20260512171857_workflow_phase3_django_alignment/migration.sql) | Django-alignment revision migration with backfill for existing `SlaThreshold.name`. |
+| [`docs/WORKFLOW_PHASE_3_PLAN.md`](docs/WORKFLOW_PHASE_3_PLAN.md) | Status flipped from ⏳ Draft → 🟡 In progress. Q5/Q11/Q13 marked signed-off. New §3a Django-alignment Revisions section. §4.1 rewritten for stay-in-stage rejection. §4.2 rewritten for escalation-ticket spawn + Django-aligned elapsed-time model (incl. §4.2a `computeElapsedSec` helper). §5.2/5.3/5.4 rewritten for single combined sweep + escalation-ticket-only transitions. §15 sign-off list closed. |
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npx prisma validate` | `valid 🚀` |
+| `npx prisma migrate status` | 7 migrations found · "Database schema is up to date" |
+| `npx prisma generate` | Client regenerated; Phase 3 model types exposed (`ApprovalPolicy`, `SlaPolicy`, `BusinessCalendar`, `SlaTimer`, etc.) |
+| `npx tsc --noEmit` (backend) | EXIT=0 |
+| Seed re-runs idempotently | ✓ — re-running `npm run db:seed` after Migration B applies cleanly with no constraint violations |
+| Generated client has renamed enum values | ✓ `SATISFIED`, `THRESHOLD_HIT`, `SLA_TRANSITION`, `RUNNING`, `EXTENDED`, `COMPLETED_LATE`, `INVALIDATED`, `EXPIRED` all present |
+| Backend up | ⚠️ Not restarted yet by user (was stopped to allow `prisma generate`) |
+
+### Known follow-ups (not blockers)
+
+- 11 untracked tables remain in Neon (`Form*`, `Iso*`, `AuditSchedule`) — they're now in `schema.prisma` after the user's merge, so they're tracked going forward; no historical migration covers their creation (they pre-date our migration history). Phase 5 (Audit Scheduling) and Phase 4 (Forms / e-sig) plans will need to account for `AuditSchedule` and `Form*` already existing, rather than introducing them. Flagged in [docs/WORKFLOW_PHASE_3_PLAN.md](docs/WORKFLOW_PHASE_3_PLAN.md) for downstream phases.
+- `escalationWorkflowId` is nullable everywhere. If a workflow author leaves it null, the SLA timer still fires `THRESHOLD_HIT` events for notification routing, but no auto-transitions happen. This is the intended graceful-degradation path.
+
+---
 
 # Phase 3 — Frontend — Approval & SLA UI
 
