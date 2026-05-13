@@ -9,6 +9,13 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(16, 'JWT_SECRET must be at least 16 chars'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   CORS_ORIGIN: z.string().default('*'),
+  // Phase 3 — BullMQ worker. Optional: when unset, `npm run worker` logs +
+  // exits gracefully. The API process never connects to Redis.
+  REDIS_URL: z.string().optional(),
+  // Override the default 15-min / 30-min cron cadences for dev/test runs.
+  // Standard 5-field crontab.
+  SLA_SWEEP_CRON: z.string().default('*/15 * * * *'),
+  APPROVAL_DEADLINE_CRON: z.string().default('*/30 * * * *'),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

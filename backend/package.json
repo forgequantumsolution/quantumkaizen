@@ -12,7 +12,9 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "sla:sweep": "tsx src/jobs/run-once.ts"
+    "sla:sweep": "tsx src/jobs/run-once.ts",
+    "worker": "tsx src/jobs/worker.ts",
+    "worker:dev": "tsx watch src/jobs/worker.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -22,10 +24,12 @@
     "@prisma/client": "^5.22.0",
     "@types/swagger-ui-express": "^4.1.8",
     "bcryptjs": "^2.4.3",
+    "bullmq": "^5.76.8",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "helmet": "^8.0.0",
+    "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "swagger-ui-express": "^5.0.1",

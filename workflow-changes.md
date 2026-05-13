@@ -1114,6 +1114,64 @@ The sweep functions are runner-agnostic. Until P3.6.b ships, ops have a few opti
 | `pg_cron` extension on Neon | Trigger via a Postgres extension that POSTs to a webhook endpoint on the API — needs a `POST /api/cron/sla-sweep` handler. Not built yet. |
 | **BullMQ + Redis worker (planned in P3.6.b)** | Separate Node process running `npm run worker`, scheduled internally. Adds Redis to infra. Sign-off received 2026-05-14 to build. |
 
+## P3.6.b — BullMQ worker wrapper (2026-05-14)
+
+Code-complete + tsc-clean. End-to-end smoke deferred to first production deploy — no local Redis available this session (no native Redis on Windows, Docker Desktop not running). The wrapper just schedules the already-smoke-verified sweep functions from P3.6, so the risk surface is the BullMQ wiring rather than the SLA logic.
+
+### Files added
+
+| File | Lines | Purpose |
+|---|---|---|
+| [`backend/src/jobs/queue.ts`](backend/src/jobs/queue.ts) | ~70 | Lazy `getConnection()` / `getSlaSweepQueue()` / `getApprovalDeadlineQueue()` factories. Each returns `null` when `REDIS_URL` is unset so the worker can decline-to-start cleanly. `closeAll()` for graceful shutdown. Queue + job name constants exported as strings. |
+| [`backend/src/jobs/worker.ts`](backend/src/jobs/worker.ts) | ~115 | Separate Node entry point (`npm run worker`). On boot: <br>• Refuses if `REDIS_URL` is unset (logs message, exits 0). <br>• Schedules repeating jobs via `Queue.add(jobName, {}, { repeat: { pattern: env.SLA_SWEEP_CRON, key: 'sla-sweep-cron' } })` — fixed repeat keys so re-runs don't accumulate duplicates. <br>• Constructs two `Worker` instances (concurrency 1 each) wired to `checkSlaTimers` and `checkApprovalDeadlines` respectively. <br>• Logs every completed/failed job. <br>• SIGINT/SIGTERM → closes both Workers + both Queues + Redis + Prisma → exits 0. |
+
+### Files modified
+
+| File | Change |
+|---|---|
+| [`backend/src/config/env.ts`](backend/src/config/env.ts) | + `REDIS_URL: z.string().optional()`, + `SLA_SWEEP_CRON: z.string().default('every 15 min crontab')` (default `*/15 * * * *`), + `APPROVAL_DEADLINE_CRON: z.string().default('every 30 min crontab')` (default `*/30 * * * *`). API process never reads `REDIS_URL` — only the worker does. |
+| [`backend/package.json`](backend/package.json) | + deps: `bullmq` `^5.76.8`, `ioredis` `^5.10.1` (18 packages added total). + scripts: `worker`, `worker:dev` (the latter via `tsx watch` for local iteration). |
+
+### Verified locally
+
+| Check | Result |
+|---|---|
+| `tsc --noEmit` | EXIT=0 |
+| `npm run worker` with REDIS_URL unset | logs `[worker] REDIS_URL not set — worker not starting. Set REDIS_URL or use \`npm run sla:sweep\` for ad-hoc runs.` and exits 0 — graceful path works |
+| `getConnection()` returns `null` when `REDIS_URL` undefined | ✓ in code |
+| API process boots without Redis | ✓ — only the worker imports `./jobs/queue` |
+
+### Production startup path (to verify on first deploy)
+
+```bash
+# 1. Provision Redis on your platform (Upstash, Render Redis, Aiven, etc.)
+# 2. Set REDIS_URL in the worker service's env:
+export REDIS_URL=rediss://default:<password>@oregon-redis.render.com:6379
+# 3. Start the worker as a SEPARATE service (not in the API process):
+npm run worker
+
+# Verify in Bull Board or via Redis CLI:
+redis-cli LRANGE bull:sla-sweep:wait 0 -1   # any queued jobs
+redis-cli ZRANGE bull:sla-sweep:delayed 0 -1 WITHSCORES   # next firing time
+```
+
+The repeating-job pattern uses BullMQ's `Queue.add(name, data, { repeat: { pattern, key } })` API. The fixed `repeat.key` (`'sla-sweep-cron'` and `'approval-deadline-cron'`) makes re-starts idempotent — BullMQ deduplicates schedules by key.
+
+### Notes
+
+- **Worker concurrency = 1** for both queues. The sweep functions already lock per-row via `SELECT FOR UPDATE`; concurrency > 1 would serialize on the locks anyway and just add Redis contention.
+- **`removeOnComplete: { count: 100 }` + `removeOnFail: { count: 200 }`** so the Redis job history doesn't grow unbounded. Tune via env if needed.
+- **`Worker` is created per-queue** rather than one Worker handling both job names. Cleaner separation; BullMQ matches one Worker → one Queue.
+- **The repeating jobs use the OLD-style `repeat: { pattern: '...' }`** (BullMQ v5 API). The newer `JobScheduler` API is also valid; we chose the older form because the docs are more stable and our cron strings are simple.
+
+### Three open follow-ups for the eventual deploy
+
+| Item | Note |
+|---|---|
+| Bull Board admin route | Add `@bull-board/express` + a route at `/api/admin/queues` for ops to inspect queues + manually trigger jobs. ~30 LoC; skipped now to keep this slice focused. |
+| Render `worker` service in `render.yaml` | Single new service block: `type: worker`, `startCommand: npm run worker`, env injects `REDIS_URL` from a managed Redis. Not yet committed because the user's `render.yaml` was last touched pre-P3 and may need other updates. |
+| `pg_cron` fallback | If Redis isn't desired in some environment, the same sweep functions can be triggered by a Postgres extension via a webhook endpoint on the API. Not built; sweep functions are already runner-agnostic. |
+
 ---
 
 # Phase 3 — Frontend — Approval & SLA UI
