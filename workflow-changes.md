@@ -1044,6 +1044,76 @@ Smoke run 3 — **REJECTED via `/transition`** (after P3.5.b transition-body fix
 - **`ApprovalInstance` lacks `@@unique([ticket, policy])`** that Django has. Multiple ApprovalInstance rows per (ticket, policy) are permitted in our schema — useful for retry-after-rejection. The `ensureInstance` function in `approval.layer.ts` uses a `findFirst({ status: 'PENDING' })` query to enforce "at most one open per (ticket, policy)" instead. Documented in code.
 - **Pure-function satisfaction checks** for `ALL_REQUIRED` use a simplified `Set(approvers).size >= requiredCount` rather than enumerating the role-or-user union as Django does. Edge case: if a policy has `approverRoles=[QE], requiredCount=1` and 1 QE approves, we're satisfied. If `requiredCount=2`, we need 2 distinct approvers (could be 2 QEs or 1 QE + 1 user). Adequate for Phase 3; can refine later if QMS audit semantics need stricter enumeration.
 
+## P3.6 — Sweep functions + CLI runner (2026-05-14)
+
+The cron-driven half of Phase 3. **Pure DB-only sweep functions** with no Redis dependency yet — the BullMQ wrapper that schedules these is P3.6.b. Today they're triggerable via `npm run sla:sweep` (CLI runner) or any host-level scheduler (PG cron, GitHub Actions, Render Cron, etc.). Each function is idempotent and concurrency-safe via `SELECT FOR UPDATE` locks.
+
+### Files added
+
+| File | Lines | Purpose |
+|---|---|---|
+| [`backend/src/jobs/sweeps/computeElapsed.ts`](backend/src/jobs/sweeps/computeElapsed.ts) | ~50 | Pure helpers: `computeElapsedSec(timer, now)` returns working-time elapsed (RUNNING/EXTENDED add the current run period; PAUSED freezes at `elapsedBeforePauseSec`; COMPLETED/BREACHED also terminal-frozen). `computePercentageConsumed(timer, policy, now)` returns `(elapsed / (duration + totalExtensionsSec)) * 100`. Mirrors `core-prod-scaling/backend/workflows/models/sla_timer.py:198-226`. |
+| [`backend/src/jobs/sweeps/checkSlaTimers.ts`](backend/src/jobs/sweeps/checkSlaTimers.ts) | ~310 | The Q11 combined sweep. Three sub-functions called in sequence: <br>• `checkThresholds` — for every `RUNNING/EXTENDED` timer, compute elapsed%, write `THRESHOLD_HIT` for any configured threshold past its % that hasn't already fired. Captures **actual elapsed %** in `thresholdPercentage` (distinct from configured `percentage`). <br>• `triggerSlaTransitions` — for every `THRESHOLD_HIT` without a matching `SLA_TRANSITION` AND whose threshold has `targetSlaStageId` AND whose timer has `escalationTicketId`: advance the escalation child ticket via direct `TicketFlow.currentStages` mutation (bypasses `orchestrator.performAction` to avoid recursion). Writes `SLA_TRANSITION` event. **Parent ticket is never touched** (Q13). <br>• `checkBreaches` — timers `RUNNING/EXTENDED` AND `deadline <= now()` → flip to `BREACHED`, snapshot final `elapsedBeforePauseSec`, write `BREACHED` event. |
+| [`backend/src/jobs/sweeps/checkApprovalDeadlines.ts`](backend/src/jobs/sweeps/checkApprovalDeadlines.ts) | ~60 | Independent sweep (separate cron in production — different domain): finds `ApprovalInstance` rows with `status = PENDING AND deadlineAt <= now()`, flips to `EXPIRED`. Ticket unaffected (same Q5 semantic — admins can re-trigger or the user can re-invoke the action). |
+| [`backend/src/jobs/run-once.ts`](backend/src/jobs/run-once.ts) | ~35 | CLI entry point. `npm run sla:sweep` runs both; `-- --sla` or `-- --approval` scope to one. Per-phase results JSON-printed at the end. Exits cleanly with `prisma.$disconnect()`. |
+| [`backend/package.json`](backend/package.json) | +1 line | New `sla:sweep` script. |
+
+### Idempotency + concurrency design
+
+- Each timer is locked via `await tx.$queryRaw\`SELECT id FROM "SlaTimer" WHERE id = ${cand.id} FOR UPDATE\`` inside a per-timer `prisma.$transaction({ timeout: 15_000 })` block. Two concurrent sweep runs serialize on the row lock.
+- Threshold firing is latched by **existing `SlaTimerEvent` rows**: re-runs of the sweep skip a `(timer, thresholdName)` pair that already has a `THRESHOLD_HIT`. Same for `SLA_TRANSITION` events latching auto-transitions.
+- Errors are caught per-timer/per-instance and accumulated into the result's `errors` array. One pathological row never aborts the sweep — the next 99 still process.
+
+### Bug found + fixed during the first smoke run
+
+First `npm run sla:sweep` against the live DB returned errors on every breach attempt:
+
+```
+Invalid prisma.$queryRaw() invocation:
+Raw query failed. Code: 42883. Message: operator does not exist: text = uuid
+HINT: No operator matches the given name and argument types. You might need to add explicit type casts.
+```
+
+Root cause: I wrote `WHERE id = ${cand.id}::uuid` — but `SlaTimer.id` is Prisma `String` → Postgres `TEXT`, not UUID. Stripped the `::uuid` cast from all three lock-statement sites. (Same applies to anywhere else that locks a Prisma `String @id` row via raw SQL — worth remembering as a Phase 3/4 gotcha.)
+
+### Smoke verification
+
+First run against the live DB (4 stale timers leftover from P3.5 smokes — already past their 300s deadlines):
+
+```
+SLA sweep: {
+  "timersInspected": 4,
+  "thresholdsFired": 8,        // multiple thresholds × 4 timers all met
+  "transitionsTriggered": 0,   // none of them had escalation tickets attached
+  "breachesFound": 4,          // all past deadline → flipped to BREACHED
+  "errors": []
+}
+Approval deadline sweep: { "inspected": 0, "expired": 0, "errors": [] }
+```
+
+Controlled smoke (fresh 1-hour policy + 2 thresholds, manual fast-forward via Prisma direct write):
+
+| Scenario | Setup | Sweep result | Events after |
+|---|---|---|---|
+| Fresh timer at 0% | raise ticket → auto-spawn | (no sweep run yet) | `STARTED` |
+| Cross 50% threshold | set `elapsedBeforePauseSec=1900` (~53% of 3600) → sweep | `thresholdsFired: 1` | + `THRESHOLD_HIT warning pct=53.0` *(actual elapsed % captured)* |
+| Re-run at 53% (idempotency) | same state → sweep again | `thresholdsFired: 0` | unchanged — latch works |
+| Cross 75% threshold | set `elapsedBeforePauseSec=2900` (~80%) → sweep | `thresholdsFired: 1` | + `THRESHOLD_HIT critical pct=80.8` |
+| Breach check at 80% | deadline still 1h future → sweep | `breachesFound: 0` | not breached (deadline in future) ✓ |
+| `tsc --noEmit` (backend) | — | EXIT=0 | — |
+
+The `thresholdPercentage` column on `SlaTimerEvent` captures the **actual elapsed %** at fire time (53.0, 80.8), distinct from the configured `SlaThreshold.percentage` (50, 75) — same audit-trail pattern as Django (`workflows/models/sla_timer.py:288-289`). Lets dashboards show "threshold was 75%, actually fired at 80.8%".
+
+### Production scheduling — three options
+
+The sweep functions are runner-agnostic. Until P3.6.b ships, ops have a few options:
+
+| Path | How |
+|---|---|
+| Host scheduler (Render Cron / GitHub Actions) | Add a 15-min cron that runs `npm run sla:sweep -- --sla` from a build artifact; separate 30-min cron for `-- --approval`. Already works today. |
+| `pg_cron` extension on Neon | Trigger via a Postgres extension that POSTs to a webhook endpoint on the API — needs a `POST /api/cron/sla-sweep` handler. Not built yet. |
+| **BullMQ + Redis worker (planned in P3.6.b)** | Separate Node process running `npm run worker`, scheduled internally. Adds Redis to infra. Sign-off received 2026-05-14 to build. |
+
 ---
 
 # Phase 3 — Frontend — Approval & SLA UI
