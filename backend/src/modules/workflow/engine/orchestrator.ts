@@ -12,9 +12,12 @@ import { advanceFlow } from './transition.layer';
 import { resolveNextStages, getPreviousActiveStageId } from './graph.layer';
 import { startBranches, markBranchCompleted } from './parallel.handler';
 import { emitAuditEvent } from './audit.emitter';
+import * as approvalLayer from './approval.layer';
+import { onTicketHeld, onTicketResumed } from './sla.handler';
 import type {
   ActorContext,
   PerformActionPayload,
+  PerformActionPayloadWithApproval,
   PerformActionResult,
 } from './types';
 
@@ -255,7 +258,7 @@ export const performAction = async (
   ticketId: string,
   actionId: string,
   actor: ActorContext,
-  payload: PerformActionPayload = {}
+  payload: PerformActionPayloadWithApproval = {}
 ): Promise<PerformActionResult> => {
   return prisma.$transaction(async (tx) => {
     // Lock the ticket row to serialise concurrent transitions
@@ -306,6 +309,50 @@ export const performAction = async (
     }
 
     await assertCanPerformAction(tx, action, actor.id);
+
+    // ── Phase 3 approval intercept ────────────────────────────────────────
+    // If this (stage, action) has a policy, route through approval.layer.
+    // - If decision REJECTED → instance flips REJECTED + audit event; ticket
+    //   stays in stage (Q5).
+    // - If approval pending more decisions → return `pending_approval`.
+    // - If satisfied → fall through to the existing behavior dispatch.
+    const policy = await approvalLayer.getPolicy(tx, currentStage.id, action.id);
+    if (policy && policy.isActive && !policy.isDeleted) {
+      const instance = await approvalLayer.ensureInstance(tx, ticket.id, policy, action.id);
+      const decision = payload.approvalDecision ?? 'APPROVED';
+      const decideResult = await approvalLayer.decide(tx, {
+        instanceId: instance.id,
+        decision,
+        comment: payload.approvalComment ?? payload.remarks ?? null,
+        actor,
+      });
+      if (decideResult.status === 'rejected') {
+        return {
+          status: 'approval_rejected',
+          ticketId: ticket.id,
+          flowId: flow.id,
+          enteredStages: [],
+          exitedStages: [],
+          isCompleted: false,
+          approval: { instanceId: decideResult.instanceId },
+        };
+      }
+      if (decideResult.status === 'pending') {
+        return {
+          status: 'pending_approval',
+          ticketId: ticket.id,
+          flowId: flow.id,
+          enteredStages: [],
+          exitedStages: [],
+          isCompleted: false,
+          approval: {
+            instanceId: decideResult.instanceId,
+            remaining: decideResult.remaining,
+          },
+        };
+      }
+      // status === 'satisfied' — fall through to the existing behavior path.
+    }
 
     const behavior = action.workflowAction.behavior;
     const customFields = (ticket.customFields ?? null) as Record<string, unknown> | null;
@@ -670,6 +717,8 @@ export const holdTicket = async (
       },
     });
     await setHoldOnActiveTracking(tx, ticketId, true, reason);
+    // Phase 3 SLA — pause active timers per policy.pauseOnHold.
+    await onTicketHeld(tx, ticketId, actor);
 
     await emitAuditEvent(
       tx,
@@ -704,6 +753,8 @@ export const resumeTicket = async (
       },
     });
     await setHoldOnActiveTracking(tx, ticketId, false);
+    // Phase 3 SLA — resume paused timers.
+    await onTicketResumed(tx, ticketId, actor);
 
     await emitAuditEvent(tx, { ticketId }, 'TICKET_RESUMED', {}, actor);
   }, TX_OPTIONS);

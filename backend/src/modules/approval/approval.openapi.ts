@@ -7,8 +7,13 @@ import { errorResponses } from '../../openapi/common';
 import {
   ApprovalModeSchema,
   CreateApprovalPolicySchema,
+  DecideApprovalSchema,
   UpdateApprovalPolicySchema,
 } from './approval.schema';
+
+DecideApprovalSchema.openapi('DecideApprovalInput', {
+  example: { decision: 'APPROVED', comment: 'Looks good, all checks done.' },
+});
 
 CreateApprovalPolicySchema.openapi('CreateApprovalPolicyInput', {
   example: {
@@ -264,5 +269,34 @@ registry.registerPath({
   },
 });
 
-// NOTE: POST /approvals/{instanceId}/decide is intentionally NOT registered.
-// It requires the engine intercept (engine/approval.layer.ts) which ships in P3.5.
+registry.registerPath({
+  method: 'post',
+  path: '/approvals/{instanceId}/decide',
+  tags: ['Approvals'],
+  summary: 'Record a decision on a PENDING approval instance',
+  description:
+    'On APPROVED + policy now satisfied: instance flips to SATISFIED. The caller ' +
+    'still needs to re-invoke the underlying action via ' +
+    '`POST /api/tickets/:id/actions/:actionId/perform` to actually advance the ' +
+    'ticket — the engine sees the satisfied instance on the next call and falls ' +
+    'through to the transition path.\n\n' +
+    'On REJECTED + policy becomes unsatisfiable (e.g. ALL_REQUIRED): instance ' +
+    'flips to REJECTED, audit event fires, **ticket stays in stage** (per Q5). ' +
+    'To walk the ticket back, the user must explicitly invoke a separate ' +
+    'REJECT-behavior action.',
+  security: [{ bearerAuth: [] }],
+  request: {
+    params: instanceIdParam,
+    body: { content: { 'application/json': { schema: DecideApprovalSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'Decided. Returns the post-decision view of the instance.',
+      content: { 'application/json': { schema: ApprovalInstanceResponse } },
+    },
+    400: errorResponses[400],
+    401: errorResponses[401],
+    403: errorResponses[403],
+    404: errorResponses[404],
+  },
+});

@@ -913,6 +913,137 @@ Extension request/decide flow not smoke-tested end-to-end this turn — needs a 
 2. **Soft-deleting an SLA policy does NOT cascade to its `SlaThreshold` rows.** When `softDeletePolicy` flips `isDeleted=true`, the threshold rows remain. If the policy is later revived via the idempotent-revive path (same `parentStageId`), the old thresholds are still attached. Could be a feature (preserves intent across edits) or a footgun (admin doesn't expect ghost thresholds). The replace-all-by-name semantics of `POST /thresholds` give admins a clean way to reset (`{thresholds: []}` clears all). Flagging for the FE plan to decide whether the inspector tab should "remember" thresholds across delete/re-create.
 3. **`POST` returns 201 on revive even when the policy already existed in soft-deleted state** — same pattern as P3.2. Matches Prisma's upsert semantics from the caller's view; not a bug.
 
+## P3.4 — BusinessCalendar module: CRUD admin (2026-05-13)
+
+Smallest of the Phase 3 module surfaces. Single resource, single router, full CRUD with name-unique enforcement, revive-by-name, and `affectedPolicies` count surfaced on delete so the admin UI can warn before nuking a referenced calendar.
+
+### Endpoints live (all gated by `business-calendar.*` permissions seeded in P3.1)
+
+| Method | Path | Permission | Behaviour |
+|---|---|---|---|
+| `GET` | `/api/business-calendars` *(`?search=&includeDeleted=true&withPolicyCount=true`)* | `business-calendar.read` | List, name-substring search (case-insensitive). `withPolicyCount=true` adds a flattened `policyCount` per row (count of non-deleted `SlaPolicy` rows pointing at the calendar) for the admin UI's delete-protection warning. |
+| `POST` | `/api/business-calendars` | `business-calendar.create` | Create. Name unique (409 on duplicate active). **Revives soft-deleted on name match** — same ID, new fields applied. |
+| `GET` | `/api/business-calendars/:id` | `business-calendar.read` | Single read. **Always** includes `policyCount` (no opt-in flag at the detail endpoint — the cost is one extra count, negligible). |
+| `PATCH` | `/api/business-calendars/:id` | `business-calendar.update` | Partial update with rename-uniqueness check. Rejects empty body. |
+| `DELETE` | `/api/business-calendars/:id` | `business-calendar.delete` | Soft-delete. Returns **`204` when no policies were referencing** the calendar; returns **`200 { affectedPolicies: N }`** when one or more active policies still point at it (the FK is `SetNull` on hard-delete only, so soft-delete doesn't auto-detach — admins must edit those policies). Idempotent — already-deleted returns `204`. |
+
+### Schema validation
+
+- **Time strings**: `^([01]\d|2[0-3]):[0-5]\d$` regex — strict 24h `HH:MM` (so `"9:00"` without the leading zero fails as a footgun).
+- **Day hours**: each weekday key is optional; value is `null` for non-working OR `{ start, end }` with start < end (enforced via Zod `.refine`).
+- **Holidays**: array of `YYYY-MM-DD` strings, max 366 entries.
+- **Timezone**: free string up to 64 chars (IANA names like `"Asia/Kolkata"` / `"America/New_York"` are validated at the runtime layer rather than Zod — the IANA list is huge).
+
+### Files added
+
+| File | Lines | Purpose |
+|---|---|---|
+| [`backend/src/modules/business-calendar/business-calendar.schema.ts`](backend/src/modules/business-calendar/business-calendar.schema.ts) | ~90 | Zod schemas — strict `HH:MM` regex, `start < end` refinement per day, holiday-array shape. |
+| [`backend/src/modules/business-calendar/business-calendar.service.ts`](backend/src/modules/business-calendar/business-calendar.service.ts) | ~115 | CRUD + revive-by-name + `policyCount` flatten + soft-delete returning `{ affectedPolicies }`. |
+| [`backend/src/modules/business-calendar/business-calendar.controller.ts`](backend/src/modules/business-calendar/business-calendar.controller.ts) | ~30 | Thin handlers. Delete handler returns 204 vs 200 based on `affectedPolicies`. |
+| [`backend/src/modules/business-calendar/business-calendar.routes.ts`](backend/src/modules/business-calendar/business-calendar.routes.ts) | ~55 | Single router (default export). |
+| [`backend/src/modules/business-calendar/business-calendar.openapi.ts`](backend/src/modules/business-calendar/business-calendar.openapi.ts) | ~105 | 5 `registerPath` calls + `BusinessCalendar` response shape (with optional `policyCount`). DELETE endpoint documents both 204 and 200 response variants. |
+
+### Wire-ins
+
+| File | Change |
+|---|---|
+| [`backend/src/app.ts`](backend/src/app.ts) | + default import of the router; + `app.use('/api/business-calendars', businessCalendarRoutes)`. |
+| [`backend/src/openapi/spec.ts`](backend/src/openapi/spec.ts) | + side-effect import for OpenAPI registration. |
+
+### Smoke verification — 13/13 green
+
+Backend restarted before smoke (per the documented `tsx watch` workaround from P3.3). Curl results against the live API:
+
+| # | Test | HTTP | Time |
+|---|---|---|---|
+| 1 | `GET /api/business-calendars` (default filter) | **200** | 2.0s — 2 seeded rows (`default-24x7`, `support-24x7`) |
+| 2 | `GET ?withPolicyCount=true` | **200** | 0.5s — `policyCount: 0` flattened on both rows |
+| 3 | `GET ?search=24x7` | **200** | 0.5s — search filter working |
+| 4 | `POST` "US East 9-5" (weekday hours + 2 US holidays) | **201** | 0.9s |
+| 5 | `GET /:id` | **200** | 0.4s — always includes `policyCount` |
+| 6 | `PATCH` `{ timezone: 'America/Los_Angeles' }` | **200** | 0.9s |
+| 7 | `POST` duplicate name | **409** | 0.2s — `A business calendar named "US East 9-5" already exists` |
+| 8 | `POST` invalid `"9:00"` (no leading zero) | **400** | <10ms — Zod stacked both regex + refinement errors |
+| 9 | `POST` `start: 17:00 >= end: 09:00` | **400** | <10ms — `start must be earlier than end` |
+| 10 | `PATCH` `{}` empty body | **400** | <10ms — rejected (see side finding below) |
+| 11 | `DELETE` (no policies referenced) | **204** | 0.9s |
+| 12 | `DELETE` again | **204** | 1.0s — idempotent |
+| 13 | `POST` revive-by-name | **201** | 2.3s — **same ID** returned, new `weeklySchedule` applied |
+| — | `tsc --noEmit` (backend) | EXIT=0 | — |
+
+### Side finding (cosmetic, applies to P3.2/P3.3 too)
+
+Test 10 returned `400` with `details: {}` empty. Root cause: schema-level `.refine((d) => Object.keys(d).length > 0, { message: '…' })` puts its error in Zod's **`formErrors`** (no field path), and our [`backend/src/middleware/validate.ts`](backend/src/middleware/validate.ts) only forwards `flatten().fieldErrors`. So the user sees the right status code but loses the explanatory message. Same shape applies to the empty-PATCH refinement in `approval.schema.ts` and `sla.schema.ts`. Easy fix later: either (a) attach a path like `{ path: ['_form'] }` on the refinement, or (b) merge `formErrors` into the details payload in the middleware. Cosmetic — flagged for a separate small PR.
+
+## P3.5 — Engine integration: SLA hooks + approval intercept + `/decide` endpoint + transition-body plumbing (2026-05-13)
+
+The Phase 3 admin/read surface from P3.2–P3.4 now actually fires on ticket actions. Three new engine layers, two existing engine files modified, plus the `/decide` endpoint deferred from P3.2 and a small additive plumb-through on `/transition`. End-to-end verified.
+
+### Files added
+
+| File | Purpose |
+|---|---|
+| [`backend/src/modules/workflow/engine/calendar.ts`](backend/src/modules/workflow/engine/calendar.ts) (~210 LoC) | `addBusinessSeconds(from, seconds, calendar)` + `elapsedBusinessSeconds(from, until, calendar)`. Iterative day-walk in the calendar's TZ using native `Intl.DateTimeFormat` — **no `date-fns-tz` dep added**. Falls back to wall-clock when `calendar` is null. 366-day safety cap to defeat infinite loops on pathological all-holiday calendars. DST-aware via per-day offset lookup (±1h drift possible at the exact transition minute — acceptable for SLA). |
+| [`backend/src/modules/workflow/engine/sla.handler.ts`](backend/src/modules/workflow/engine/sla.handler.ts) (~230 LoC) | Four hook functions ridden by existing engine call-sites: `onStageEntered` (creates timer; spawns escalation child ticket inline when `policy.escalationWorkflowId` is set), `onStageExited` (settles timer → `COMPLETED` or `COMPLETED_LATE` based on whether deadline already passed), `onTicketHeld` (accumulates `elapsedBeforePauseSec += now − lastResumedAt`, status → `PAUSED`), `onTicketResumed` (re-arms `lastResumedAt`, status → `RUNNING` or `EXTENDED` based on `extensionCount`). All hooks ride on the caller's tx. Each writes a `SlaTimerEvent` row and calls the noop `audit.emitter`. |
+| [`backend/src/modules/workflow/engine/approval.layer.ts`](backend/src/modules/workflow/engine/approval.layer.ts) (~290 LoC) | Pure logic + tx-aware mutators: `getPolicy`, `ensureInstance` (find-or-create PENDING per `(ticket, policy)`), `recordDecision` (with self-approval block, approver-eligibility check, unique-approver guard), `isPolicySatisfied` (pure — switches on mode: SINGLE / ANY / ALL_REQUIRED / QUORUM / SEQUENTIAL), `isPolicyUnsatisfiable` (Q5 short-circuit: any REJECTED on ALL_REQUIRED/SEQUENTIAL makes the policy unsatisfiable; QUORUM/ANY/SINGLE can still recover). Top-level `decide(tx, params)` is the entry point used by both the action intercept and the `/decide` endpoint. |
+
+### Files modified
+
+| File | Change |
+|---|---|
+| [`backend/src/modules/workflow/engine/types.ts`](backend/src/modules/workflow/engine/types.ts) | + 7 new `AuditEventType` values (`APPROVAL_DECISION_RECORDED`, `APPROVAL_SATISFIED`, `APPROVAL_REJECTED`, `SLA_TIMER_STARTED/COMPLETED/PAUSED/RESUMED`). + 2 new `PerformActionStatus` values: `'pending_approval'` and `'approval_rejected'`. + `PerformActionPayloadWithApproval` interface (extends `PerformActionPayload` with optional `approvalDecision`/`approvalComment`). + optional `approval: { instanceId, remaining? }` field on `PerformActionResult`. |
+| [`backend/src/modules/workflow/engine/tracking.layer.ts`](backend/src/modules/workflow/engine/tracking.layer.ts) | + optional `actor` param on `openStageTracking`; calls `onStageEntered` after tracking-row create. `closeStageTracking` calls `onStageExited` after closing all active rows. No-op when stage has no policy. |
+| [`backend/src/modules/workflow/engine/orchestrator.ts`](backend/src/modules/workflow/engine/orchestrator.ts) | + import `approvalLayer` + `{ onTicketHeld, onTicketResumed }`. + approval intercept block in `performAction` (after `assertCanPerformAction`, before behavior dispatch): calls `approvalLayer.getPolicy` and short-circuits with `'approval_rejected'` / `'pending_approval'` results when the policy isn't satisfied yet. Falls through to existing behavior dispatch when satisfied. + `onTicketHeld(tx, ticketId, actor)` call inside `holdTicket` and `onTicketResumed` inside `resumeTicket`. |
+| [`backend/src/modules/approval/{schema,service,controller,routes,openapi}.ts`](backend/src/modules/approval/) | + `DecideApprovalSchema` (Zod). + `decideInstance` service (wraps `approvalLayer.decide` in a `prisma.$transaction` and returns the post-decision view via `getInstance`). + `decideInstance` controller + route at `POST /api/approvals/:instanceId/decide` (permission: `approval.decide`). + OpenAPI registration with the long description explaining the SATISFIED → caller-re-invokes-action loop and the REJECTED stays-in-stage semantics. **This is the endpoint deferred from P3.2.** |
+| [`backend/src/modules/ticket/ticket.schema.ts`](backend/src/modules/ticket/ticket.schema.ts) | + `approvalDecision: z.enum(['APPROVED','REJECTED']).optional()` and `approvalComment: z.string().max(2000).optional()` on `TransitionBodySchema`, with an inline comment documenting the three response outcomes. Backwards-compatible — existing callers unaffected. **Engine already supported it** (P3.5 intercept reads `payload.approvalDecision`); the schema just had to let the fields through. |
+| [`backend/src/modules/ticket/ticket.openapi.ts`](backend/src/modules/ticket/ticket.openapi.ts) | + `'pending_approval'` / `'approval_rejected'` on `TransitionResponse.status` enum. + optional `approval: { instanceId, remaining? }` field with `.describe()` annotation. |
+
+### Verified end-to-end smoke
+
+Smoke run 1 — **happy path through `/transition`** (logged in as `qa@forgequantum.com` = QE role):
+
+| Step | Result |
+|---|---|
+| `POST /api/tickets { workflowId, title }` | 201 — ticket raised; `SlaTimer` auto-spawned by `onStageEntered`: `status=RUNNING`, `deadline=startedAt+300s`, `STARTED` event row written |
+| `GET /api/tickets/:id/sla` | `timers[0].status=RUNNING events=[STARTED]` |
+| `POST /api/tickets/:id/transition { actionId }` (no `approvalDecision` → defaults to APPROVED) | 200 — intercept fires → `ApprovalInstance` created → APPROVED record (`approvedAsRole=QUALITY_ENGINEER`) → `isPolicySatisfied` returns true (`QUORUM` 1-of-1) → falls through to behavior dispatch → ticket advances `Single Stage → New Stage`. Response: `status: 'transitioned', enteredStages: [{New Stage}], exitedStages: [{Single Stage}]` |
+| `GET /api/tickets/:id/approvals` | 1 instance, `status=SATISFIED`, 1 record (APPROVED by Priya Sharma, `approvedAsRole=QUALITY_ENGINEER`) |
+| `GET /api/tickets/:id/sla` after transition | `timer.status=COMPLETED completedAt=…` + `events=[STARTED, COMPLETED]` (closed by `onStageExited` hook) |
+
+Smoke run 2 — **REJECTED via `/decide` endpoint** (Q5 stay-in-stage):
+
+| Step | Result |
+|---|---|
+| Pre-create `PENDING ApprovalInstance` via Prisma | manual setup (real flow would have the intercept create it) |
+| `POST /api/approvals/:id/decide { decision: 'REJECTED', comment }` | 200 — instance flips `REJECTED`, record persisted with comment, returns the post-decision view |
+| `GET /api/tickets/:id` | `currentStages: ["Single Stage"]` — **ticket did NOT move** (Q5 verified) |
+| `POST /api/approvals/:id/decide` second time | 400 `"Approval instance is already REJECTED"` (idempotency guard) |
+
+Smoke run 3 — **REJECTED via `/transition`** (after P3.5.b transition-body fix):
+
+| Step | Result |
+|---|---|
+| `POST /api/tickets/:id/transition { actionId, approvalDecision: 'REJECTED', approvalComment: 'smoke reject' }` | 200 — response shape: `status: 'approval_rejected', enteredStages: [], exitedStages: [], approval: { instanceId: '…' }`. No stages moved. |
+| `GET /api/tickets/:id` | `currentStages: ["Single Stage"]` — stays put |
+| `GET /api/tickets/:id/approvals` | 1 instance `status=REJECTED`, 1 record `decision=REJECTED comment="smoke reject"` |
+| `tsc --noEmit` (backend) | EXIT=0 |
+
+### Three coherent approval paths the FE can use
+
+| Path | Use case |
+|---|---|
+| `POST /transition` (no `approvalDecision`) | Happy path; defaults to APPROVED via intercept; ticket advances when policy is satisfied. |
+| `POST /transition` with `approvalDecision: 'APPROVED' \| 'REJECTED'` + `approvalComment?` | Explicit decision through the same endpoint the FE already uses. Single-call workflow. |
+| `POST /api/approvals/:instanceId/decide` | Approver-only flow when the approver is NOT the actor who'll later move the ticket forward (e.g. a doc controller approves a QE's submission, then the QE hits `/transition` later). |
+
+### Notes + flagged items
+
+- **`tsx watch` was killed + restarted** twice during P3.5 smoke work — same Windows + chokidar reliability quirk as P3.3. No code fix needed; `taskkill /F /PID <pid>` then `npm run dev:backend` works.
+- **Escalation child ticket spawn** is wired but not exercised in smoke — `policy.escalationWorkflowId` was null in all smoke runs. The code path is `sla.handler.ts:onStageEntered` lines 78-127: creates a child `Ticket` + `TicketFlow` + initial `TicketStageTracking` with `parentTicketId` and `parentTicketStageId` set, and `SlaTimer.escalationTicketId` populated. Plan to smoke this in P3.7.
+- **`ApprovalInstance` lacks `@@unique([ticket, policy])`** that Django has. Multiple ApprovalInstance rows per (ticket, policy) are permitted in our schema — useful for retry-after-rejection. The `ensureInstance` function in `approval.layer.ts` uses a `findFirst({ status: 'PENDING' })` query to enforce "at most one open per (ticket, policy)" instead. Documented in code.
+- **Pure-function satisfaction checks** for `ALL_REQUIRED` use a simplified `Set(approvers).size >= requiredCount` rather than enumerating the role-or-user union as Django does. Edge case: if a policy has `approverRoles=[QE], requiredCount=1` and 1 QE approves, we're satisfied. If `requiredCount=2`, we need 2 distinct approvers (could be 2 QEs or 1 QE + 1 user). Adequate for Phase 3; can refine later if QMS audit semantics need stricter enumeration.
+
 ---
 
 # Phase 3 — Frontend — Approval & SLA UI

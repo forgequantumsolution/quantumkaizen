@@ -1,7 +1,9 @@
 import type { Request, Response } from 'express';
+import { Unauthorized } from '../../lib/httpError';
 import * as service from './approval.service';
 import type {
   CreateApprovalPolicyInput,
+  DecideApprovalInput,
   UpdateApprovalPolicyInput,
 } from './approval.schema';
 
@@ -43,4 +45,16 @@ export const listTicketApprovals = async (req: Request, res: Response) => {
 
 export const getInstance = async (req: Request, res: Response) => {
   res.json(await service.getInstance(req.params.instanceId as string));
+};
+
+export const decideInstance = async (req: Request, res: Response) => {
+  if (!req.user) throw Unauthorized();
+  const instanceId = req.params.instanceId as string;
+  const body = req.body as DecideApprovalInput;
+  res.json(
+    await service.decideInstance(instanceId, body, {
+      id: req.user.userId,
+      email: req.user.email,
+    }),
+  );
 };

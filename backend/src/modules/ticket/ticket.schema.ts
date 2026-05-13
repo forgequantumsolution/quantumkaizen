@@ -51,6 +51,23 @@ export const TransitionBodySchema = z.object({
   returnToStageId: z.string().uuid().optional(),
   reassignToUserId: z.string().uuid().optional(),
   reassignToRoleId: z.string().uuid().optional(),
+
+  // Phase 3 — approval intercept fields. When the (stage, action) has an
+  // ApprovalPolicy, the engine's approval layer reads these:
+  //   - Omitted        → defaults to APPROVED (the happy path)
+  //   - 'APPROVED'     → records an APPROVED vote; if the policy is now
+  //                      satisfied, falls through to the existing behavior
+  //                      dispatch; otherwise returns status='pending_approval'.
+  //   - 'REJECTED'     → records a REJECTED vote. If the policy is now
+  //                      unsatisfiable (ALL_REQUIRED / SEQUENTIAL with one no),
+  //                      the instance flips REJECTED and we return
+  //                      status='approval_rejected'. **Ticket stays in stage**
+  //                      (Q5 signed-off 2026-05-12) — to walk the ticket back,
+  //                      invoke a separate REJECT-behavior action.
+  // `approvalComment` is captured on the record. If omitted, `remarks` is
+  // used as a fallback so legacy callers don't need to change.
+  approvalDecision: z.enum(['APPROVED', 'REJECTED']).optional(),
+  approvalComment: z.string().max(2000).optional(),
 });
 
 export const HoldBodySchema = z.object({

@@ -55,12 +55,35 @@ const RaiseTicketResponse = z
 
 const TransitionResponse = z
   .object({
-    status: z.enum(['transitioned', 'completed', 'held', 'returned', 'reassigned']),
+    status: z.enum([
+      'transitioned',
+      'completed',
+      'held',
+      'returned',
+      'reassigned',
+      // Phase 3 — Approvals. Returned when the action's policy isn't yet
+      // satisfied (`pending_approval`) or was rejected (`approval_rejected`).
+      // In both cases enteredStages/exitedStages are empty and isCompleted=false.
+      'pending_approval',
+      'approval_rejected',
+    ]),
     ticketId: z.string().uuid(),
     flowId: z.string().uuid(),
     enteredStages: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
     exitedStages: z.array(z.object({ id: z.string().uuid(), name: z.string() })),
     isCompleted: z.boolean(),
+    approval: z
+      .object({
+        instanceId: z.string().uuid(),
+        remaining: z
+          .object({
+            rolesRequired: z.number().int(),
+            recordedApprovers: z.number().int(),
+          })
+          .optional(),
+      })
+      .optional()
+      .describe('Present when status is pending_approval or approval_rejected'),
   })
   .openapi('TransitionResponse');
 

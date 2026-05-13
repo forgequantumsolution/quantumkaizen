@@ -99,8 +99,16 @@ export const UpdateApprovalPolicySchema = z
     message: 'PATCH body must contain at least one field',
   });
 
+// ─── Decide endpoint body ──────────────────────────────────────────────────
+
+export const DecideApprovalSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  comment: z.string().max(2000).optional(),
+});
+
 // ─── Inferred types ────────────────────────────────────────────────────────
 
 export type CreateApprovalPolicyInput = z.infer<typeof CreateApprovalPolicySchema>;
 export type UpdateApprovalPolicyInput = z.infer<typeof UpdateApprovalPolicySchema>;
 export type ApprovalSequenceStep = z.infer<typeof ApprovalSequenceStepSchema>;
+export type DecideApprovalInput = z.infer<typeof DecideApprovalSchema>;

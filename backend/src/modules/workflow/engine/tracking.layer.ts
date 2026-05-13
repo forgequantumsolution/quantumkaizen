@@ -1,4 +1,6 @@
 import type { Prisma } from '@prisma/client';
+import { onStageEntered, onStageExited } from './sla.handler';
+import type { ActorContext } from './types';
 
 type Tx = Prisma.TransactionClient;
 
@@ -11,11 +13,16 @@ interface StageRef {
 /**
  * Open a new TicketStageTracking row for a stage the ticket just entered.
  * Caller is responsible for closing any prior active row first.
+ *
+ * Also fires the SLA `onStageEntered` hook — if the stage has an `SlaPolicy`,
+ * a timer is created (and an escalation child ticket is spawned when the
+ * policy has an `escalationWorkflowId`). No-op when no policy is bound.
  */
 export const openStageTracking = async (
   tx: Tx,
   ticketId: string,
-  stage: StageRef
+  stage: StageRef,
+  actor: ActorContext | null = null,
 ): Promise<{ id: string }> => {
   const row = await tx.ticketStageTracking.create({
     data: {
@@ -27,6 +34,7 @@ export const openStageTracking = async (
     },
     select: { id: true },
   });
+  await onStageEntered(tx, ticketId, stage, actor);
   return row;
 };
 
@@ -73,6 +81,13 @@ export const closeStageTracking = async (
       },
     });
   }
+  // Phase 3 SLA — settle any timers for this (ticket, stage) on exit.
+  await onStageExited(
+    tx,
+    params.ticketId,
+    params.stageId,
+    params.performedById ? { id: params.performedById } : null,
+  );
   return active.length;
 };
 

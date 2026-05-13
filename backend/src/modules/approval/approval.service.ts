@@ -12,8 +12,11 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
+import * as approvalLayer from '../workflow/engine/approval.layer';
+import type { ActorContext } from '../workflow/engine/types';
 import type {
   CreateApprovalPolicyInput,
+  DecideApprovalInput,
   UpdateApprovalPolicyInput,
 } from './approval.schema';
 
@@ -340,4 +343,33 @@ export const getInstance = async (instanceId: string) => {
   });
   if (!instance) throw NotFound(`Approval instance ${instanceId} not found`);
   return instance;
+};
+
+/**
+ * `POST /api/approvals/:instanceId/decide` — record a decision against an
+ * existing PENDING instance via the engine's approval layer. Stays in stage on
+ * REJECTED per Q5; flips the instance to SATISFIED and reloads the expanded
+ * view on APPROVED-and-satisfied.
+ *
+ * The engine's `decide()` does NOT advance the ticket — to actually move the
+ * ticket forward after the policy is satisfied, the user re-invokes the
+ * action via `POST /api/tickets/:id/actions/:actionId/perform`, which now
+ * sees a SATISFIED instance and falls through to the transition path.
+ */
+export const decideInstance = async (
+  instanceId: string,
+  input: DecideApprovalInput,
+  actor: ActorContext,
+) => {
+  await prisma.$transaction(async (tx) => {
+    await approvalLayer.decide(tx, {
+      instanceId,
+      decision: input.decision,
+      comment: input.comment ?? null,
+      actor,
+    });
+  });
+  // Reload via the public read path so the caller sees the post-decision shape
+  // (status + records list). Same select shape as getInstance.
+  return getInstance(instanceId);
 };

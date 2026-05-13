@@ -15,6 +15,7 @@ import { Router } from 'express';
 import * as ctrl from './approval.controller';
 import {
   CreateApprovalPolicySchema,
+  DecideApprovalSchema,
   IdParamSchema,
   InstanceIdParamSchema,
   UpdateApprovalPolicySchema,
@@ -78,6 +79,15 @@ instanceRouter.get(
   requirePermission('approval.read'),
   validate(InstanceIdParamSchema, 'params'),
   asyncHandler(ctrl.getInstance),
+);
+
+// Phase 3 — Approval decide endpoint. Wired in P3.5 (needs engine intercept).
+instanceRouter.post(
+  '/:instanceId/decide',
+  requirePermission('approval.decide'),
+  validate(InstanceIdParamSchema, 'params'),
+  validate(DecideApprovalSchema),
+  asyncHandler(ctrl.decideInstance),
 );
 
 // ─── /api/tickets/:id/approvals — list instances for a ticket ─────────────
