@@ -30,6 +30,7 @@ import {
   extensionRouter as slaExtensionRouter,
   ticketScopedSlaRouter,
 } from './modules/sla/sla.routes';
+import businessCalendarRoutes from './modules/business-calendar/business-calendar.routes';
 import { mountOpenApi } from './openapi';
 import { prisma } from './lib/prisma';
 import { asyncHandler } from './lib/asyncHandler';
@@ -78,6 +79,9 @@ export const buildApp = () => {
   app.use('/api/sla/timers', slaTimerRouter);            // GET, /:id/extend POST
   app.use('/api/sla/extensions', slaExtensionRouter);    // /:id/decide POST
   app.use('/api/tickets', ticketScopedSlaRouter);        // /:id/sla (GET)
+
+  // Phase 3 — Business calendars admin.
+  app.use('/api/business-calendars', businessCalendarRoutes);
 
   // OpenAPI / Swagger UI — public, mounted under /api so the Vite proxy serves
   // it through the frontend dev server too (http://localhost:3000/api/docs).
