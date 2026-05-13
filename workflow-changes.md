@@ -765,6 +765,154 @@ Schema field-level deltas (Migration B):
 - 11 untracked tables remain in Neon (`Form*`, `Iso*`, `AuditSchedule`) — they're now in `schema.prisma` after the user's merge, so they're tracked going forward; no historical migration covers their creation (they pre-date our migration history). Phase 5 (Audit Scheduling) and Phase 4 (Forms / e-sig) plans will need to account for `AuditSchedule` and `Form*` already existing, rather than introducing them. Flagged in [docs/WORKFLOW_PHASE_3_PLAN.md](docs/WORKFLOW_PHASE_3_PLAN.md) for downstream phases.
 - `escalationWorkflowId` is nullable everywhere. If a workflow author leaves it null, the SLA timer still fires `THRESHOLD_HIT` events for notification routing, but no auto-transitions happen. This is the intended graceful-degradation path.
 
+## P3.2 — Approval module: routes, controller, service, Zod, OpenAPI (2026-05-12)
+
+Shipped the approval admin + read surface as 5 new module files mirroring the workflow/ticket module shape. The `/decide` endpoint is intentionally deferred to P3.5 (needs the engine intercept in `engine/approval.layer.ts`).
+
+### Endpoints live (all gated by `approval.*` permissions seeded in P3.1)
+
+| Method | Path | Permission | Behaviour |
+|---|---|---|---|
+| `GET` | `/api/workflows/:id/approval-policies` *(`?includeInactive=true&includeDeleted=true`)* | `approval.policy.read` | Lists policies on a workflow. Default filter: active and not-deleted. |
+| `POST` | `/api/workflows/:id/approval-policies` | `approval.policy.create` | Creates a policy on `(stageId, actionId)`. Validates that stage belongs to workflow and action belongs to stage; surfaces 409 on duplicate active policy; **idempotently revives** a soft-deleted policy on the same `(stage, action)` by updating it instead of erroring. |
+| `GET` | `/api/approval-policies/:id` | `approval.policy.read` | Single-policy expansion with approverRoles/approverUsers/stage/action.workflowAction. |
+| `PATCH` | `/api/approval-policies/:id` | `approval.policy.update` | Partial update. Re-validates mode coherence on the merged-future view (e.g. switching to SEQUENTIAL without providing `approvalSequence` and the existing row has none → 400). |
+| `DELETE` | `/api/approval-policies/:id` | `approval.policy.delete` | Soft-delete; also flips `isActive=false`. Idempotent — already-deleted returns 204. |
+| `GET` | `/api/tickets/:id/approvals` | `approval.read` | Ticket's approval instances with records (approver + role + decision + comment), ordered by `decidedAt asc` per instance. |
+| `GET` | `/api/approvals/:instanceId` | `approval.read` | Single instance with policy + records expansion. |
+
+Deferred to P3.5 once `engine/approval.layer.ts` lands: `POST /api/approvals/:instanceId/decide`.
+
+### Files added
+
+| File | Lines | Purpose |
+|---|---|---|
+| [`backend/src/modules/approval/approval.schema.ts`](backend/src/modules/approval/approval.schema.ts) | ~105 | Zod schemas with mode-conditional refinements. `CreateApprovalPolicySchema` enforces "SEQUENTIAL → non-empty `approvalSequence`" and "non-SEQUENTIAL → at least one approverRole or approverUser". `UpdateApprovalPolicySchema` is fully partial but rejects empty bodies. `ApprovalSequenceStepSchema` enforces exactly-one of `{roleId, userId}` per step. |
+| [`backend/src/modules/approval/approval.service.ts`](backend/src/modules/approval/approval.service.ts) | ~270 | CRUD + read. Imposes the same coherence validator on PATCH against the merged-future view of the policy (read existing row, project the patch, re-validate). Soft-delete revive path reuses the existing row ID, preserving any historical references. |
+| [`backend/src/modules/approval/approval.controller.ts`](backend/src/modules/approval/approval.controller.ts) | ~40 | Thin handlers. |
+| [`backend/src/modules/approval/approval.routes.ts`](backend/src/modules/approval/approval.routes.ts) | ~90 | 4 routers exported (workflow-scoped policy, policy-by-id, instance-by-id, ticket-scoped instance list) so they can mount under their natural paths without colliding with existing routers under `/api/workflows` and `/api/tickets`. |
+| [`backend/src/modules/approval/approval.openapi.ts`](backend/src/modules/approval/approval.openapi.ts) | ~215 | 7 `registerPath` calls + 3 response schemas (`ApprovalPolicy`, `ApprovalInstance`, `ApprovalRecord`). |
+
+### Wire-ins
+
+| File | Change |
+|---|---|
+| [`backend/src/app.ts`](backend/src/app.ts) | + named imports of all 4 routers; + 4 `app.use(…)` lines after the existing modules. Both workflow-scoped and ticket-scoped routers coexist with the existing `workflowRoutes` / `ticketRoutes` at the same mount path — Express tries each in registration order. |
+| [`backend/src/openapi/spec.ts`](backend/src/openapi/spec.ts) | + side-effect `import '../modules/approval/approval.openapi'` so the registry is populated at boot. |
+
+### Smoke verification
+
+Backend restarted, all endpoints exercised with curl. Each row below is a real HTTP response from the live API:
+
+| # | Test | Result |
+|---|---|---|
+| 1 | `POST` create policy (ALL_REQUIRED, 2 QEs, 24h SLA) | **201** + full expansion |
+| 2 | `GET` list policies for workflow | **200**, 1 row |
+| 3 | `GET` single policy by id | **200**, matches list-row shape |
+| 4 | `PATCH` flip `isActive=false` | **200**, field flipped + `updatedAt` advanced |
+| 5 | `GET` list (default filter) | **200** `[]` — inactive correctly hidden |
+| 6 | `GET` list with `?includeInactive=true` | **200**, 1 row |
+| 7 | `DELETE` policy | **204** |
+| 8 | `GET` list after delete (with `includeInactive`) | **200** `[]` — soft-deleted correctly hidden |
+| 9 | `POST` again with same (stage, action) | **201**, **same ID** as #1 — idempotent revive working, new fields (mode=QUORUM) applied |
+| 10 | `POST` once more (now active) | **409** `An approval policy already exists for this stage + action` |
+| 11 | `POST` SEQUENTIAL mode without `approvalSequence` | **400** with Zod field detail `approvalSequence: ["SEQUENTIAL mode requires a non-empty approvalSequence"]` |
+| 12 | `GET /api/tickets/:realTicketId/approvals` | **200** `[]` — empty as expected (no instances created yet; P3.5 wires the engine intercept that creates them) |
+| 13 | `tsc --noEmit` (backend) | EXIT=0 |
+
+### Side finding worth flagging (not a P3.2 issue)
+
+The originally-seeded sample `ApprovalPolicy` + `SlaPolicy` rows on Document Review v1 were **gone** before the smoke run. Root cause: the workflow was rebuilt via the builder UI at some point (canonicalIds went from `sample-submit`/`sample-review` → `n1`/`node-mox8ekmq-1`), and the save-equals-rebuild pattern from P1.8 (no-versioning) cascade-deleted the FK-linked policies. **`BusinessCalendar` rows survived** because they're not stage-scoped.
+
+Same dynamic that wipes `TicketFlow.currentStages` on workflow edits (already documented as a Phase 2 known-quirk in [FE.P2.5](#fep25--known-interaction-with-no-versioning)). The Phase 3 FE plan's "Approvals" inspector tab will need a UX story for "policy was lost because the stage was rebuilt." The seed is idempotent (`findFirst` + `if (!existing)`) so `npm run db:seed` will re-create the sample after any rebuild — but only if the rebuilt stages keep the original `sample-submit`/`sample-review` canonicalIds (they won't, because the FE generates fresh `node-{ts}-{n}` ids). To re-seed reliably we'd need to either:
+- Match by stage `name` instead of `canonicalId` (current seed uses `canonicalId`)
+- Or move sample-policy seeding out of `seed.ts` into a manual `seed:phase3-samples` script
+
+Deferred — not blocking. Flagged for P3.5 / FE work.
+
+## P3.3 — SLA module: policies, thresholds, timers, extensions (2026-05-13)
+
+Shipped the SLA admin + read surface + extension request/approve flow as 5 new module files mirroring the P3.2 shape. Like P3.2, this is the **admin surface only** — `SlaTimer` rows are spawned by the engine when a ticket enters an SLA-tracked stage (P3.5). The extension request/approve endpoints work standalone (mutate an existing timer + emit an `EXTENDED` event) but won't have real timers to operate on until P3.5 lands.
+
+### Endpoints live (all gated by `sla.*` permissions seeded in P3.1)
+
+| Method | Path | Permission | Behaviour |
+|---|---|---|---|
+| `GET` | `/api/workflows/:id/sla-policies` *(`?includeDeleted=true`)* | `sla.policy.read` | Policies on this workflow (matched via `parentStage.workflowId`). Default filter: not-deleted. |
+| `POST` | `/api/sla-policies` | `sla.policy.create` | Create on a `parentStageId` (1:1 with `WorkflowStage`). Validates stage + calendar + escalation-workflow existence; surfaces 409 on duplicate active policy; **idempotently revives** soft-deleted policy on same stage. |
+| `GET` | `/api/sla-policies/:id` | `sla.policy.read` | Single policy with calendar + escalationWorkflow + responsibleRoles/Users + thresholds (sorted by percentage, each with notifyRoles/Users + targetSlaStage). |
+| `PATCH` | `/api/sla-policies/:id` | `sla.policy.update` | Partial update. `calendarId: null` and `escalationWorkflowId: null` disconnect via Prisma's `disconnect: true`. |
+| `DELETE` | `/api/sla-policies/:id` | `sla.policy.delete` | Soft-delete (idempotent). Does NOT cascade to `SlaThreshold` rows — see [§ side findings](#side-findings-not-blockers) below. |
+| `POST` | `/api/sla-policies/:id/thresholds` | `sla.policy.update` | **Replace-all-by-name** upsert. Wraps writes in a 30s tx; the deep re-read runs post-commit to avoid Neon RTT × N work exceeding the default 5s tx timeout. |
+| `DELETE` | `/api/sla-thresholds/:id` | `sla.policy.update` | Single threshold delete. |
+| `GET` | `/api/sla/timers` *(`?status=&workflowId=&ticketId=&page=&pageSize=`)* | `sla.timer.read` | Paginated dashboard query. Joins through `policy.parentStage.workflowId` when `workflowId` is provided. |
+| `GET` | `/api/tickets/:id/sla` | `sla.timer.read` | Returns `{ timers: [...] }` with each timer's full event history (THRESHOLD_HIT/EXTENDED/PAUSED/etc., ordered by `occurredAt`). |
+| `POST` | `/api/sla/timers/:id/extend` | `sla.timer.extend` | Create `SlaExtension(PENDING)`. Refuses if the timer is `COMPLETED` or `BREACHED`. |
+| `POST` | `/api/sla/extensions/:id/decide` | `sla.timer.extend.approve` | Approve/reject. On `APPROVED`: transactional path pushes `timer.deadline` by `extensionSec`, increments `totalExtensionsSec` + `extensionCount`, flips `RUNNING → EXTENDED` (preserves `PAUSED`), emits `SlaTimerEvent(EXTENDED, newDeadline, triggeredBy=approver)`. Self-approval blocked. |
+
+### Files added
+
+| File | Lines | Purpose |
+|---|---|---|
+| [`backend/src/modules/sla/sla.schema.ts`](backend/src/modules/sla/sla.schema.ts) | ~110 | Zod schemas. `duration` capped at 31 days, `extensionSec` at 30 days to catch unit typos. Threshold names free-form (matches Django). |
+| [`backend/src/modules/sla/sla.service.ts`](backend/src/modules/sla/sla.service.ts) | ~410 | All CRUD + flows. Notable patterns: replace-all-by-name threshold upsert wraps writes only (re-read post-commit per the P2028 fix below); `decideExtension` is atomic across the timer update + event write + extension status flip; self-approval blocked at the service layer. |
+| [`backend/src/modules/sla/sla.controller.ts`](backend/src/modules/sla/sla.controller.ts) | ~70 | Thin handlers. Extension endpoints pull `req.user.userId` from the JWT to populate `requestedById` / `approverId`. |
+| [`backend/src/modules/sla/sla.routes.ts`](backend/src/modules/sla/sla.routes.ts) | ~110 | **Six routers exported** to keep mounts orthogonal (workflow-scoped, policy, threshold, timer, extension, ticket-scoped). |
+| [`backend/src/modules/sla/sla.openapi.ts`](backend/src/modules/sla/sla.openapi.ts) | ~290 | 11 `registerPath` calls + 4 response schemas (`SlaPolicy`, `SlaTimer`, `SlaTimerWithEvents`, `SlaExtension`). |
+
+### Wire-ins
+
+| File | Change |
+|---|---|
+| [`backend/src/app.ts`](backend/src/app.ts) | + named imports of all 6 routers; + 6 `app.use(…)` lines. Same coexistence pattern as P3.2 — workflow-scoped + ticket-scoped routers share their mount path with the existing `workflowRoutes` / `ticketRoutes` (Express tries each in order). |
+| [`backend/src/openapi/spec.ts`](backend/src/openapi/spec.ts) | + side-effect `import '../modules/sla/sla.openapi'` so the registry gets the SLA paths at boot. |
+
+### Bug found + fixed during smoke (P2028 transaction-timeout in `upsertThresholds`)
+
+First version wrapped both the writes AND the deep `findUnique` re-read inside a single `prisma.$transaction`. On Neon (us-east-1 RTT ~250-450ms from this dev box) a 2-threshold create with m2m notifyRole connects + the deep policy re-read hit ~15 round-trips, blowing through the default 5s interactive-tx timeout:
+
+```
+PrismaClientKnownRequestError: P2028
+Transaction already closed: A query cannot be executed on an expired transaction.
+The timeout for this transaction was 5000 ms, however 5239 ms passed since
+the start of the transaction.
+```
+
+Fix in [`sla.service.ts:upsertThresholds`](backend/src/modules/sla/sla.service.ts):
+
+1. **Bumped the tx options** to `{ timeout: 30_000, maxWait: 10_000 }` (same pattern `seed.ts` uses for the Document-Review-v1 transaction).
+2. **Moved the deep re-read OUT of the tx** — writes commit first, then `prisma.slaPolicy.findUnique({ select: policySelect })` runs against the committed state. This is the right call architecturally regardless of timeout: the re-read does not need to be transactional with the writes.
+
+Both changes together; the tx body is now write-only (well under 5s) and the re-read is a separate (slow but not transactional) query. Pattern documented in code comment so future tx-heavy edits know to follow it.
+
+### Smoke verification
+
+Backend restarted twice during the smoke (`tsx watch` failed to pick up new files on Windows + chokidar; documented in [§ side findings](#side-findings-not-blockers) below). Final pass on the fresh backend:
+
+| # | Test | HTTP | Time | Verdict |
+|---|---|---|---|---|
+| 1 | `POST /api/sla-policies` (create on stage `4d30e794-…`) | **201** | ~10s | Idempotent revive returned same ID as a prior smoke; cold-start RTT. |
+| 2 | `POST /api/sla-policies/:id/thresholds` — 2 thresholds with notifyRoles (the previously-failing P2028 case) | **200** | 9.4s | Replace-all completed; thresholds visible with `notify=1` (QE role connected). |
+| 3 | `GET /api/sla-policies/:id` | **200** | 2.4s | Confirms `warning@50 + critical@75`, each with QE notifyRole. |
+| 4 | `POST .../thresholds` again — drop `warning`, change `critical → 80`, add `breach@100` | **200** | 6.4s | Replace-by-name semantics working; `warning` row was deleted, `critical` updated, `breach` created. |
+| 5 | `GET /api/sla-policies/:id` | **200** | 3.5s | Confirms `critical@80 + breach@100`. |
+| 6 | `PATCH /api/sla-policies/:id` `{ duration: 28800 }` | **200** | 3.8s | Field updated. |
+| 7 | `POST /api/sla-policies` (duplicate on same stage) | **409** | 0.5s | `Stage … already has an SLA policy`. |
+| 8 | `GET /api/sla/timers` | **200** | 2.1s | `{ items: [], total: 0, page: 1, pageSize: 50 }` — no timers yet (engine spawns them in P3.5). |
+| 9 | `GET /api/tickets/:realId/sla` | **200** | 0.9s | `{ timers: [] }`. |
+| 10 | `POST /api/sla/timers/<bogus-uuid>/extend` | **404** | 0.5s | `SLA timer … not found`. |
+| 11 | `POST /api/sla-policies` `{ duration: 30 }` (below min) | **400** | <10ms | Zod field detail `duration: ["Number must be greater than or equal to 60"]`. |
+| 12 | `DELETE /api/sla-policies/:id` | **204** | <1s | Soft-delete. |
+| 13 | `tsc --noEmit` (backend) | EXIT=0 | — | — |
+
+Extension request/decide flow not smoke-tested end-to-end this turn — needs a real `SlaTimer` row, which only exists after P3.5 wires the engine. The code paths are exercised by tests 10 (timer-not-found) and the type-level checks (Zod schemas + service signatures).
+
+### Side findings (not blockers)
+
+1. **`tsx watch` is unreliable on Windows when new files are added.** First smoke attempt against my just-edited `app.ts` returned 404s on every SLA route because the watcher had only booted once and never reloaded despite multiple edits. The Approval routes (added in a previous edit cycle) worked because they were present at the original boot. Symptom: log header shows `Backend listening …` exactly once, with no reload messages. **Workaround:** kill the listening PID and `npm run dev:backend` fresh. This same pattern affected the [P3.1 `prisma generate`](backend/prisma/migrations/20260512171857_workflow_phase3_django_alignment) step (file-lock on DLL) — Windows + Node-watcher combos seem to be a running theme. Not worth fixing in code; just `taskkill /F /PID <pid>` when in doubt.
+2. **Soft-deleting an SLA policy does NOT cascade to its `SlaThreshold` rows.** When `softDeletePolicy` flips `isDeleted=true`, the threshold rows remain. If the policy is later revived via the idempotent-revive path (same `parentStageId`), the old thresholds are still attached. Could be a feature (preserves intent across edits) or a footgun (admin doesn't expect ghost thresholds). The replace-all-by-name semantics of `POST /thresholds` give admins a clean way to reset (`{thresholds: []}` clears all). Flagging for the FE plan to decide whether the inspector tab should "remember" thresholds across delete/re-create.
+3. **`POST` returns 201 on revive even when the policy already existed in soft-deleted state** — same pattern as P3.2. Matches Prisma's upsert semantics from the caller's view; not a bug.
+
 ---
 
 # Phase 3 — Frontend — Approval & SLA UI

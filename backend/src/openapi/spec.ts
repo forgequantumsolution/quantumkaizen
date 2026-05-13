@@ -15,6 +15,7 @@ import '../modules/workflow/workflow.openapi';
 import '../modules/workflow/lookups/lookups.openapi';
 import '../modules/ticket/ticket.openapi';
 import '../modules/approval/approval.openapi';
+import '../modules/sla/sla.openapi';
 
 export const buildOpenApiSpec = () => {
   const generator = new OpenApiGeneratorV31(registry.definitions);

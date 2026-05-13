@@ -22,6 +22,14 @@ import {
   instanceRouter as approvalInstanceRouter,
   ticketScopedInstanceRouter as approvalTicketScopedRouter,
 } from './modules/approval/approval.routes';
+import {
+  workflowScopedPolicyRouter as slaWorkflowScopedRouter,
+  policyRouter as slaPolicyRouter,
+  thresholdRouter as slaThresholdRouter,
+  timerRouter as slaTimerRouter,
+  extensionRouter as slaExtensionRouter,
+  ticketScopedSlaRouter,
+} from './modules/sla/sla.routes';
 import { mountOpenApi } from './openapi';
 import { prisma } from './lib/prisma';
 import { asyncHandler } from './lib/asyncHandler';
@@ -62,6 +70,14 @@ export const buildApp = () => {
   app.use('/api/approval-policies', approvalPolicyRouter);    // /:id (GET, PATCH, DELETE)
   app.use('/api/approvals', approvalInstanceRouter);          // /:instanceId (GET)
   app.use('/api/tickets', approvalTicketScopedRouter);        // /:id/approvals (GET)
+
+  // Phase 3 — SLA module. Same multi-router pattern.
+  app.use('/api/workflows', slaWorkflowScopedRouter);   // /:id/sla-policies (GET)
+  app.use('/api/sla-policies', slaPolicyRouter);         // POST, /:id GET/PATCH/DELETE, /:id/thresholds POST
+  app.use('/api/sla-thresholds', slaThresholdRouter);    // /:id DELETE
+  app.use('/api/sla/timers', slaTimerRouter);            // GET, /:id/extend POST
+  app.use('/api/sla/extensions', slaExtensionRouter);    // /:id/decide POST
+  app.use('/api/tickets', ticketScopedSlaRouter);        // /:id/sla (GET)
 
   // OpenAPI / Swagger UI — public, mounted under /api so the Vite proxy serves
   // it through the frontend dev server too (http://localhost:3000/api/docs).
