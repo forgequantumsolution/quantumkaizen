@@ -53,6 +53,7 @@ export const deserializeFlow = (
       email_notification: n.data.basic_details?.email_notification ?? false,
       primary_actions: n.data.primary_actions ?? [],
       secondary_actions: n.data.secondary_actions ?? [],
+      persistedStageId: n.data.persistedStageId,
     };
     return { id: n.id, type: 'stage', position, data };
   });

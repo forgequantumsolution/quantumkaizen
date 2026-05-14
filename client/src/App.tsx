@@ -8,6 +8,7 @@ import WorkflowsPage from '@/features/workflows/WorkflowsPage';
 import WorkflowDetailPage from '@/features/workflows/WorkflowDetailPage';
 import WorkflowBuilderPage from '@/features/workflows/builder/WorkflowBuilderPage';
 import WorkflowLookupsPage from '@/features/admin/workflow-lookups/WorkflowLookupsPage';
+import BusinessCalendarsPage from '@/features/admin/business-calendars/BusinessCalendarsPage';
 // Tickets
 import TicketsPage from '@/features/tickets/TicketsPage';
 import TicketDetailPage from '@/features/tickets/TicketDetailPage';
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
           <Route path="/workflows/:id/builder" element={<WorkflowBuilderPage />} />
           <Route path="/admin/workflow-lookups" element={<WorkflowLookupsPage />} />
+          <Route path="/admin/business-calendars" element={<BusinessCalendarsPage />} />
           <Route path="/tickets" element={<TicketsPage />} />
           <Route path="/tickets/:id" element={<TicketDetailPage />} />
 

@@ -59,6 +59,8 @@ export interface BuilderNode {
   data: {
     label: string;
     nodeType?: StageType;
+    /** Set on persisted stages — the WorkflowStage UUID. Absent for new canvas-only nodes. */
+    persistedStageId?: string;
     basic_details?: {
       is_initial_stage?: boolean;
       email_notification?: boolean;

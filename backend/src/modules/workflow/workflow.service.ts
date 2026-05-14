@@ -99,6 +99,7 @@ const toFlowJson = (wf: WorkflowDetail) => {
     data: {
       label: stage.name,
       nodeType: stage.stageType.toLowerCase(),
+      persistedStageId: stage.id,
       basic_details: {
         is_initial_stage: stage.isInitialStage,
         email_notification: stage.sendEmail,

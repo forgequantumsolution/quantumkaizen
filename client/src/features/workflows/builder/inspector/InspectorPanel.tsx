@@ -14,6 +14,7 @@ import type {
 import type { WorkflowStageStatus } from '@/lib/api/workflowLookups';
 
 interface Props {
+  workflowId: string;
   selectedNode: Node<WorkflowNodeData> | null;
   onNodeUpdate: (id: string, data: WorkflowNodeData) => void;
   onNodeDelete: (id: string) => void;
@@ -22,6 +23,7 @@ interface Props {
 }
 
 export default function InspectorPanel({
+  workflowId,
   selectedNode,
   onNodeUpdate,
   onNodeDelete,
@@ -55,6 +57,7 @@ export default function InspectorPanel({
       </div>
       {kind === 'stage' && (
         <StageInspector
+          workflowId={workflowId}
           data={selectedNode.data as StageNodeData}
           onChange={handleChange}
           stageStatuses={stageStatuses}

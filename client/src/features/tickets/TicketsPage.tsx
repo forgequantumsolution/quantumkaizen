@@ -16,6 +16,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useTickets, type ListTicketsQuery } from '@/lib/api/ticket';
 import RaiseTicketModal from './shared/RaiseTicketModal';
 import TicketStatusBadge from './shared/TicketStatusBadge';
+import SlaBreachTile from './SlaBreachTile';
 
 const STATUS_OPTIONS: { value: NonNullable<ListTicketsQuery['status']> | ''; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -66,7 +67,11 @@ export default function TicketsPage() {
         }
       />
 
-      <Card className="mt-6 !p-4">
+      <div className="mt-6">
+        <SlaBreachTile />
+      </div>
+
+      <Card className="mt-4 !p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="relative">
             <Search

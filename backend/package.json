@@ -14,7 +14,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "sla:sweep": "tsx src/jobs/run-once.ts",
     "worker": "tsx src/jobs/worker.ts",
-    "worker:dev": "tsx watch src/jobs/worker.ts"
+    "worker:dev": "tsx watch src/jobs/worker.ts",
+    "test:unit": "vitest run --dir ../tests/unit",
+    "test:unit:watch": "vitest --dir ../tests/unit"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -44,6 +46,7 @@
     "@types/node": "^22.9.0",
     "prisma": "^5.22.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.6"
   }
 }

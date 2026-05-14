@@ -11,7 +11,11 @@ import { defineConfig, devices } from '@playwright/test';
  * are typically left running in separate terminals.
  */
 export default defineConfig({
-  testDir: './e2e',
+  // Scan both the committed perf suite under `e2e/` AND the gitignored
+  // local-only suites under `tests/e2e/`. testDir defaults to cwd; testMatch
+  // accepts a glob across multiple roots.
+  testDir: '.',
+  testMatch: ['e2e/**/*.spec.ts', 'tests/e2e/**/*.spec.ts'],
   timeout: 60_000,
   expect: { timeout: 10_000 },
   fullyParallel: false, // perf assertions are wall-clock; parallelism distorts them

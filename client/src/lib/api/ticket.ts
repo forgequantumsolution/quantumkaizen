@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { NamedRef, StageActionBehavior, UserRef } from './workflow';
+import { approvalKeys } from './approval';
+import { slaKeys } from './sla';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -239,6 +241,11 @@ export const useTransition = (id: string) => {
       qc.invalidateQueries({ queryKey: ticketKeys.track(id) });
       qc.invalidateQueries({ queryKey: ticketKeys.timeline(id) });
       qc.invalidateQueries({ queryKey: ticketKeys.all });
+      // Phase 3 — a transition can spawn approvals (intercept) and start/settle
+      // SLA timers (stage cross). Without these the awaiting card + SLA panel
+      // would lag by up to a full poll window.
+      qc.invalidateQueries({ queryKey: approvalKeys.ticketInstances(id) });
+      qc.invalidateQueries({ queryKey: slaKeys.ticketSla(id) });
     },
   });
 };
@@ -250,6 +257,7 @@ export const useHoldTicket = (id: string) => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ticketKeys.detail(id) });
       qc.invalidateQueries({ queryKey: ticketKeys.all });
+      qc.invalidateQueries({ queryKey: slaKeys.ticketSla(id) });
     },
   });
 };
@@ -261,6 +269,7 @@ export const useResumeTicket = (id: string) => {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ticketKeys.detail(id) });
       qc.invalidateQueries({ queryKey: ticketKeys.all });
+      qc.invalidateQueries({ queryKey: slaKeys.ticketSla(id) });
     },
   });
 };

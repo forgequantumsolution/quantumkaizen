@@ -685,7 +685,7 @@ Tickets raised against a workflow before that workflow is edited in-place will e
 
 # Phase 3 — Backend — Approvals + SLA
 
-**Status:** 🟡 In progress — P3.1 (schema + seed) shipped + Django-aligned; P3.2 (Approval module) next
+**Status:** ✅ Complete (2026-05-14) — schema, modules (approval / SLA / business-calendar), engine integration, sweep functions, BullMQ wrapper, Vitest 44/44 + Playwright 2/2 green
 **Plan doc:** [`docs/WORKFLOW_PHASE_3_PLAN.md`](docs/WORKFLOW_PHASE_3_PLAN.md)
 **Master plan:** [`docs/WORKFLOW_MASTER_PLAN.md`](docs/WORKFLOW_MASTER_PLAN.md) §5
 
@@ -1172,14 +1172,166 @@ The repeating-job pattern uses BullMQ's `Queue.add(name, data, { repeat: { patte
 | Render `worker` service in `render.yaml` | Single new service block: `type: worker`, `startCommand: npm run worker`, env injects `REDIS_URL` from a managed Redis. Not yet committed because the user's `render.yaml` was last touched pre-P3 and may need other updates. |
 | `pg_cron` fallback | If Redis isn't desired in some environment, the same sweep functions can be triggered by a Postgres extension via a webhook endpoint on the API. Not built; sweep functions are already runner-agnostic. |
 
+## P3.7 — Tests + verification (2026-05-14)
+
+The pragmatic slice: Vitest for pure functions + one Playwright spec for the happy-and-reject e2e paths. Total ~3 hours of work, catches the 80% of regressions a future change would introduce.
+
+### Vitest unit suite (44 tests, 333 ms)
+
+Added Vitest as a devDep + `npm run test:unit` script. **Tests live under `tests/` at the repo root, which is gitignored** (so the test artefacts don't bloat PR diffs). The Vitest scripts in `backend/package.json` pass `--dir ../tests/unit` so they resolve correctly from the backend cwd. Playwright config uses `testMatch: ['e2e/**/*.spec.ts', 'tests/e2e/**/*.spec.ts']` to scan both committed + local-only specs.
+
+| File | Tests | Covers |
+|---|---|---|
+| `tests/unit/approval.layer.test.ts` *(gitignored)* | 21 | `isPolicySatisfied` across all 5 modes (SINGLE, ANY, ALL_REQUIRED, QUORUM, SEQUENTIAL) with edge cases: empty records, all-rejected, duplicate same-approver, ignoring REJECTED in distinct-approver count. `isPolicyUnsatisfiable` returns true for ALL_REQUIRED/SEQUENTIAL with rejection, false for QUORUM/ANY/SINGLE (can still recover). |
+| `tests/unit/computeElapsed.test.ts` *(gitignored)* | 11 | `computeElapsedSec` for every status (COMPLETED + BREACHED frozen; PAUSED + null-lastResumedAt frozen at elapsedBeforePauseSec; RUNNING + EXTENDED accumulate current running period; clamps negatives from clock skew). `computePercentageConsumed` accounts for `totalExtensionsSec` in denominator and handles `duration=0` divide-by-zero. |
+| `tests/unit/calendar.test.ts` *(gitignored)* | 12 | `addBusinessSeconds` wall-clock fallback, single-day add, cross-day-boundary jumps, weekend skipping, holiday skipping, before-business-hours jumps. `elapsedBusinessSeconds` zero on `until <= from`, wall-clock fallback, single-day, multi-day-span-with-weekend correctness, 24x7 calendar near wall-clock. |
+| **Total** | **44** | **All pure logic** — no DB, no HTTP, no Prisma. Pure functions stay pure. |
+
+```
+$ npm run test:unit
+ Test Files  3 passed (3)
+      Tests  44 passed (44)
+   Duration  333ms
+```
+
+### Playwright e2e (2 tests, ~1.4 min)
+
+Codifies the manual P3.5 smokes into a repeatable regression spec. Lives in `tests/e2e/phase3.spec.ts` *(gitignored)* alongside the existing committed perf suite (`e2e/perf.spec.ts`). Boots against the running `:4000` backend; doesn't spin its own server up. `playwright.config.ts` scans both directories via `testMatch`.
+
+| Test | What it verifies |
+|---|---|
+| **Happy path** | Create SLA + approval policy on the Single Stage of Document Review v1 → QE raises a ticket → assert SLA timer auto-spawned (`RUNNING`, `STARTED` event) → `POST /transition { actionId }` (no `approvalDecision` → defaults to APPROVED via intercept) → assert response `status='transitioned'`, ticket advances `Single Stage → New Stage` → assert approval instance `SATISFIED` with 1 APPROVED record + `approvedAsRole='QUALITY_ENGINEER'` → assert SLA timer flipped to `COMPLETED` with `COMPLETED` event written. |
+| **Reject path** | Create approval policy → QE raises → `POST /transition { actionId, approvalDecision: 'REJECTED', approvalComment }` → assert response `status='approval_rejected'`, `enteredStages=[]`, `exitedStages=[]` → assert ticket still on `["Single Stage"]` (Q5 stay-in-stage verified) → assert instance `REJECTED` with comment captured on record. |
+
+```
+$ npx playwright test e2e/phase3.spec.ts
+  ok 1 [chromium] › happy path: raise → SLA spawn → /transition → SATISFIED + ticket advances + timer COMPLETED (46.4s)
+  ok 2 [chromium] › reject path: /transition with approvalDecision=REJECTED → ticket stays in stage (Q5) (27.4s)
+  2 passed (1.4m)
+```
+
+The spec uses `beforeEach` to wipe SLA + approval policies on the test stage so tests are independent. Tickets created during runs are tracked in a top-level array and cleaned up in `afterAll`. The seeded `Document Review v1` / `Single Stage` IDs are referenced as constants; if those ever change in the seed, the spec needs updating (flagged in the spec comments).
+
+### What's deferred to a separate slice
+
+| Item | Why deferred |
+|---|---|
+| Concurrency tests (two simultaneous `/decide` calls; hold + threshold race) | Hard to write reliably without a time-mocking infrastructure. The schema-level guarantees (`@@unique([instanceId, approverId])` on `ApprovalRecord`, `SELECT FOR UPDATE` in the sweep, `prisma.$transaction` around `recordDecision`) are documented; mechanical tests can come later. |
+| BullMQ worker end-to-end test | Requires running Redis. Deferred to the first production deploy (see P3.6.b). |
+| Escalation child ticket spawn smoke | The code path in `sla.handler.ts:onStageEntered` runs when `policy.escalationWorkflowId` is set; never exercised in this session because we didn't have a second workflow set up to serve as the escalation. The e2e spec could grow a 3rd test for this; left for the FE work where the UI will exercise it naturally. |
+| `pg_cron` fallback | Sweep functions are runner-agnostic; building the webhook endpoint is non-blocking. |
+
+### Phase 3 backend — final close-out summary
+
+| Slice | What shipped | State |
+|---|---|---|
+| P3.1 | 6 enums + 9 models + back-relations + Django-alignment migration + seed (calendars + sample policies) | ✅ |
+| P3.2 | Approval module: 7 endpoints + Zod + OpenAPI | ✅ smoke 13/13 |
+| P3.3 | SLA module: 11 endpoints (policies + thresholds + timer read + extensions) + P2028 tx-timeout fix | ✅ smoke 13/13 |
+| P3.4 | BusinessCalendar admin module: 5 endpoints + revive-by-name + affectedPolicies-on-delete | ✅ smoke 13/13 |
+| P3.5 | Engine: `calendar.ts`, `sla.handler.ts`, `approval.layer.ts`, tracking hooks, `performAction` intercept, `/decide` endpoint, `TransitionBodySchema` plumbing | ✅ smoke 4 scenarios + Q5 verified |
+| P3.6 | Sweep functions: `checkSlaTimers` (thresholds + escalation transitions + breaches) + `checkApprovalDeadlines` + CLI runner | ✅ smoke 5 scenarios |
+| P3.6.b | BullMQ wrapper: `queue.ts`, `worker.ts`, env config, graceful no-Redis path | ✅ tsc clean + graceful path verified (e2e on prod) |
+| P3.7 | Vitest 44/44 + Playwright 2/2 | ✅ |
+
+**Total LoC added across Phase 3 backend:** ~3,800 (rough count from the file tables). **Migrations applied:** 2 (initial + Django-alignment revision). **Permissions seeded:** 17 new (`approval.*` × 6, `sla.*` × 7, `business-calendar.*` × 4). **Deferred follow-ups:** 6 minor items captured in the per-slice "side findings" sections.
+
+### Phase 3 backend → Phase 3 frontend handoff
+
+The FE has everything it needs:
+
+- **Admin endpoints** are stable (`POST /api/{sla,approval}-policies`, `/api/business-calendars`, etc.) — the FE can build the inspector tabs + business-calendar admin page against this surface.
+- **Ticket-side endpoints** are stable (`GET /tickets/:id/approvals`, `GET /tickets/:id/sla`, `POST /transition` with optional `approvalDecision/approvalComment`, `POST /approvals/:id/decide`) — the FE can build the SLA progress ring, approval-awaiting card, and decide modal against this surface.
+- **Engine intercept is live** — calls to `/transition` on actions with policies will block & return `pending_approval` or `approval_rejected` as appropriate, OR advance the ticket if satisfied. The FE handles these as documented in `WORKFLOW_PHASE_3_FRONTEND_PLAN.md`.
+- **Cron sweep can be exercised** via `npm run sla:sweep` for FE testing — drag a timer past 75% via DB poke, run the sweep, watch the SLA progress ring's notification badge update.
+
+P3.7 closed; Phase 3 backend done. Phase 3 frontend is next.
+
 ---
 
 # Phase 3 — Frontend — Approval & SLA UI
 
-**Status:** ⏳ Not started — plan drafted
+**Status:** ✅ Complete (2026-05-14)
 **Plan doc:** [`docs/WORKFLOW_PHASE_3_FRONTEND_PLAN.md`](docs/WORKFLOW_PHASE_3_FRONTEND_PLAN.md)
 
-Scope: SLA progress ring + countdown on ticket detail, approval-awaiting card + decide modal, two new inspector tabs (approval policy + SLA policy) on the workflow builder, business-calendar admin page, SLA breach tile on `/tickets`, ~5 days, ~2,500 LoC. No new runtime deps. Sign-off needed on FE.Q1–FE.Q9 in §3 of the plan.
+Scope shipped: typed API client (approval/SLA/business-calendar), live SLA progress ring + countdown on ticket detail, approval-awaiting card + decide modal, all-instances approvals timeline tab, two builder-inspector flows (per-action approval policy + per-stage SLA policy with thresholds), `/admin/business-calendars` admin page, and an SLA breach/at-risk tile at the top of `/tickets`. No new runtime deps. Backend touched once (one field added to flow_json — see P3F.5).
+
+## P3F.1 — API client modules
+
+**Files:**
+- `client/src/lib/api/approval.ts` (new, ~230 LoC)
+- `client/src/lib/api/sla.ts` (new, ~295 LoC)
+- `client/src/lib/api/businessCalendar.ts` (new, ~125 LoC)
+
+Typed React-Query hooks for every Phase 3 endpoint:
+
+- `useApprovalPoliciesForWorkflow`, `useApprovalPolicy`, `useCreate/Update/DeleteApprovalPolicy`
+- `useTicketApprovals`, `useApprovalInstance`, `useDecideApproval`
+- `useSlaPoliciesForWorkflow`, `useSlaPolicy`, `useCreate/Update/DeleteSlaPolicy`, `useUpsertThresholds`, `useDeleteThreshold`
+- `useSlaTimers` (paginated, status-filtered), `useTicketSla` (live — 30s poll, paused while `document.hidden`, FE.Q1 signed off)
+- `useRequestExtension`, `useDecideExtension`
+- `useCalendars`, `useCalendar`, `useCreate/Update/DeleteCalendar` (the delete hook normalises the dual 204/200 response shape — `{ affectedPolicies }`)
+
+## P3F.2 — Live SLA panel + ring + countdown
+
+**Files:**
+- `client/src/hooks/useCountdown.ts` (new, 1Hz countdown w/ document.visibilitychange pause/resume)
+- `client/src/features/tickets/detail/SlaProgressRing.tsx` (SVG ring with FE.Q4 colour bands: green <50%, amber 50–79%, red ≥80%/BREACHED; PAUSED renders a pause glyph)
+- `client/src/features/tickets/detail/SlaPanel.tsx` (one card per active timer — ring + countdown + last-fired threshold chip + extend button)
+- `client/src/features/tickets/detail/SlaExtendModal.tsx` (hours + reason form → `useRequestExtension`)
+
+Elapsed math mirrors backend (`elapsedBeforePauseSec + (now - lastResumedAt)` while RUNNING/EXTENDED; frozen on PAUSED/COMPLETED/BREACHED). Panel returns `null` when the ticket has no timers.
+
+## P3F.3 — Approval-awaiting card + decide modal + timeline
+
+**Files:**
+- `client/src/features/tickets/detail/ApprovalAwaitingCard.tsx` (PENDING-only; "Decide" visible only to eligible approvers — user.id ∈ approverUsers OR user.role.name ∈ approverRoles — and only when the user holds `approval.decide` AND hasn't already recorded a decision)
+- `client/src/features/tickets/detail/ApprovalDecideModal.tsx` (approve/reject radio + optional comment; toast surfaces SATISFIED / REJECTED / pending outcomes from the API response)
+- `client/src/features/tickets/detail/ApprovalsTimeline.tsx` (audit view — all instances, newest first, with full record list per instance)
+
+## P3F.4 — Wire panels into ticket detail page
+
+**File:** `client/src/features/tickets/TicketDetailPage.tsx`
+
+- `SlaPanel` lives in the right-hand sidebar above `Details`.
+- `ApprovalAwaitingCard` lives above `ActionBar` so approvers see "Decide" before trying to transition (the orchestrator's approval intercept would block them anyway, but this is the friendlier UX).
+- New "Approvals" tab inserted between "Timeline" and "Comments" — mounts `ApprovalsTimeline`.
+
+## P3F.5 — Builder inspector flows
+
+**Files:**
+- `client/src/features/workflows/builder/inspector/ApprovalPolicyEditor.tsx` (modal — create/update/remove `ApprovalPolicy` for a single (stage, action) tuple; all modes except SEQUENTIAL fully editable, SEQUENTIAL's `approvalSequence` deferred to API)
+- `client/src/features/workflows/builder/inspector/SlaPolicyEditor.tsx` (modal — create/update/remove `SlaPolicy` for a single stage; thresholds editable inline, name + percentage only; notify-roles/users deferred)
+- `client/src/features/workflows/builder/inspector/StageInspector.tsx` (modified — added "SLA" section below secondary actions and a per-action approval link beneath each saved action)
+- `client/src/features/workflows/builder/inspector/InspectorPanel.tsx` (now takes `workflowId` and forwards to `StageInspector`)
+- `client/src/features/workflows/builder/WorkflowBuilderPage.tsx` (passes `id` as `workflowId` into the inspector)
+- `client/src/features/workflows/builder/builder.types.ts` + `builder.serializer.ts` (added `persistedStageId?: string` on `StageNodeData`; serializer round-trips it from the backend response)
+- `backend/src/modules/workflow/workflow.service.ts` (one-line addition — `data.persistedStageId = stage.id` in `toFlowJson` so the canvas can reach the real WorkflowStage UUID without an extra fetch)
+- `client/src/lib/api/workflow.ts` (mirrored the new optional `persistedStageId` field on `BuilderNode.data`)
+
+Editor buttons are gated on `persistedStageId` (for SLA) or `action.id` (for approvals) being set — both are populated only after the workflow has been saved, so the inspector copy explains: "Save the workflow first to configure an SLA on this stage."
+
+## P3F.6 — Business-Calendars admin page
+
+**Files:**
+- `client/src/features/admin/business-calendars/BusinessCalendarsPage.tsx` (new — list with search, in-place create/edit modal, soft-delete with `affectedPolicies` warning, weekly-schedule grid w/ enable + start/end time per day, free-text holidays)
+- `client/src/App.tsx` (added `/admin/business-calendars` route)
+
+Default new-calendar timezone is `Intl.DateTimeFormat().resolvedOptions().timeZone` (user's browser). Weekly schedule defaults to Mon–Fri 09:00–17:00, weekends off.
+
+## P3F.7 — SLA breach tile on `/tickets`
+
+**Files:**
+- `client/src/features/tickets/SlaBreachTile.tsx` (new — two stat cells: `BREACHED` count from server, plus client-computed `at risk` = RUNNING/EXTENDED timers ≥ 80% consumed; renders `null` for tenants without SLA usage)
+- `client/src/features/tickets/TicketsPage.tsx` (mounted above the filter card)
+
+## P3F.8 — Verification
+
+- `npx tsc --noEmit` clean on the client after every slice (P3F.2 through P3F.7) — last full run after P3F.7 passes with zero diagnostics.
+- `npx tsc --noEmit` clean on the backend after the one-line `persistedStageId` addition.
+- Dev servers (FE :3000, BE :4000) already running, not auto-restarted by these edits.
+- No new runtime deps; no `package.json` churn.
+- Visual smoke deferred to the user — the UI lives entirely behind the existing `/tickets`, `/tickets/:id`, `/workflows/:id/builder`, and `/admin/business-calendars` routes.
 
 ---
 

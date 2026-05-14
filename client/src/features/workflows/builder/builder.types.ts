@@ -23,6 +23,8 @@ export interface StageNodeData {
   email_notification?: boolean;
   primary_actions?: NodeAction[];
   secondary_actions?: NodeAction[];
+  /** WorkflowStage UUID — present on stages already persisted to the backend. */
+  persistedStageId?: string;
 }
 
 export interface ForkNodeData {

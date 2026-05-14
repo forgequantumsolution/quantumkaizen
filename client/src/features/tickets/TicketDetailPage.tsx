@@ -12,9 +12,13 @@ import ActionBar from './detail/ActionBar';
 import TimelineTab from './detail/TimelineTab';
 import CommentsTab from './detail/CommentsTab';
 import DocsTab from './detail/DocsTab';
+import SlaPanel from './detail/SlaPanel';
+import ApprovalAwaitingCard from './detail/ApprovalAwaitingCard';
+import ApprovalsTimeline from './detail/ApprovalsTimeline';
 
 const TABS = [
   { id: 'timeline', label: 'Timeline' },
+  { id: 'approvals', label: 'Approvals' },
   { id: 'comments', label: 'Comments' },
   { id: 'docs', label: 'Documents' },
 ];
@@ -144,6 +148,8 @@ export default function TicketDetailPage() {
             </Card>
           )}
 
+          <ApprovalAwaitingCard ticketId={ticket.id} />
+
           <ActionBar
             ticketId={ticket.id}
             isOnHold={ticket.isOnHold}
@@ -168,6 +174,7 @@ export default function TicketDetailPage() {
             <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
             <div className="mt-3">
               {activeTab === 'timeline' && <TimelineTab ticketId={ticket.id} />}
+              {activeTab === 'approvals' && <ApprovalsTimeline ticketId={ticket.id} />}
               {activeTab === 'comments' && <CommentsTab ticketId={ticket.id} />}
               {activeTab === 'docs' && <DocsTab ticketId={ticket.id} canUpdate={canUpdate} />}
             </div>
@@ -175,6 +182,8 @@ export default function TicketDetailPage() {
         </div>
 
         <div className="space-y-3">
+          <SlaPanel ticketId={ticket.id} />
+
           <Card>
             <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-3">
               Details

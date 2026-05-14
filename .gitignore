@@ -65,3 +65,8 @@ scripts/scratch/
 # ── Playwright test artifacts ────────────────────────────────────────
 playwright-report/
 test-results/
+
+# ── Local-only tests (P3.7 Vitest + extra Playwright specs) ──────────
+# Kept locally for regression catching; not committed to keep PR diffs lean.
+# Re-introduce on a case-by-case basis when a regression actually surfaces.
+tests/
