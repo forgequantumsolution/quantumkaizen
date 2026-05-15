@@ -2,8 +2,9 @@
 // Logic. Tabs that don't apply for the field type are hidden so the panel
 // doesn't get cluttered.
 import { useState } from 'react';
-import { fieldUsesOptions } from '../fieldCatalog';
+import { fieldIsTable, fieldUsesOptions } from '../fieldCatalog';
 import OptionsEditor from './OptionsEditor';
+import TableColumnsEditor from './TableColumnsEditor';
 import ValidationEditor from './ValidationEditor';
 import DependencyEditor, { type ParentField } from './DependencyEditor';
 import { emptyRule, type DependencyRule } from '../lib/dependency';
@@ -16,16 +17,19 @@ interface Props {
   parents: ParentField[];
 }
 
-type Tab = 'options' | 'rules' | 'logic';
+type Tab = 'columns' | 'options' | 'rules' | 'logic';
 
 export default function FieldBlockSettings({ field, onChange, parents }: Props) {
   const supportsOptions = fieldUsesOptions(field.type);
+  const isTable = fieldIsTable(field.type);
   const tabs: { key: Tab; label: string; visible: boolean }[] = [
+    { key: 'columns', label: 'Columns',    visible: isTable },
     { key: 'options', label: 'Options',    visible: supportsOptions },
     { key: 'rules',   label: 'Validation', visible: true },
     { key: 'logic',   label: 'Logic',      visible: true },
   ];
-  const [tab, setTab] = useState<Tab>(supportsOptions ? 'options' : 'rules');
+  const defaultTab: Tab = isTable ? 'columns' : supportsOptions ? 'options' : 'rules';
+  const [tab, setTab] = useState<Tab>(defaultTab);
 
   return (
     <div className="border-t border-slate-100 bg-slate-50/40">
@@ -48,6 +52,12 @@ export default function FieldBlockSettings({ field, onChange, parents }: Props) 
       </div>
 
       <div className="p-4 pt-3">
+        {tab === 'columns' && isTable && (
+          <TableColumnsEditor
+            columns={field.fields ?? []}
+            onChange={(cols) => onChange({ fields: cols })}
+          />
+        )}
         {tab === 'options' && supportsOptions && (
           <OptionsEditor
             value={field.options ?? []}

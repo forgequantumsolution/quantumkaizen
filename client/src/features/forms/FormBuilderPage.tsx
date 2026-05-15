@@ -17,9 +17,38 @@ import SectionRail from './components/SectionRail';
 import SectionPanel from './components/SectionPanel';
 import FieldTable from './components/FieldTable';
 import FormPreview from './components/FormPreview';
-import { evaluateVisibility } from './lib/dependency';
 import type { ParentField } from './components/DependencyEditor';
+import type { DependencyRule } from './lib/dependency';
 import type { FieldType, FormFieldDef, FormSectionDef } from './types';
+
+// Walk all sections and patch dependency rules whose references still point
+// at the old section/field name. Used when the user renames a section or a
+// field so previously-configured conditions don't silently break.
+const remapDependencies = (
+  sections: FormSectionDef[],
+  matcher: (cond: { sectionName: string; fieldName: string }) =>
+    | { sectionName?: string; fieldName?: string }
+    | null,
+): FormSectionDef[] => {
+  const fixRule = (raw: unknown): unknown => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const rule = raw as DependencyRule;
+    if (!Array.isArray(rule.conditions) || rule.conditions.length === 0) return raw;
+    let changed = false;
+    const conditions = rule.conditions.map((c) => {
+      const patch = matcher({ sectionName: c.sectionName, fieldName: c.fieldName });
+      if (!patch) return c;
+      changed = true;
+      return { ...c, ...patch };
+    });
+    return changed ? { ...rule, conditions } : raw;
+  };
+  return sections.map((sec) => ({
+    ...sec,
+    dependency: fixRule(sec.dependency),
+    fields: sec.fields.map((f) => ({ ...f, dependency: fixRule(f.dependency) })),
+  }));
+};
 
 type Mode = 'build' | 'preview';
 
@@ -60,8 +89,21 @@ export default function FormBuilderPage() {
   const updateSection = (idx: number, patch: Partial<FormSectionDef>) =>
     setSections((s) => s.map((sec, i) => (i === idx ? { ...sec, ...patch } : sec)));
 
-  const renameSection = (idx: number, name: string) =>
-    updateSection(idx, { section_name: name });
+  const renameSection = (idx: number, name: string) => {
+    const oldName = sections[idx]?.section_name;
+    if (oldName === undefined || oldName === name) {
+      updateSection(idx, { section_name: name });
+      return;
+    }
+    setSections((s) => {
+      const renamed = s.map((sec, i) =>
+        i === idx ? { ...sec, section_name: name } : sec,
+      );
+      return remapDependencies(renamed, (cond) =>
+        cond.sectionName === oldName ? { sectionName: name } : null,
+      );
+    });
+  };
 
   const addSection = () => {
     const next: FormSectionDef = {
@@ -97,16 +139,30 @@ export default function FormBuilderPage() {
 
   // ── Field mutators (scoped to active section) ────────────────
   const updateField = (sIdx: number, fieldId: string, patch: Partial<FormFieldDef>) =>
-    setSections((s) =>
-      s.map((sec, i) =>
+    setSections((s) => {
+      const sectionName = s[sIdx]?.section_name;
+      const oldField = s[sIdx]?.fields.find((f) => f.field_id === fieldId);
+      const renamedTo =
+        oldField && patch.name !== undefined && patch.name !== oldField.name
+          ? patch.name
+          : null;
+      const next = s.map((sec, i) =>
         i === sIdx
           ? {
               ...sec,
-              fields: sec.fields.map((f) => (f.field_id === fieldId ? { ...f, ...patch } : f)),
+              fields: sec.fields.map((f) =>
+                f.field_id === fieldId ? { ...f, ...patch } : f,
+              ),
             }
-          : sec
-      )
-    );
+          : sec,
+      );
+      if (!renamedTo || !sectionName || !oldField) return next;
+      return remapDependencies(next, (cond) =>
+        cond.sectionName === sectionName && cond.fieldName === oldField.name
+          ? { fieldName: renamedTo }
+          : null,
+      );
+    });
 
   const insertField = (sIdx: number, atIndex: number, type: FieldType) => {
     const slug = type.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
@@ -194,11 +250,6 @@ export default function FormBuilderPage() {
     return out;
   };
 
-  const previewLookup = (sectionName: string, fieldName: string): unknown => {
-    const sec = sections.find((s) => s.section_name === sectionName);
-    return sec?.fields.find((f) => f.name === fieldName)?.value;
-  };
-
   // ── Save handlers ───────────────────────────────────────────
   const onSaveDraft = async () => {
     if (!id) return;
@@ -223,14 +274,10 @@ export default function FormBuilderPage() {
   if (isLoading) return <div className="flex justify-center py-16"><Spinner /></div>;
 
   const currentSection = sections[activeSection];
-  const sectionVisible = currentSection
-    ? evaluateVisibility(currentSection.dependency, previewLookup)
-    : true;
-  const hiddenFieldIds = new Set<string>(
-    (currentSection?.fields ?? [])
-      .filter((f) => !evaluateVisibility(f.dependency, previewLookup))
-      .map((f) => f.field_id ?? '')
-  );
+  // Conditional rules are evaluated against real responses in the Preview
+  // tab and on the fill page. The build canvas always shows every field so
+  // they remain editable — the rule itself is summarised on each row.
+  const hiddenFieldIds = new Set<string>();
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -302,7 +349,6 @@ export default function FormBuilderPage() {
                     index={activeSection}
                     parents={parentsBefore(activeSection - 1)}
                     onChange={(p) => updateSection(activeSection, p)}
-                    hidden={!sectionVisible}
                   />
                   <FieldTable
                     fields={currentSection.fields}

@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, Copy, Eye, ListChecks, Settings, Trash2,
 } from 'lucide-react';
 import { FIELD_CATALOG, fieldUsesOptions } from '../fieldCatalog';
-import { isRuleConfigured } from '../lib/dependency';
+import { isRuleConfigured, summariseRule } from '../lib/dependency';
 import type { FieldType, FormFieldDef } from '../types';
 import FieldBlockSettings from './FieldBlockSettings';
 import type { ParentField } from './DependencyEditor';
@@ -163,7 +163,7 @@ export default function FieldTableRow({
 
         {/* Indicators */}
         <td className="px-3 py-2.5 w-32 hidden lg:table-cell">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {validationCount > 0 && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] text-amber-700 bg-amber-50 rounded px-1.5 py-0.5"
@@ -174,10 +174,11 @@ export default function FieldTableRow({
             )}
             {hasLogic && (
               <span
-                className="inline-flex items-center text-[10px] text-violet-700 bg-violet-50 rounded px-1.5 py-0.5"
-                title="Has visibility rule"
+                className="inline-flex items-center gap-1 text-[10px] text-violet-700 bg-violet-50 rounded px-1.5 py-0.5 max-w-full truncate"
+                title={summariseRule(field.dependency)}
               >
-                <Eye className="h-2.5 w-2.5" />
+                <Eye className="h-2.5 w-2.5 shrink-0" />
+                <span className="truncate">{summariseRule(field.dependency)}</span>
               </span>
             )}
             {!validationCount && !hasLogic && (

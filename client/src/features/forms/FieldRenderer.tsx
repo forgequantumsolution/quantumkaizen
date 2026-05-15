@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
 import { fieldIsTable } from './fieldCatalog';
-import type { FormFieldDef } from './types';
+import type { FormFieldDef, FieldOption } from './types';
 
 const { TextArea, Password } = Input;
 const { RangePicker: DateRangePicker } = DatePicker;
@@ -31,10 +31,96 @@ const dateValue = (v: unknown): Dayjs | null => {
   return d.isValid() ? d : null;
 };
 
+// Cell renderer for a single column of a table field. Mirrors the main field
+// renderer but only for the types the column editor exposes.
+const renderCell = (
+  col: FormFieldDef,
+  cellValue: unknown,
+  onChange: (v: unknown) => void,
+  disabled?: boolean,
+) => {
+  const opts: FieldOption[] = col.options ?? [];
+  switch (col.type) {
+    case 'number':
+      return (
+        <InputNumber
+          size="small"
+          value={cellValue as number | null | undefined}
+          onChange={(v) => onChange(v ?? null)}
+          disabled={disabled}
+          className="!w-full"
+        />
+      );
+    case 'date':
+      return (
+        <DatePicker
+          size="small"
+          value={dateValue(cellValue)}
+          onChange={(d) => onChange(d ? d.format('YYYY-MM-DD') : null)}
+          disabled={disabled}
+          className="!w-full"
+        />
+      );
+    case 'time':
+      return (
+        <TimePicker
+          size="small"
+          value={dateValue(cellValue ? `2000-01-01T${cellValue as string}` : null)}
+          onChange={(d) => onChange(d ? d.format('HH:mm') : null)}
+          disabled={disabled}
+          format="HH:mm"
+          className="!w-full"
+        />
+      );
+    case 'select':
+      return (
+        <Select
+          size="small"
+          value={(cellValue as string | number | undefined) ?? undefined}
+          onChange={(v) => onChange(v)}
+          disabled={disabled}
+          allowClear
+          options={opts.map((o) => ({ value: o.value, label: o.label }))}
+          className="!w-full"
+        />
+      );
+    case 'checkbox':
+      return (
+        <Checkbox
+          checked={!!cellValue}
+          onChange={(e) => onChange(e.target.checked)}
+          disabled={disabled}
+        />
+      );
+    case 'switch':
+      return (
+        <Switch
+          size="small"
+          checked={!!cellValue}
+          onChange={(v) => onChange(v)}
+          disabled={disabled}
+        />
+      );
+    case 'text':
+    default:
+      return (
+        <Input
+          size="small"
+          value={String(cellValue ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        />
+      );
+  }
+};
+
 export default function FieldRenderer({ field, value, onChange, disabled }: Props) {
   const id = useId();
   const type = field.type ?? '';
   const placeholder = (field as { placeholder?: string }).placeholder;
+  const validation = (field.validation ?? {}) as {
+    min?: number; max?: number; isInteger?: boolean;
+  };
 
   // ── Table ──────────────────────────────────────────────────
   if (fieldIsTable(type)) {
@@ -45,19 +131,25 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
       next[rIdx] = { ...(next[rIdx] ?? {}), [key]: v };
       onChange(next);
     };
+    if (cols.length === 0) {
+      return (
+        <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/60 p-4 text-center text-xs text-slate-500">
+          No columns defined yet — open this field's settings and add columns under the “Columns” tab.
+        </div>
+      );
+    }
     const columns = [
       ...cols.map((c) => ({
         title: c.label,
         dataIndex: c.name,
         key: c.name,
-        render: (_: unknown, _row: Record<string, unknown>, rIdx: number) => (
-          <Input
-            size="small"
-            value={String(rows[rIdx]?.[c.name] ?? '')}
-            onChange={(e) => update(rIdx, c.name, e.target.value)}
-            disabled={disabled}
-          />
-        ),
+        render: (_: unknown, _row: Record<string, unknown>, rIdx: number) =>
+          renderCell(
+            c,
+            rows[rIdx]?.[c.name],
+            (v) => update(rIdx, c.name, v),
+            disabled,
+          ),
       })),
       {
         title: '',
@@ -139,27 +231,52 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
         />
       );
 
-    case 'slider':
+    case 'slider': {
+      const sMin = validation.min ?? 0;
+      const sMax = validation.max ?? 100;
+      const step = validation.isInteger ? 1 : undefined;
       return (
-        <Slider
-          value={typeof value === 'number' ? value : 0}
-          onChange={(v) => onChange(v)}
-          disabled={disabled}
-        />
+        <div>
+          <Slider
+            value={typeof value === 'number' ? value : sMin}
+            onChange={(v) => onChange(v)}
+            disabled={disabled}
+            min={sMin}
+            max={sMax}
+            step={step}
+          />
+          <div className="flex justify-between text-[10px] text-slate-400 -mt-1 px-0.5">
+            <span>{sMin}</span>
+            <span>{sMax}</span>
+          </div>
+        </div>
       );
+    }
 
     case 'range': {
       const v = (value as { start?: number; end?: number }) ?? {};
+      const rMin = validation.min ?? 0;
+      const rMax = validation.max ?? 100;
+      const step = validation.isInteger ? 1 : undefined;
       return (
-        <Slider
-          range
-          value={[v.start ?? 0, v.end ?? 100]}
-          onChange={(arr) => {
-            const [start, end] = arr as [number, number];
-            onChange({ start, end });
-          }}
-          disabled={disabled}
-        />
+        <div>
+          <Slider
+            range
+            value={[v.start ?? rMin, v.end ?? rMax]}
+            onChange={(arr) => {
+              const [start, end] = arr as [number, number];
+              onChange({ start, end });
+            }}
+            disabled={disabled}
+            min={rMin}
+            max={rMax}
+            step={step}
+          />
+          <div className="flex justify-between text-[10px] text-slate-400 -mt-1 px-0.5">
+            <span>{rMin}</span>
+            <span>{rMax}</span>
+          </div>
+        </div>
       );
     }
 
