@@ -46,6 +46,10 @@ const generateUniqueTicketId = async (
     where: {
       flows: { some: { workflowId } },
       uniqueId: { startsWith: `${prefix}-NEX-` },
+      // Skip SLA escalation children (named `{parent}-SLA`). Their tail
+      // parses to NaN and would reset the counter to 1, colliding with the
+      // earliest top-level tickets on the same workflow.
+      parentTicketId: null,
     },
     orderBy: { uniqueId: 'desc' },
     select: { uniqueId: true },

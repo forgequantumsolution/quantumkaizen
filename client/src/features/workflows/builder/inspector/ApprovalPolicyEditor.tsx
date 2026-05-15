@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Trash2 } from 'lucide-react';
+import { Select as AntSelect, Spin } from 'antd';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import {
   useApprovalPoliciesForWorkflow,
@@ -24,6 +25,7 @@ import {
 } from '@/lib/api/approval';
 import { useRoles } from '@/features/admin/roles/hooks';
 import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 interface Props {
   isOpen: boolean;
@@ -68,10 +70,52 @@ export default function ApprovalPolicyEditor({
     [policies, stageId, actionId],
   );
 
-  const { data: rolesData } = useRoles({ pageSize: 200 });
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  // Backend-driven search. Each dropdown carries its own search string, which
+  // is debounced before being forwarded to the API. The first 50 records load
+  // by default (empty `search`); typing replaces them with matches from the
+  // server. Already-selected roles/users that fall outside the current page
+  // are preserved via a label cache (see `roleLabelCache` / `userLabelCache`
+  // below) so antd can render their tags even when the records aren't in the
+  // current `options` list.
+  const [roleSearch, setRoleSearch] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const debouncedRoleSearch = useDebouncedValue(roleSearch, 250);
+  const debouncedUserSearch = useDebouncedValue(userSearch, 250);
+
+  const { data: rolesData, isFetching: rolesFetching } = useRoles({
+    search: debouncedRoleSearch || undefined,
+    pageSize: 50,
+  });
+  const { data: usersData, isFetching: usersFetching } = useAdminUsers({
+    search: debouncedUserSearch || undefined,
+    isActive: true,
+    pageSize: 50,
+  });
   const roles = rolesData?.items ?? [];
   const users = usersData?.items ?? [];
+
+  // Label caches — record id → display label. Pre-seeded from the existing
+  // policy on open, and kept updated as new pages of search results arrive.
+  const [roleLabelCache, setRoleLabelCache] = useState<Record<string, string>>({});
+  const [userLabelCache, setUserLabelCache] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (roles.length === 0) return;
+    setRoleLabelCache((prev) => {
+      const next = { ...prev };
+      for (const r of roles) next[r.id] = r.name;
+      return next;
+    });
+  }, [roles]);
+
+  useEffect(() => {
+    if (users.length === 0) return;
+    setUserLabelCache((prev) => {
+      const next = { ...prev };
+      for (const u of users) next[u.id] = `${u.name} (${u.email})`;
+      return next;
+    });
+  }, [users]);
 
   const [mode, setMode] = useState<ApprovalMode>('SINGLE');
   const [requiredCount, setRequiredCount] = useState(1);
@@ -98,6 +142,18 @@ export default function ApprovalPolicyEditor({
       setApproverRoleIds(existing.approverRoles.map((r) => r.id));
       setApproverUserIds(existing.approverUsers.map((u) => u.id));
       setIsActive(existing.isActive);
+      // Pre-seed label caches so the multi-select tags render correctly even
+      // before the search queries return.
+      setRoleLabelCache((prev) => ({
+        ...prev,
+        ...Object.fromEntries(existing.approverRoles.map((r) => [r.id, r.name])),
+      }));
+      setUserLabelCache((prev) => ({
+        ...prev,
+        ...Object.fromEntries(
+          existing.approverUsers.map((u) => [u.id, `${u.name} (${u.email})`]),
+        ),
+      }));
     } else {
       setMode('SINGLE');
       setRequiredCount(1);
@@ -185,9 +241,6 @@ export default function ApprovalPolicyEditor({
     }
   };
 
-  const toggle = (list: string[], id: string): string[] =>
-    list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
-
   const isSubmitting = create.isPending || update.isPending;
 
   return (
@@ -227,51 +280,68 @@ export default function ApprovalPolicyEditor({
               <label className="text-xs font-medium text-gray-700 mb-1 block">
                 Approver roles
               </label>
-              <div className="max-h-32 overflow-auto border border-gray-200 rounded p-2 space-y-1">
-                {roles.length === 0 && (
-                  <p className="text-xs text-gray-400 italic">No roles defined.</p>
-                )}
-                {roles.map((r) => (
-                  <label
-                    key={r.id}
-                    className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={approverRoleIds.includes(r.id)}
-                      onChange={() => setApproverRoleIds((arr) => toggle(arr, r.id))}
-                    />
-                    <span>{r.name}</span>
-                  </label>
-                ))}
-              </div>
+              <AntSelect
+                mode="multiple"
+                allowClear
+                showSearch
+                style={{ width: '100%' }}
+                placeholder="Search roles…"
+                value={approverRoleIds}
+                onChange={(vals: string[]) => setApproverRoleIds(vals)}
+                onSearch={setRoleSearch}
+                onBlur={() => setRoleSearch('')}
+                // Backend-side filtering — disable antd's client-side filter.
+                filterOption={false}
+                notFoundContent={
+                  rolesFetching ? <Spin size="small" /> : <span>No roles match</span>
+                }
+                // Options = current search results, PLUS already-selected items
+                // not in the result set (rendered via the label cache).
+                options={[
+                  ...roles.map((r) => ({ value: r.id, label: r.name })),
+                  ...approverRoleIds
+                    .filter((id) => !roles.some((r) => r.id === id))
+                    .map((id) => ({
+                      value: id,
+                      label: roleLabelCache[id] ?? id,
+                    })),
+                ]}
+                maxTagCount="responsive"
+              />
             </div>
 
             <div>
               <label className="text-xs font-medium text-gray-700 mb-1 block">
                 Approver users
               </label>
-              <div className="max-h-32 overflow-auto border border-gray-200 rounded p-2 space-y-1">
-                {users.length === 0 && (
-                  <p className="text-xs text-gray-400 italic">No users available.</p>
-                )}
-                {users.map((u) => (
-                  <label
-                    key={u.id}
-                    className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={approverUserIds.includes(u.id)}
-                      onChange={() => setApproverUserIds((arr) => toggle(arr, u.id))}
-                    />
-                    <span>
-                      {u.name}{' '}
-                      <span className="text-gray-400 text-xs">({u.email})</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <AntSelect
+                mode="multiple"
+                allowClear
+                showSearch
+                style={{ width: '100%' }}
+                placeholder="Search users by name or email…"
+                value={approverUserIds}
+                onChange={(vals: string[]) => setApproverUserIds(vals)}
+                onSearch={setUserSearch}
+                onBlur={() => setUserSearch('')}
+                filterOption={false}
+                notFoundContent={
+                  usersFetching ? <Spin size="small" /> : <span>No users match</span>
+                }
+                options={[
+                  ...users.map((u) => ({
+                    value: u.id,
+                    label: `${u.name} (${u.email})`,
+                  })),
+                  ...approverUserIds
+                    .filter((id) => !users.some((u) => u.id === id))
+                    .map((id) => ({
+                      value: id,
+                      label: userLabelCache[id] ?? id,
+                    })),
+                ]}
+                maxTagCount="responsive"
+              />
             </div>
           </>
         )}

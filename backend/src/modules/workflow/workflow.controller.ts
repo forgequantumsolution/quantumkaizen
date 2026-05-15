@@ -1,11 +1,9 @@
 import type { Request, Response } from 'express';
 import * as service from './workflow.service';
 import { WorkflowValidationError } from './workflow.service';
-import { saveLayout } from './workflow.layout';
 import type {
   CreateWorkflowShellInput,
   ListWorkflowsQuery,
-  SaveLayoutBody,
   SaveWorkflowBody,
 } from './workflow.schema';
 
@@ -50,12 +48,6 @@ export const save = async (req: Request, res: Response) => {
 export const remove = async (req: Request, res: Response) => {
   await service.softDelete(req.params.id as string, userId(req));
   res.status(204).send();
-};
-
-export const layoutSave = async (req: Request, res: Response) => {
-  res.json(
-    await saveLayout(req.params.id as string, req.body as SaveLayoutBody)
-  );
 };
 
 export const draftSave = async (req: Request, res: Response) => {

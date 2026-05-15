@@ -57,7 +57,6 @@ const workflowDetailSelect = {
       splitType: true,
       joinType: true,
       joinPointId: true,
-      position: true,
       sendEmail: true,
       additionalData: true,
       actions: {
@@ -95,7 +94,6 @@ const toFlowJson = (wf: WorkflowDetail) => {
   const nodes = wf.stages.map((stage) => ({
     id: stage.canonicalId || stage.id,
     type: stage.stageType.toLowerCase(),
-    position: stage.position ?? { x: 0, y: 0 },
     data: {
       label: stage.name,
       nodeType: stage.stageType.toLowerCase(),

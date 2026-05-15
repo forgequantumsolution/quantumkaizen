@@ -347,7 +347,6 @@ model WorkflowStage {
   name           String
   canonicalId    String  @default("")
   isInitialStage Boolean @default(false)
-  position       Json?
   sendEmail      Boolean @default(false)
   additionalData Json?
 

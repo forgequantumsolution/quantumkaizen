@@ -8,6 +8,9 @@ import type {
   DecisionNodeData,
 } from './builder.types';
 
+// Auto-layout (dagre) decides actual positions at render time — see
+// `layout.ts`. The builder still needs a placeholder so React Flow can mount
+// the node before the layout pass runs.
 const DEFAULT_POS = { x: 0, y: 0 };
 
 /**
@@ -19,7 +22,6 @@ export const deserializeFlow = (
 ): { nodes: WorkflowReactFlowNode[]; edges: WorkflowReactFlowEdge[] } => {
   const nodes: WorkflowReactFlowNode[] = serverNodes.map((n) => {
     const kind = (n.data.nodeType ?? n.type ?? 'stage').toLowerCase();
-    const position = n.position ?? DEFAULT_POS;
     if (kind === 'fork') {
       const cfg = n.data.parallelConfig ?? {};
       const data: ForkNodeData = {
@@ -28,7 +30,7 @@ export const deserializeFlow = (
         splitType: cfg.splitType ?? 'AND',
         joinStageId: cfg.joinStageId ?? null,
       };
-      return { id: n.id, type: 'fork', position, data };
+      return { id: n.id, type: 'fork', position: DEFAULT_POS, data };
     }
     if (kind === 'join') {
       const cfg = n.data.parallelConfig ?? {};
@@ -37,7 +39,7 @@ export const deserializeFlow = (
         branchCount: cfg.branchCount ?? 2,
         joinType: cfg.joinType ?? 'AND',
       };
-      return { id: n.id, type: 'join', position, data };
+      return { id: n.id, type: 'join', position: DEFAULT_POS, data };
     }
     if (kind === 'decision') {
       const cfg = n.data.parallelConfig ?? {};
@@ -45,7 +47,7 @@ export const deserializeFlow = (
         label: n.data.label,
         branchCount: cfg.branchCount ?? 2,
       };
-      return { id: n.id, type: 'decision', position, data };
+      return { id: n.id, type: 'decision', position: DEFAULT_POS, data };
     }
     const data: StageNodeData = {
       label: n.data.label,
@@ -55,7 +57,7 @@ export const deserializeFlow = (
       secondary_actions: n.data.secondary_actions ?? [],
       persistedStageId: n.data.persistedStageId,
     };
-    return { id: n.id, type: 'stage', position, data };
+    return { id: n.id, type: 'stage', position: DEFAULT_POS, data };
   });
 
   const edges: WorkflowReactFlowEdge[] = serverEdges.map((e, idx) => ({
@@ -76,7 +78,8 @@ export const deserializeFlow = (
 };
 
 /**
- * Convert React Flow state to backend `flow_json` payload.
+ * Convert React Flow state to backend `flow_json` payload. Positions are no
+ * longer round-tripped to the server — layout is purely a client concern.
  */
 export const serializeFlow = (
   nodes: WorkflowReactFlowNode[],
@@ -89,7 +92,6 @@ export const serializeFlow = (
       return {
         id: n.id,
         type: 'fork',
-        position: n.position,
         data: {
           label: d.label,
           nodeType: 'fork',
@@ -106,7 +108,6 @@ export const serializeFlow = (
       return {
         id: n.id,
         type: 'join',
-        position: n.position,
         data: {
           label: d.label,
           nodeType: 'join',
@@ -122,7 +123,6 @@ export const serializeFlow = (
       return {
         id: n.id,
         type: 'decision',
-        position: n.position,
         data: {
           label: d.label,
           nodeType: 'decision',
@@ -134,7 +134,6 @@ export const serializeFlow = (
     return {
       id: n.id,
       type: 'stage',
-      position: n.position,
       data: {
         label: d.label,
         nodeType: 'stage',

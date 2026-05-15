@@ -5,7 +5,6 @@ import {
   DraftBodySchema,
   IdParamSchema,
   ListWorkflowsQuerySchema,
-  SaveLayoutBodySchema,
   SaveWorkflowBodySchema,
 } from './workflow.schema';
 import { validate } from '../../middleware/validate';
@@ -51,14 +50,6 @@ router.delete(
   requirePermission('workflow.delete'),
   validate(IdParamSchema, 'params'),
   asyncHandler(ctrl.remove)
-);
-
-router.post(
-  '/:id/save-layout',
-  requirePermission('workflow.update'),
-  validate(IdParamSchema, 'params'),
-  validate(SaveLayoutBodySchema),
-  asyncHandler(ctrl.layoutSave)
 );
 
 router.post(

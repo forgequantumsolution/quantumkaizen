@@ -1325,13 +1325,55 @@ Default new-calendar timezone is `Intl.DateTimeFormat().resolvedOptions().timeZo
 - `client/src/features/tickets/SlaBreachTile.tsx` (new — two stat cells: `BREACHED` count from server, plus client-computed `at risk` = RUNNING/EXTENDED timers ≥ 80% consumed; renders `null` for tenants without SLA usage)
 - `client/src/features/tickets/TicketsPage.tsx` (mounted above the filter card)
 
-## P3F.8 — Verification
+## P3F.8 — Verification + Playwright suite (2026-05-15)
 
-- `npx tsc --noEmit` clean on the client after every slice (P3F.2 through P3F.7) — last full run after P3F.7 passes with zero diagnostics.
-- `npx tsc --noEmit` clean on the backend after the one-line `persistedStageId` addition.
-- Dev servers (FE :3000, BE :4000) already running, not auto-restarted by these edits.
-- No new runtime deps; no `package.json` churn.
-- Visual smoke deferred to the user — the UI lives entirely behind the existing `/tickets`, `/tickets/:id`, `/workflows/:id/builder`, and `/admin/business-calendars` routes.
+Static checks:
+- `npx tsc --noEmit` clean on the client after every slice (P3F.2 through P3F.7).
+- `npx tsc --noEmit` clean on the backend after the `persistedStageId` addition.
+- No new runtime deps.
+
+End-to-end Playwright coverage. All specs live under the gitignored `tests/e2e/` root, scanned via the existing `playwright.config.ts` `testMatch`.
+
+**Harness changes**
+- `playwright.config.ts`: bumped per-test `timeout` 60s → 120s (the warm happy-path needs ~50s against Neon; cold runs were timing out). `baseURL` flipped from `http://localhost:3000` → `http://localhost:5173` (FE is on Vite's default port).
+- New shared `tests/e2e/_helpers.ts` — Prisma client wired to `backend/.env`, seeded user/role/workflow IDs, login + `seedAuthAndGoto` (writes the zustand-persist `qk-auth` key the protected route gate actually reads, not just raw `qk_token`), sweep CLI runners via `execSync npm run sla:sweep -- --sla|--approval`, plus `fastForwardTimer` / `expireApproval` time-travel helpers.
+
+**Cache-invalidation fix shipped during testing** ([client/src/lib/api/ticket.ts:236-274](client/src/lib/api/ticket.ts#L236-L274))
+`useTransition` / `useHoldTicket` / `useResumeTicket` now invalidate `approvalKeys.ticketInstances(id)` and `slaKeys.ticketSla(id)` on success. Without this the `ApprovalAwaitingCard` + `SlaPanel` lagged a full 30s poll behind every state change. The `ApprovalDecideModal` UI test in `phase3-ui-flows.spec.ts` exercises this path (decide → awaiting card must disappear).
+
+**Backend bug caught + fixed** ([backend/src/jobs/sweeps/checkApprovalDeadlines.ts:39](backend/src/jobs/sweeps/checkApprovalDeadlines.ts#L39))
+The approval-deadline sweep's `SELECT FOR UPDATE` raw query cast `id::uuid`, but `ApprovalInstance.id` is `String` in Prisma (TEXT at the DB layer). Postgres rejected with `ERROR: operator does not exist: text = uuid` every sweep run — the sweep was silently no-op'ing in production. Same class of bug as the SlaTimer one fixed in P3.6. Dropped the cast; the deadline-expiry test now sees PENDING → EXPIRED.
+
+**Spec inventory** (18 tests, ~10.8 min wall clock)
+
+| File | Test | Coverage |
+|---|---|---|
+| `phase3.spec.ts` | happy path (raise → SLA spawn → /transition → SATISFIED + COMPLETED) | API |
+| `phase3.spec.ts` | reject path (Q5 stay-in-stage on REJECTED) | API |
+| `phase3-backend-modes.spec.ts` | SINGLE — one approval satisfies | API |
+| `phase3-backend-modes.spec.ts` | ANY — first APPROVED wins | API |
+| `phase3-backend-modes.spec.ts` | ALL_REQUIRED(N=2) — PENDING after 1, SATISFIED after 2 | API |
+| `phase3-backend-modes.spec.ts` | QUORUM(N=2) of 3 — 2nd satisfies; 3rd is rejected | API |
+| `phase3-backend-modes.spec.ts` | PATCH mode + approver set takes effect on next instance | API |
+| `phase3-backend-modes.spec.ts` | Approval-deadline sweep flips PENDING → EXPIRED | API + sweep CLI |
+| `phase3-ui.spec.ts` | TicketDetailPage mounts SlaPanel + Approvals tab | UI |
+| `phase3-ui.spec.ts` | TicketsPage mount path with running timer | UI |
+| `phase3-ui.spec.ts` | Workflow builder inspector finds persisted stage + SLA section | UI |
+| `phase3-ui-flows.spec.ts` | ApprovalDecideModal end-to-end (decide → awaiting card disappears) | UI + invalidation |
+| `phase3-ui-flows.spec.ts` | ApprovalsTimeline tab shows recorded entry | UI |
+| `phase3-ui-flows.spec.ts` | Builder SlaPolicyEditor create → inspector summary updates | UI |
+| `phase3-ui-flows.spec.ts` | Builder ApprovalPolicyEditor create → action label updates | UI |
+| `phase3-ui-flows.spec.ts` | SlaExtendModal request flow | UI |
+| `phase3-ui-flows.spec.ts` | BusinessCalendarsPage create + list + delete | UI |
+| `phase3-ui-flows.spec.ts` | SlaBreachTile renders with a BREACHED timer (DB-seeded) | UI |
+
+**Gaps still untested** (deferred per scope):
+- Backend SLA timer pause/resume on hold/unhold.
+- SLA extension request → admin approval → deadline shift end-to-end.
+- SLA threshold firing + breach detection + escalation child-ticket spawn (the sweep code path; the SlaBreachTile test only seeds the BREACHED row directly).
+- BullMQ worker (`worker.ts`) — sweeps are exercised via the `run-once.ts` CLI; the cron wrapper isn't.
+- BusinessCalendar duration math in production timers (the calendar component is covered by 44 vitest unit tests in `tests/unit/calendar.test.ts`).
+- SEQUENTIAL approval mode.
 
 ---
 
