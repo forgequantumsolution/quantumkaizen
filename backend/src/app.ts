@@ -31,6 +31,12 @@ import {
   ticketScopedSlaRouter,
 } from './modules/sla/sla.routes';
 import businessCalendarRoutes from './modules/business-calendar/business-calendar.routes';
+import {
+  workflowScopedBindingRouter as stageFormWorkflowScopedRouter,
+  bindingRouter as stageFormBindingRouter,
+  ticketScopedFormsRouter as stageFormTicketScopedRouter,
+  ticketScopedSubmissionRouter as ticketScopedFormSubmissionRouter,
+} from './modules/stage-form/stage-form.routes';
 import { mountOpenApi } from './openapi';
 import { prisma } from './lib/prisma';
 import { asyncHandler } from './lib/asyncHandler';
@@ -82,6 +88,13 @@ export const buildApp = () => {
 
   // Phase 3 — Business calendars admin.
   app.use('/api/business-calendars', businessCalendarRoutes);
+
+  // Phase 3.5 — StageFormBinding admin + ticket-scoped reads + workflow-bound
+  // form submission. See docs/WORKFLOW_PHASE_3_5_PLAN.md §4.
+  app.use('/api/workflows', stageFormWorkflowScopedRouter);  // /:id/stage-form-bindings
+  app.use('/api/stage-form-bindings', stageFormBindingRouter); // /:id (GET/PATCH/DELETE)
+  app.use('/api/tickets', stageFormTicketScopedRouter);       // /:id/stage-forms
+  app.use('/api/tickets', ticketScopedFormSubmissionRouter);  // /:id/forms/:formId/submissions
 
   // OpenAPI / Swagger UI — public, mounted under /api so the Vite proxy serves
   // it through the frontend dev server too (http://localhost:3000/api/docs).

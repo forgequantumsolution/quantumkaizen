@@ -14,6 +14,7 @@ import CommentsTab from './detail/CommentsTab';
 import DocsTab from './detail/DocsTab';
 import SlaPanel from './detail/SlaPanel';
 import ApprovalAwaitingCard from './detail/ApprovalAwaitingCard';
+import RequiredFormsCard from './detail/RequiredFormsCard';
 import ApprovalsTimeline from './detail/ApprovalsTimeline';
 
 const TABS = [
@@ -149,6 +150,8 @@ export default function TicketDetailPage() {
           )}
 
           <ApprovalAwaitingCard ticketId={ticket.id} />
+
+          <RequiredFormsCard ticketId={ticket.id} />
 
           <ActionBar
             ticketId={ticket.id}

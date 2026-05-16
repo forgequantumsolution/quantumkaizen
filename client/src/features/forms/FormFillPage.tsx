@@ -1,7 +1,12 @@
 // End-user fill view. Honors section + field visibility rules from the
 // builder, runs validation on submit and shows inline errors.
+//
+// Workflow context (Phase 3.5): if the URL carries `ticketId` + `bindingId`
+// query params, submission is routed through the workflow-bound endpoint
+// (POST /tickets/:id/forms/:formId/submissions) so the resulting row carries
+// the right FKs and counts toward `form.layer.findUnsatisfiedRequiredForms`.
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Send, Save, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageContainer from '@/components/layout/PageContainer';
@@ -10,6 +15,7 @@ import { Button } from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import FieldRenderer from './FieldRenderer';
 import { useFormDetail, useSubmitForm } from './hooks';
+import { useCreateWorkflowSubmission } from '@/lib/api/stageForm';
 import { evaluateVisibility } from './lib/dependency';
 import { validateField } from './lib/validation';
 import type { FormSectionDef } from './types';
@@ -18,9 +24,20 @@ type Errors = Record<string, Record<string, string>>; // sectionName -> fieldNam
 
 export default function FormFillPage() {
   const { id } = useParams<{ id: string }>();
+  const [params] = useSearchParams();
+  const workflowCtx = useMemo(() => {
+    const ticketId = params.get('ticketId');
+    const bindingId = params.get('bindingId');
+    return ticketId && bindingId ? { ticketId, bindingId } : null;
+  }, [params]);
+
   const nav = useNavigate();
   const { data: detail, isLoading } = useFormDetail(id);
   const submitMutation = useSubmitForm();
+  const workflowSubmit = useCreateWorkflowSubmission(
+    workflowCtx?.ticketId ?? '',
+    id ?? '',
+  );
 
   const sections = useMemo<FormSectionDef[]>(
     () => (detail?.draft_data as { sections?: FormSectionDef[] })?.sections ?? [],
@@ -77,11 +94,23 @@ export default function FormFillPage() {
     }
 
     try {
-      await submitMutation.mutateAsync({ formId: id, responses, status });
+      if (workflowCtx) {
+        await workflowSubmit.mutateAsync({
+          bindingId: workflowCtx.bindingId,
+          status,
+          responses: responses as Record<string, unknown>,
+        });
+      } else {
+        await submitMutation.mutateAsync({ formId: id, responses, status });
+      }
       toast.success(status === 'SUBMITTED' ? 'Form submitted' : 'Saved as draft');
-      if (status === 'SUBMITTED') nav('/forms');
+      if (status === 'SUBMITTED') {
+        nav(workflowCtx ? `/tickets/${workflowCtx.ticketId}` : '/forms');
+      }
     } catch (e) {
-      const msg = (e as { response?: { data?: { message?: string } } }).response?.data?.message
+      const msg = (e as { response?: { data?: { error?: { message?: string }; message?: string } } })
+        .response?.data?.error?.message
+        ?? (e as { response?: { data?: { message?: string } } }).response?.data?.message
         ?? (e as Error).message;
       toast.error(msg);
     }
@@ -92,8 +121,14 @@ export default function FormFillPage() {
 
   return (
     <PageContainer>
-      <Button variant="ghost" size="sm" onClick={() => nav('/forms')} className="mb-2">
-        <ArrowLeft className="h-4 w-4" /> Back to forms
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => nav(workflowCtx ? `/tickets/${workflowCtx.ticketId}` : '/forms')}
+        className="mb-2"
+      >
+        <ArrowLeft className="h-4 w-4" />{' '}
+        {workflowCtx ? 'Back to ticket' : 'Back to forms'}
       </Button>
       <PageHeader
         title={detail.form_details.title}

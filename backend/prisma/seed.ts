@@ -85,6 +85,11 @@ const PERMISSIONS = [
   { key: 'form_submission.create',module: 'FORM_SUBMISSION', action: 'CREATE', description: 'Submit form responses' },
   { key: 'form_submission.update',module: 'FORM_SUBMISSION', action: 'UPDATE', description: 'Update submission status (approve/reject)' },
   { key: 'form_submission.delete',module: 'FORM_SUBMISSION', action: 'DELETE', description: 'Delete form submissions' },
+  // ── Phase 3.5 — Stage form bindings ──────────────────
+  { key: 'stage-form.read',       module: 'STAGE_FORM',      action: 'READ',   description: 'View stage form bindings' },
+  { key: 'stage-form.create',     module: 'STAGE_FORM',      action: 'CREATE', description: 'Attach a form to a stage' },
+  { key: 'stage-form.update',     module: 'STAGE_FORM',      action: 'UPDATE', description: 'Update a stage form binding (required/position)' },
+  { key: 'stage-form.delete',     module: 'STAGE_FORM',      action: 'DELETE', description: 'Detach a form from a stage' },
   // ── Audit (ISO standards & schedules) ────────────────
   { key: 'iso_standard.read',     module: 'ISO_STANDARD',    action: 'READ',   description: 'View ISO standards / audit checklists' },
   { key: 'iso_standard.create',   module: 'ISO_STANDARD',    action: 'CREATE', description: 'Create ISO standards' },
@@ -178,6 +183,9 @@ const ROLES = [
       'approval.read', 'approval.decide', 'approval.policy.read',
       'sla.policy.read', 'sla.timer.read', 'sla.timer.extend',
       'business-calendar.read',
+      // Phase 3.5 — see and fill workflow-bound forms
+      'stage-form.read',
+      'form.read', 'form_submission.read', 'form_submission.create',
     ],
   },
   {
@@ -196,6 +204,8 @@ const ROLES = [
       'approval.read', 'approval.policy.read',
       'sla.policy.read', 'sla.timer.read',
       'business-calendar.read',
+      // Phase 3.5 — read-only on bindings + submissions
+      'stage-form.read', 'form.read', 'form_submission.read',
     ],
   },
   {
@@ -213,6 +223,9 @@ const ROLES = [
       'approval.read', 'approval.decide', 'approval.policy.read',
       'sla.policy.read', 'sla.timer.read',
       'business-calendar.read',
+      // Phase 3.5 — read + fill workflow-bound forms
+      'stage-form.read',
+      'form.read', 'form_submission.read', 'form_submission.create',
     ],
   },
   {
