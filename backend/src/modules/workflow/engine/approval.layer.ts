@@ -135,9 +135,29 @@ export const recordDecision = async (tx: Tx, params: RecordDecisionParams) => {
     throw BadRequest(`Approval instance is already ${instance.status}`);
   }
 
-  // Self-approval check: the ticket creator can't approve their own ticket
-  // unless policy.allowSelfApproval is on.
-  if (!instance.policy.allowSelfApproval) {
+  // SUPER_ADMIN bypasses eligibility + self-approval checks (god-mode role).
+  // Resolve the caller's role name once and reuse below.
+  const caller = await tx.user.findUnique({
+    where: { id: params.userId },
+    select: { roleId: true, role: { select: { name: true } } },
+  });
+  const isSuperAdmin = caller?.role?.name === 'SUPER_ADMIN';
+
+  // Whether the caller was named directly in approverUsers (vs only inherited
+  // via a role). Explicit per-user grants override `allowSelfApproval=false`
+  // — putting someone in `approverUserIds` is the policy author's signal
+  // that this specific person can approve regardless of who raised the ticket.
+  const isApproverUser = instance.policy.approverUsers.some((u) => u.id === params.userId);
+
+  // Self-approval check: ticket creator can't approve their own ticket UNLESS
+  //   - policy.allowSelfApproval is on, OR
+  //   - caller is SUPER_ADMIN, OR
+  //   - caller was named directly in approverUsers (explicit grant overrides).
+  if (
+    !instance.policy.allowSelfApproval &&
+    !isSuperAdmin &&
+    !isApproverUser
+  ) {
     const ticket = await tx.ticket.findUnique({
       where: { id: instance.ticketId },
       select: { createdById: true },
@@ -161,19 +181,15 @@ export const recordDecision = async (tx: Tx, params: RecordDecisionParams) => {
     }
   }
 
-  // Approver eligibility: must be in approverUsers OR have a role in approverRoles.
-  const isApproverUser = instance.policy.approverUsers.some((u) => u.id === params.userId);
+  // Approver eligibility: must be in approverUsers OR have a role in
+  // approverRoles. SUPER_ADMIN bypasses this entirely.
   let qualifyingRoleId: string | null = null;
-  if (!isApproverUser) {
-    const u = await tx.user.findUnique({
-      where: { id: params.userId },
-      select: { roleId: true },
-    });
-    if (u?.roleId && instance.policy.approverRoles.some((r) => r.id === u.roleId)) {
-      qualifyingRoleId = u.roleId;
+  if (!isApproverUser && !isSuperAdmin) {
+    if (caller?.roleId && instance.policy.approverRoles.some((r) => r.id === caller.roleId)) {
+      qualifyingRoleId = caller.roleId;
     }
   }
-  if (!isApproverUser && !qualifyingRoleId) {
+  if (!isApproverUser && !qualifyingRoleId && !isSuperAdmin) {
     throw Forbidden('You are not listed as an approver for this policy');
   }
 

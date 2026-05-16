@@ -56,6 +56,10 @@ export const deserializeFlow = (
       primary_actions: n.data.primary_actions ?? [],
       secondary_actions: n.data.secondary_actions ?? [],
       persistedStageId: n.data.persistedStageId,
+      // Phase 3.5+ embedded policy intents.
+      formBindings: n.data.formBindings ?? [],
+      sla: n.data.sla ?? null,
+      approvalPolicies: n.data.approvalPolicies ?? [],
     };
     return { id: n.id, type: 'stage', position: DEFAULT_POS, data };
   });
@@ -155,6 +159,10 @@ export const serializeFlow = (
           roles_id: a.roles_id ?? [],
           employees_id: a.employees_id ?? [],
         })),
+        // Phase 3.5+ embedded policy intents — passed through verbatim.
+        formBindings: d.formBindings ?? [],
+        sla: d.sla ?? null,
+        approvalPolicies: d.approvalPolicies ?? [],
       },
     };
   });

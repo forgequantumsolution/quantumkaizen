@@ -1,60 +1,42 @@
 /**
- * Builder-side SLA-policy editor.
+ * Canvas-state SLA editor.
  *
- * Modal that creates or updates the `SlaPolicy` attached to a single stage.
- * Threshold rows are edited in a sub-table — name + percentage are the
- * minimum required to fire `THRESHOLD_HIT` events; `notifyRoles`/`notifyUsers`
- * are deferred to a later iteration (the API accepts them but the inspector
- * keeps the surface narrow).
- *
- * On create the policy is POSTed with `parentStageId`; thresholds are pushed
- * in a second `useUpsertThresholds` call. Edits use the same two-call dance.
+ * Reads / writes a single `EmbeddedSla` object on the selected stage node.
+ * No API calls — the SLA materialises as a `SlaPolicy` (+ `SlaThreshold` rows)
+ * on Publish via workflow.builder.buildWorkflowGraph.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button, Input, Modal, Select } from '@/components/ui';
-import { api } from '@/lib/api';
-import {
-  slaKeys,
-  useCreateSlaPolicy,
-  useDeleteSlaPolicy,
-  useSlaPoliciesForWorkflow,
-  useUpdateSlaPolicy,
-} from '@/lib/api/sla';
+import type { EmbeddedSla } from '../builder.types';
 import { useCalendars } from '@/lib/api/businessCalendar';
-import { useQueryClient } from '@tanstack/react-query';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  workflowId: string;
-  stageId: string;
   stageName: string;
+  value: EmbeddedSla | null;
+  onSave: (next: EmbeddedSla | null) => void;
 }
 
 interface ThresholdRow {
-  id?: string;
   name: string;
   percentage: number;
 }
 
+const DEFAULT_HOURS = '24';
+
 export default function SlaPolicyEditor({
   isOpen,
   onClose,
-  workflowId,
-  stageId,
   stageName,
+  value,
+  onSave,
 }: Props) {
-  const { data: policies = [] } = useSlaPoliciesForWorkflow(workflowId);
-  const existing = useMemo(
-    () => policies.find((p) => p.parentStage.id === stageId),
-    [policies, stageId],
-  );
-
   const { data: calendars = [] } = useCalendars();
 
-  const [durationHours, setDurationHours] = useState('24');
+  const [durationHours, setDurationHours] = useState(DEFAULT_HOURS);
   const [calendarId, setCalendarId] = useState<string>('');
   const [pauseOnHold, setPauseOnHold] = useState(true);
   const [pauseOnExtensionPending, setPauseOnExtensionPending] = useState(false);
@@ -64,35 +46,26 @@ export default function SlaPolicyEditor({
 
   useEffect(() => {
     if (!isOpen) return;
-    if (existing) {
-      setDurationHours(String(Math.round((existing.duration / 3600) * 100) / 100));
-      setCalendarId(existing.calendarId ?? '');
-      setPauseOnHold(existing.pauseOnHold);
-      setPauseOnExtensionPending(existing.pauseOnExtensionPending);
+    if (value) {
+      setDurationHours(String(Math.round((value.duration / 3600) * 100) / 100));
+      setCalendarId(value.calendarId ?? '');
+      setPauseOnHold(value.pauseOnHold);
+      setPauseOnExtensionPending(value.pauseOnExtensionPending);
       setThresholds(
-        existing.thresholds.length > 0
-          ? existing.thresholds.map((t) => ({
-              id: t.id,
-              name: t.name,
-              percentage: t.percentage,
-            }))
+        value.thresholds.length > 0
+          ? value.thresholds.map((t) => ({ name: t.name, percentage: t.percentage }))
           : [],
       );
     } else {
-      setDurationHours('24');
+      setDurationHours(DEFAULT_HOURS);
       setCalendarId('');
       setPauseOnHold(true);
       setPauseOnExtensionPending(false);
       setThresholds([{ name: 'Warning', percentage: 80 }]);
     }
-  }, [isOpen, existing]);
+  }, [isOpen, value]);
 
-  const create = useCreateSlaPolicy();
-  const update = useUpdateSlaPolicy(existing?.id ?? '');
-  const remove = useDeleteSlaPolicy();
-  const qc = useQueryClient();
-
-  const submit = async () => {
+  const handleSave = () => {
     const hours = Number(durationHours);
     if (!Number.isFinite(hours) || hours <= 0) {
       toast.error('Duration must be a positive number of hours');
@@ -107,59 +80,28 @@ export default function SlaPolicyEditor({
       return;
     }
 
-    try {
-      const payload = {
-        duration: Math.round(hours * 3600),
-        calendarId: calendarId || null,
-        pauseOnHold,
-        pauseOnExtensionPending,
-      };
-      const policy = existing
-        ? await update.mutateAsync(payload)
-        : await create.mutateAsync({ parentStageId: stageId, ...payload });
-
-      // Upsert thresholds against the now-known policy id. POST directly via
-      // the api singleton — the `useUpsertThresholds` hook would need an id
-      // bound at component-mount time, but for the create path we only learn
-      // the policy id after the create call.
-      await api.post(`/sla-policies/${policy.id}/thresholds`, {
-        thresholds: thresholds.map((t) => ({
-          name: t.name.trim(),
-          percentage: t.percentage,
-        })),
-      });
-      qc.invalidateQueries({ queryKey: slaKeys.all });
-
-      toast.success(existing ? 'SLA policy updated' : 'SLA policy created');
-      onClose();
-    } catch (err) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message ?? 'Failed to save policy';
-      toast.error(msg);
-    }
+    onSave({
+      duration: Math.round(hours * 3600),
+      calendarId: calendarId || null,
+      escalationWorkflowId: value?.escalationWorkflowId ?? null,
+      pauseOnHold,
+      pauseOnExtensionPending,
+      thresholds: thresholds.map((t) => ({
+        name: t.name.trim(),
+        percentage: t.percentage,
+        targetStageCanonicalId: null,
+      })),
+    });
+    toast.success(value ? 'SLA updated' : 'SLA attached');
+    onClose();
   };
-
-  const handleDelete = async () => {
-    if (!existing) return;
-    if (!confirm('Remove the SLA for this stage? Active timers keep running.'))
-      return;
-    try {
-      await remove.mutateAsync(existing.id);
-      toast.success('SLA policy removed');
-      onClose();
-    } catch (err) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message ?? 'Failed to delete';
-      toast.error(msg);
-    }
-  };
-
-  const isSubmitting = create.isPending || update.isPending;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={`${existing ? 'Edit' : 'Add'} SLA — ${stageName}`}>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`${value ? 'Edit' : 'Add'} SLA — ${stageName}`}
+    >
       <div className="space-y-4">
         <div>
           <label className="text-xs font-medium text-gray-700 mb-1 block">
@@ -232,7 +174,7 @@ export default function SlaPolicyEditor({
           <div className="space-y-2">
             {thresholds.length === 0 && (
               <p className="text-xs text-gray-400 italic">
-                No thresholds — only the final breach event will fire.
+                No thresholds — only the breach event will fire.
               </p>
             )}
             {thresholds.map((t, i) => (
@@ -277,34 +219,13 @@ export default function SlaPolicyEditor({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-2 pt-2 border-t">
-          {existing ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDelete}
-              isLoading={remove.isPending}
-              disabled={remove.isPending || isSubmitting}
-            >
-              <Trash2 size={14} className="text-red-500" />
-              <span className="ml-1 text-red-600">Remove SLA</span>
-            </Button>
-          ) : (
-            <span />
-          )}
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={onClose} disabled={isSubmitting}>
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={submit}
-              isLoading={isSubmitting}
-              disabled={isSubmitting}
-            >
-              {existing ? 'Save' : 'Create'}
-            </Button>
-          </div>
+        <div className="flex items-center justify-end gap-2 pt-2 border-t">
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSave}>
+            {value ? 'Save' : 'Attach'}
+          </Button>
         </div>
       </div>
     </Modal>

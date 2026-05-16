@@ -66,6 +66,38 @@ export interface BuilderNode {
     };
     primary_actions?: BuilderActionPayload[];
     secondary_actions?: BuilderActionPayload[];
+    /** Phase 3.5+ embedded policy intents — round-tripped through draft/publish. */
+    formBindings?: Array<{
+      formId: string;
+      isRequired: boolean;
+      position: number;
+    }>;
+    sla?: {
+      duration: number;
+      calendarId?: string | null;
+      escalationWorkflowId?: string | null;
+      pauseOnHold: boolean;
+      pauseOnExtensionPending: boolean;
+      thresholds: Array<{
+        name: string;
+        percentage: number;
+        targetStageCanonicalId?: string | null;
+      }>;
+    } | null;
+    approvalPolicies?: Array<{
+      actionType: 'primary' | 'secondary';
+      actionIndex: number;
+      mode: 'SINGLE' | 'ALL_REQUIRED' | 'QUORUM' | 'SEQUENTIAL' | 'ANY';
+      requiredCount: number;
+      strictRoleMatch: boolean;
+      allowSelfApproval: boolean;
+      requireUniqueApprovers: boolean;
+      approverRoleIds: string[];
+      approverUserIds: string[];
+      approvalSlaHours?: number | null;
+      isActive: boolean;
+      approvalSequence?: unknown;
+    }>;
     parallelConfig?: {
       branchCount?: number;
       splitType?: SplitType;
@@ -202,6 +234,27 @@ export const useSaveWorkflow = (id: string) => {
   });
 };
 
+/**
+ * Status-only update. Activates / deactivates a workflow WITHOUT going
+ * through the full save endpoint — `save()` wipes and rebuilds the stage
+ * graph, which cascades and removes attached approval/SLA/form policies.
+ */
+export const useSetWorkflowStatus = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation<
+    { id: string; workflowStatus: WorkflowLifecycleStatus },
+    unknown,
+    WorkflowLifecycleStatus
+  >({
+    mutationFn: (workflowStatus) =>
+      api.patch(`/workflows/${id}/status`, { workflowStatus }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: workflowKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: workflowKeys.all });
+    },
+  });
+};
+
 export const useSoftDeleteWorkflow = () => {
   const qc = useQueryClient();
   return useMutation<void, unknown, string>({
@@ -217,10 +270,21 @@ export const useWorkflowDraft = (id: string | undefined) =>
     enabled: !!id,
   });
 
-export const useSaveDraft = (id: string) =>
-  useMutation<{ status: boolean; msg: string }, unknown, { flow_json: unknown }>({
+export const useSaveDraft = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation<{ status: boolean; msg: string }, unknown, { flow_json: unknown }>({
     mutationFn: (body) => api.post(`/workflows/${id}/draft`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workflowKeys.draft(id) }),
   });
+};
+
+export const useDeleteDraft = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation<void, unknown, void>({
+    mutationFn: () => api.delete(`/workflows/${id}/draft`).then(() => undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: workflowKeys.draft(id) }),
+  });
+};
 
 // Helper to detect validation failures (4xx with validation_errors array)
 export const isWorkflowValidationFailure = (

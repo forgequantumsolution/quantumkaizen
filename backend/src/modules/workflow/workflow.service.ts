@@ -61,6 +61,7 @@ const workflowDetailSelect = {
       additionalData: true,
       actions: {
         where: { isDeleted: false },
+        orderBy: { createdAt: 'asc' },
         select: {
           id: true,
           isPrimary: true,
@@ -68,6 +69,54 @@ const workflowDetailSelect = {
           workflowAction: { select: { id: true, name: true, behavior: true } },
           allowedRoles: { select: { id: true, name: true } },
           allowedUsers: { select: { id: true, name: true, email: true } },
+          // Phase 3.5+ — approval policies on this action
+          approvalPolicies: {
+            where: { isDeleted: false },
+            select: {
+              id: true,
+              mode: true,
+              requiredCount: true,
+              strictRoleMatch: true,
+              allowSelfApproval: true,
+              requireUniqueApprovers: true,
+              approvalSequence: true,
+              approvalSlaHours: true,
+              isActive: true,
+              approverRoles: { select: { id: true } },
+              approverUsers: { select: { id: true } },
+            },
+          },
+        },
+      },
+      // Phase 3.5+ — embedded policies on this stage
+      slaPolicy: {
+        where: { isDeleted: false },
+        select: {
+          id: true,
+          duration: true,
+          calendarId: true,
+          escalationWorkflowId: true,
+          pauseOnHold: true,
+          pauseOnExtensionPending: true,
+          thresholds: {
+            orderBy: { percentage: 'asc' },
+            select: {
+              id: true,
+              name: true,
+              percentage: true,
+              targetSlaStage: { select: { id: true, canonicalId: true } },
+            },
+          },
+        },
+      },
+      formBindings: {
+        where: { isDeleted: false, isActive: true },
+        orderBy: { position: 'asc' },
+        select: {
+          id: true,
+          formId: true,
+          isRequired: true,
+          position: true,
         },
       },
     },
@@ -91,7 +140,64 @@ type WorkflowDetail = Prisma.WorkflowGetPayload<{ select: typeof workflowDetailS
 
 const toFlowJson = (wf: WorkflowDetail) => {
   const stageById = new Map(wf.stages.map((s) => [s.id, s]));
-  const nodes = wf.stages.map((stage) => ({
+  const nodes = wf.stages.map((stage) => {
+    const primaryActions = stage.actions.filter((a) => a.isPrimary);
+    const secondaryActions = stage.actions.filter((a) => !a.isPrimary);
+
+    // Phase 3.5+ — derive `approvalPolicies` array keyed by (actionType, idx)
+    // so the canvas inspector can render policies against the right action.
+    const embeddedApprovalPolicies: Array<{
+      actionType: 'primary' | 'secondary';
+      actionIndex: number;
+      mode: string;
+      requiredCount: number;
+      strictRoleMatch: boolean;
+      allowSelfApproval: boolean;
+      requireUniqueApprovers: boolean;
+      approverRoleIds: string[];
+      approverUserIds: string[];
+      approvalSlaHours: number | null;
+      isActive: boolean;
+      approvalSequence: unknown;
+    }> = [];
+    primaryActions.forEach((a, idx) => {
+      for (const p of a.approvalPolicies) {
+        embeddedApprovalPolicies.push({
+          actionType: 'primary',
+          actionIndex: idx,
+          mode: p.mode,
+          requiredCount: p.requiredCount,
+          strictRoleMatch: p.strictRoleMatch,
+          allowSelfApproval: p.allowSelfApproval,
+          requireUniqueApprovers: p.requireUniqueApprovers,
+          approverRoleIds: p.approverRoles.map((r) => r.id),
+          approverUserIds: p.approverUsers.map((u) => u.id),
+          approvalSlaHours: p.approvalSlaHours,
+          isActive: p.isActive,
+          approvalSequence: p.approvalSequence,
+        });
+      }
+    });
+    secondaryActions.forEach((a, idx) => {
+      for (const p of a.approvalPolicies) {
+        embeddedApprovalPolicies.push({
+          actionType: 'secondary',
+          actionIndex: idx,
+          mode: p.mode,
+          requiredCount: p.requiredCount,
+          strictRoleMatch: p.strictRoleMatch,
+          allowSelfApproval: p.allowSelfApproval,
+          requireUniqueApprovers: p.requireUniqueApprovers,
+          approverRoleIds: p.approverRoles.map((r) => r.id),
+          approverUserIds: p.approverUsers.map((u) => u.id),
+          approvalSlaHours: p.approvalSlaHours,
+          isActive: p.isActive,
+          approvalSequence: p.approvalSequence,
+        });
+      }
+    });
+
+    return {
     id: stage.canonicalId || stage.id,
     type: stage.stageType.toLowerCase(),
     data: {
@@ -102,9 +208,7 @@ const toFlowJson = (wf: WorkflowDetail) => {
         is_initial_stage: stage.isInitialStage,
         email_notification: stage.sendEmail,
       },
-      primary_actions: stage.actions
-        .filter((a) => a.isPrimary)
-        .map((a) => ({
+      primary_actions: primaryActions.map((a) => ({
           id: a.id,
           stage_status_id: a.workflowAction.id,
           stage_status_name: a.workflowAction.name,
@@ -113,9 +217,7 @@ const toFlowJson = (wf: WorkflowDetail) => {
           roles_id: a.allowedRoles.map((r) => r.id),
           employees_id: a.allowedUsers.map((u) => u.id),
         })),
-      secondary_actions: stage.actions
-        .filter((a) => !a.isPrimary)
-        .map((a) => ({
+      secondary_actions: secondaryActions.map((a) => ({
           id: a.id,
           stage_status_id: a.workflowAction.id,
           stage_status_name: a.workflowAction.name,
@@ -125,6 +227,28 @@ const toFlowJson = (wf: WorkflowDetail) => {
           roles_id: a.allowedRoles.map((r) => r.id),
           employees_id: a.allowedUsers.map((u) => u.id),
         })),
+      // Phase 3.5+ embedded policy intent — round-trips so the canvas can
+      // edit attached policies without an extra API call.
+      formBindings: stage.formBindings.map((fb) => ({
+        formId: fb.formId,
+        isRequired: fb.isRequired,
+        position: fb.position,
+      })),
+      sla: stage.slaPolicy
+        ? {
+            duration: stage.slaPolicy.duration,
+            calendarId: stage.slaPolicy.calendarId,
+            escalationWorkflowId: stage.slaPolicy.escalationWorkflowId,
+            pauseOnHold: stage.slaPolicy.pauseOnHold,
+            pauseOnExtensionPending: stage.slaPolicy.pauseOnExtensionPending,
+            thresholds: stage.slaPolicy.thresholds.map((t) => ({
+              name: t.name,
+              percentage: t.percentage,
+              targetStageCanonicalId: t.targetSlaStage?.canonicalId ?? null,
+            })),
+          }
+        : null,
+      approvalPolicies: embeddedApprovalPolicies,
       parallelConfig:
         stage.stageType === 'FORK' || stage.stageType === 'JOIN'
           ? {
@@ -137,7 +261,8 @@ const toFlowJson = (wf: WorkflowDetail) => {
           : undefined,
       additional_data: stage.additionalData,
     },
-  }));
+    };
+  });
 
   const edges = wf.transitions.map((t) => ({
     id: t.id,
@@ -324,6 +449,40 @@ export const save = async (
   );
 };
 
+/**
+ * Status-only update — flips `Workflow.workflowStatus` without re-running the
+ * builder. `save()` rebuilds the entire stage graph from `flow_json` (and
+ * cascades approval/SLA/form policies), so we explicitly avoid that path for
+ * a pure status change like "Activate".
+ *
+ * A workflow with zero stages can be saved but cannot be ACTIVE — guard that.
+ */
+export const setStatus = async (
+  id: string,
+  status: 'ACTIVE' | 'INACTIVE' | 'DRAFT' | 'DRAFT_UPDATE',
+) => {
+  const wf = await prisma.workflow.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      isDeleted: true,
+      workflowStatus: true,
+      _count: { select: { stages: true } },
+    },
+  });
+  if (!wf) throw NotFound(`Workflow ${id} not found`);
+  if (wf.isDeleted) throw BadRequest('Cannot change status of a deleted workflow');
+  if (status === 'ACTIVE' && wf._count.stages === 0) {
+    throw BadRequest('Cannot activate a workflow with no stages');
+  }
+
+  return prisma.workflow.update({
+    where: { id },
+    data: { workflowStatus: status },
+    select: { id: true, workflowStatus: true },
+  });
+};
+
 export const softDelete = async (id: string, userId: string | null) => {
   const wf = await prisma.workflow.findUnique({
     where: { id },
@@ -376,5 +535,14 @@ export const getDraft = async (workflowId: string) => {
     where: { workflowId },
   });
   return { flow_json: draft?.flowJson ?? null };
+};
+
+/**
+ * Drop the TemporaryWorkflow row for this workflow. Used after a successful
+ * Publish so the builder stops preferring the stale draft over the
+ * just-rebuilt graph. Idempotent — no-ops when no draft exists.
+ */
+export const deleteDraft = async (workflowId: string) => {
+  await prisma.temporaryWorkflow.deleteMany({ where: { workflowId } });
 };
 

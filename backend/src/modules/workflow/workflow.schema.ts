@@ -15,6 +15,60 @@ const ActionPayloadSchema = z
   })
   .passthrough();
 
+// ─── Phase 3.5+ — embedded policy intents on each stage node ───────────────
+// Persisted INSIDE node.data so the canvas JSON is the single source of truth
+// during the build phase. The backend's buildWorkflowGraph materialises these
+// into real ApprovalPolicy / SlaPolicy / StageFormBinding rows on Publish.
+
+const EmbeddedFormBindingSchema = z.object({
+  formId: z.string().uuid(),
+  isRequired: z.boolean().default(true),
+  position: z.number().int().min(0).max(1000).default(0),
+});
+
+const EmbeddedSlaThresholdSchema = z.object({
+  name: z.string().min(1).max(80),
+  percentage: z.number().int().min(1).max(100),
+  targetStageCanonicalId: z.string().min(1).optional().nullable(),
+});
+
+const EmbeddedSlaSchema = z.object({
+  duration: z.number().int().min(1).max(60 * 60 * 24 * 365),
+  calendarId: z.string().uuid().optional().nullable(),
+  escalationWorkflowId: z.string().uuid().optional().nullable(),
+  pauseOnHold: z.boolean().default(true),
+  pauseOnExtensionPending: z.boolean().default(false),
+  thresholds: z.array(EmbeddedSlaThresholdSchema).max(50).default([]),
+});
+
+// Approval policies attach to a specific action on the stage. Actions don't
+// have stable canonicalIds yet; we key by (actionType, actionIndex) which
+// matches the order primary_actions/secondary_actions appear in node.data.
+const EmbeddedApprovalPolicySchema = z.object({
+  actionType: z.enum(['primary', 'secondary']),
+  actionIndex: z.number().int().min(0).max(50),
+  mode: z.enum(['SINGLE', 'ALL_REQUIRED', 'QUORUM', 'SEQUENTIAL', 'ANY']),
+  requiredCount: z.number().int().min(1).max(100).default(1),
+  strictRoleMatch: z.boolean().default(false),
+  allowSelfApproval: z.boolean().default(false),
+  requireUniqueApprovers: z.boolean().default(true),
+  approverRoleIds: z.array(z.string().uuid()).max(200).default([]),
+  approverUserIds: z.array(z.string().uuid()).max(200).default([]),
+  approvalSlaHours: z.number().int().min(1).max(24 * 365).nullish(),
+  isActive: z.boolean().default(true),
+  approvalSequence: z
+    .array(
+      z.object({
+        order: z.number().int().min(1),
+        roleId: z.string().uuid().optional(),
+        userId: z.string().uuid().optional(),
+        label: z.string().min(1).max(200).optional(),
+      }),
+    )
+    .max(50)
+    .optional(),
+});
+
 const NodeSchema = z.object({
   id: z.string().min(1),
   type: z.string().optional(),
@@ -32,8 +86,12 @@ const NodeSchema = z.object({
         .default({}),
       primary_actions: z.array(ActionPayloadSchema).optional(),
       secondary_actions: z.array(ActionPayloadSchema).optional(),
+      // Phase 3.5+ embedded policy intent — see schemas above.
+      formBindings: z.array(EmbeddedFormBindingSchema).max(50).optional(),
+      sla: EmbeddedSlaSchema.nullish(),
+      approvalPolicies: z.array(EmbeddedApprovalPolicySchema).max(50).optional(),
+      // Legacy fields — retained for backward-compat with older saved JSON.
       forms: z.array(z.unknown()).optional(),
-      sla: z.array(z.unknown()).optional(),
       dependency: z.array(z.unknown()).optional(),
       child_workflow_triggers: z.array(z.unknown()).optional(),
       form_visibility_rules: z.array(z.unknown()).optional(),
@@ -99,6 +157,10 @@ export const ListWorkflowsQuerySchema = z.object({
 
 export const IdParamSchema = z.object({ id: z.string().uuid() });
 
+export const SetWorkflowStatusSchema = z.object({
+  workflowStatus: WorkflowStatusSchema,
+});
+
 export const DraftBodySchema = z.object({
   flow_json: z.unknown(),
 });
@@ -106,6 +168,10 @@ export const DraftBodySchema = z.object({
 export type SaveWorkflowBody = z.infer<typeof SaveWorkflowBodySchema>;
 export type CreateWorkflowShellInput = z.infer<typeof CreateWorkflowShellSchema>;
 export type ListWorkflowsQuery = z.infer<typeof ListWorkflowsQuerySchema>;
+export type SetWorkflowStatusInput = z.infer<typeof SetWorkflowStatusSchema>;
 export type WorkflowNode = z.infer<typeof NodeSchema>;
 export type WorkflowEdge = z.infer<typeof EdgeSchema>;
 export type WorkflowSettings = z.infer<typeof WorkflowSettingsSchema>;
+export type EmbeddedFormBinding = z.infer<typeof EmbeddedFormBindingSchema>;
+export type EmbeddedSla = z.infer<typeof EmbeddedSlaSchema>;
+export type EmbeddedApprovalPolicy = z.infer<typeof EmbeddedApprovalPolicySchema>;

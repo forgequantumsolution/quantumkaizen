@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Save } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ReactFlow, {
   addEdge,
@@ -18,9 +18,13 @@ import 'reactflow/dist/style.css';
 import { Button, Card, Spinner } from '@/components/ui';
 import {
   isWorkflowValidationFailure,
+  useDeleteDraft,
+  useSaveDraft,
   useSaveWorkflow,
   useWorkflow,
+  useWorkflowDraft,
 } from '@/lib/api/workflow';
+import type { BuilderEdge, BuilderNode } from '@/lib/api/workflow';
 import { useStageStatuses } from '@/lib/api/workflowLookups';
 import { deserializeFlow, serializeFlow } from './builder.serializer';
 import { layoutGraph } from './layout';
@@ -63,8 +67,15 @@ export default function WorkflowBuilderPage() {
   const navigate = useNavigate();
 
   const { data, isLoading } = useWorkflow(id);
+  const { data: draftData } = useWorkflowDraft(id);
   const { data: stageStatuses = [] } = useStageStatuses();
-  const saveWorkflow = useSaveWorkflow(id);
+  const saveDraft = useSaveDraft(id);
+  const deleteDraft = useDeleteDraft(id);
+  const publish = useSaveWorkflow(id);
+
+  // Has the user ever touched the canvas this session? Used to flip the
+  // load preference back to published once they explicitly discard the draft.
+  const [draftDiscarded, setDraftDiscarded] = useState(false);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowReactFlowEdge['data']>([]);
@@ -73,19 +84,29 @@ export default function WorkflowBuilderPage() {
   const rfInstance = useRef<ReactFlowInstance | null>(null);
   const needsFitView = useRef(false);
 
-  // Load workflow → canvas. Positions are computed by dagre at load time
-  // (the backend no longer stores layout — see WorkflowStage migration
-  // 20260515_drop_workflow_stage_position). React Flow's `fitView` prop
-  // only runs on initial mount BEFORE this effect's setNodes commits, so
-  // we set a flag and re-fit in the post-commit effect below.
+  // Load workflow → canvas. Prefers the saved draft (TemporaryWorkflow row)
+  // over the published flow_json when one exists, so users see exactly what
+  // they last saved. Positions are computed by dagre at load time (the backend
+  // no longer stores layout). React Flow's `fitView` prop only runs on initial
+  // mount BEFORE this effect's setNodes commits, so we set a flag and re-fit
+  // in the post-commit effect below.
   useEffect(() => {
     if (!data) return;
-    const { nodes: n, edges: e } = deserializeFlow(data.flow_json.nodes, data.flow_json.edges);
+    // `draftData?.flow_json` is unknown-typed; cast to the builder shape.
+    const draftFlow = draftData?.flow_json as
+      | { nodes: BuilderNode[]; edges: BuilderEdge[] }
+      | null
+      | undefined;
+    const source =
+      !draftDiscarded && draftFlow && Array.isArray(draftFlow.nodes)
+        ? draftFlow
+        : data.flow_json;
+    const { nodes: n, edges: e } = deserializeFlow(source.nodes, source.edges);
     const laidOut = layoutGraph(n, e, { direction: 'TB' });
     setNodes(laidOut);
     setEdges(e);
     needsFitView.current = true;
-  }, [data, setNodes, setEdges]);
+  }, [data, draftData, draftDiscarded, setNodes, setEdges]);
 
   // After the laid-out nodes commit to React state, fit the viewport once so
   // every stage is visible. The flag is single-shot — user-initiated drags
@@ -174,15 +195,60 @@ export default function WorkflowBuilderPage() {
     setSelectedId(null);
   };
 
-  const handleSave = async () => {
+  /**
+   * Save = non-destructive draft. Persists the current canvas JSON into the
+   * `TemporaryWorkflow` row WITHOUT touching `WorkflowStage`/`Transition`
+   * rows, so attached approval/SLA/form policies survive routine edits.
+   */
+  const handleSaveDraft = async () => {
     setValidationErrors([]);
     const payload = serializeFlow(
       nodes as WorkflowReactFlowNode[],
       edges as WorkflowReactFlowEdge[],
     );
     try {
-      await saveWorkflow.mutateAsync({ flow_json: payload });
-      toast.success('Workflow saved');
+      await saveDraft.mutateAsync({ flow_json: payload });
+      toast.success('Draft saved');
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message ?? 'Failed to save draft';
+      toast.error(msg);
+    }
+  };
+
+  /**
+   * Publish = destructive rebuild. Wipes the existing stage graph and
+   * rebuilds from the canvas, then flips `workflowStatus` to ACTIVE. Existing
+   * approval/SLA/form policies attached to stages on this workflow ARE LOST
+   * — that's the pre-existing builder behavior. See WORKFLOW_PHASE_3_5_PLAN
+   * §Risks for the planned reconciliation fix.
+   */
+  const handlePublish = async () => {
+    if (
+      !confirm(
+        'Publish will rebuild the stage graph and activate this workflow.\n\n' +
+          'WARNING: any approval policies, SLA policies, and form bindings ' +
+          'currently attached to stages on this workflow will be re-created and ' +
+          'may need to be re-attached. Continue?',
+      )
+    ) {
+      return;
+    }
+    setValidationErrors([]);
+    const payload = serializeFlow(
+      nodes as WorkflowReactFlowNode[],
+      edges as WorkflowReactFlowEdge[],
+    );
+    try {
+      await publish.mutateAsync({
+        flow_json: payload,
+        workflow_settings: { workflowStatus: 'ACTIVE' },
+      });
+      // Drop the now-stale draft so the next load shows the published graph.
+      await deleteDraft.mutateAsync().catch(() => undefined);
+      setDraftDiscarded(true);
+      toast.success('Workflow published');
     } catch (err) {
       if (isWorkflowValidationFailure(err)) {
         setValidationErrors(err.response.data.validation_errors);
@@ -190,7 +256,7 @@ export default function WorkflowBuilderPage() {
       } else {
         const msg =
           (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-            ?.error?.message ?? 'Failed to save';
+            ?.error?.message ?? 'Failed to publish';
         toast.error(msg);
       }
     }
@@ -240,13 +306,28 @@ export default function WorkflowBuilderPage() {
             {edges.length === 1 ? '' : 's'}
           </span>
           <Button
-            variant="primary"
-            onClick={handleSave}
-            isLoading={saveWorkflow.isPending}
-            disabled={saveWorkflow.isPending}
+            variant="outline"
+            onClick={handleSaveDraft}
+            isLoading={saveDraft.isPending}
+            disabled={saveDraft.isPending}
+            title="Save the canvas as a draft. Doesn't rebuild stages or affect policies."
           >
             <Save size={16} />
-            <span className="ml-1.5">Save</span>
+            <span className="ml-1.5">Save draft</span>
+          </Button>
+          <Button
+            variant="primary"
+            onClick={handlePublish}
+            isLoading={publish.isPending}
+            disabled={publish.isPending || nodes.length === 0}
+            title={
+              nodes.length === 0
+                ? 'Add at least one stage before publishing'
+                : 'Rebuild the workflow graph and activate'
+            }
+          >
+            <CheckCircle2 size={16} />
+            <span className="ml-1.5">Publish</span>
           </Button>
         </div>
       </div>

@@ -1,30 +1,25 @@
 /**
- * Builder-side editor for attaching a `Form` to a stage as a `StageFormBinding`.
+ * Canvas-state form binding editor.
  *
- * Single form per modal invocation. Multi-binding is achieved by opening the
- * modal multiple times. Backend search via antd Select, debounced 250ms.
+ * Picks one form via antd Select (backend-searchable form list) and calls
+ * `onAdd` with the new binding. The parent updates `node.data.formBindings`
+ * via `onChange`. No POST happens here — the binding materialises as a
+ * `StageFormBinding` row on Publish.
  */
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { Select as AntSelect, Spin } from 'antd';
 import { Button, Input, Modal } from '@/components/ui';
-import {
-  useCreateStageFormBinding,
-  type CreateStageFormBindingBody,
-} from '@/lib/api/stageForm';
+import type { EmbeddedFormBinding } from '../builder.types';
 import { useForms } from '@/features/forms/hooks';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  workflowId: string;
-  stageId: string;
   stageName: string;
-  /** Form ids already bound to this stage — hidden from the picker so we
-   *  don't surface obviously-invalid options. The backend enforces the
-   *  uniqueness constraint anyway. */
-  excludeFormIds: string[];
+  existing: EmbeddedFormBinding[];
+  onAdd: (binding: EmbeddedFormBinding) => void;
 }
 
 interface FormListItem {
@@ -37,10 +32,9 @@ interface FormListItem {
 export default function StageFormBindingEditor({
   isOpen,
   onClose,
-  workflowId,
-  stageId,
   stageName,
-  excludeFormIds,
+  existing,
+  onAdd,
 }: Props) {
   const [formId, setFormId] = useState<string | null>(null);
   const [isRequired, setIsRequired] = useState(true);
@@ -52,23 +46,22 @@ export default function StageFormBindingEditor({
     search: debouncedSearch || undefined,
     page_size: 50,
   });
+  const excludedIds = new Set(existing.map((b) => b.formId));
   const allForms = ((data?.forms ?? []) as unknown as FormListItem[]).filter(
-    (f) => !excludeFormIds.includes(f.id),
+    (f) => !excludedIds.has(f.id),
   );
-
-  const create = useCreateStageFormBinding(workflowId);
 
   useEffect(() => {
     if (!isOpen) return;
     setFormId(null);
     setIsRequired(true);
-    setPosition('0');
+    setPosition(String(existing.length));
     setSearch('');
-  }, [isOpen]);
+  }, [isOpen, existing.length]);
 
-  const submit = async () => {
+  const handleAdd = () => {
     if (!formId) {
-      toast.error('Pick a form to bind');
+      toast.error('Pick a form to attach');
       return;
     }
     const positionNum = Number(position);
@@ -76,22 +69,9 @@ export default function StageFormBindingEditor({
       toast.error('Position must be a non-negative integer');
       return;
     }
-    try {
-      const body: CreateStageFormBindingBody = {
-        stageId,
-        formId,
-        isRequired,
-        position: positionNum,
-      };
-      await create.mutateAsync(body);
-      toast.success('Form attached to stage');
-      onClose();
-    } catch (err) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response
-          ?.data?.error?.message ?? 'Failed to attach form';
-      toast.error(msg);
-    }
+    onAdd({ formId, isRequired, position: positionNum });
+    toast.success('Form attached');
+    onClose();
   };
 
   return (
@@ -150,15 +130,10 @@ export default function StageFormBindingEditor({
         </div>
 
         <div className="flex items-center justify-end gap-2 pt-2 border-t">
-          <Button variant="ghost" onClick={onClose} disabled={create.isPending}>
+          <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            variant="primary"
-            onClick={submit}
-            isLoading={create.isPending}
-            disabled={create.isPending}
-          >
+          <Button variant="primary" onClick={handleAdd}>
             Attach
           </Button>
         </div>

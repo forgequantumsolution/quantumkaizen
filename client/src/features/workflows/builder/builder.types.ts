@@ -17,6 +17,50 @@ export interface NodeAction {
   employees_id?: string[];
 }
 
+// ─── Phase 3.5+ — policy intents embedded in the canvas state ────────────
+// These live on a stage node so the inspector can edit them on a draft
+// (pre-publish) workflow without round-tripping to the policy CRUD endpoints.
+// The backend materialises them into real ApprovalPolicy / SlaPolicy /
+// StageFormBinding rows on Publish — see workflow.builder.ts.
+
+export interface EmbeddedFormBinding {
+  formId: string;
+  isRequired: boolean;
+  position: number;
+}
+
+export interface EmbeddedSlaThreshold {
+  name: string;
+  percentage: number;
+  targetStageCanonicalId?: string | null;
+}
+
+export interface EmbeddedSla {
+  duration: number; // seconds
+  calendarId?: string | null;
+  escalationWorkflowId?: string | null;
+  pauseOnHold: boolean;
+  pauseOnExtensionPending: boolean;
+  thresholds: EmbeddedSlaThreshold[];
+}
+
+export interface EmbeddedApprovalPolicy {
+  actionType: 'primary' | 'secondary';
+  actionIndex: number;
+  mode: 'SINGLE' | 'ALL_REQUIRED' | 'QUORUM' | 'SEQUENTIAL' | 'ANY';
+  requiredCount: number;
+  strictRoleMatch: boolean;
+  allowSelfApproval: boolean;
+  requireUniqueApprovers: boolean;
+  approverRoleIds: string[];
+  approverUserIds: string[];
+  approvalSlaHours?: number | null;
+  isActive: boolean;
+  /** Loose-typed because canvas passes through whatever the server emits;
+   *  backend Zod schema validates the shape on publish. */
+  approvalSequence?: unknown;
+}
+
 export interface StageNodeData {
   label: string;
   is_initial_stage?: boolean;
@@ -25,6 +69,10 @@ export interface StageNodeData {
   secondary_actions?: NodeAction[];
   /** WorkflowStage UUID — present on stages already persisted to the backend. */
   persistedStageId?: string;
+  /** Phase 3.5+ embedded policy intents (canvas-native, materialised on publish). */
+  formBindings?: EmbeddedFormBinding[];
+  sla?: EmbeddedSla | null;
+  approvalPolicies?: EmbeddedApprovalPolicy[];
 }
 
 export interface ForkNodeData {

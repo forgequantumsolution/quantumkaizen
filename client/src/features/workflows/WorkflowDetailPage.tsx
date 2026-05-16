@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Edit3, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Edit3, Pause, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ReactFlow, {
   Background,
@@ -15,7 +15,11 @@ import { Card, Button, Spinner, EmptyState } from '@/components/ui';
 import PageHeader from '@/components/layout/PageHeader';
 import { formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
-import { useSoftDeleteWorkflow, useWorkflow } from '@/lib/api/workflow';
+import {
+  useSetWorkflowStatus,
+  useSoftDeleteWorkflow,
+  useWorkflow,
+} from '@/lib/api/workflow';
 import WorkflowStatusBadge from './shared/WorkflowStatusBadge';
 import { deserializeFlow } from './builder/builder.serializer';
 import { layoutGraph } from './builder/layout';
@@ -30,6 +34,7 @@ export default function WorkflowDetailPage() {
 
   const { data, isLoading, error } = useWorkflow(id);
   const softDelete = useSoftDeleteWorkflow();
+  const setStatus = useSetWorkflowStatus(id);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
@@ -68,6 +73,24 @@ export default function WorkflowDetailPage() {
       const msg =
         (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
           ?.error?.message ?? 'Failed to delete';
+      toast.error(msg);
+    }
+  };
+
+  const handleSetStatus = async (next: 'ACTIVE' | 'INACTIVE' | 'DRAFT') => {
+    try {
+      await setStatus.mutateAsync(next);
+      toast.success(
+        next === 'ACTIVE'
+          ? 'Workflow activated'
+          : next === 'INACTIVE'
+            ? 'Workflow deactivated'
+            : 'Workflow returned to draft',
+      );
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message ?? 'Failed to change status';
       toast.error(msg);
     }
   };
@@ -119,9 +142,36 @@ export default function WorkflowDetailPage() {
         }
         actions={
           <div className="flex gap-2">
-            {canUpdate && (
+            {canUpdate && wf.workflowStatus !== 'ACTIVE' && (
               <Button
                 variant="primary"
+                onClick={() => handleSetStatus('ACTIVE')}
+                isLoading={setStatus.isPending}
+                disabled={setStatus.isPending}
+                title={
+                  nodes.length === 0
+                    ? 'Add at least one stage in the builder before activating'
+                    : undefined
+                }
+              >
+                <CheckCircle2 size={16} />
+                <span className="ml-1.5">Activate</span>
+              </Button>
+            )}
+            {canUpdate && wf.workflowStatus === 'ACTIVE' && (
+              <Button
+                variant="outline"
+                onClick={() => handleSetStatus('INACTIVE')}
+                isLoading={setStatus.isPending}
+                disabled={setStatus.isPending}
+              >
+                <Pause size={16} />
+                <span className="ml-1.5">Deactivate</span>
+              </Button>
+            )}
+            {canUpdate && (
+              <Button
+                variant={wf.workflowStatus === 'ACTIVE' ? 'outline' : 'primary'}
                 onClick={() => navigate(`/workflows/${wf.id}/builder`)}
               >
                 <Edit3 size={16} />

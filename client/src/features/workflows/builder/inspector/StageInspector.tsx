@@ -1,25 +1,29 @@
+/**
+ * Stage inspector — Phase 3.5+ canvas-state architecture.
+ *
+ * The three policy sections (Approvals, SLA, Forms) source from the node's
+ * own data (`data.approvalPolicies`, `data.sla`, `data.formBindings`). The
+ * editors write back through `onChange`. Nothing in this inspector POSTs to
+ * the policy CRUD endpoints — policies materialise on Publish via
+ * `workflow.builder.buildWorkflowGraph`. See WORKFLOW_PHASE_3_5_PLAN.md.
+ */
 import { useState } from 'react';
-import toast from 'react-hot-toast';
 import {
   ClipboardList,
   FileText,
   Pencil,
   Plus,
-  Settings,
   ShieldCheck,
   Timer,
   Trash2,
 } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
-import type { StageNodeData, NodeAction } from '../builder.types';
+import type {
+  EmbeddedApprovalPolicy,
+  NodeAction,
+  StageNodeData,
+} from '../builder.types';
 import type { WorkflowStageStatus } from '@/lib/api/workflowLookups';
-import { useApprovalPoliciesForWorkflow, type ApprovalPolicy } from '@/lib/api/approval';
-import { useSlaPoliciesForWorkflow } from '@/lib/api/sla';
-import {
-  useDeleteStageFormBinding,
-  useStageFormBindings,
-  useUpdateStageFormBinding,
-} from '@/lib/api/stageForm';
 import ApprovalPolicyEditor from './ApprovalPolicyEditor';
 import SlaPolicyEditor from './SlaPolicyEditor';
 import StageFormBindingEditor from './StageFormBindingEditor';
@@ -40,28 +44,16 @@ export default function StageInspector({
   const [slaOpen, setSlaOpen] = useState(false);
   const [formBindingOpen, setFormBindingOpen] = useState(false);
   const [approvalEditFor, setApprovalEditFor] = useState<
-    { actionId: string; actionLabel: string } | null
+    {
+      actionType: 'primary' | 'secondary';
+      actionIndex: number;
+      actionLabel: string;
+    } | null
   >(null);
 
-  const persistedStageId = data.persistedStageId;
-  const { data: slaPolicies = [] } = useSlaPoliciesForWorkflow(workflowId);
-  const { data: approvalPolicies = [] } = useApprovalPoliciesForWorkflow(workflowId, {
-    includeInactive: true,
-  });
-  const { data: formBindings = [] } = useStageFormBindings(workflowId, {
-    stageId: persistedStageId,
-  });
-  const removeFormBinding = useDeleteStageFormBinding();
-
-  const slaForThisStage = persistedStageId
-    ? slaPolicies.find((p) => p.parentStage.id === persistedStageId)
-    : undefined;
-
-  const approvalByActionId = new Map<string, ApprovalPolicy>(
-    approvalPolicies
-      .filter((p) => persistedStageId && p.stage.id === persistedStageId)
-      .map((p) => [p.action.id, p]),
-  );
+  const formBindings = data.formBindings ?? [];
+  const sla = data.sla ?? null;
+  const approvalPolicies = data.approvalPolicies ?? [];
 
   const update = <K extends keyof StageNodeData>(key: K, value: StageNodeData[K]) =>
     onChange({ ...data, [key]: value });
@@ -100,6 +92,18 @@ export default function StageInspector({
     const next = arr.filter((_, i) => i !== idx);
     if (kind === 'primary') update('primary_actions', next);
     else update('secondary_actions', next);
+    // Drop any approval policies that were attached to the removed action;
+    // also re-index policies on later actions of the same type.
+    const remaining = (data.approvalPolicies ?? [])
+      .filter((p) => !(p.actionType === kind && p.actionIndex === idx))
+      .map((p) =>
+        p.actionType === kind && p.actionIndex > idx
+          ? { ...p, actionIndex: p.actionIndex - 1 }
+          : p,
+      );
+    if (remaining.length !== (data.approvalPolicies ?? []).length) {
+      update('approvalPolicies', remaining);
+    }
   };
 
   const renderActions = (kind: 'primary' | 'secondary') => {
@@ -152,25 +156,43 @@ export default function StageInspector({
   };
 
   // ─── Approvals section ─────────────────────────────────────────────────────
-  // Surfaces every SAVED action on this stage with its current approval policy
-  // status. Unsaved actions are hidden — without an action UUID we can't bind
-  // a policy. Mirrors the SLA section's design.
-  const savedActions: { action: NodeAction; kind: 'primary' | 'secondary' }[] = [
-    ...(data.primary_actions ?? []).map((a) => ({ action: a, kind: 'primary' as const })),
-    ...(data.secondary_actions ?? []).map((a) => ({ action: a, kind: 'secondary' as const })),
-  ].filter((row) => !!row.action.id);
+  // One row per action that has a policy + an "Add policy" row per action without.
+  type ActionRef = { type: 'primary' | 'secondary'; index: number; label: string };
+  const allActionRefs: ActionRef[] = [
+    ...(data.primary_actions ?? []).map((a, i) => ({
+      type: 'primary' as const,
+      index: i,
+      label: a.stage_status_name ?? 'Action',
+    })),
+    ...(data.secondary_actions ?? []).map((a, i) => ({
+      type: 'secondary' as const,
+      index: i,
+      label: a.stage_status_name ?? 'Action',
+    })),
+  ];
 
-  const renderApprovalRow = (
-    action: NodeAction,
-    kind: 'primary' | 'secondary',
-    idx: number,
+  const findPolicy = (
+    ref: ActionRef,
+  ): EmbeddedApprovalPolicy | undefined =>
+    approvalPolicies.find(
+      (p) => p.actionType === ref.type && p.actionIndex === ref.index,
+    );
+
+  const upsertApprovalPolicy = (
+    ref: ActionRef,
+    next: EmbeddedApprovalPolicy | null,
   ) => {
-    const status = stageStatuses.find((s) => s.id === action.stage_status_id);
-    const label = action.stage_status_name ?? status?.name ?? 'Action';
-    const policy = action.id ? approvalByActionId.get(action.id) : undefined;
+    const filtered = approvalPolicies.filter(
+      (p) => !(p.actionType === ref.type && p.actionIndex === ref.index),
+    );
+    update('approvalPolicies', next ? [...filtered, next] : filtered);
+  };
+
+  const renderApprovalRow = (ref: ActionRef) => {
+    const policy = findPolicy(ref);
     return (
       <div
-        key={`${kind}-${idx}-${action.id}`}
+        key={`${ref.type}-${ref.index}-${ref.label}`}
         className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0"
       >
         <ShieldCheck
@@ -178,21 +200,17 @@ export default function StageInspector({
           className={policy?.isActive ? 'text-green-600' : 'text-gray-300'}
         />
         <div className="flex-1 min-w-0">
-          <div className="text-sm text-gray-900 truncate">{label}</div>
+          <div className="text-sm text-gray-900 truncate">{ref.label}</div>
           <div className="text-[11px] text-gray-500 truncate">
             {policy ? (
               <>
                 <span className="font-medium text-gray-700">{policy.mode}</span>
                 {!policy.isActive && <span className="text-gray-400"> · inactive</span>}
-                {policy.approverRoles.length > 0 && (
-                  <span> · {policy.approverRoles.map((r) => r.name).join(', ')}</span>
+                {policy.approverRoleIds.length > 0 && (
+                  <span> · {policy.approverRoleIds.length} role(s)</span>
                 )}
-                {policy.approverUsers.length > 0 && policy.approverRoles.length === 0 && (
-                  <span>
-                    {' · '}
-                    {policy.approverUsers.length} user
-                    {policy.approverUsers.length === 1 ? '' : 's'}
-                  </span>
+                {policy.approverUserIds.length > 0 && (
+                  <span> · {policy.approverUserIds.length} user(s)</span>
                 )}
               </>
             ) : (
@@ -204,7 +222,11 @@ export default function StageInspector({
           variant="ghost"
           size="sm"
           onClick={() =>
-            setApprovalEditFor({ actionId: action.id!, actionLabel: label })
+            setApprovalEditFor({
+              actionType: ref.type,
+              actionIndex: ref.index,
+              actionLabel: ref.label,
+            })
           }
           aria-label={policy ? 'edit approval policy' : 'add approval policy'}
         >
@@ -274,19 +296,13 @@ export default function StageInspector({
           <ShieldCheck size={12} />
           Approvals
         </h4>
-        {!persistedStageId ? (
+        {allActionRefs.length === 0 ? (
           <p className="text-xs text-gray-400 italic">
-            Save the workflow first to configure approval policies on this stage's actions.
-          </p>
-        ) : savedActions.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">
-            Add at least one action above (and save) to attach an approval policy.
+            Add at least one action above to attach an approval policy.
           </p>
         ) : (
           <div className="rounded border border-gray-200 px-2">
-            {savedActions.map(({ action, kind }, idx) =>
-              renderApprovalRow(action, kind, idx),
-            )}
+            {allActionRefs.map(renderApprovalRow)}
           </div>
         )}
       </div>
@@ -297,34 +313,37 @@ export default function StageInspector({
           <Timer size={12} />
           SLA
         </h4>
-        {!persistedStageId ? (
-          <p className="text-xs text-gray-400 italic">
-            Save the workflow first to configure an SLA on this stage.
-          </p>
-        ) : slaForThisStage ? (
+        {sla ? (
           <div className="flex items-center justify-between">
             <div className="text-xs text-gray-700">
               <div>
                 Duration:{' '}
                 <span className="font-medium">
-                  {Math.round(slaForThisStage.duration / 360) / 10}h
+                  {Math.round(sla.duration / 360) / 10}h
                 </span>
-                {slaForThisStage.calendar && (
-                  <span className="text-gray-500">
-                    {' · '}
-                    {slaForThisStage.calendar.name}
-                  </span>
-                )}
               </div>
               <div className="text-gray-500">
-                {slaForThisStage.thresholds.length} threshold
-                {slaForThisStage.thresholds.length === 1 ? '' : 's'}
+                {sla.thresholds.length} threshold
+                {sla.thresholds.length === 1 ? '' : 's'}
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setSlaOpen(true)}>
-              <Settings size={12} />
-              <span className="ml-1">Edit</span>
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="sm" onClick={() => setSlaOpen(true)}>
+                <Pencil size={12} />
+                <span className="ml-1">Edit</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label="remove sla"
+                onClick={() => {
+                  if (!confirm('Remove the SLA for this stage?')) return;
+                  update('sla', null);
+                }}
+              >
+                <Trash2 size={14} className="text-red-500" />
+              </Button>
+            </div>
           </div>
         ) : (
           <Button variant="ghost" size="sm" onClick={() => setSlaOpen(true)}>
@@ -341,31 +360,24 @@ export default function StageInspector({
             <ClipboardList size={12} />
             Forms
           </h4>
-          {persistedStageId && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setFormBindingOpen(true)}
-            >
-              <Plus size={12} />
-              <span className="ml-1 text-xs">Attach form</span>
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setFormBindingOpen(true)}
+          >
+            <Plus size={12} />
+            <span className="ml-1 text-xs">Attach form</span>
+          </Button>
         </div>
-        {!persistedStageId ? (
+        {formBindings.length === 0 ? (
           <p className="text-xs text-gray-400 italic">
-            Save the workflow first to attach forms to this stage.
-          </p>
-        ) : formBindings.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">
-            No forms attached. Required forms block transitions out of the stage
-            until they're submitted on the ticket.
+            No forms attached. Required forms will block transitions until submitted.
           </p>
         ) : (
           <div className="rounded border border-gray-200 px-2">
-            {formBindings.map((b) => (
+            {formBindings.map((b, idx) => (
               <div
-                key={b.id}
+                key={`${b.formId}-${idx}`}
                 className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0"
               >
                 <FileText
@@ -374,11 +386,9 @@ export default function StageInspector({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-gray-900 truncate">
-                    {b.form.title}
-                    <span className="text-gray-400 text-xs">
-                      {' '}
-                      · v{b.form.version}
-                    </span>
+                    {/* Form title isn't in canvas state — show the formId placeholder.
+                        The editor surfaces titles via the live form list. */}
+                    Form {b.formId.substring(0, 8)}…
                   </div>
                   <div className="text-[11px] text-gray-500">
                     {b.isRequired ? 'Required to transition' : 'Optional'}
@@ -390,22 +400,12 @@ export default function StageInspector({
                   variant="ghost"
                   size="sm"
                   aria-label="remove form binding"
-                  onClick={async () => {
-                    if (
-                      !confirm(
-                        `Detach "${b.form.title}" from this stage? Existing submissions are kept.`,
-                      )
-                    )
-                      return;
-                    try {
-                      await removeFormBinding.mutateAsync(b.id);
-                      toast.success('Form detached');
-                    } catch (err) {
-                      const msg =
-                        (err as { response?: { data?: { error?: { message?: string } } } })
-                          ?.response?.data?.error?.message ?? 'Failed to detach';
-                      toast.error(msg);
-                    }
+                  onClick={() => {
+                    if (!confirm('Detach this form from the stage?')) return;
+                    update(
+                      'formBindings',
+                      formBindings.filter((_, i) => i !== idx),
+                    );
                   }}
                 >
                   <Trash2 size={14} className="text-red-500" />
@@ -416,35 +416,51 @@ export default function StageInspector({
         )}
       </div>
 
-      {persistedStageId && (
-        <SlaPolicyEditor
-          isOpen={slaOpen}
-          onClose={() => setSlaOpen(false)}
-          workflowId={workflowId}
-          stageId={persistedStageId}
-          stageName={data.label}
-        />
-      )}
+      <SlaPolicyEditor
+        isOpen={slaOpen}
+        onClose={() => setSlaOpen(false)}
+        stageName={data.label}
+        value={sla}
+        onSave={(next) => update('sla', next)}
+      />
 
-      {persistedStageId && approvalEditFor && (
+      <StageFormBindingEditor
+        isOpen={formBindingOpen}
+        onClose={() => setFormBindingOpen(false)}
+        stageName={data.label}
+        existing={formBindings}
+        onAdd={(b) => update('formBindings', [...formBindings, b])}
+      />
+
+      {approvalEditFor && (
         <ApprovalPolicyEditor
           isOpen={!!approvalEditFor}
           onClose={() => setApprovalEditFor(null)}
           workflowId={workflowId}
-          stageId={persistedStageId}
-          actionId={approvalEditFor.actionId}
           actionLabel={approvalEditFor.actionLabel}
-        />
-      )}
-
-      {persistedStageId && (
-        <StageFormBindingEditor
-          isOpen={formBindingOpen}
-          onClose={() => setFormBindingOpen(false)}
-          workflowId={workflowId}
-          stageId={persistedStageId}
-          stageName={data.label}
-          excludeFormIds={formBindings.map((b) => b.formId)}
+          value={
+            findPolicy({
+              type: approvalEditFor.actionType,
+              index: approvalEditFor.actionIndex,
+              label: approvalEditFor.actionLabel,
+            }) ?? null
+          }
+          onSave={(next) =>
+            upsertApprovalPolicy(
+              {
+                type: approvalEditFor.actionType,
+                index: approvalEditFor.actionIndex,
+                label: approvalEditFor.actionLabel,
+              },
+              next === null
+                ? null
+                : {
+                    actionType: approvalEditFor.actionType,
+                    actionIndex: approvalEditFor.actionIndex,
+                    ...next,
+                  },
+            )
+          }
         />
       )}
     </div>
