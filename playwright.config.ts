@@ -16,14 +16,16 @@ export default defineConfig({
   // accepts a glob across multiple roots.
   testDir: '.',
   testMatch: ['e2e/**/*.spec.ts', 'tests/e2e/**/*.spec.ts'],
-  timeout: 60_000,
+  // Phase 3 happy-path needs ~50s against Neon when the SLA escalation child
+  // ticket spawn is paid for cold. 60s was too tight; 120s leaves headroom.
+  timeout: 120_000,
   expect: { timeout: 10_000 },
   fullyParallel: false, // perf assertions are wall-clock; parallelism distorts them
   workers: 1,
   retries: 0,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:5173',
     trace: 'retain-on-failure',
   },
   projects: [

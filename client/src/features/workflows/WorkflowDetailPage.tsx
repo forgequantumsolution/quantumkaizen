@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Edit3, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,6 +8,7 @@ import ReactFlow, {
   MiniMap,
   useEdgesState,
   useNodesState,
+  type ReactFlowInstance,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card, Button, Spinner, EmptyState } from '@/components/ui';
@@ -17,6 +18,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useSoftDeleteWorkflow, useWorkflow } from '@/lib/api/workflow';
 import WorkflowStatusBadge from './shared/WorkflowStatusBadge';
 import { deserializeFlow } from './builder/builder.serializer';
+import { layoutGraph } from './builder/layout';
 import { nodeTypes } from './builder/nodes';
 
 export default function WorkflowDetailPage() {
@@ -30,14 +32,30 @@ export default function WorkflowDetailPage() {
   const softDelete = useSoftDeleteWorkflow();
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const rfInstance = useRef<ReactFlowInstance | null>(null);
+  const needsFitView = useRef(false);
 
   const flowJson = useMemo(() => data?.flow_json ?? { nodes: [], edges: [] }, [data]);
 
+  // Apply dagre layout to the deserialised graph — backend no longer stores
+  // positions, so every node arrives at (0,0) and needs computed coordinates.
   useEffect(() => {
     const { nodes: n, edges: e } = deserializeFlow(flowJson.nodes, flowJson.edges);
-    setNodes(n);
+    const laidOut = layoutGraph(n, e, { direction: 'TB' });
+    setNodes(laidOut);
     setEdges(e);
+    needsFitView.current = true;
   }, [flowJson, setNodes, setEdges]);
+
+  // Re-fit the viewport once after the laid-out nodes commit.
+  useEffect(() => {
+    if (!needsFitView.current || nodes.length === 0) return;
+    const id = requestAnimationFrame(() => {
+      rfInstance.current?.fitView({ padding: 0.18, maxZoom: 1, minZoom: 0.4 });
+      needsFitView.current = false;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [nodes]);
 
   const handleDelete = async () => {
     if (!data) return;
@@ -142,6 +160,9 @@ export default function WorkflowDetailPage() {
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
+              onInit={(inst) => {
+                rfInstance.current = inst;
+              }}
               nodeTypes={nodeTypes}
               fitView
               nodesDraggable={false}

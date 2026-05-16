@@ -55,7 +55,6 @@ export interface BuilderActionPayload {
 export interface BuilderNode {
   id: string;
   type?: string;
-  position: { x: number; y: number };
   data: {
     label: string;
     nodeType?: StageType;
@@ -152,10 +151,6 @@ export interface ListWorkflowsQuery {
   includeDeleted?: 'true' | 'false';
 }
 
-export interface SaveLayoutBody {
-  positions: Array<{ canonicalId: string; position: { x: number; y: number } }>;
-}
-
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const workflowKeys = {
@@ -206,12 +201,6 @@ export const useSaveWorkflow = (id: string) => {
     },
   });
 };
-
-export const useSaveLayout = (id: string) =>
-  useMutation<{ updated: number }, unknown, SaveLayoutBody>({
-    mutationFn: (body) =>
-      api.post(`/workflows/${id}/save-layout`, body).then((r) => r.data),
-  });
 
 export const useSoftDeleteWorkflow = () => {
   const qc = useQueryClient();

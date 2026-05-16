@@ -18,12 +18,12 @@ import 'reactflow/dist/style.css';
 import { Button, Card, Spinner } from '@/components/ui';
 import {
   isWorkflowValidationFailure,
-  useSaveLayout,
   useSaveWorkflow,
   useWorkflow,
 } from '@/lib/api/workflow';
 import { useStageStatuses } from '@/lib/api/workflowLookups';
 import { deserializeFlow, serializeFlow } from './builder.serializer';
+import { layoutGraph } from './layout';
 import { nodeTypes } from './nodes';
 import NodePalette from './NodePalette';
 import InspectorPanel from './inspector/InspectorPanel';
@@ -65,83 +65,98 @@ export default function WorkflowBuilderPage() {
   const { data, isLoading } = useWorkflow(id);
   const { data: stageStatuses = [] } = useStageStatuses();
   const saveWorkflow = useSaveWorkflow(id);
-  const saveLayout = useSaveLayout(id);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowReactFlowEdge['data']>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const rfInstance = useRef<ReactFlowInstance | null>(null);
+  const needsFitView = useRef(false);
 
-  // Load workflow → canvas
+  // Load workflow → canvas. Positions are computed by dagre at load time
+  // (the backend no longer stores layout — see WorkflowStage migration
+  // 20260515_drop_workflow_stage_position). React Flow's `fitView` prop
+  // only runs on initial mount BEFORE this effect's setNodes commits, so
+  // we set a flag and re-fit in the post-commit effect below.
   useEffect(() => {
     if (!data) return;
     const { nodes: n, edges: e } = deserializeFlow(data.flow_json.nodes, data.flow_json.edges);
-    setNodes(n);
+    const laidOut = layoutGraph(n, e, { direction: 'TB' });
+    setNodes(laidOut);
     setEdges(e);
+    needsFitView.current = true;
   }, [data, setNodes, setEdges]);
 
-  // Layout autosave: debounced position-only save
+  // After the laid-out nodes commit to React state, fit the viewport once so
+  // every stage is visible. The flag is single-shot — user-initiated drags
+  // don't retrigger this (they go through `onNodesChange` and don't bump
+  // `data`, so the load effect above doesn't fire either).
   useEffect(() => {
-    if (!data || nodes.length === 0) return;
-    const timer = setTimeout(() => {
-      const positions = nodes.map((n) => ({
-        canonicalId: n.id,
-        position: n.position,
-      }));
-      saveLayout.mutate({ positions });
-    }, 1500);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes.map((n) => `${n.id}:${n.position.x},${n.position.y}`).join('|')]);
+    if (!needsFitView.current || nodes.length === 0) return;
+    const id = requestAnimationFrame(() => {
+      rfInstance.current?.fitView({ padding: 0.18, maxZoom: 1, minZoom: 0.4 });
+      needsFitView.current = false;
+    });
+    return () => cancelAnimationFrame(id);
+  }, [nodes]);
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
     [nodes, selectedId],
   );
 
+  // Apply dagre after a topology change. Drag-only changes go through
+  // `onNodesChange` and don't re-layout, so user drags survive within a
+  // session.
+  const relayout = useCallback(
+    (ns: WorkflowReactFlowNode[], es: WorkflowReactFlowEdge[]) =>
+      layoutGraph(ns, es as Edge[], { direction: 'TB' }),
+    [],
+  );
+
   const onConnect = useCallback(
     (params: Edge | Connection) => {
-      setEdges((eds) =>
-        addEdge(
+      setEdges((eds) => {
+        const next = addEdge(
           { ...params, data: { branchName: undefined, condition: undefined } },
           eds as Edge[],
-        ) as typeof eds,
-      );
+        ) as typeof eds;
+        // After a new edge, re-layout so the graph rearranges to honour the new topology.
+        setNodes((cur) => relayout(cur, next as unknown as WorkflowReactFlowEdge[]));
+        return next;
+      });
     },
-    [setEdges],
+    [setEdges, setNodes, relayout],
   );
 
   const handleAddNode = (kind: NodeKind) => {
     const id = newNodeId();
-    // Place new node below the lowest existing node, so vertical flows stack naturally.
-    // Gap = approx node height (~90px) + comfortable breathing room.
-    const NODE_GAP = 140;
-    const baseX = 250;
-    const baseY = 100;
-    const lowest = nodes.reduce<number | null>(
-      (acc, n) => (acc === null ? n.position.y : Math.max(acc, n.position.y)),
-      null,
-    );
-    const y = lowest === null ? baseY : lowest + NODE_GAP;
     const newNode: WorkflowReactFlowNode = {
       id,
       type: kind,
-      position: { x: baseX, y },
+      // Placeholder — dagre lays this out as soon as it's appended.
+      position: { x: 0, y: 0 },
       data: defaultDataFor(kind),
     };
-    setNodes((ns) => [...ns, newNode]);
+    setNodes((ns) => {
+      const next = [...ns, newNode];
+      return relayout(next, edges as unknown as WorkflowReactFlowEdge[]);
+    });
     setSelectedId(id);
-    // Pan the canvas so the new node is visible immediately. Defer a frame so
-    // ReactFlow has had a chance to commit the new node before we ask it to focus.
+    // Pan to the newly added node once dagre has positioned it.
     requestAnimationFrame(() => {
       const inst = rfInstance.current;
       if (!inst) return;
-      // Approximate node center: stage cards are ~110×45 in their default state.
-      const targetX = baseX + 110;
-      const targetY = y + 45;
+      const placed = (nodes as WorkflowReactFlowNode[]).find((n) => n.id === id);
+      if (!placed) {
+        inst.fitView({ padding: 0.18, duration: 350 });
+        return;
+      }
       const zoom = Math.max(inst.getZoom(), 0.85);
-      inst.setCenter(targetX, targetY, { duration: 350, zoom });
+      inst.setCenter(placed.position.x + 110, placed.position.y + 45, {
+        duration: 350,
+        zoom,
+      });
     });
   };
 
@@ -151,8 +166,11 @@ export default function WorkflowBuilderPage() {
 
   const handleNodeDelete = (nodeId: string) => {
     if (!confirm('Delete this node and its connections?')) return;
-    setNodes((ns) => ns.filter((n) => n.id !== nodeId));
-    setEdges((es) => es.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    const remainingEdges = (edges as WorkflowReactFlowEdge[]).filter(
+      (e) => e.source !== nodeId && e.target !== nodeId,
+    );
+    setEdges(remainingEdges as typeof edges);
+    setNodes((ns) => relayout(ns.filter((n) => n.id !== nodeId), remainingEdges));
     setSelectedId(null);
   };
 

@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Plus, Settings, ShieldCheck, Timer, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Settings, ShieldCheck, Timer, Trash2 } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
 import type { StageNodeData, NodeAction } from '../builder.types';
 import type { WorkflowStageStatus } from '@/lib/api/workflowLookups';
-import { useApprovalPoliciesForWorkflow } from '@/lib/api/approval';
+import { useApprovalPoliciesForWorkflow, type ApprovalPolicy } from '@/lib/api/approval';
 import { useSlaPoliciesForWorkflow } from '@/lib/api/sla';
 import ApprovalPolicyEditor from './ApprovalPolicyEditor';
 import SlaPolicyEditor from './SlaPolicyEditor';
@@ -36,11 +36,12 @@ export default function StageInspector({
     ? slaPolicies.find((p) => p.parentStage.id === persistedStageId)
     : undefined;
 
-  const approvalByActionId = new Map(
+  const approvalByActionId = new Map<string, ApprovalPolicy>(
     approvalPolicies
       .filter((p) => persistedStageId && p.stage.id === persistedStageId)
       .map((p) => [p.action.id, p]),
   );
+
   const update = <K extends keyof StageNodeData>(key: K, value: StageNodeData[K]) =>
     onChange({ ...data, [key]: value });
 
@@ -89,61 +90,34 @@ export default function StageInspector({
         )}
         {arr.map((a, i) => {
           const status = stageStatuses.find((s) => s.id === a.stage_status_id);
-          const policy = a.id ? approvalByActionId.get(a.id) : undefined;
           return (
-            <div key={i} className="space-y-1">
-              <div className="flex gap-2 items-start">
-                <Select
-                  value={a.stage_status_id}
-                  onChange={(e) => {
-                    const s = stageStatuses.find((x) => x.id === e.target.value);
-                    updateAction(kind, i, {
-                      stage_status_id: e.target.value,
-                      stage_status_name: s?.name,
-                      behavior: s?.behavior,
-                    });
-                  }}
-                  options={stageStatuses.map((s) => ({
-                    value: s.id,
-                    label: `${s.name} (${s.behavior})`,
-                  }))}
-                  className="flex-1"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeAction(kind, i)}
-                  aria-label="remove action"
-                >
-                  <Trash2 size={14} className="text-red-500" />
-                </Button>
-                {status && a.behavior !== status.behavior && (
-                  <span className="text-[10px] text-amber-600">behavior mismatch</span>
-                )}
-              </div>
-              {a.id && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setApprovalEditFor({
-                      actionId: a.id!,
-                      actionLabel: a.stage_status_name ?? status?.name ?? 'Action',
-                    })
-                  }
-                  className="flex items-center gap-1 text-[11px] text-gray-600 hover:text-blue-700 ml-1"
-                >
-                  <ShieldCheck size={11} />
-                  {policy ? (
-                    <span>
-                      Approval: <span className="font-medium">{policy.mode}</span>
-                      {!policy.isActive && (
-                        <span className="text-gray-400"> (inactive)</span>
-                      )}
-                    </span>
-                  ) : (
-                    <span className="italic text-gray-400">No approval — add</span>
-                  )}
-                </button>
+            <div key={i} className="flex gap-2 items-start">
+              <Select
+                value={a.stage_status_id}
+                onChange={(e) => {
+                  const s = stageStatuses.find((x) => x.id === e.target.value);
+                  updateAction(kind, i, {
+                    stage_status_id: e.target.value,
+                    stage_status_name: s?.name,
+                    behavior: s?.behavior,
+                  });
+                }}
+                options={stageStatuses.map((s) => ({
+                  value: s.id,
+                  label: `${s.name} (${s.behavior})`,
+                }))}
+                className="flex-1"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => removeAction(kind, i)}
+                aria-label="remove action"
+              >
+                <Trash2 size={14} className="text-red-500" />
+              </Button>
+              {status && a.behavior !== status.behavior && (
+                <span className="text-[10px] text-amber-600">behavior mismatch</span>
               )}
             </div>
           );
@@ -151,6 +125,79 @@ export default function StageInspector({
         <Button variant="ghost" size="sm" onClick={() => addAction(kind)}>
           <Plus size={14} />
           <span className="ml-1">Add {kind} action</span>
+        </Button>
+      </div>
+    );
+  };
+
+  // ─── Approvals section ─────────────────────────────────────────────────────
+  // Surfaces every SAVED action on this stage with its current approval policy
+  // status. Unsaved actions are hidden — without an action UUID we can't bind
+  // a policy. Mirrors the SLA section's design.
+  const savedActions: { action: NodeAction; kind: 'primary' | 'secondary' }[] = [
+    ...(data.primary_actions ?? []).map((a) => ({ action: a, kind: 'primary' as const })),
+    ...(data.secondary_actions ?? []).map((a) => ({ action: a, kind: 'secondary' as const })),
+  ].filter((row) => !!row.action.id);
+
+  const renderApprovalRow = (
+    action: NodeAction,
+    kind: 'primary' | 'secondary',
+    idx: number,
+  ) => {
+    const status = stageStatuses.find((s) => s.id === action.stage_status_id);
+    const label = action.stage_status_name ?? status?.name ?? 'Action';
+    const policy = action.id ? approvalByActionId.get(action.id) : undefined;
+    return (
+      <div
+        key={`${kind}-${idx}-${action.id}`}
+        className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0"
+      >
+        <ShieldCheck
+          size={14}
+          className={policy?.isActive ? 'text-green-600' : 'text-gray-300'}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm text-gray-900 truncate">{label}</div>
+          <div className="text-[11px] text-gray-500 truncate">
+            {policy ? (
+              <>
+                <span className="font-medium text-gray-700">{policy.mode}</span>
+                {!policy.isActive && <span className="text-gray-400"> · inactive</span>}
+                {policy.approverRoles.length > 0 && (
+                  <span> · {policy.approverRoles.map((r) => r.name).join(', ')}</span>
+                )}
+                {policy.approverUsers.length > 0 && policy.approverRoles.length === 0 && (
+                  <span>
+                    {' · '}
+                    {policy.approverUsers.length} user
+                    {policy.approverUsers.length === 1 ? '' : 's'}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="italic">No approval requirement</span>
+            )}
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() =>
+            setApprovalEditFor({ actionId: action.id!, actionLabel: label })
+          }
+          aria-label={policy ? 'edit approval policy' : 'add approval policy'}
+        >
+          {policy ? (
+            <>
+              <Pencil size={12} />
+              <span className="ml-1 text-xs">Edit</span>
+            </>
+          ) : (
+            <>
+              <Plus size={12} />
+              <span className="ml-1 text-xs">Add policy</span>
+            </>
+          )}
         </Button>
       </div>
     );
@@ -200,6 +247,30 @@ export default function StageInspector({
         {renderActions('secondary')}
       </div>
 
+      {/* ── Approvals ───────────────────────────────────────────────────── */}
+      <div className="border-t pt-3">
+        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+          <ShieldCheck size={12} />
+          Approvals
+        </h4>
+        {!persistedStageId ? (
+          <p className="text-xs text-gray-400 italic">
+            Save the workflow first to configure approval policies on this stage's actions.
+          </p>
+        ) : savedActions.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">
+            Add at least one action above (and save) to attach an approval policy.
+          </p>
+        ) : (
+          <div className="rounded border border-gray-200 px-2">
+            {savedActions.map(({ action, kind }, idx) =>
+              renderApprovalRow(action, kind, idx),
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── SLA ─────────────────────────────────────────────────────────── */}
       <div className="border-t pt-3">
         <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
           <Timer size={12} />

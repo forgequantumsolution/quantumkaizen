@@ -4,7 +4,6 @@ import {
   CreateWorkflowShellSchema,
   DraftBodySchema,
   ListWorkflowsQuerySchema,
-  SaveLayoutBodySchema,
   SaveWorkflowBodySchema,
 } from './workflow.schema';
 
@@ -12,7 +11,6 @@ CreateWorkflowShellSchema.openapi('CreateWorkflowShellInput', {
   example: { name: 'CAPA Approval', typeId: undefined },
 });
 SaveWorkflowBodySchema.openapi('SaveWorkflowInput');
-SaveLayoutBodySchema.openapi('SaveWorkflowLayoutInput');
 DraftBodySchema.openapi('SaveWorkflowDraftInput');
 
 const TagRef = z.object({ id: z.string().uuid(), name: z.string() }).nullable();
@@ -172,24 +170,6 @@ registry.registerPath({
   request: { params: idParam },
   responses: {
     204: { description: 'Deleted' },
-    401: errorResponses[401],
-    403: errorResponses[403],
-    404: errorResponses[404],
-  },
-});
-
-registry.registerPath({
-  method: 'post',
-  path: '/workflows/{id}/save-layout',
-  tags: ['Workflows'],
-  summary: 'Update only canvas positions',
-  security: [{ bearerAuth: [] }],
-  request: {
-    params: idParam,
-    body: { content: { 'application/json': { schema: SaveLayoutBodySchema } } },
-  },
-  responses: {
-    200: { description: 'Updated', content: { 'application/json': { schema: z.object({ updated: z.number().int() }) } } },
     401: errorResponses[401],
     403: errorResponses[403],
     404: errorResponses[404],

@@ -5,8 +5,6 @@ export const SplitTypeSchema = z.enum(['AND', 'OR', 'XOR']);
 export const JoinTypeSchema = z.enum(['AND', 'OR']);
 export const WorkflowStatusSchema = z.enum(['ACTIVE', 'INACTIVE', 'DRAFT', 'DRAFT_UPDATE']);
 
-const PositionSchema = z.object({ x: z.number(), y: z.number() });
-
 const ActionPayloadSchema = z
   .object({
     stage_status_id: z.string().uuid(),
@@ -20,7 +18,6 @@ const ActionPayloadSchema = z
 const NodeSchema = z.object({
   id: z.string().min(1),
   type: z.string().optional(),
-  position: PositionSchema,
   data: z
     .object({
       label: z.string().min(1),
@@ -102,15 +99,6 @@ export const ListWorkflowsQuerySchema = z.object({
 
 export const IdParamSchema = z.object({ id: z.string().uuid() });
 
-export const SaveLayoutBodySchema = z.object({
-  positions: z.array(
-    z.object({
-      canonicalId: z.string().min(1),
-      position: PositionSchema,
-    })
-  ),
-});
-
 export const DraftBodySchema = z.object({
   flow_json: z.unknown(),
 });
@@ -118,7 +106,6 @@ export const DraftBodySchema = z.object({
 export type SaveWorkflowBody = z.infer<typeof SaveWorkflowBodySchema>;
 export type CreateWorkflowShellInput = z.infer<typeof CreateWorkflowShellSchema>;
 export type ListWorkflowsQuery = z.infer<typeof ListWorkflowsQuerySchema>;
-export type SaveLayoutBody = z.infer<typeof SaveLayoutBodySchema>;
 export type WorkflowNode = z.infer<typeof NodeSchema>;
 export type WorkflowEdge = z.infer<typeof EdgeSchema>;
 export type WorkflowSettings = z.infer<typeof WorkflowSettingsSchema>;

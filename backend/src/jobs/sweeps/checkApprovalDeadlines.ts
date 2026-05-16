@@ -36,7 +36,11 @@ export const checkApprovalDeadlines = async (): Promise<ApprovalDeadlineResult> 
   for (const c of candidates) {
     try {
       await prisma.$transaction(async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "ApprovalInstance" WHERE id = ${c.id}::uuid FOR UPDATE`;
+        // `ApprovalInstance.id` is declared `String @default(uuid())` in
+        // Prisma — the underlying column is TEXT, not UUID. Casting `c.id`
+        // to `::uuid` produces "operator does not exist: text = uuid" at
+        // runtime (same class as the SlaTimer bug fixed in P3.6).
+        await tx.$queryRaw`SELECT id FROM "ApprovalInstance" WHERE id = ${c.id} FOR UPDATE`;
         const inst = await tx.approvalInstance.findUnique({
           where: { id: c.id },
           select: { id: true, status: true, deadlineAt: true },

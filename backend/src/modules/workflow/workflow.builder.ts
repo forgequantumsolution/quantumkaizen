@@ -132,7 +132,6 @@ export const buildWorkflowGraph = async (
       name: node.data.label,
       canonicalId: node.id,
       isInitialStage: isInitial,
-      position: node.position as unknown as Prisma.InputJsonValue,
       sendEmail: node.data.basic_details?.email_notification === true,
       additionalData: additionalData as Prisma.InputJsonValue | undefined,
       stageType,

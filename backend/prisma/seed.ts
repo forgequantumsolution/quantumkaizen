@@ -482,13 +482,14 @@ async function main() {
             createdById: adminUser?.id ?? null,
           },
         });
+        // Layout is computed client-side by dagre at render time — no
+        // position stored on the WorkflowStage row anymore.
         const submit = await tx.workflowStage.create({
           data: {
             workflowId: wf.id,
             name: 'Submit',
             canonicalId: 'sample-submit',
             isInitialStage: true,
-            position: { x: 50, y: 100 },
             stageType: 'STAGE',
           },
         });
@@ -497,7 +498,6 @@ async function main() {
             workflowId: wf.id,
             name: 'Review',
             canonicalId: 'sample-review',
-            position: { x: 300, y: 100 },
             stageType: 'STAGE',
           },
         });
@@ -506,7 +506,6 @@ async function main() {
             workflowId: wf.id,
             name: 'Approve',
             canonicalId: 'sample-approve',
-            position: { x: 550, y: 100 },
             stageType: 'STAGE',
           },
         });
