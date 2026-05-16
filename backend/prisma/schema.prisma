@@ -72,6 +72,9 @@ model User {
   slaExtensionsApproved   SlaExtension[]   @relation("SlaExtensionApprover")
   slaTimerEventsTriggered SlaTimerEvent[]  @relation("SlaTimerEventTriggeredBy")
 
+  // Phase 3.5 — stage form bindings
+  stageFormBindingsCreated StageFormBinding[] @relation("StageFormBindingCreatedBy")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -330,6 +333,9 @@ model Workflow {
   approvalPolicies ApprovalPolicy[] @relation("WorkflowApprovalPolicies")
   usedAsSlaEscalation SlaPolicy[]   @relation("WorkflowAsSlaEscalation")
 
+  // Phase 3.5 — stage form bindings owned by this workflow
+  stageFormBindings StageFormBinding[] @relation("WorkflowStageFormBindings")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -376,6 +382,10 @@ model WorkflowStage {
   slaPolicy           SlaPolicy?       @relation("StageSlaPolicy")
   slaTimers           SlaTimer[]       @relation("StageSlaTimers")
   slaThresholdTargets SlaThreshold[]   @relation("SlaThresholdTargetStage")
+
+  // Phase 3.5 — stage form bindings
+  formBindings    StageFormBinding[] @relation("StageFormBindings")
+  formSubmissions FormSubmission[]   @relation("StageFormSubmissions")
 
   isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
@@ -525,6 +535,9 @@ model Ticket {
   // spawned escalation child (so we can query "is this an SLA-escalation ticket?").
   slaTimersAsEscalation SlaTimer[]         @relation("TicketAsSlaEscalation")
 
+  // Phase 3.5 — workflow-bound form submissions
+  formSubmissions FormSubmission[] @relation("TicketFormSubmissions")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -550,6 +563,9 @@ model TicketFlow {
   statusUpdatedAt DateTime  @default(now())
 
   currentStages WorkflowStage[] @relation("TicketFlowCurrentStages")
+
+  // Phase 3.5 — workflow-bound form submissions on this flow
+  formSubmissions FormSubmission[] @relation("TicketFlowFormSubmissions")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -674,6 +690,43 @@ model ParallelBranchTracking {
 }
 
 // =====================================================================
+// Phase 3.5 — Stage ↔ Form bindings
+// =====================================================================
+
+// A StageFormBinding declares "this form must (or may) be submitted on this
+// stage before the ticket can transition out". Bindings reference the
+// logical `Form` (templateKey), not a pinned version — the latest version is
+// what's served at fill time. See docs/WORKFLOW_PHASE_3_5_PLAN.md §3.
+model StageFormBinding {
+  id         String   @id @default(uuid())
+  workflowId String
+  workflow   Workflow @relation("WorkflowStageFormBindings", fields: [workflowId], references: [id], onDelete: Cascade)
+
+  stageId String
+  stage   WorkflowStage @relation("StageFormBindings", fields: [stageId], references: [id], onDelete: Cascade)
+
+  formId String
+  form   Form   @relation("FormStageFormBindings", fields: [formId], references: [id], onDelete: Restrict)
+
+  isRequired Boolean @default(true)
+  position   Int     @default(0)
+
+  isActive  Boolean @default(true)
+  isDeleted Boolean @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdById String?
+  createdBy   User?    @relation("StageFormBindingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  submissions FormSubmission[] @relation("FormSubmissionBinding")
+
+  @@unique([stageId, formId])
+  @@index([workflowId, stageId])
+  @@index([formId])
+}
+
+// =====================================================================
 // Dynamic Form Builder
 // =====================================================================
 
@@ -752,6 +805,9 @@ model Form {
   sections    FormSection[]
   draft       FormDraft?
   submissions FormSubmission[]
+
+  // Phase 3.5 — bindings linking this form to workflow stages
+  stageBindings StageFormBinding[] @relation("FormStageFormBindings")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -854,11 +910,25 @@ model FormSubmission {
   submittedBy   User?   @relation("FormSubmissionSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
   submittedAt   DateTime?
 
+  // Phase 3.5 — workflow-bound submissions. All nullable so standalone fills
+  // continue to work. Populated by the workflow-scoped POST endpoint at
+  // /api/tickets/:id/forms/:formId/submissions.
+  ticketId String?
+  ticket   Ticket? @relation("TicketFormSubmissions", fields: [ticketId], references: [id], onDelete: SetNull)
+  stageId  String?
+  stage    WorkflowStage? @relation("StageFormSubmissions", fields: [stageId], references: [id], onDelete: SetNull)
+  flowId   String?
+  flow     TicketFlow?    @relation("TicketFlowFormSubmissions", fields: [flowId], references: [id], onDelete: SetNull)
+  bindingId String?
+  binding   StageFormBinding? @relation("FormSubmissionBinding", fields: [bindingId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([formId, status])
   @@index([submittedById])
+  @@index([ticketId, stageId])
+  @@index([bindingId])
 }
 
 // =====================================================================

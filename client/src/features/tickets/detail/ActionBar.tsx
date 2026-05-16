@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { ArrowRight, XCircle, Pause, Play, Undo2, UserCog } from 'lucide-react';
 import { Button, Card, Modal, Textarea } from '@/components/ui';
@@ -11,6 +11,7 @@ import {
   type StageActionsView,
 } from '@/lib/api/ticket';
 import type { StageActionBehavior } from '@/lib/api/workflow';
+import { useTicketStageForms } from '@/lib/api/stageForm';
 
 interface Props {
   ticketId: string;
@@ -39,9 +40,26 @@ const BEHAVIOR_VARIANT: Record<StageActionBehavior, 'primary' | 'reject' | 'seco
 
 export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransition }: Props) {
   const { data: stageActions = [], isLoading } = useAllowedActions(ticketId);
+  const { data: stageFormsData } = useTicketStageForms(ticketId);
   const transition = useTransition(ticketId);
   const hold = useHoldTicket(ticketId);
   const resume = useResumeTicket(ticketId);
+
+  // Phase 3.5 — block transitions when any required form on the current
+  // stage is unsubmitted. The backend re-checks at /transition time (engine
+  // form.layer); this is just the friendlier UX.
+  const unsubmittedRequiredForms = useMemo(() => {
+    const bindings = stageFormsData?.bindings ?? [];
+    return bindings.filter(
+      (b) => b.isRequired && b.latestSubmission?.status !== 'SUBMITTED',
+    );
+  }, [stageFormsData]);
+  const formsBlocked = unsubmittedRequiredForms.length > 0;
+  const formsBlockedReason = formsBlocked
+    ? `Submit required forms first: ${unsubmittedRequiredForms
+        .map((b) => b.form.title)
+        .join(', ')}`
+    : undefined;
   const [pending, setPending] = useState<{ action: AllowedAction; stage: StageActionsView } | null>(null);
   const [remarks, setRemarks] = useState('');
   const [holdOpen, setHoldOpen] = useState(false);
@@ -126,20 +144,23 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
                       )}
                       {stage.actions.map((a) => {
                         const Icon = BEHAVIOR_ICON[a.behavior];
+                        const disabled =
+                          !a.canPerform || !canTransition || isOnHold || formsBlocked;
+                        const tooltip = !a.canPerform
+                          ? a.canPerformReason
+                          : isOnHold
+                            ? 'Ticket is on hold'
+                            : formsBlocked
+                              ? formsBlockedReason
+                              : undefined;
                         return (
                           <Button
                             key={a.id}
                             variant={BEHAVIOR_VARIANT[a.behavior]}
                             size="sm"
-                            disabled={!a.canPerform || !canTransition || isOnHold}
+                            disabled={disabled}
                             onClick={() => setPending({ action: a, stage })}
-                            title={
-                              !a.canPerform
-                                ? a.canPerformReason
-                                : isOnHold
-                                  ? 'Ticket is on hold'
-                                  : undefined
-                            }
+                            title={tooltip}
                           >
                             <Icon size={12} />
                             <span className="ml-1">{a.name}</span>

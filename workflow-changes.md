@@ -1377,6 +1377,81 @@ The approval-deadline sweep's `SELECT FOR UPDATE` raw query cast `id::uuid`, but
 
 ---
 
+# Phase 3.5 — Forms ↔ Workflow Integration
+
+**Status:** 🟡 Code complete, tests pending (2026-05-16)
+**Plan doc:** [`docs/WORKFLOW_PHASE_3_5_PLAN.md`](docs/WORKFLOW_PHASE_3_5_PLAN.md)
+
+Scope: stages can declare required (or optional) forms; the engine blocks `/transition` until each required form is submitted on the ticket. `FormSubmission` rows gain optional `ticketId`/`stageId`/`flowId`/`bindingId` FKs so the existing standalone `/forms` flow keeps working unchanged.
+
+## P3.5.BE.1 — Schema + migration
+
+**Files:**
+- `backend/prisma/schema.prisma` — new `StageFormBinding` model + four optional FKs on `FormSubmission` (`ticketId`, `stageId`, `flowId`, `bindingId`). Back-relations added on `User`, `Workflow`, `WorkflowStage`, `Form`, `Ticket`, `TicketFlow`.
+- Migration `20260516120000_add_stage_form_bindings` applied via `prisma db execute` + `prisma migrate resolve --applied` (filtered diff output dropped unrelated drift in the live DB).
+- `backend/package.json` — added `"predev": "prisma generate"` so a fresh-checkout dev never starts against a stale client.
+
+## P3.5.BE.2 — Binding CRUD module
+
+**New module** `backend/src/modules/stage-form/`:
+- `stage-form.schema.ts` — Zod schemas (`CreateStageFormBindingSchema`, `UpdateStageFormBindingSchema`, `CreateWorkflowSubmissionSchema`, plus params + query schemas).
+- `stage-form.service.ts` — `listForWorkflow`, `getBinding`, `createBinding`, `updateBinding`, `softDeleteBinding`, `listForTicket` (returns bindings + latest submission for the ticket's current stage(s)), `createWorkflowSubmission` (validates the binding belongs to a current stage and the route's `formId` matches before stamping all four FKs).
+- `stage-form.controller.ts` — thin request→service shim.
+- `stage-form.routes.ts` — four routers: workflow-scoped (GET/POST `/:id/stage-form-bindings`), binding (GET/PATCH/DELETE `/:id`), ticket-scoped list (GET `/:id/stage-forms`), ticket-scoped submission (POST `/:id/forms/:formId/submissions`).
+
+**Wiring:** `backend/src/app.ts` — four `app.use` lines mounting under `/api/workflows`, `/api/stage-form-bindings`, `/api/tickets`.
+
+**Permissions** (in `backend/prisma/seed.ts`): new `stage-form.{read,create,update,delete}` keys. Granted to `SUPER_ADMIN` + `QMS_ADMIN` by default; `QUALITY_ENGINEER` + `DOCUMENT_CONTROLLER` get `stage-form.read` + `form.read` + `form_submission.read`/`create` so they can see and fill bindings on tickets they work; `AUDITOR` gets read-only.
+
+## P3.5.BE.3 — Engine integration
+
+**Files:**
+- New `backend/src/modules/workflow/engine/form.layer.ts` — single `findUnsatisfiedRequiredForms(tx, ticketId, stageId)` entry point. Loads all `isRequired=true` bindings for the stage, looks up SUBMITTED submissions for `(ticketId, stageId, formId)`, returns the binding rows with no matching submission.
+- `backend/src/modules/workflow/engine/orchestrator.ts` — `performAction()` gains a Phase 3.5 intercept right after the approval intercept and before behavior dispatch. Unmet required forms → `BadRequest('Required forms not submitted', { formsRequired: [...] })` so the FE can render which forms are blocking.
+
+The approval intercept stays the outermost gate (per Q8 commentary in the plan doc) — approvers see "Decide" first; once they decide APPROVED, the form check kicks in.
+
+## P3.5.FE.1 — API client
+
+**File:** `client/src/lib/api/stageForm.ts` — typed hooks for every endpoint:
+- `useStageFormBindings(workflowId, opts)`, `useStageFormBinding(id)`
+- `useCreateStageFormBinding(workflowId)`, `useUpdateStageFormBinding(id)`, `useDeleteStageFormBinding`
+- `useTicketStageForms(ticketId)` — returns bindings + latest submission per binding
+- `useCreateWorkflowSubmission(ticketId, formId)` — invalidates `stageFormKeys.ticket(ticketId)` so the awaiting card re-renders right after a fill
+
+## P3.5.FE.2 — Builder inspector
+
+**Files:**
+- `client/src/features/workflows/builder/inspector/StageFormBindingEditor.tsx` — new modal. antd `Select` (single-pick, backend-search via the existing `useForms({ search })` hook, debounced 250 ms via `useDebouncedValue`), position number, required/optional toggle.
+- `client/src/features/workflows/builder/inspector/StageInspector.tsx` — new "Forms" section below SLA. Lists every binding with form title + version + required pill + position + remove button. "Attach form" button at the section header opens the editor with `excludeFormIds` so already-attached forms don't surface in the picker.
+
+## P3.5.FE.3 — Ticket detail
+
+**Files:**
+- `client/src/features/tickets/detail/RequiredFormsCard.tsx` — new card listing every binding for the ticket's current stage(s) with status pill (Not started / Draft saved / Submitted), "Fill"/"Resume"/"View" CTA that deep-links to `FormFillPage` with `?ticketId=…&bindingId=…&submissionId=…`.
+- `client/src/features/tickets/TicketDetailPage.tsx` — mounts `RequiredFormsCard` between `ApprovalAwaitingCard` and `ActionBar`.
+- `client/src/features/tickets/detail/ActionBar.tsx` — reads `useTicketStageForms(ticketId)`, computes `unsubmittedRequiredForms`, disables every transition button while any required form is unsubmitted. Tooltip surfaces the blocking form names.
+
+## P3.5.FE.4 — FormFillPage workflow-bound path
+
+**File:** `client/src/features/forms/FormFillPage.tsx` — reads `ticketId` + `bindingId` from `useSearchParams`. When both are present:
+- Submit POSTs to the workflow-bound endpoint via `useCreateWorkflowSubmission`.
+- Back button returns to the ticket detail instead of `/forms`.
+- Toast errors unwrap the new `{ error: { message } }` envelope shape too.
+
+Standalone fills (no query params) take the existing `useSubmitForm` path unchanged.
+
+## P3.5.Verification — Static checks
+
+- `npx tsc --noEmit` clean on backend after every slice.
+- `npx tsc --noEmit` clean on client after every slice.
+- Migration applied to the live DB; Prisma client regenerated.
+- No new runtime deps (FE uses existing `antd`, `lucide-react`, `dagre` was already added in the layout slice).
+
+End-to-end Playwright suite is pending — to come in a follow-up.
+
+---
+
 # Phase 4 — Backend — Audit + E-Signatures
 
 **Status:** ⏳ Not started

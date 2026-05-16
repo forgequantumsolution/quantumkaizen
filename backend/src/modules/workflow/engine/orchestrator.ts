@@ -13,6 +13,7 @@ import { resolveNextStages, getPreviousActiveStageId } from './graph.layer';
 import { startBranches, markBranchCompleted } from './parallel.handler';
 import { emitAuditEvent } from './audit.emitter';
 import * as approvalLayer from './approval.layer';
+import { findUnsatisfiedRequiredForms } from './form.layer';
 import { onTicketHeld, onTicketResumed } from './sla.handler';
 import type {
   ActorContext,
@@ -356,6 +357,22 @@ export const performAction = async (
         };
       }
       // status === 'satisfied' — fall through to the existing behavior path.
+    }
+
+    // ── Phase 3.5 required-forms intercept ────────────────────────────────
+    // After the approval gate, before behavior dispatch. Stage bindings with
+    // isRequired=true block the transition until a SUBMITTED FormSubmission
+    // exists for each (ticket, stage, formId). Standalone fills (no ticketId)
+    // don't count. See docs/WORKFLOW_PHASE_3_5_PLAN.md §5.
+    const unmetForms = await findUnsatisfiedRequiredForms(
+      tx,
+      ticket.id,
+      currentStage.id,
+    );
+    if (unmetForms.length > 0) {
+      throw BadRequest('Required forms not submitted', {
+        formsRequired: unmetForms,
+      });
     }
 
     const behavior = action.workflowAction.behavior;

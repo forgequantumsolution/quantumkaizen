@@ -1,12 +1,28 @@
 import { useState } from 'react';
-import { Pencil, Plus, Settings, ShieldCheck, Timer, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import {
+  ClipboardList,
+  FileText,
+  Pencil,
+  Plus,
+  Settings,
+  ShieldCheck,
+  Timer,
+  Trash2,
+} from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
 import type { StageNodeData, NodeAction } from '../builder.types';
 import type { WorkflowStageStatus } from '@/lib/api/workflowLookups';
 import { useApprovalPoliciesForWorkflow, type ApprovalPolicy } from '@/lib/api/approval';
 import { useSlaPoliciesForWorkflow } from '@/lib/api/sla';
+import {
+  useDeleteStageFormBinding,
+  useStageFormBindings,
+  useUpdateStageFormBinding,
+} from '@/lib/api/stageForm';
 import ApprovalPolicyEditor from './ApprovalPolicyEditor';
 import SlaPolicyEditor from './SlaPolicyEditor';
+import StageFormBindingEditor from './StageFormBindingEditor';
 
 interface Props {
   workflowId: string;
@@ -22,6 +38,7 @@ export default function StageInspector({
   stageStatuses,
 }: Props) {
   const [slaOpen, setSlaOpen] = useState(false);
+  const [formBindingOpen, setFormBindingOpen] = useState(false);
   const [approvalEditFor, setApprovalEditFor] = useState<
     { actionId: string; actionLabel: string } | null
   >(null);
@@ -31,6 +48,10 @@ export default function StageInspector({
   const { data: approvalPolicies = [] } = useApprovalPoliciesForWorkflow(workflowId, {
     includeInactive: true,
   });
+  const { data: formBindings = [] } = useStageFormBindings(workflowId, {
+    stageId: persistedStageId,
+  });
+  const removeFormBinding = useDeleteStageFormBinding();
 
   const slaForThisStage = persistedStageId
     ? slaPolicies.find((p) => p.parentStage.id === persistedStageId)
@@ -313,6 +334,88 @@ export default function StageInspector({
         )}
       </div>
 
+      {/* ── Forms ──────────────────────────────────────────────────────── */}
+      <div className="border-t pt-3">
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
+            <ClipboardList size={12} />
+            Forms
+          </h4>
+          {persistedStageId && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFormBindingOpen(true)}
+            >
+              <Plus size={12} />
+              <span className="ml-1 text-xs">Attach form</span>
+            </Button>
+          )}
+        </div>
+        {!persistedStageId ? (
+          <p className="text-xs text-gray-400 italic">
+            Save the workflow first to attach forms to this stage.
+          </p>
+        ) : formBindings.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">
+            No forms attached. Required forms block transitions out of the stage
+            until they're submitted on the ticket.
+          </p>
+        ) : (
+          <div className="rounded border border-gray-200 px-2">
+            {formBindings.map((b) => (
+              <div
+                key={b.id}
+                className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0"
+              >
+                <FileText
+                  size={14}
+                  className={b.isRequired ? 'text-amber-600' : 'text-gray-300'}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-900 truncate">
+                    {b.form.title}
+                    <span className="text-gray-400 text-xs">
+                      {' '}
+                      · v{b.form.version}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-gray-500">
+                    {b.isRequired ? 'Required to transition' : 'Optional'}
+                    {' · position '}
+                    {b.position}
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="remove form binding"
+                  onClick={async () => {
+                    if (
+                      !confirm(
+                        `Detach "${b.form.title}" from this stage? Existing submissions are kept.`,
+                      )
+                    )
+                      return;
+                    try {
+                      await removeFormBinding.mutateAsync(b.id);
+                      toast.success('Form detached');
+                    } catch (err) {
+                      const msg =
+                        (err as { response?: { data?: { error?: { message?: string } } } })
+                          ?.response?.data?.error?.message ?? 'Failed to detach';
+                      toast.error(msg);
+                    }
+                  }}
+                >
+                  <Trash2 size={14} className="text-red-500" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {persistedStageId && (
         <SlaPolicyEditor
           isOpen={slaOpen}
@@ -331,6 +434,17 @@ export default function StageInspector({
           stageId={persistedStageId}
           actionId={approvalEditFor.actionId}
           actionLabel={approvalEditFor.actionLabel}
+        />
+      )}
+
+      {persistedStageId && (
+        <StageFormBindingEditor
+          isOpen={formBindingOpen}
+          onClose={() => setFormBindingOpen(false)}
+          workflowId={workflowId}
+          stageId={persistedStageId}
+          stageName={data.label}
+          excludeFormIds={formBindings.map((b) => b.formId)}
         />
       )}
     </div>
