@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, FileText, Eye, Pencil, Trash2,
   ListChecks, Layers, ClipboardList, LayoutGrid, List, GitBranch, Check,
+  CheckSquare,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageContainer from '@/components/layout/PageContainer';
@@ -13,48 +14,105 @@ import { KpiCard } from '@/components/ui/KpiCard';
 import EmptyState from '@/components/ui/EmptyState';
 import Spinner from '@/components/ui/Spinner';
 import { useDeleteForm, useForms } from './hooks';
-import type { FormListItem } from './types';
+import type { FormKind, FormListItem } from './types';
 
 type ViewMode = 'card' | 'table';
 
+const COPY: Record<FormKind, {
+  pageTitle: string;
+  pageDescription: string;
+  newButton: string;
+  newRoute: string;
+  searchPlaceholder: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  totalLabel: string;
+  deleteConfirm: (title: string) => string;
+  deleteToast: string;
+}> = {
+  FORM: {
+    pageTitle: 'Form Builder',
+    pageDescription: 'Build and version dynamic forms for any process',
+    newButton: 'New form',
+    newRoute: '/forms/new',
+    searchPlaceholder: 'Search forms by title…',
+    emptyTitle: 'No forms yet',
+    emptyDescription: 'Create your first dynamic form to get started.',
+    totalLabel: 'Total forms',
+    deleteConfirm: (t) => `Delete form "${t}"?`,
+    deleteToast: 'Form deleted',
+  },
+  CHECKLIST: {
+    pageTitle: 'Checklist Builder',
+    pageDescription: 'Build and version reusable checklists for any process',
+    newButton: 'New checklist',
+    newRoute: '/forms/new?kind=CHECKLIST',
+    searchPlaceholder: 'Search checklists by title…',
+    emptyTitle: 'No checklists yet',
+    emptyDescription: 'Create your first checklist to get started.',
+    totalLabel: 'Total checklists',
+    deleteConfirm: (t) => `Delete checklist "${t}"?`,
+    deleteToast: 'Checklist deleted',
+  },
+};
+
 export default function FormListPage() {
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeKind: FormKind = tabParam === 'checklists' ? 'CHECKLIST' : 'FORM';
+
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ViewMode>('card');
 
-  const { data, isLoading } = useForms({ search: search || undefined, page_size: 50 });
+  const { data, isLoading } = useForms({
+    search: search || undefined,
+    page_size: 50,
+    kind: activeKind,
+  });
   const deleteForm = useDeleteForm();
   const forms = data?.forms ?? [];
+  const copy = COPY[activeKind];
 
   const draftCount = forms.filter((f) => f.status === 'DRAFT').length;
   const publishedCount = forms.filter((f) => f.status === 'PUBLISHED').length;
 
+  const handleTabChange = (kind: FormKind) => {
+    const next = new URLSearchParams(searchParams);
+    if (kind === 'CHECKLIST') next.set('tab', 'checklists');
+    else next.delete('tab');
+    setSearchParams(next, { replace: true });
+    setSearch('');
+  };
+
   const handleDelete = (f: FormListItem) => {
-    if (!confirm(`Delete form "${f.title}"?`)) return;
-    deleteForm.mutate(f.id, { onSuccess: () => toast.success('Form deleted') });
+    if (!confirm(copy.deleteConfirm(f.title))) return;
+    deleteForm.mutate(f.id, { onSuccess: () => toast.success(copy.deleteToast) });
   };
 
   return (
     <PageContainer>
       <PageHeader
-        title="Form Builder"
-        description="Build and version dynamic checklists for any process"
+        title={copy.pageTitle}
+        description={copy.pageDescription}
         actions={
           <div className="flex gap-2">
             <Button variant="secondary" onClick={() => nav('/forms/field-types')}>
               <Layers className="h-4 w-4" />
               Field types
             </Button>
-            <Button onClick={() => nav('/forms/new')}>
+            <Button onClick={() => nav(copy.newRoute)}>
               <Plus className="h-4 w-4" />
-              New form
+              {copy.newButton}
             </Button>
           </div>
         }
       />
 
+      <KindTabs active={activeKind} onChange={handleTabChange} />
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-        <KpiCard label="Total forms" value={forms.length} icon={FileText} accent="slate" selected />
+        <KpiCard label={copy.totalLabel} value={forms.length} icon={FileText} accent="slate" selected />
         <KpiCard label="Drafts"      value={draftCount}   icon={Pencil}   accent="amber" />
         <KpiCard label="Published"   value={publishedCount} icon={ListChecks} accent="emerald" />
       </div>
@@ -66,7 +124,7 @@ export default function FormListPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search forms by title…"
+            placeholder={copy.searchPlaceholder}
             className="pl-9"
           />
         </div>
@@ -79,11 +137,11 @@ export default function FormListPage() {
         </div>
       ) : forms.length === 0 ? (
         <EmptyState
-          icon={ClipboardList}
-          title="No forms yet"
-          description="Create your first dynamic form to get started."
-          actionLabel="New form"
-          onAction={() => nav('/forms/new')}
+          icon={activeKind === 'CHECKLIST' ? CheckSquare : ClipboardList}
+          title={copy.emptyTitle}
+          description={copy.emptyDescription}
+          actionLabel={copy.newButton}
+          onAction={() => nav(copy.newRoute)}
         />
       ) : view === 'card' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
@@ -109,6 +167,41 @@ export default function FormListPage() {
       )}
 
     </PageContainer>
+  );
+}
+
+// ─── Kind tabs (Forms / Checklists) ────────────────────────────
+function KindTabs({
+  active, onChange,
+}: { active: FormKind; onChange: (k: FormKind) => void }) {
+  const tabs: Array<{ kind: FormKind; label: string; icon: React.ElementType }> = [
+    { kind: 'FORM',      label: 'Forms',      icon: FileText },
+    { kind: 'CHECKLIST', label: 'Checklists', icon: CheckSquare },
+  ];
+  return (
+    <div className="mb-5 border-b border-slate-200">
+      <nav className="-mb-px flex gap-1">
+        {tabs.map(({ kind, label, icon: Icon }) => {
+          const selected = active === kind;
+          return (
+            <button
+              key={kind}
+              type="button"
+              onClick={() => onChange(kind)}
+              className={
+                'inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition ' +
+                (selected
+                  ? 'border-indigo-600 text-indigo-700'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300')
+              }
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
 

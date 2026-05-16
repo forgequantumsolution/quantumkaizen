@@ -2,9 +2,7 @@
 // `parentScope` lists every field the rule can reference. The current field
 // (when editing field-level visibility) is excluded by the caller.
 import { Plus, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import Select from '@/components/ui/Select';
+import { Button as AntButton, Checkbox, Input as AntInput, Select as AntSelect } from 'antd';
 import {
   emptyRule,
   type DependencyCondition,
@@ -77,40 +75,38 @@ export default function DependencyEditor({ scopeLabel = 'field', rule, onChange,
 
   return (
     <div className="space-y-4">
-      <label className="inline-flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => set({ enabled: e.target.checked })}
-        />
-        <span className="text-slate-700">
-          Conditional visibility for this {scopeLabel}
-        </span>
-      </label>
+      <Checkbox
+        checked={enabled}
+        onChange={(e) => set({ enabled: e.target.checked })}
+      >
+        Conditional visibility for this {scopeLabel}
+      </Checkbox>
 
       {enabled && (
         <>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">When</label>
-              <Select
+              <AntSelect
                 value={rule.mode}
-                onChange={(e) => set({ mode: e.target.value as DependencyRule['mode'] })}
+                onChange={(v) => set({ mode: v as DependencyRule['mode'] })}
                 options={[
                   { value: 'show', label: 'Show this ' + scopeLabel },
                   { value: 'hide', label: 'Hide this ' + scopeLabel },
                 ]}
+                style={{ width: '100%' }}
               />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Match</label>
-              <Select
+              <AntSelect
                 value={rule.combinator}
-                onChange={(e) => set({ combinator: e.target.value as DependencyRule['combinator'] })}
+                onChange={(v) => set({ combinator: v as DependencyRule['combinator'] })}
                 options={[
                   { value: 'and', label: 'All conditions (AND)' },
                   { value: 'or',  label: 'Any condition (OR)' },
                 ]}
+                style={{ width: '100%' }}
               />
             </div>
           </div>
@@ -125,70 +121,69 @@ export default function DependencyEditor({ scopeLabel = 'field', rule, onChange,
                 <div key={idx} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <Select
+                      <AntSelect
                         value={`${c.sectionName}::${c.fieldName}`}
-                        onChange={(e) => {
-                          const [sectionName, fieldName] = e.target.value.split('::');
+                        onChange={(val) => {
+                          const [sectionName, fieldName] = String(val).split('::');
                           updateCondition(idx, { sectionName, fieldName, value: '' });
                         }}
                         options={parents.map((p) => ({
                           value: `${p.sectionName}::${p.fieldName}`,
                           label: `${p.label}  (${p.sectionName})`,
                         }))}
+                        style={{ width: '100%' }}
+                        showSearch
+                        optionFilterProp="label"
                       />
                     </div>
-                    <button
+                    <AntButton
+                      type="text"
+                      danger
+                      size="small"
+                      icon={<Trash2 className="h-4 w-4" />}
                       onClick={() => removeCondition(idx)}
-                      className="text-slate-400 hover:text-red-500 mt-1.5"
-                      type="button"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    />
                   </div>
-                  <Select
+                  <AntSelect
                     value={c.operator}
-                    onChange={(e) =>
-                      updateCondition(idx, { operator: e.target.value as DependencyOperator })
-                    }
+                    onChange={(v) => updateCondition(idx, { operator: v as DependencyOperator })}
                     options={OPERATORS.map((o) => ({ value: o.value, label: o.label }))}
+                    style={{ width: '100%' }}
                   />
                   {op?.needsValue &&
                     (parent?.options && parent.options.length > 0 ? (
                       c.operator === 'in' || c.operator === 'not_in' ? (
-                        <div className="flex flex-wrap gap-2 px-1">
-                          {parent.options.map((o) => {
-                            const arr = Array.isArray(c.value) ? (c.value as string[]) : c.value ? [String(c.value)] : [];
-                            const checked = arr.includes(String(o.value));
-                            return (
-                              <label key={String(o.value)} className="flex items-center gap-1.5 text-sm">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => {
-                                    const next = checked
-                                      ? arr.filter((v) => v !== String(o.value))
-                                      : [...arr, String(o.value)];
-                                    updateCondition(idx, { value: next });
-                                  }}
-                                />
-                                {o.label}
-                              </label>
-                            );
-                          })}
-                        </div>
+                        <AntSelect
+                          mode="multiple"
+                          value={(Array.isArray(c.value)
+                            ? (c.value as string[])
+                            : c.value
+                              ? [String(c.value)]
+                              : []
+                          )}
+                          onChange={(vals) => updateCondition(idx, { value: vals as string[] })}
+                          options={parent.options.map((o) => ({
+                            value: String(o.value),
+                            label: o.label,
+                          }))}
+                          placeholder="— Pick one or more values —"
+                          style={{ width: '100%' }}
+                        />
                       ) : (
-                        <Select
-                          value={String(c.value ?? '')}
-                          onChange={(e) => updateCondition(idx, { value: e.target.value })}
+                        <AntSelect
+                          value={c.value ? String(c.value) : undefined}
+                          onChange={(v) => updateCondition(idx, { value: v })}
                           placeholder="— Pick a value —"
                           options={parent.options.map((o) => ({
                             value: String(o.value),
                             label: o.label,
                           }))}
+                          style={{ width: '100%' }}
+                          allowClear
                         />
                       )
                     ) : (
-                      <Input
+                      <AntInput
                         value={Array.isArray(c.value) ? c.value.join(',') : String(c.value ?? '')}
                         onChange={(e) => updateCondition(idx, { value: e.target.value })}
                         placeholder="Value to match"
@@ -197,17 +192,17 @@ export default function DependencyEditor({ scopeLabel = 'field', rule, onChange,
                 </div>
               );
             })}
-            <Button variant="ghost" size="sm" onClick={addCondition}>
-              <Plus className="h-4 w-4" /> Add condition
-            </Button>
+            <AntButton type="dashed" size="small" icon={<Plus className="h-4 w-4" />} onClick={addCondition}>
+              Add condition
+            </AntButton>
           </div>
         </>
       )}
 
       {!enabled && parents.length > 0 && (
-        <Button variant="ghost" size="sm" onClick={addCondition}>
-          <Plus className="h-4 w-4" /> Add condition
-        </Button>
+        <AntButton type="dashed" size="small" icon={<Plus className="h-4 w-4" />} onClick={addCondition}>
+          Add condition
+        </AntButton>
       )}
     </div>
   );

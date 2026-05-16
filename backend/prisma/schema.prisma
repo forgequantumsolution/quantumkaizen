@@ -683,6 +683,11 @@ enum FormStatus {
   ARCHIVED
 }
 
+enum FormKind {
+  FORM
+  CHECKLIST
+}
+
 enum FormSubmissionStatus {
   IN_PROGRESS
   SUBMITTED
@@ -732,6 +737,7 @@ model Form {
   version     Int        @default(1)
   versionId   String     @unique // immutable per version
   status      FormStatus @default(DRAFT)
+  kind        FormKind   @default(FORM)
   isCompleted Boolean    @default(false)
 
   formTypeId String?
@@ -759,6 +765,7 @@ model Form {
   @@index([templateKey, version])
   @@index([formTypeId])
   @@index([status])
+  @@index([kind, status])
 }
 
 model FormSection {

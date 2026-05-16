@@ -1,6 +1,5 @@
 // Inspector for a section: name, optional description, dependency rule.
-import Input from '@/components/ui/Input';
-import Textarea from '@/components/ui/Textarea';
+import { Button as AntButton, Input as AntInput } from 'antd';
 import DependencyEditor, { type ParentField } from './DependencyEditor';
 import { emptyRule, type DependencyRule } from '../lib/dependency';
 import type { FormSectionDef } from '../types';
@@ -22,19 +21,15 @@ export default function SectionInspector({ section, onChange, parents, onDelete,
           <h3 className="text-sm font-semibold text-slate-800">{section.section_name}</h3>
         </div>
         {canDelete && (
-          <button
-            onClick={onDelete}
-            className="text-xs text-red-500 hover:underline"
-            type="button"
-          >
+          <AntButton type="link" danger size="small" onClick={onDelete}>
             Delete
-          </button>
+          </AntButton>
         )}
       </div>
 
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Section name</label>
-        <Input
+        <AntInput
           value={section.section_name}
           onChange={(e) => onChange({ section_name: e.target.value })}
         />
@@ -42,8 +37,8 @@ export default function SectionInspector({ section, onChange, parents, onDelete,
 
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
-        <Textarea
-          rows={2}
+        <AntInput.TextArea
+          autoSize={{ minRows: 2, maxRows: 6 }}
           value={(section as { description?: string }).description ?? ''}
           onChange={(e) =>
             onChange({ description: e.target.value } as Partial<FormSectionDef>)

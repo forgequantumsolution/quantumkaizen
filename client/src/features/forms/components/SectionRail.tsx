@@ -2,6 +2,7 @@
 // the field count is shown as a small badge so users can see at a glance
 // where work remains.
 import { ChevronDown, ChevronUp, Eye, Plus, Trash2 } from 'lucide-react';
+import { Button as AntButton, Input as AntInput } from 'antd';
 import { isRuleConfigured } from '../lib/dependency';
 import type { FormSectionDef } from '../types';
 
@@ -48,14 +49,18 @@ export default function SectionRail({
                   {String(idx + 1).padStart(2, '0')}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <input
+                  <AntInput
                     value={sec.section_name}
                     onChange={(e) => onRename(idx, e.target.value)}
                     onClick={(e) => e.stopPropagation()}
-                    className={
-                      'w-full text-sm bg-transparent border-0 outline-none truncate p-0 focus:ring-1 focus:ring-indigo-200 rounded ' +
-                      (active ? 'text-indigo-900 font-semibold' : 'text-slate-700 font-medium')
-                    }
+                    variant="borderless"
+                    size="small"
+                    style={{
+                      padding: 0,
+                      fontSize: 14,
+                      fontWeight: active ? 600 : 500,
+                      color: active ? '#312e81' : '#334155',
+                    }}
                   />
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="text-[11px] text-slate-500">
@@ -105,12 +110,20 @@ export default function SectionRail({
         })}
       </ul>
 
-      <button
+      <AntButton
+        type="text"
+        block
         onClick={onAdd}
-        className="w-full flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm text-indigo-600 hover:bg-indigo-50 border-t border-slate-100 transition"
+        icon={<Plus className="h-3.5 w-3.5" />}
+        style={{
+          borderTop: '1px solid #f1f5f9',
+          borderRadius: 0,
+          color: '#4f46e5',
+          height: 40,
+        }}
       >
-        <Plus className="h-3.5 w-3.5" /> Add section
-      </button>
+        Add section
+      </AntButton>
     </aside>
   );
 }

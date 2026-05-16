@@ -4,6 +4,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, Search } from 'lucide-react';
+import { Button as AntButton, Input as AntInput } from 'antd';
 import { FIELD_CATALOG, GROUP_LABELS, type FieldGroup } from '../fieldCatalog';
 import type { FieldType } from '../types';
 
@@ -113,14 +114,14 @@ export default function AddFieldPopover({ fieldTypes, onPick, variant = 'inline'
         </span>
       </button>
     ) : (
-      <button
-        ref={triggerRef}
-        type="button"
+      <AntButton
+        ref={triggerRef as unknown as React.Ref<HTMLButtonElement>}
+        type="primary"
+        icon={<Plus className="h-4 w-4" />}
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700"
       >
-        <Plus className="h-4 w-4" /> {label ?? 'Add field'}
-      </button>
+        {label ?? 'Add field'}
+      </AntButton>
     );
 
   return (
@@ -141,16 +142,14 @@ export default function AddFieldPopover({ fieldTypes, onPick, variant = 'inline'
             className="overflow-auto rounded-xl border border-slate-200 bg-white shadow-2xl flex flex-col"
           >
             <div className="sticky top-0 bg-white p-3 border-b border-slate-100">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search field types…"
-                  className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
-                />
-              </div>
+              <AntInput
+                autoFocus
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search field types…"
+                prefix={<Search className="h-3.5 w-3.5 text-slate-400" />}
+                allowClear
+              />
             </div>
 
             <div className="p-2 flex-1 overflow-auto">

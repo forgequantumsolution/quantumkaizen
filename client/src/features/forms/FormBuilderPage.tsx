@@ -7,7 +7,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Eye, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button } from '@/components/ui/Button';
+import { Button as AntButton, Input as AntInput } from 'antd';
 import Spinner from '@/components/ui/Spinner';
 import {
   useFieldTypes, useFormDetail, useSaveDraft, useSaveFormFields,
@@ -19,7 +19,7 @@ import FieldTable from './components/FieldTable';
 import FormPreview from './components/FormPreview';
 import type { ParentField } from './components/DependencyEditor';
 import type { DependencyRule } from './lib/dependency';
-import type { FieldType, FormFieldDef, FormSectionDef } from './types';
+import type { FieldType, FormFieldDef, FormKind, FormSectionDef } from './types';
 
 // Walk all sections and patch dependency rules whose references still point
 // at the old section/field name. Used when the user renames a section or a
@@ -65,6 +65,13 @@ export default function FormBuilderPage() {
   const [description, setDescription] = useState('');
   const [sections, setSections] = useState<FormSectionDef[]>([]);
   const [activeSection, setActiveSection] = useState(0);
+
+  const kind: FormKind = detail?.form_details.kind ?? 'FORM';
+  const isChecklist = kind === 'CHECKLIST';
+  const noun = isChecklist ? 'checklist' : 'form';
+  const Noun = isChecklist ? 'Checklist' : 'Form';
+  const backLabel = isChecklist ? 'Checklists' : 'Forms';
+  const backRoute = isChecklist ? '/forms?tab=checklists' : '/forms';
 
   // Hydrate from server payload
   useEffect(() => {
@@ -264,8 +271,8 @@ export default function FormBuilderPage() {
     if (!id) return;
     try {
       await saveFields.mutateAsync({ id, sections, title, description });
-      toast.success('Form published');
-      nav('/forms');
+      toast.success(`${Noun} published`);
+      nav(backRoute);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -284,9 +291,9 @@ export default function FormBuilderPage() {
       {/* TOP BAR ─────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="w-full h-14 flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => nav('/forms')}>
-            <ArrowLeft className="h-4 w-4" /> Forms
-          </Button>
+          <AntButton type="text" size="small" icon={<ArrowLeft className="h-4 w-4" />} onClick={() => nav(backRoute)}>
+            {backLabel}
+          </AntButton>
           <p className="hidden md:block text-xs text-slate-500 truncate flex-1">
             {sections.length} section{sections.length === 1 ? '' : 's'} · {totalFields} field
             {totalFields === 1 ? '' : 's'}
@@ -298,12 +305,23 @@ export default function FormBuilderPage() {
             <ModeTab active={mode === 'preview'} onClick={() => setMode('preview')} icon={Eye}    label="Preview" />
           </div>
 
-          <Button variant="secondary" size="sm" onClick={onSaveDraft} disabled={saveDraft.isPending}>
-            <Save className="h-4 w-4" /> Save draft
-          </Button>
-          <Button size="sm" onClick={onPublish} disabled={saveFields.isPending}>
-            <Check className="h-4 w-4" /> Publish
-          </Button>
+          <AntButton
+            size="small"
+            icon={<Save className="h-4 w-4" />}
+            loading={saveDraft.isPending}
+            onClick={onSaveDraft}
+          >
+            Save draft
+          </AntButton>
+          <AntButton
+            type="primary"
+            size="small"
+            icon={<Check className="h-4 w-4" />}
+            loading={saveFields.isPending}
+            onClick={onPublish}
+          >
+            Publish
+          </AntButton>
         </div>
       </div>
 
@@ -311,17 +329,19 @@ export default function FormBuilderPage() {
       <div className="w-full py-6">
         {/* Form heading */}
         <div className="mb-6">
-          <input
+          <AntInput
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="Untitled form"
-            className="w-full text-2xl sm:text-3xl font-bold text-slate-900 bg-transparent border-0 outline-none focus:ring-2 focus:ring-indigo-200 rounded px-1 -mx-1 placeholder-slate-300"
+            placeholder={`Untitled ${noun}`}
+            variant="borderless"
+            style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', padding: '4px 4px', margin: '0 -4px' }}
           />
-          <input
+          <AntInput
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Add a description"
-            className="block w-full mt-1 text-sm text-slate-500 bg-transparent border-0 outline-none focus:ring-2 focus:ring-indigo-200 rounded px-1 -mx-1 placeholder-slate-300"
+            variant="borderless"
+            style={{ fontSize: 14, color: '#64748b', padding: '4px 4px', margin: '0 -4px' }}
           />
         </div>
 

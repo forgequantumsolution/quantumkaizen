@@ -40,6 +40,8 @@ export const SectionSchema = z.object({
   fields: z.array(FieldSchema).default([]),
 });
 
+export const FormKindSchema = z.enum(['FORM', 'CHECKLIST']);
+
 // ---- Form CRUD ----
 export const CreateFormSchema = z.object({
   title: z.string().min(1).max(255),
@@ -53,6 +55,7 @@ export const CreateFormSchema = z.object({
   pdca_approved: z.boolean().optional(),
   workflow_name: z.string().optional().nullable(),
   workflow_type: z.string().optional().nullable(),
+  kind: FormKindSchema.optional().default('FORM'),
 });
 
 export const SaveFormFieldsSchema = z.object({
@@ -82,6 +85,7 @@ export const ListFormsQuerySchema = z.object({
   form_type_id: z.string().optional(),
   workflow_type_id: z.string().optional(),
   workflow_name_id: z.string().optional(),
+  kind: FormKindSchema.optional(),
   _t: z.string().optional(),
 });
 

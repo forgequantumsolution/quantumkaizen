@@ -2,6 +2,7 @@
 // Logic. Tabs that don't apply for the field type are hidden so the panel
 // doesn't get cluttered.
 import { useState } from 'react';
+import { Tabs } from 'antd';
 import { fieldIsTable, fieldUsesOptions } from '../fieldCatalog';
 import OptionsEditor from './OptionsEditor';
 import TableColumnsEditor from './TableColumnsEditor';
@@ -31,54 +32,46 @@ export default function FieldBlockSettings({ field, onChange, parents }: Props) 
   const defaultTab: Tab = isTable ? 'columns' : supportsOptions ? 'options' : 'rules';
   const [tab, setTab] = useState<Tab>(defaultTab);
 
-  return (
-    <div className="border-t border-slate-100 bg-slate-50/40">
-      <div className="flex px-4 pt-3 gap-1">
-        {tabs.filter((t) => t.visible).map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            type="button"
-            className={
-              'px-3 py-1.5 text-xs rounded-md transition ' +
-              (tab === t.key
-                ? 'bg-white text-indigo-700 font-medium shadow-sm border border-slate-200'
-                : 'text-slate-500 hover:text-slate-700')
-            }
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+  const visibleTabs = tabs.filter((t) => t.visible);
 
-      <div className="p-4 pt-3">
-        {tab === 'columns' && isTable && (
-          <TableColumnsEditor
-            columns={field.fields ?? []}
-            onChange={(cols) => onChange({ fields: cols })}
-          />
-        )}
-        {tab === 'options' && supportsOptions && (
-          <OptionsEditor
-            value={field.options ?? []}
-            onChange={(opts) => onChange({ options: opts })}
-          />
-        )}
-        {tab === 'rules' && (
-          <ValidationEditor
-            type={field.type ?? ''}
-            value={(field.validation ?? {}) as ValidationRules}
-            onChange={(v) => onChange({ validation: v })}
-          />
-        )}
-        {tab === 'logic' && (
-          <DependencyEditor
-            rule={(field.dependency as DependencyRule | undefined) ?? emptyRule()}
-            onChange={(r) => onChange({ dependency: r })}
-            parents={parents}
-          />
-        )}
-      </div>
+  return (
+    <div className="border-t border-slate-100 bg-slate-50/40 px-4 pt-3">
+      <Tabs
+        size="small"
+        activeKey={tab}
+        onChange={(k) => setTab(k as Tab)}
+        items={visibleTabs.map((t) => ({
+          key: t.key,
+          label: t.label,
+          children:
+            t.key === 'columns' && isTable ? (
+              <TableColumnsEditor
+                columns={field.fields ?? []}
+                onChange={(cols) => onChange({ fields: cols })}
+              />
+            )
+            : t.key === 'options' && supportsOptions ? (
+              <OptionsEditor
+                value={field.options ?? []}
+                onChange={(opts) => onChange({ options: opts })}
+              />
+            )
+            : t.key === 'rules' ? (
+              <ValidationEditor
+                type={field.type ?? ''}
+                value={(field.validation ?? {}) as ValidationRules}
+                onChange={(v) => onChange({ validation: v })}
+              />
+            )
+            : (
+              <DependencyEditor
+                rule={(field.dependency as DependencyRule | undefined) ?? emptyRule()}
+                onChange={(r) => onChange({ dependency: r })}
+                parents={parents}
+              />
+            ),
+        }))}
+      />
     </div>
   );
 }

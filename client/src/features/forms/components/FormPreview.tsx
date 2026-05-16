@@ -3,7 +3,7 @@
 // "Submit" runs validation and reports findings without persisting.
 import { useState } from 'react';
 import { AlertCircle, CheckCircle2, Send, Smartphone, Monitor } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
+import { Button as AntButton, Segmented } from 'antd';
 import FieldRenderer from '../FieldRenderer';
 import { evaluateVisibility } from '../lib/dependency';
 import { validateField } from '../lib/validation';
@@ -69,26 +69,15 @@ export default function FormPreview({ title, description, sections }: Props) {
             <span className="ml-2 text-slate-400">— this is exactly what users will see</span>
           </p>
         </div>
-        <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
-          <button
-            onClick={() => setDevice('desktop')}
-            className={
-              'h-7 px-2.5 inline-flex items-center gap-1 text-xs rounded-md transition ' +
-              (device === 'desktop' ? 'bg-white text-slate-800 shadow-sm font-medium' : 'text-slate-500')
-            }
-          >
-            <Monitor className="h-3.5 w-3.5" /> Desktop
-          </button>
-          <button
-            onClick={() => setDevice('mobile')}
-            className={
-              'h-7 px-2.5 inline-flex items-center gap-1 text-xs rounded-md transition ' +
-              (device === 'mobile' ? 'bg-white text-slate-800 shadow-sm font-medium' : 'text-slate-500')
-            }
-          >
-            <Smartphone className="h-3.5 w-3.5" /> Mobile
-          </button>
-        </div>
+        <Segmented
+          size="small"
+          value={device}
+          onChange={(v) => setDevice(v as Device)}
+          options={[
+            { label: <span className="inline-flex items-center gap-1"><Monitor className="h-3.5 w-3.5" /> Desktop</span>, value: 'desktop' },
+            { label: <span className="inline-flex items-center gap-1"><Smartphone className="h-3.5 w-3.5" /> Mobile</span>, value: 'mobile' },
+          ]}
+        />
       </div>
 
       {/* Frame */}
@@ -169,9 +158,9 @@ export default function FormPreview({ title, description, sections }: Props) {
                 Try filling the form to test validation rules.
               </p>
             )}
-            <Button onClick={handleValidate}>
-              <Send className="h-4 w-4" /> Test submit
-            </Button>
+            <AntButton type="primary" icon={<Send className="h-4 w-4" />} onClick={handleValidate}>
+              Test submit
+            </AntButton>
           </div>
         </div>
       </div>
