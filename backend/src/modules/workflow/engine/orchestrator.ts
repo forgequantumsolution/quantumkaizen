@@ -43,13 +43,17 @@ const generateUniqueTicketId = async (
   // against different workflows still run in parallel.
   await tx.$queryRaw`SELECT id FROM "Workflow" WHERE id = ${workflowId} FOR UPDATE`;
 
+  // Look up the highest existing ticket with this prefix across ALL workflows
+  // (not just `workflowId`). Multiple workflows can share a `codePrefix`
+  // (e.g. several workflows of the same WorkflowType), and uniqueId is
+  // GLOBALLY unique — so scoping per-workflow would let a new workflow
+  // collide with already-allocated ids on a sibling workflow.
+  //
+  // Also skip SLA escalation children (named `{parent}-SLA`) — their tail
+  // parses to NaN and would reset the counter to 1.
   const last = await tx.ticket.findFirst({
     where: {
-      flows: { some: { workflowId } },
       uniqueId: { startsWith: `${prefix}-NEX-` },
-      // Skip SLA escalation children (named `{parent}-SLA`). Their tail
-      // parses to NaN and would reset the counter to 1, colliding with the
-      // earliest top-level tickets on the same workflow.
       parentTicketId: null,
     },
     orderBy: { uniqueId: 'desc' },

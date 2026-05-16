@@ -16,7 +16,7 @@ import type { UserRef } from './workflow';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export type FormStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
+export type FormStatus = 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
 export type FormSubmissionStatus = 'IN_PROGRESS' | 'SUBMITTED';
 
 export interface StageFormBinding {

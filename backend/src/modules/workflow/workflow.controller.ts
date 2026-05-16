@@ -5,6 +5,7 @@ import type {
   CreateWorkflowShellInput,
   ListWorkflowsQuery,
   SaveWorkflowBody,
+  SetWorkflowStatusInput,
 } from './workflow.schema';
 
 const userId = (req: Request): string | null => req.user?.userId ?? null;
@@ -50,6 +51,11 @@ export const remove = async (req: Request, res: Response) => {
   res.status(204).send();
 };
 
+export const setStatus = async (req: Request, res: Response) => {
+  const { workflowStatus } = req.body as SetWorkflowStatusInput;
+  res.json(await service.setStatus(req.params.id as string, workflowStatus));
+};
+
 export const draftSave = async (req: Request, res: Response) => {
   res.json(
     await service.upsertDraft(
@@ -61,4 +67,9 @@ export const draftSave = async (req: Request, res: Response) => {
 
 export const draftGet = async (req: Request, res: Response) => {
   res.json(await service.getDraft(req.params.id as string));
+};
+
+export const draftDelete = async (req: Request, res: Response) => {
+  await service.deleteDraft(req.params.id as string);
+  res.status(204).send();
 };

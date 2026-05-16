@@ -1,4 +1,4 @@
-import { PrismaClient, StageActionBehavior } from '@prisma/client';
+import { Prisma, PrismaClient, StageActionBehavior } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -685,6 +685,232 @@ async function main() {
   console.log(`    field types:  ${FIELD_TYPES.length}`);
   console.log(`    calendars:    2 (default-24x7, support-24x7)`);
   console.log(`    sample SLA + approval policy on Document Review v1`);
+
+  // ── Phase 3.5 — sample workflow-bound forms ─────────────────────────────
+  // Two forms with stage bindings on the seeded Document Review v1 workflow:
+  //   1. "Submission Confirmation" — OPTIONAL binding on Submit (lets users
+  //      acknowledge but doesn't block transitions).
+  //   2. "Document Review Checklist" — REQUIRED binding on Review (blocks
+  //      the Approve transition until submitted).
+  // Idempotent via Form.templateKey + StageFormBinding.@@unique([stage, form]).
+  console.log('🌱  Seeding workflow-bound sample forms...');
+  const wfForForms = await prisma.workflow.findFirst({
+    where: { name: 'Document Review v1' },
+  });
+  if (wfForForms) {
+    const submitStageForForms = await prisma.workflowStage.findFirst({
+      where: { workflowId: wfForForms.id, canonicalId: 'sample-submit' },
+    });
+    const reviewStageForForms = await prisma.workflowStage.findFirst({
+      where: { workflowId: wfForForms.id, canonicalId: 'sample-review' },
+    });
+    const textType = await prisma.fieldType.findUnique({ where: { name: 'text' } });
+    const textareaType = await prisma.fieldType.findUnique({
+      where: { name: 'textarea' },
+    });
+    const checkboxType = await prisma.fieldType.findUnique({
+      where: { name: 'checkbox' },
+    });
+    const switchType = await prisma.fieldType.findUnique({
+      where: { name: 'switch' },
+    });
+
+    const upsertForm = async (
+      templateKey: string,
+      title: string,
+      description: string,
+      sectionsSpec: Array<{
+        sectionId: string;
+        name: string;
+        fields: Array<{
+          fieldId: string;
+          name: string;
+          label: string;
+          typeId: string | null;
+          typeName: string;
+          required?: boolean;
+          width?: string;
+          options?: Array<{ label: string; value: string }>;
+        }>;
+      }>,
+    ) => {
+      const existing = await prisma.form.findFirst({
+        where: { templateKey, version: 1 },
+        select: { id: true },
+      });
+      if (existing) return existing.id;
+
+      const form = await prisma.form.create({
+        data: {
+          templateKey,
+          title,
+          description,
+          version: 1,
+          versionId: `${templateKey}-v1`,
+          status: 'PUBLISHED',
+        },
+        select: { id: true },
+      });
+      for (const sec of sectionsSpec) {
+        const section = await prisma.formSection.create({
+          data: {
+            formId: form.id,
+            sectionId: sec.sectionId,
+            name: sec.name,
+            position: 0,
+          },
+          select: { id: true },
+        });
+        for (const [fieldIdx, f] of sec.fields.entries()) {
+          await prisma.formField.create({
+            data: {
+              sectionId: section.id,
+              fieldId: f.fieldId,
+              name: f.name,
+              label: f.label,
+              position: fieldIdx,
+              width: f.width ?? '100',
+              required: f.required ?? false,
+              typeId: f.typeId,
+              typeName: f.typeName,
+              options: f.options ? (f.options as unknown as Prisma.InputJsonValue) : undefined,
+            },
+          });
+        }
+      }
+      return form.id;
+    };
+
+    const submissionFormId = await upsertForm(
+      'submission-confirmation',
+      'Submission Confirmation',
+      'Optional confirmation form filled when submitting the document.',
+      [
+        {
+          sectionId: 'sec-meta',
+          name: 'Submission details',
+          fields: [
+            {
+              fieldId: 'fld-doctitle',
+              name: 'documentTitle',
+              label: 'Document title',
+              typeId: textType?.id ?? null,
+              typeName: 'text',
+              required: true,
+            },
+            {
+              fieldId: 'fld-summary',
+              name: 'changeSummary',
+              label: 'What changed?',
+              typeId: textareaType?.id ?? null,
+              typeName: 'textarea',
+            },
+            {
+              fieldId: 'fld-major',
+              name: 'isMajor',
+              label: 'Major revision?',
+              typeId: switchType?.id ?? null,
+              typeName: 'switch',
+              width: '50',
+            },
+          ],
+        },
+      ],
+    );
+
+    const reviewFormId = await upsertForm(
+      'document-review-checklist',
+      'Document Review Checklist',
+      'Mandatory checklist filled by the reviewer before forwarding to Approve.',
+      [
+        {
+          sectionId: 'sec-checks',
+          name: 'Reviewer checks',
+          fields: [
+            {
+              fieldId: 'fld-reviewer',
+              name: 'reviewerName',
+              label: 'Reviewer name',
+              typeId: textType?.id ?? null,
+              typeName: 'text',
+              required: true,
+              width: '50',
+            },
+            {
+              fieldId: 'fld-checks',
+              name: 'completedChecks',
+              label: 'Completed checks',
+              typeId: checkboxType?.id ?? null,
+              typeName: 'checkbox',
+              required: true,
+              options: [
+                { label: 'Document follows the template', value: 'template' },
+                { label: 'Sources cited', value: 'sources' },
+                { label: 'Spelling and grammar pass', value: 'spelling' },
+                { label: 'Diagrams legible', value: 'diagrams' },
+              ],
+            },
+            {
+              fieldId: 'fld-notes',
+              name: 'reviewerNotes',
+              label: 'Notes for the approver',
+              typeId: textareaType?.id ?? null,
+              typeName: 'textarea',
+            },
+          ],
+        },
+      ],
+    );
+
+    // Bind forms to their stages. Use upsert-style behavior so a re-seed
+    // un-deletes soft-deleted bindings left over from test runs (the
+    // @@unique([stage, form]) constraint covers both isDeleted=true and =false
+    // rows, so plain `create` would conflict).
+    const upsertBinding = async (
+      stageId: string,
+      formId: string,
+      isRequired: boolean,
+    ) => {
+      const existing = await prisma.stageFormBinding.findUnique({
+        where: { stageId_formId: { stageId, formId } },
+        select: { id: true, isDeleted: true, isActive: true, isRequired: true },
+      });
+      if (!existing) {
+        await prisma.stageFormBinding.create({
+          data: {
+            workflowId: wfForForms.id,
+            stageId,
+            formId,
+            isRequired,
+            position: 0,
+          },
+        });
+      } else if (
+        existing.isDeleted ||
+        !existing.isActive ||
+        existing.isRequired !== isRequired
+      ) {
+        await prisma.stageFormBinding.update({
+          where: { id: existing.id },
+          data: {
+            isDeleted: false,
+            isActive: true,
+            isRequired,
+          },
+        });
+      }
+    };
+
+    if (submitStageForForms) {
+      await upsertBinding(submitStageForForms.id, submissionFormId, false);
+    }
+    if (reviewStageForForms) {
+      await upsertBinding(reviewStageForForms.id, reviewFormId, true);
+    }
+    console.log(`    sample forms: 2 (Submission Confirmation, Document Review Checklist)`);
+    console.log(`    sample bindings: Submit (optional) + Review (required)`);
+  }
+
   console.log(`\n    All seeded users login with password:  ${SEED_PASSWORD}`);
 }
 

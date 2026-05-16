@@ -6,6 +6,7 @@ import {
   IdParamSchema,
   ListWorkflowsQuerySchema,
   SaveWorkflowBodySchema,
+  SetWorkflowStatusSchema,
 } from './workflow.schema';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
@@ -52,6 +53,17 @@ router.delete(
   asyncHandler(ctrl.remove)
 );
 
+// Status-only update — Activate / Deactivate without re-running the builder.
+// `save()` wipes and rebuilds all stages (cascading approvals/SLA/forms), so
+// status changes must NOT go through that path.
+router.patch(
+  '/:id/status',
+  requirePermission('workflow.update'),
+  validate(IdParamSchema, 'params'),
+  validate(SetWorkflowStatusSchema),
+  asyncHandler(ctrl.setStatus)
+);
+
 router.post(
   '/:id/draft',
   requirePermission('workflow.update'),
@@ -65,6 +77,13 @@ router.get(
   requirePermission('workflow.read'),
   validate(IdParamSchema, 'params'),
   asyncHandler(ctrl.draftGet)
+);
+
+router.delete(
+  '/:id/draft',
+  requirePermission('workflow.update'),
+  validate(IdParamSchema, 'params'),
+  asyncHandler(ctrl.draftDelete)
 );
 
 export default router;

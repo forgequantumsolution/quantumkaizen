@@ -106,6 +106,29 @@ export const buildWorkflowGraph = async (
   const forkUpdates: { stageId: string; joinPointId: string }[] = [];
   const transitionRows: Prisma.WorkflowTransitionCreateManyInput[] = [];
 
+  // Phase 3.5+ — collect embedded policy intent for materialisation after the
+  // base stage/action rows are inserted. See workflow.schema.ts for the
+  // canonical shapes (`EmbeddedFormBinding`, `EmbeddedSla`, `EmbeddedApprovalPolicy`).
+  //
+  // Approval policies key by (actionType, actionIndex) within a stage node;
+  // we resolve them to action UUIDs via this map populated alongside action
+  // row creation.
+  const actionIdByRef = new Map<string, string>(); // `${stageId}:${type}:${index}` → actionId
+  const formBindingRows: Prisma.StageFormBindingCreateManyInput[] = [];
+  // SLA + thresholds + responsible/notify M2M are inserted per-stage after the
+  // bulk create because the policy id needs to exist before threshold inserts.
+  type PendingSla = {
+    stageId: string;
+    data: import('./workflow.schema').EmbeddedSla;
+  };
+  const pendingSlaPolicies: PendingSla[] = [];
+  type PendingApproval = {
+    stageId: string;
+    actionRef: string; // matches actionIdByRef key
+    data: import('./workflow.schema').EmbeddedApprovalPolicy;
+  };
+  const pendingApprovalPolicies: PendingApproval[] = [];
+
   let initialStageSeen = false;
 
   // Pass 1 (in-memory): build stage + action rows
@@ -141,49 +164,98 @@ export const buildWorkflowGraph = async (
     stageByNodeId.set(node.id, { id: stageId, nodeType });
 
     const primary = node.data.primary_actions ?? [];
-    const secondary = (node.data.secondary_actions ?? []).map((a) => ({
-      ...(a as object),
-      type: (a as { type?: string }).type ?? 'secondary',
-    }));
-    const allActions = [...primary, ...secondary];
+    const secondary = node.data.secondary_actions ?? [];
 
-    for (const action of allActions) {
+    // Track index-within-type so embedded approval policies can resolve to
+    // the right action UUID by (actionType, actionIndex).
+    primary.forEach((action, idx) => {
       const a = action as {
-        type?: string;
         stage_status_id: string;
         action_criteria_id?: string | null;
         roles_id?: unknown[];
         employees_id?: unknown[];
       };
-      const isPrimary = (a.type ?? 'primary') !== 'secondary';
-
       const actionId = randomUUID();
       actionRows.push({
         id: actionId,
         workflowStageId: stageId,
         workflowActionId: a.stage_status_id,
         criteriaId: a.action_criteria_id ?? defaultCriteriaId ?? null,
-        isPrimary,
+        isPrimary: true,
       });
-
+      actionIdByRef.set(`${stageId}:primary:${idx}`, actionId);
       for (const roleId of toIdList(a.roles_id)) roleConnects.push({ actionId, roleId });
       for (const userId of toIdList(a.employees_id)) userConnects.push({ actionId, userId });
+    });
+    secondary.forEach((action, idx) => {
+      const a = action as {
+        stage_status_id: string;
+        action_criteria_id?: string | null;
+        roles_id?: unknown[];
+        employees_id?: unknown[];
+      };
+      const actionId = randomUUID();
+      actionRows.push({
+        id: actionId,
+        workflowStageId: stageId,
+        workflowActionId: a.stage_status_id,
+        criteriaId: a.action_criteria_id ?? defaultCriteriaId ?? null,
+        isPrimary: false,
+      });
+      actionIdByRef.set(`${stageId}:secondary:${idx}`, actionId);
+      for (const roleId of toIdList(a.roles_id)) roleConnects.push({ actionId, roleId });
+      for (const userId of toIdList(a.employees_id)) userConnects.push({ actionId, userId });
+    });
+
+    // ── Phase 3.5+ embedded policy intent ────────────────────────────────
+    // Form bindings — one StageFormBinding row per entry, keyed by formId.
+    const embeddedForms = (node.data.formBindings ?? []) as Array<{
+      formId: string;
+      isRequired?: boolean;
+      position?: number;
+    }>;
+    for (const fb of embeddedForms) {
+      formBindingRows.push({
+        workflowId,
+        stageId,
+        formId: fb.formId,
+        isRequired: fb.isRequired ?? true,
+        position: fb.position ?? 0,
+      });
     }
 
-    // Phase 1: silently warn if forms / sla / dependency / child triggers / form rules present
-    if ((node.data.forms ?? []).length > 0)
-      warnings.push(`Stage '${node.data.label}': forms binding deferred to Forms phase`);
-    if ((node.data.sla ?? []).length > 0)
-      warnings.push(`Stage '${node.data.label}': SLA configuration deferred to SLA phase`);
+    // SLA — at most one per stage. Defer execution because thresholds need
+    // the policy id which only exists after the create call returns.
+    const embeddedSla = (node.data as { sla?: unknown }).sla;
+    if (embeddedSla && typeof embeddedSla === 'object' && 'duration' in embeddedSla) {
+      pendingSlaPolicies.push({
+        stageId,
+        data: embeddedSla as PendingSla['data'],
+      });
+    }
+
+    // Approval policies — one per (action, mode). Resolve actionId after
+    // the action row inserts complete; track the ref now.
+    const embeddedApprovals = ((node.data as { approvalPolicies?: unknown[] })
+      .approvalPolicies ?? []) as PendingApproval['data'][];
+    for (const ap of embeddedApprovals) {
+      pendingApprovalPolicies.push({
+        stageId,
+        actionRef: `${stageId}:${ap.actionType}:${ap.actionIndex}`,
+        data: ap,
+      });
+    }
+
+    // Legacy / future fields the builder doesn't process yet.
     if ((node.data.dependency ?? []).length > 0)
       warnings.push(`Stage '${node.data.label}': dependencies deferred to Engine phase`);
     if ((node.data.child_workflow_triggers ?? []).length > 0)
       warnings.push(
-        `Stage '${node.data.label}': child workflow triggers deferred to Engine phase`
+        `Stage '${node.data.label}': child workflow triggers deferred to Engine phase`,
       );
     if ((node.data.form_visibility_rules ?? []).length > 0)
       warnings.push(
-        `Stage '${node.data.label}': cross-stage form rules deferred to Forms phase`
+        `Stage '${node.data.label}': cross-stage form rules deferred to Forms phase`,
       );
   }
 
@@ -268,6 +340,94 @@ export const buildWorkflowGraph = async (
 
   if (transitionRows.length > 0) {
     await tx.workflowTransition.createMany({ data: transitionRows });
+  }
+
+  // ─── Phase 3.5+ embedded-policy materialisation ─────────────────────────
+  // Forms — bulk create.
+  if (formBindingRows.length > 0) {
+    await tx.stageFormBinding.createMany({ data: formBindingRows });
+  }
+
+  // SLA policies — one per stage; thresholds linked via FK so we create the
+  // policy, then bulk insert thresholds against it.
+  for (const pending of pendingSlaPolicies) {
+    const sla = await tx.slaPolicy.create({
+      data: {
+        parentStageId: pending.stageId,
+        duration: pending.data.duration,
+        calendarId: pending.data.calendarId ?? null,
+        escalationWorkflowId: pending.data.escalationWorkflowId ?? null,
+        pauseOnHold: pending.data.pauseOnHold,
+        pauseOnExtensionPending: pending.data.pauseOnExtensionPending,
+      },
+      select: { id: true },
+    });
+    if (pending.data.thresholds.length > 0) {
+      // Resolve targetStageCanonicalId → targetSlaStageId via the just-built
+      // stage map. Unknown canonicalIds become null (logged as a warning).
+      const thresholdRows: Prisma.SlaThresholdCreateManyInput[] = [];
+      for (const th of pending.data.thresholds) {
+        let targetSlaStageId: string | null = null;
+        if (th.targetStageCanonicalId) {
+          const resolved = stageByNodeId.get(th.targetStageCanonicalId);
+          if (resolved) targetSlaStageId = resolved.id;
+          else
+            warnings.push(
+              `SLA threshold '${th.name}' targets unknown stage '${th.targetStageCanonicalId}'`,
+            );
+        }
+        thresholdRows.push({
+          policyId: sla.id,
+          name: th.name,
+          percentage: th.percentage,
+          targetSlaStageId,
+        });
+      }
+      await tx.slaThreshold.createMany({ data: thresholdRows });
+    }
+  }
+
+  // Approval policies — one per (stage, action). Resolve actionId via
+  // actionIdByRef. Skip with a warning if the ref is stale (e.g. user
+  // reordered actions after creating the embedded policy).
+  for (const pending of pendingApprovalPolicies) {
+    const actionId = actionIdByRef.get(pending.actionRef);
+    if (!actionId) {
+      warnings.push(
+        `Approval policy references missing action ref '${pending.actionRef}' — skipped`,
+      );
+      continue;
+    }
+    await tx.approvalPolicy.create({
+      data: {
+        workflowId,
+        stageId: pending.stageId,
+        actionId,
+        mode: pending.data.mode,
+        requiredCount: pending.data.requiredCount,
+        strictRoleMatch: pending.data.strictRoleMatch,
+        allowSelfApproval: pending.data.allowSelfApproval,
+        requireUniqueApprovers: pending.data.requireUniqueApprovers,
+        approvalSequence:
+          pending.data.approvalSequence === undefined
+            ? Prisma.JsonNull
+            : (pending.data.approvalSequence as Prisma.InputJsonValue),
+        approvalSlaHours: pending.data.approvalSlaHours ?? null,
+        isActive: pending.data.isActive,
+        approverRoles:
+          pending.data.approverRoleIds.length > 0
+            ? {
+                connect: pending.data.approverRoleIds.map((id) => ({ id })),
+              }
+            : undefined,
+        approverUsers:
+          pending.data.approverUserIds.length > 0
+            ? {
+                connect: pending.data.approverUserIds.map((id) => ({ id })),
+              }
+            : undefined,
+      },
+    });
   }
 
   return { warnings };
