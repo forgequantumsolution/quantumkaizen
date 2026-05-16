@@ -33,7 +33,10 @@ services:
     # Workspaces install everything once. Build only the backend workspace
     # — `prisma generate` is explicit because workspaces don't always fire
     # the postinstall hook on Render's runtime.
-    buildCommand: npm ci --no-audit && npx prisma generate --schema backend/prisma/schema.prisma && npm run build --workspace=backend
+    # --include=dev is required: NODE_ENV=production makes npm ci skip
+    # devDependencies by default, which strips @types/* (breaks tsc) and the
+    # prisma CLI (breaks `migrate deploy` in startCommand).
+    buildCommand: npm ci --no-audit --include=dev && npx prisma generate --schema backend/prisma/schema.prisma && npm run build --workspace=backend
     # Apply any pending migrations on every deploy, then start the API.
     startCommand: cd backend && npx prisma migrate deploy && node dist/index.js
     healthCheckPath: /health
@@ -63,7 +66,10 @@ services:
     runtime: node
     plan: free
     rootDir: .
-    buildCommand: npm ci --no-audit && npx prisma generate --schema backend/prisma/schema.prisma && npm run build --workspace=backend
+    # --include=dev is required: NODE_ENV=production makes npm ci skip
+    # devDependencies by default, which strips @types/* (breaks tsc) and the
+    # prisma CLI (breaks `migrate deploy` in startCommand).
+    buildCommand: npm ci --no-audit --include=dev && npx prisma generate --schema backend/prisma/schema.prisma && npm run build --workspace=backend
     startCommand: cd backend && node dist/jobs/worker.js
     autoDeploy: true
     envVars:
