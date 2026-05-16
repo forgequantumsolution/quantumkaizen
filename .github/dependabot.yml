@@ -1,78 +1,20 @@
+# Dependabot version updates are intentionally DISABLED.
+#
+# The previous config (with weekly schedules for /server, /client, and /)
+# generated 20+ open PRs at a time and the team kept the branches lying
+# around instead of merging them. The old config also referenced /server
+# which no longer exists in this monorepo (it's /backend now).
+#
+# Re-enable when there's a clear owner for the weekly dependency-PR
+# review. To re-enable: restore an earlier version of this file from
+# git history (commit before this one) and adjust `directory` from
+# `/server` to `/backend` to match the current layout.
+#
+# Manual dependency upgrades in the meantime:
+#   npm outdated --workspace=client
+#   npm outdated --workspace=backend
+#   npx npm-check-updates -u --workspace=client     # bumps package.json
+#   npm install && npm run build                    # verify
+
 version: 2
-updates:
-  # ── Server npm dependencies ───────────────────────────────────────
-  - package-ecosystem: npm
-    directory: /server
-    schedule:
-      interval: weekly
-      day: monday
-      time: "09:00"
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-      - server
-    groups:
-      production-deps:
-        dependency-type: production
-        update-types:
-          - minor
-          - patch
-    ignore:
-      - dependency-name: "*"
-        update-types: [version-update:semver-major]
-
-  # ── Client npm dependencies ───────────────────────────────────────
-  - package-ecosystem: npm
-    directory: /client
-    schedule:
-      interval: weekly
-      day: monday
-      time: "09:00"
-    open-pull-requests-limit: 10
-    labels:
-      - dependencies
-      - client
-    groups:
-      production-deps:
-        dependency-type: production
-        update-types:
-          - minor
-          - patch
-
-  # ── Root npm dependencies ─────────────────────────────────────────
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels:
-      - dependencies
-
-  # ── GitHub Actions ────────────────────────────────────────────────
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    open-pull-requests-limit: 5
-    labels:
-      - dependencies
-      - github-actions
-
-  # ── Docker base images ────────────────────────────────────────────
-  - package-ecosystem: docker
-    directory: /server
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-      - docker
-
-  - package-ecosystem: docker
-    directory: /client
-    schedule:
-      interval: weekly
-    labels:
-      - dependencies
-      - docker
+updates: []
