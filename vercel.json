@@ -1,6 +1,10 @@
 {
-  "installCommand": "cd client && npm install",
-  "buildCommand": "cd client && npm run build",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "installCommand": "npm ci --no-audit",
+  "buildCommand": "npm run build --workspace=client",
   "outputDirectory": "client/dist",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+  "framework": null,
+  "rewrites": [
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
 }

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import {
   ChevronDown, ChevronUp, Copy, Eye, ListChecks, Settings, Trash2,
 } from 'lucide-react';
+import { Button as AntButton, Input as AntInput, Select, Switch } from 'antd';
 import { FIELD_CATALOG, fieldUsesOptions } from '../fieldCatalog';
 import { isRuleConfigured, summariseRule } from '../lib/dependency';
 import type { FieldType, FormFieldDef } from '../types';
@@ -62,17 +63,20 @@ export default function FieldTableRow({
                   <Icon className="h-3 w-3" />
                 </span>
               )}
-              <select
-                value={field.type ?? ''}
-                onChange={(e) => {
-                  const next = fieldTypes.find((t) => t.name === e.target.value);
+              <Select
+                value={field.type ?? undefined}
+                size="small"
+                style={{ flex: 1, minWidth: 0 }}
+                showSearch
+                optionFilterProp="label"
+                onChange={(typeName) => {
+                  const next = fieldTypes.find((t) => t.name === typeName);
                   if (!next) return;
                   const slug = next.label.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
                   const patch: Partial<FormFieldDef> = {
                     type: next.name,
                     type_id: next.id,
                   };
-                  // Only re-derive label/name if user hasn't customised them yet.
                   const currentMeta = field.type ? FIELD_CATALOG[field.type] : undefined;
                   if (!field.label || field.label === (currentMeta?.defaultLabel ?? field.type)) {
                     patch.label = next.label;
@@ -80,7 +84,6 @@ export default function FieldTableRow({
                   if (!field.name || field.name.startsWith(field.type ?? '')) {
                     patch.name = `${slug}_${Math.random().toString(36).slice(2, 4)}`;
                   }
-                  // Reset options when toggling to/from a type that uses them.
                   if (fieldUsesOptions(next.name) && !field.options) {
                     patch.options = [
                       { label: 'Option 1', value: 'option_1' },
@@ -91,12 +94,8 @@ export default function FieldTableRow({
                   }
                   onChange(patch);
                 }}
-                className="flex-1 min-w-0 text-xs bg-slate-50 border border-slate-200 rounded px-1.5 py-1 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              >
-                {fieldTypes.map((t) => (
-                  <option key={t.id} value={t.name}>{t.label}</option>
-                ))}
-              </select>
+                options={fieldTypes.map((t) => ({ label: t.label, value: t.name }))}
+              />
             </div>
           ) : (
             <div className="inline-flex items-center gap-2">
@@ -114,51 +113,45 @@ export default function FieldTableRow({
 
         {/* Label */}
         <td className="px-3 py-2.5 min-w-0">
-          <input
+          <AntInput
             value={field.label}
             onChange={(e) => onChange({ label: e.target.value })}
             placeholder="Untitled field"
-            className="w-full text-sm font-medium text-slate-800 bg-transparent border-0 outline-none focus:ring-2 focus:ring-indigo-200 rounded px-1 -mx-1"
+            variant="borderless"
+            size="small"
+            style={{ fontWeight: 500, color: '#1e293b', padding: '0 4px', margin: '0 -4px' }}
           />
         </td>
 
         {/* Field key */}
         <td className="px-3 py-2.5 hidden md:table-cell w-44">
-          <input
+          <AntInput
             value={field.name}
             onChange={(e) => onChange({ name: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_') })}
-            className="w-full text-[11px] font-mono text-slate-500 bg-transparent border border-transparent hover:border-slate-200 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+            size="small"
+            style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11, color: '#64748b' }}
           />
         </td>
 
         {/* Required */}
         <td className="px-3 py-2.5 w-16 text-center">
-          <button
-            type="button"
-            onClick={() => onChange({ required: !field.required })}
-            className={
-              'h-5 w-5 inline-flex items-center justify-center rounded transition text-[11px] font-bold ' +
-              (field.required
-                ? 'bg-rose-500 text-white'
-                : 'bg-slate-100 text-slate-400 hover:bg-slate-200')
-            }
-            title={field.required ? 'Click to make optional' : 'Click to require'}
-          >
-            *
-          </button>
+          <Switch
+            size="small"
+            checked={!!field.required}
+            onChange={(checked) => onChange({ required: checked })}
+            title={field.required ? 'Required — click to make optional' : 'Optional — click to require'}
+          />
         </td>
 
         {/* Width */}
         <td className="px-3 py-2.5 hidden lg:table-cell w-28">
-          <select
+          <Select
             value={field.width ?? '100'}
-            onChange={(e) => onChange({ width: e.target.value })}
-            className="text-xs bg-slate-50 border border-slate-200 rounded px-1.5 py-0.5 hover:border-indigo-300 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-          >
-            {WIDTH_OPTS.map((w) => (
-              <option key={w} value={w}>{w}%</option>
-            ))}
-          </select>
+            onChange={(v) => onChange({ width: v })}
+            size="small"
+            style={{ width: 80 }}
+            options={WIDTH_OPTS.map((w) => ({ label: `${w}%`, value: w }))}
+          />
         </td>
 
         {/* Indicators */}
@@ -236,24 +229,17 @@ const IconBtn = ({
   danger?: boolean;
   highlight?: boolean;
 }) => (
-  <button
-    type="button"
-    onClick={onClick}
+  <AntButton
+    type={highlight ? 'primary' : 'text'}
+    size="small"
+    icon={children as React.ReactElement}
     title={title}
     disabled={disabled}
-    className={
-      'h-7 w-7 inline-flex items-center justify-center rounded-md transition ' +
-      (disabled
-        ? 'text-slate-200 cursor-not-allowed'
-        : highlight
-        ? 'bg-indigo-100 text-indigo-700'
-        : danger
-        ? 'text-slate-400 hover:bg-red-50 hover:text-red-500'
-        : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700')
-    }
-  >
-    {children}
-  </button>
+    danger={danger}
+    ghost={highlight}
+    onClick={onClick}
+    style={{ width: 28, height: 28 }}
+  />
 );
 
 const countValidations = (f: FormFieldDef): number => {

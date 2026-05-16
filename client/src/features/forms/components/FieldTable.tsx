@@ -2,6 +2,7 @@
 // most-used controls inline (label, key, required, width, indicators); the
 // gear in the actions column expands a settings panel below the row.
 import { Plus, ListPlus } from 'lucide-react';
+import { Button as AntButton } from 'antd';
 import AddFieldPopover from './AddFieldPopover';
 import FieldTableRow from './FieldTableRow';
 import type { ParentField } from './DependencyEditor';
@@ -30,14 +31,14 @@ export default function FieldTable({
   const defaultType = fieldTypes[0];
 
   const inlineAddBtn = (label: string) => (
-    <button
-      type="button"
+    <AntButton
+      type="primary"
+      icon={<Plus className="h-4 w-4" />}
       onClick={() => defaultType && onAddField(fields.length, defaultType)}
       disabled={!defaultType}
-      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
     >
-      <Plus className="h-4 w-4" /> {label}
-    </button>
+      {label}
+    </AntButton>
   );
   if (fields.length === 0) {
     return (

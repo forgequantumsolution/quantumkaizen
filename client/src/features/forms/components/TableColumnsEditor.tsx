@@ -3,8 +3,7 @@
 // through FormField.parentFieldId / children. Column types are kept to the
 // subset that makes sense in a row cell.
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
-import Input from '@/components/ui/Input';
-import Select from '@/components/ui/Select';
+import { Button as AntButton, Input as AntInput, Select as AntSelect } from 'antd';
 import OptionsEditor from './OptionsEditor';
 import { fieldUsesOptions } from '../fieldCatalog';
 import type { FormFieldDef } from '../types';
@@ -85,74 +84,77 @@ export default function TableColumnsEditor({ columns, onChange }: Props) {
           >
             <div className="grid grid-cols-12 gap-2 items-center">
               <div className="col-span-1 flex flex-col items-center gap-0.5">
-                <button
-                  type="button"
+                <AntButton
+                  type="text"
+                  size="small"
+                  icon={<ChevronUp className="h-3.5 w-3.5" />}
                   onClick={() => move(idx, -1)}
                   disabled={idx === 0}
-                  className="text-slate-300 hover:text-slate-500 disabled:opacity-30"
                   aria-label="Move column up"
-                >
-                  <ChevronUp className="h-3.5 w-3.5" />
-                </button>
-                <button
-                  type="button"
+                />
+                <AntButton
+                  type="text"
+                  size="small"
+                  icon={<ChevronDown className="h-3.5 w-3.5" />}
                   onClick={() => move(idx, 1)}
                   disabled={idx === columns.length - 1}
-                  className="text-slate-300 hover:text-slate-500 disabled:opacity-30"
                   aria-label="Move column down"
-                >
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </button>
+                />
               </div>
-              <Input
-                className="col-span-4"
-                value={col.label}
-                placeholder={`Column ${idx + 1}`}
-                onChange={(e) => {
-                  const newLabel = e.target.value;
-                  const auto = slug(col.label) === col.name;
-                  update(idx, {
-                    label: newLabel,
-                    ...(auto ? { name: slug(newLabel) || `column_${idx + 1}` } : null),
-                  });
-                }}
-              />
-              <Input
-                className="col-span-3"
-                value={col.name}
-                onChange={(e) =>
-                  update(idx, {
-                    name: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'),
-                  })
-                }
-              />
-              <Select
-                className="col-span-3"
-                value={col.type ?? 'text'}
-                onChange={(e) => {
-                  const nextType = e.target.value;
-                  const patch: Partial<FormFieldDef> = { type: nextType };
-                  if (fieldUsesOptions(nextType) && !col.options) {
-                    patch.options = [
-                      { label: 'Option 1', value: 'option_1' },
-                      { label: 'Option 2', value: 'option_2' },
-                    ];
-                  } else if (!fieldUsesOptions(nextType) && col.options) {
-                    patch.options = undefined;
+              <div className="col-span-4">
+                <AntInput
+                  value={col.label}
+                  placeholder={`Column ${idx + 1}`}
+                  onChange={(e) => {
+                    const newLabel = e.target.value;
+                    const auto = slug(col.label) === col.name;
+                    update(idx, {
+                      label: newLabel,
+                      ...(auto ? { name: slug(newLabel) || `column_${idx + 1}` } : null),
+                    });
+                  }}
+                />
+              </div>
+              <div className="col-span-3">
+                <AntInput
+                  value={col.name}
+                  onChange={(e) =>
+                    update(idx, {
+                      name: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_'),
+                    })
                   }
-                  update(idx, patch);
-                }}
-                options={COLUMN_TYPES}
-              />
-              <button
-                type="button"
-                onClick={() => remove(idx)}
-                className="col-span-1 text-slate-400 hover:text-red-500 justify-self-end"
-                aria-label="Remove column"
-                title="Remove column"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+                />
+              </div>
+              <div className="col-span-3">
+                <AntSelect
+                  value={col.type ?? 'text'}
+                  onChange={(nextType) => {
+                    const patch: Partial<FormFieldDef> = { type: nextType };
+                    if (fieldUsesOptions(nextType) && !col.options) {
+                      patch.options = [
+                        { label: 'Option 1', value: 'option_1' },
+                        { label: 'Option 2', value: 'option_2' },
+                      ];
+                    } else if (!fieldUsesOptions(nextType) && col.options) {
+                      patch.options = undefined;
+                    }
+                    update(idx, patch);
+                  }}
+                  options={COLUMN_TYPES}
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="col-span-1 justify-self-end">
+                <AntButton
+                  type="text"
+                  danger
+                  size="small"
+                  icon={<Trash2 className="h-4 w-4" />}
+                  onClick={() => remove(idx)}
+                  aria-label="Remove column"
+                  title="Remove column"
+                />
+              </div>
             </div>
 
             {usesOptions && (
@@ -170,13 +172,15 @@ export default function TableColumnsEditor({ columns, onChange }: Props) {
         );
       })}
 
-      <button
-        type="button"
+      <AntButton
+        type="dashed"
+        block
         onClick={add}
-        className="w-full mt-2 flex items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 py-2 text-sm text-slate-500 hover:border-indigo-300 hover:text-indigo-600"
+        icon={<Plus className="h-4 w-4" />}
+        style={{ marginTop: 8 }}
       >
-        <Plus className="h-4 w-4" /> Add column
-      </button>
+        Add column
+      </AntButton>
     </div>
   );
 }

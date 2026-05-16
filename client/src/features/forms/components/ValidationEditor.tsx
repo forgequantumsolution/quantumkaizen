@@ -1,7 +1,7 @@
 // Per-field-type validation editor. Only renders the rules that make sense
 // for the current field type so the inspector stays uncluttered.
-import Input from '@/components/ui/Input';
-import Textarea from '@/components/ui/Textarea';
+import { Checkbox, DatePicker, Input as AntInput, InputNumber, TimePicker } from 'antd';
+import dayjs from 'dayjs';
 import {
   DATE_TYPES, FILE_TYPES, NUMBER_TYPES, SELECTION_TYPES, STRING_TYPES, TIME_TYPES,
   type ValidationRules,
@@ -46,22 +46,24 @@ export default function ValidationEditor({ type, value, onChange }: Props) {
         <>
           <div className="grid grid-cols-2 gap-3">
             <Row label="Min length">
-              <Input
-                type="number"
-                value={value.minLength ?? ''}
-                onChange={(e) => set('minLength', e.target.value === '' ? undefined : Number(e.target.value))}
+              <InputNumber
+                value={value.minLength}
+                onChange={(v) => set('minLength', v ?? undefined)}
+                style={{ width: '100%' }}
+                min={0}
               />
             </Row>
             <Row label="Max length">
-              <Input
-                type="number"
-                value={value.maxLength ?? ''}
-                onChange={(e) => set('maxLength', e.target.value === '' ? undefined : Number(e.target.value))}
+              <InputNumber
+                value={value.maxLength}
+                onChange={(v) => set('maxLength', v ?? undefined)}
+                style={{ width: '100%' }}
+                min={0}
               />
             </Row>
           </div>
           <Row label="Regex pattern" hint="JavaScript regex without delimiters, e.g. ^[A-Z0-9]+$">
-            <Input
+            <AntInput
               value={value.pattern ?? ''}
               onChange={(e) => set('pattern', e.target.value)}
               placeholder="^[A-Z0-9]+$"
@@ -74,38 +76,44 @@ export default function ValidationEditor({ type, value, onChange }: Props) {
         <>
           <div className="grid grid-cols-2 gap-3">
             <Row label="Minimum">
-              <Input
-                type="number"
-                value={value.min ?? ''}
-                onChange={(e) => set('min', e.target.value === '' ? undefined : Number(e.target.value))}
+              <InputNumber
+                value={value.min}
+                onChange={(v) => set('min', v ?? undefined)}
+                style={{ width: '100%' }}
               />
             </Row>
             <Row label="Maximum">
-              <Input
-                type="number"
-                value={value.max ?? ''}
-                onChange={(e) => set('max', e.target.value === '' ? undefined : Number(e.target.value))}
+              <InputNumber
+                value={value.max}
+                onChange={(v) => set('max', v ?? undefined)}
+                style={{ width: '100%' }}
               />
             </Row>
           </div>
-          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={!!value.isInteger}
-              onChange={(e) => set('isInteger', e.target.checked || undefined)}
-            />
+          <Checkbox
+            checked={!!value.isInteger}
+            onChange={(e) => set('isInteger', e.target.checked || undefined)}
+          >
             Integer values only
-          </label>
+          </Checkbox>
         </>
       )}
 
       {DATE_TYPES.has(type) && (
         <div className="grid grid-cols-2 gap-3">
           <Row label="Earliest date">
-            <Input type="date" value={value.minDate ?? ''} onChange={(e) => set('minDate', e.target.value)} />
+            <DatePicker
+              value={value.minDate ? dayjs(value.minDate) : null}
+              onChange={(d) => set('minDate', d ? d.format('YYYY-MM-DD') : undefined)}
+              style={{ width: '100%' }}
+            />
           </Row>
           <Row label="Latest date">
-            <Input type="date" value={value.maxDate ?? ''} onChange={(e) => set('maxDate', e.target.value)} />
+            <DatePicker
+              value={value.maxDate ? dayjs(value.maxDate) : null}
+              onChange={(d) => set('maxDate', d ? d.format('YYYY-MM-DD') : undefined)}
+              style={{ width: '100%' }}
+            />
           </Row>
         </div>
       )}
@@ -113,10 +121,20 @@ export default function ValidationEditor({ type, value, onChange }: Props) {
       {TIME_TYPES.has(type) && (
         <div className="grid grid-cols-2 gap-3">
           <Row label="Earliest time">
-            <Input type="time" value={value.minTime ?? ''} onChange={(e) => set('minTime', e.target.value)} />
+            <TimePicker
+              value={value.minTime ? dayjs(value.minTime, 'HH:mm') : null}
+              onChange={(t) => set('minTime', t ? t.format('HH:mm') : undefined)}
+              format="HH:mm"
+              style={{ width: '100%' }}
+            />
           </Row>
           <Row label="Latest time">
-            <Input type="time" value={value.maxTime ?? ''} onChange={(e) => set('maxTime', e.target.value)} />
+            <TimePicker
+              value={value.maxTime ? dayjs(value.maxTime, 'HH:mm') : null}
+              onChange={(t) => set('maxTime', t ? t.format('HH:mm') : undefined)}
+              format="HH:mm"
+              style={{ width: '100%' }}
+            />
           </Row>
         </div>
       )}
@@ -124,17 +142,19 @@ export default function ValidationEditor({ type, value, onChange }: Props) {
       {SELECTION_TYPES.has(type) && (
         <div className="grid grid-cols-2 gap-3">
           <Row label="Min selections">
-            <Input
-              type="number"
-              value={value.minSelection ?? ''}
-              onChange={(e) => set('minSelection', e.target.value === '' ? undefined : Number(e.target.value))}
+            <InputNumber
+              value={value.minSelection}
+              onChange={(v) => set('minSelection', v ?? undefined)}
+              style={{ width: '100%' }}
+              min={0}
             />
           </Row>
           <Row label="Max selections">
-            <Input
-              type="number"
-              value={value.maxSelection ?? ''}
-              onChange={(e) => set('maxSelection', e.target.value === '' ? undefined : Number(e.target.value))}
+            <InputNumber
+              value={value.maxSelection}
+              onChange={(v) => set('maxSelection', v ?? undefined)}
+              style={{ width: '100%' }}
+              min={0}
             />
           </Row>
         </div>
@@ -143,25 +163,26 @@ export default function ValidationEditor({ type, value, onChange }: Props) {
       {FILE_TYPES.has(type) && (
         <>
           <Row label="Allowed extensions" hint="Comma-separated, no dots: pdf,jpg,png">
-            <Input
+            <AntInput
               value={value.allowedExtensions ?? ''}
               onChange={(e) => set('allowedExtensions', e.target.value)}
               placeholder="pdf,jpg,png"
             />
           </Row>
           <Row label="Max file size (MB)">
-            <Input
-              type="number"
-              value={value.maxFileSizeMb ?? ''}
-              onChange={(e) => set('maxFileSizeMb', e.target.value === '' ? undefined : Number(e.target.value))}
+            <InputNumber
+              value={value.maxFileSizeMb}
+              onChange={(v) => set('maxFileSizeMb', v ?? undefined)}
+              style={{ width: '100%' }}
+              min={0}
             />
           </Row>
         </>
       )}
 
       <Row label="Custom error message" hint="Shown instead of the default message when validation fails.">
-        <Textarea
-          rows={2}
+        <AntInput.TextArea
+          autoSize={{ minRows: 2, maxRows: 4 }}
           value={value.errorMessage ?? ''}
           onChange={(e) => set('errorMessage', e.target.value)}
           placeholder="e.g. Please enter a valid serial number"

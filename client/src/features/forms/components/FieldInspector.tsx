@@ -1,9 +1,7 @@
 // Tabbed inspector for the currently selected field. Tabs are shown only
 // when relevant for the field type (e.g. Options is hidden for plain text).
 import { useState } from 'react';
-import Input from '@/components/ui/Input';
-import Select from '@/components/ui/Select';
-import Textarea from '@/components/ui/Textarea';
+import { Button as AntButton, Checkbox, Input as AntInput, Select as AntSelect, Tabs } from 'antd';
 import { fieldUsesOptions } from '../fieldCatalog';
 import type { FormFieldDef } from '../types';
 import OptionsEditor from './OptionsEditor';
@@ -41,6 +39,61 @@ export default function FieldInspector({ field, onChange, parents, onDelete }: P
     { key: 'logic',   label: 'Logic',      visible: true },
   ];
 
+  const generalPane = (
+    <div className="space-y-3">
+      <Field label="Label">
+        <AntInput
+          value={field.label}
+          onChange={(e) => onChange({ label: e.target.value })}
+        />
+      </Field>
+      <Field label="Field name (key)" hint="Used as the JSON key in the response payload.">
+        <AntInput
+          value={field.name}
+          onChange={(e) =>
+            onChange({ name: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_') })
+          }
+        />
+      </Field>
+      <Field label="Help text">
+        <AntInput.TextArea
+          autoSize={{ minRows: 2, maxRows: 6 }}
+          value={(field as { helpText?: string }).helpText ?? ''}
+          onChange={(e) => onChange({ helpText: e.target.value } as Partial<FormFieldDef>)}
+          placeholder="Optional guidance shown under the field"
+        />
+      </Field>
+      <Field label="Placeholder">
+        <AntInput
+          value={(field as { placeholder?: string }).placeholder ?? ''}
+          onChange={(e) => onChange({ placeholder: e.target.value } as Partial<FormFieldDef>)}
+        />
+      </Field>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Width">
+          <AntSelect
+            value={field.width ?? '100'}
+            onChange={(v) => onChange({ width: v })}
+            options={WIDTH_OPTIONS}
+            style={{ width: '100%' }}
+          />
+        </Field>
+        <Field label="Required">
+          <div className="flex items-center h-9">
+            <Checkbox
+              checked={!!field.required}
+              onChange={(e) => onChange({ required: e.target.checked })}
+            >
+              Required to fill
+            </Checkbox>
+          </div>
+        </Field>
+      </div>
+    </div>
+  );
+
+  const visibleTabs = tabs.filter((t) => t.visible);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -48,107 +101,41 @@ export default function FieldInspector({ field, onChange, parents, onDelete }: P
           <p className="text-[11px] uppercase tracking-wide text-slate-400">Editing field</p>
           <h3 className="text-sm font-semibold text-slate-800">{field.label}</h3>
         </div>
-        <button
-          onClick={onDelete}
-          className="text-xs text-red-500 hover:underline"
-          type="button"
-        >
+        <AntButton type="link" danger size="small" onClick={onDelete}>
           Delete
-        </button>
+        </AntButton>
       </div>
 
-      <div className="flex border-b border-slate-200 -mx-4 px-4">
-        {tabs.filter((t) => t.visible).map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={
-              'px-3 py-2 text-sm border-b-2 -mb-px transition ' +
-              (tab === t.key
-                ? 'border-indigo-500 text-indigo-600 font-medium'
-                : 'border-transparent text-slate-500 hover:text-slate-700')
-            }
-            type="button"
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'general' && (
-        <div className="space-y-3">
-          <Field label="Label">
-            <Input
-              value={field.label}
-              onChange={(e) => onChange({ label: e.target.value })}
-            />
-          </Field>
-          <Field label="Field name (key)" hint="Used as the JSON key in the response payload.">
-            <Input
-              value={field.name}
-              onChange={(e) =>
-                onChange({ name: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_') })
-              }
-            />
-          </Field>
-          <Field label="Help text">
-            <Textarea
-              rows={2}
-              value={(field as { helpText?: string }).helpText ?? ''}
-              onChange={(e) => onChange({ helpText: e.target.value } as Partial<FormFieldDef>)}
-              placeholder="Optional guidance shown under the field"
-            />
-          </Field>
-          <Field label="Placeholder">
-            <Input
-              value={(field as { placeholder?: string }).placeholder ?? ''}
-              onChange={(e) => onChange({ placeholder: e.target.value } as Partial<FormFieldDef>)}
-            />
-          </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Width">
-              <Select
-                value={field.width ?? '100'}
-                onChange={(e) => onChange({ width: e.target.value })}
-                options={WIDTH_OPTIONS}
-              />
-            </Field>
-            <Field label="Required">
-              <label className="flex items-center gap-2 h-9 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={!!field.required}
-                  onChange={(e) => onChange({ required: e.target.checked })}
+      <Tabs
+        activeKey={tab}
+        onChange={(k) => setTab(k as Tab)}
+        items={visibleTabs.map((t) => ({
+          key: t.key,
+          label: t.label,
+          children:
+            t.key === 'general' ? generalPane
+            : t.key === 'options' ? (
+                <OptionsEditor
+                  value={field.options ?? []}
+                  onChange={(opts) => onChange({ options: opts })}
                 />
-                Required to fill
-              </label>
-            </Field>
-          </div>
-        </div>
-      )}
-
-      {tab === 'options' && (
-        <OptionsEditor
-          value={field.options ?? []}
-          onChange={(opts) => onChange({ options: opts })}
-        />
-      )}
-
-      {tab === 'rules' && (
-        <ValidationEditor
-          type={field.type ?? ''}
-          value={(field.validation ?? {}) as ValidationRules}
-          onChange={(v) => onChange({ validation: v })}
-        />
-      )}
-
-      {tab === 'logic' && (
-        <DependencyEditor
-          rule={(field.dependency as DependencyRule | undefined) ?? emptyRule()}
-          onChange={(r) => onChange({ dependency: r })}
-          parents={parents}
-        />
-      )}
+              )
+            : t.key === 'rules' ? (
+                <ValidationEditor
+                  type={field.type ?? ''}
+                  value={(field.validation ?? {}) as ValidationRules}
+                  onChange={(v) => onChange({ validation: v })}
+                />
+              )
+            : (
+                <DependencyEditor
+                  rule={(field.dependency as DependencyRule | undefined) ?? emptyRule()}
+                  onChange={(r) => onChange({ dependency: r })}
+                  parents={parents}
+                />
+              ),
+        }))}
+      />
     </div>
   );
 }

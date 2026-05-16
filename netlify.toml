@@ -1,0 +1,25 @@
+# Netlify config — https://docs.netlify.com/configure-builds/file-based-configuration/
+#
+# Frontend lives at client/ in this npm workspaces monorepo. Backend lives
+# at backend/ and is deployed separately on Render (see render.yaml).
+#
+# The frontend talks to the backend via VITE_API_BASE_URL (absolute URL),
+# set in the Netlify dashboard → Site settings → Environment variables.
+# Example: VITE_API_BASE_URL = https://qk-api.onrender.com/api
+
+[build]
+  command = "npm ci --no-audit && npm run build --workspace=client"
+  publish = "client/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+  # Vite reads VITE_* vars at build time, baked into the JS bundle.
+  # Set VITE_API_BASE_URL in the Netlify dashboard, not here.
+
+# SPA fallback — every unknown path serves index.html so React Router can
+# handle it. Since the API is on a different origin (Render), /api/* is
+# never requested from this domain, so we don't need to exclude it.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

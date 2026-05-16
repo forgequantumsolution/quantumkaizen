@@ -1,7 +1,7 @@
 // Editable list of {label, value} options for select/radio/checkbox fields.
 // Auto-derives `value` from `label` when the user hasn't customised it.
 import { GripVertical, Plus, Trash2 } from 'lucide-react';
-import Input from '@/components/ui/Input';
+import { Button as AntButton, Input as AntInput } from 'antd';
 import type { FieldOption } from '../types';
 
 interface Props {
@@ -42,51 +42,56 @@ export default function OptionsEditor({ value, onChange }: Props) {
       {value.map((opt, idx) => (
         <div key={idx} className="grid grid-cols-12 gap-2 items-center">
           <div className="col-span-1 flex flex-col items-center">
-            <button
-              type="button"
+            <AntButton
+              type="text"
+              size="small"
+              icon={<GripVertical className="h-4 w-4" />}
               onClick={() => move(idx, -1)}
-              className="text-slate-300 hover:text-slate-500 leading-none"
               aria-label="Move up"
-            >
-              <GripVertical className="h-4 w-4" />
-            </button>
+            />
           </div>
-          <Input
-            className="col-span-5"
-            value={opt.label}
-            onChange={(e) => {
-              const newLabel = e.target.value;
-              const auto = slug(opt.label) === String(opt.value);
-              update(idx, {
-                label: newLabel,
-                ...(auto ? { value: slug(newLabel) } : null),
-              });
-            }}
-            placeholder={`Option ${idx + 1}`}
-          />
-          <Input
-            className="col-span-5"
-            value={String(opt.value ?? '')}
-            onChange={(e) => update(idx, { value: e.target.value })}
-            placeholder="value"
-          />
-          <button
-            type="button"
-            onClick={() => remove(idx)}
-            className="col-span-1 text-slate-400 hover:text-red-500 justify-self-end"
-            aria-label="Remove option"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
+          <div className="col-span-5">
+            <AntInput
+              value={opt.label}
+              onChange={(e) => {
+                const newLabel = e.target.value;
+                const auto = slug(opt.label) === String(opt.value);
+                update(idx, {
+                  label: newLabel,
+                  ...(auto ? { value: slug(newLabel) } : null),
+                });
+              }}
+              placeholder={`Option ${idx + 1}`}
+            />
+          </div>
+          <div className="col-span-5">
+            <AntInput
+              value={String(opt.value ?? '')}
+              onChange={(e) => update(idx, { value: e.target.value })}
+              placeholder="value"
+            />
+          </div>
+          <div className="col-span-1 justify-self-end">
+            <AntButton
+              type="text"
+              danger
+              size="small"
+              icon={<Trash2 className="h-4 w-4" />}
+              onClick={() => remove(idx)}
+              aria-label="Remove option"
+            />
+          </div>
         </div>
       ))}
-      <button
-        type="button"
+      <AntButton
+        type="dashed"
+        block
         onClick={add}
-        className="w-full mt-2 flex items-center justify-center gap-1 rounded-lg border border-dashed border-slate-300 py-2 text-sm text-slate-500 hover:border-indigo-300 hover:text-indigo-600"
+        icon={<Plus className="h-4 w-4" />}
+        style={{ marginTop: 8 }}
       >
-        <Plus className="h-4 w-4" /> Add option
-      </button>
+        Add option
+      </AntButton>
     </div>
   );
 }

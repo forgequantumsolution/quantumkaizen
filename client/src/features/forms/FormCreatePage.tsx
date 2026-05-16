@@ -6,18 +6,15 @@
 //      validation, width, dependency, options, and reordering controls per field.
 //   4. Submit creates the form, saves its fields, and routes back to /forms.
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Download, Upload as UploadIcon, X, Plus, Trash2,
   Check, Search, ChevronDown, ChevronUp, FileText, AlertTriangle, RefreshCw,
   Eye, Save,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button } from '@/components/ui/Button';
-import Input from '@/components/ui/Input';
-import Textarea from '@/components/ui/Textarea';
+import { Button as AntButton, Divider, Input as AntInput, Modal as AntModal, Select } from 'antd';
 import Spinner from '@/components/ui/Spinner';
-import Modal from '@/components/ui/Modal';
 import {
   useCreateForm, useCreateFormType, useFieldTypes, useFormTypes,
   useSaveDraft, useSaveFormFields,
@@ -26,10 +23,16 @@ import { fieldUsesOptions } from './fieldCatalog';
 import FieldTable from './components/FieldTable';
 import FormPreview from './components/FormPreview';
 import type { ParentField } from './components/DependencyEditor';
-import type { FieldType, FormFieldDef, FormSectionDef } from './types';
+import type { FieldType, FormFieldDef, FormKind, FormSectionDef } from './types';
 
 export default function FormCreatePage() {
   const nav = useNavigate();
+  const [searchParams] = useSearchParams();
+  const kind: FormKind = searchParams.get('kind') === 'CHECKLIST' ? 'CHECKLIST' : 'FORM';
+  const isChecklist = kind === 'CHECKLIST';
+  const noun = isChecklist ? 'checklist' : 'form';
+  const Noun = isChecklist ? 'Checklist' : 'Form';
+  const listTab = isChecklist ? '/forms?tab=checklists' : '/forms';
 
   // ── Form-detail state ─────────────────────────────────
   const [title, setTitle] = useState('');
@@ -103,7 +106,7 @@ export default function FormCreatePage() {
     setDetailsCollapsed(true);
   };
 
-  const handleClose = () => nav('/forms');
+  const handleClose = () => nav(listTab);
 
   const handleCreateType = async () => {
     const name = newTypeName.trim();
@@ -251,6 +254,7 @@ export default function FormCreatePage() {
       title: title.trim(),
       description: description.trim() || undefined,
       type_id: typeId || null,
+      kind,
     });
     setDraftFormId(created.form_id);
     return created.form_id;
@@ -298,10 +302,10 @@ export default function FormCreatePage() {
         description: description.trim() || null,
         form_type: typeId || null,
       });
-      toast.success('Form created');
-      nav('/forms');
+      toast.success(`${Noun} created`);
+      nav(listTab);
     } catch (err) {
-      toast.error((err as Error).message ?? 'Failed to create form');
+      toast.error((err as Error).message ?? `Failed to create ${noun}`);
     }
   };
 
@@ -311,22 +315,21 @@ export default function FormCreatePage() {
       <div className="bg-slate-50 border-b border-slate-200">
         <div className="px-6 py-5 flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Form Templates</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{Noun} Templates</h1>
             <p className="text-sm text-slate-500 mt-0.5">
               Create entries and manage their status
             </p>
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by title..."
-                className="pl-9 w-64"
-              />
-            </div>
+            <AntInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by title..."
+              prefix={<Search className="h-4 w-4 text-slate-400" />}
+              style={{ width: 256 }}
+              allowClear
+            />
             <HeaderButton icon={Download} label="Bulk Export" onClick={() => toast('Coming soon')} />
             <HeaderButton icon={UploadIcon} label="Bulk Upload" onClick={() => toast('Coming soon')} />
             <HeaderButton icon={X} label="Close Template" onClick={handleClose} />
@@ -347,7 +350,7 @@ export default function FormCreatePage() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-sm font-semibold text-slate-900 truncate">
-                    {title || 'Untitled form'}
+                    {title || `Untitled ${noun}`}
                   </h3>
                   {typeId && (
                     <span className="text-[10px] font-medium uppercase tracking-wide bg-slate-100 text-slate-600 rounded px-1.5 py-0.5">
@@ -388,44 +391,50 @@ export default function FormCreatePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
                   <label className="block text-sm font-semibold text-slate-900 mb-2">Title</label>
-                  <Input
+                  <AntInput
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Enter Title"
+                    size="large"
+                    allowClear
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-900 mb-2">Type</label>
-                  <div className="flex items-stretch gap-2">
-                    <div className="relative flex-1">
-                      <select
-                        value={typeId}
-                        onChange={(e) => setTypeId(e.target.value)}
-                        className="input-base appearance-none pr-9 cursor-pointer w-full"
-                      >
-                        <option value="">
-                          {activeTypes.length === 0 ? 'No types yet — click + to add one' : 'Select Type'}
-                        </option>
-                        {activeTypes.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.name}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setAddTypeOpen(true)}
-                      title="Add new type"
-                      className="h-10 w-10 inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 hover:text-indigo-600 transition"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </button>
-                  </div>
+                  <Select
+                    value={typeId || undefined}
+                    onChange={(v) => setTypeId(v ?? '')}
+                    placeholder={activeTypes.length === 0 ? 'No types yet — add one' : 'Select Type'}
+                    size="large"
+                    style={{ width: '100%' }}
+                    options={activeTypes.map((t) => ({ label: t.name, value: t.id }))}
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    popupRender={(menu) => (
+                      <>
+                        {menu}
+                        <Divider style={{ margin: '4px 0' }} />
+                        <AntButton
+                          type="link"
+                          icon={<Plus className="h-4 w-4" />}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => setAddTypeOpen(true)}
+                          style={{ width: '100%', textAlign: 'left' }}
+                        >
+                          Add new type
+                        </AntButton>
+                      </>
+                    )}
+                    notFoundContent={
+                      <div className="py-2 text-center text-xs text-slate-500">
+                        No types in the system yet
+                      </div>
+                    }
+                  />
                   {activeTypes.length === 0 && (
                     <p className="mt-1.5 text-xs text-slate-400">
-                      No types in the system yet. Click <span className="font-medium text-slate-600">+</span> to create one (POST <code className="text-[10px] bg-slate-100 px-1 py-0.5 rounded">/api/forms/form_types/create/</code>).
+                      No types in the system yet. Use <span className="font-medium text-slate-600">Add new type</span> in the dropdown to create one.
                     </p>
                   )}
                 </div>
@@ -433,26 +442,26 @@ export default function FormCreatePage() {
 
               <div className="mt-5">
                 <label className="block text-sm font-semibold text-slate-900 mb-2">Description</label>
-                <Textarea
+                <AntInput.TextArea
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Enter description"
-                  rows={4}
+                  autoSize={{ minRows: 4, maxRows: 8 }}
                 />
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
-                <Button variant="secondary" onClick={handleReset} disabled={isSubmitting}>
+                <AntButton onClick={handleReset} disabled={isSubmitting}>
                   Reset
-                </Button>
+                </AntButton>
                 {!detailsLocked ? (
-                  <Button onClick={handleNext} disabled={!canNext}>
+                  <AntButton type="primary" onClick={handleNext} disabled={!canNext}>
                     Next
-                  </Button>
+                  </AntButton>
                 ) : (
-                  <Button onClick={() => setDetailsCollapsed(true)} disabled={!canNext}>
+                  <AntButton type="primary" onClick={() => setDetailsCollapsed(true)} disabled={!canNext}>
                     Done
-                  </Button>
+                  </AntButton>
                 )}
               </div>
             </div>
@@ -469,9 +478,9 @@ export default function FormCreatePage() {
                   Add sections and pick the field types that go in each.
                 </p>
               </div>
-              <Button onClick={addSection} variant="secondary">
-                <Plus className="h-4 w-4" /> Add Section
-              </Button>
+              <AntButton onClick={addSection} icon={<Plus className="h-4 w-4" />}>
+                Add Section
+              </AntButton>
             </div>
 
             {(fieldTypesError || (!loadingFieldTypes && fieldTypes.length === 0)) && (
@@ -518,107 +527,100 @@ export default function FormCreatePage() {
             ))}
 
             <div className="pt-2 flex flex-wrap justify-end gap-3">
-              <Button variant="secondary" onClick={handleClose} disabled={isSubmitting || isSavingDraft}>
+              <AntButton onClick={handleClose} disabled={isSubmitting || isSavingDraft}>
                 Cancel
-              </Button>
-              <Button
-                variant="secondary"
+              </AntButton>
+              <AntButton
+                icon={<Eye className="h-4 w-4" />}
                 onClick={() => setPreviewOpen(true)}
                 disabled={!hasFields || isSubmitting || isSavingDraft}
-                title={hasFields ? 'Preview form' : 'Add at least one field to preview'}
+                title={hasFields ? `Preview ${noun}` : 'Add at least one field to preview'}
               >
-                <Eye className="h-4 w-4" /> Preview
-              </Button>
-              <Button
-                variant="secondary"
+                Preview
+              </AntButton>
+              <AntButton
+                icon={<Save className="h-4 w-4" />}
                 onClick={handleSaveDraft}
+                loading={isSavingDraft && !isSubmitting}
                 disabled={!canNext || isSubmitting || isSavingDraft}
               >
-                {isSavingDraft && !isSubmitting ? (
-                  <>
-                    <Spinner /> Saving…
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" /> Save Draft
-                  </>
-                )}
-              </Button>
-              <Button onClick={handleSubmit} disabled={isSubmitting || isSavingDraft}>
-                {isSubmitting ? (
-                  <>
-                    <Spinner /> Creating…
-                  </>
-                ) : (
-                  <>
-                    <Check className="h-4 w-4" /> Create Form
-                  </>
-                )}
-              </Button>
+                Save Draft
+              </AntButton>
+              <AntButton
+                type="primary"
+                icon={<Check className="h-4 w-4" />}
+                onClick={handleSubmit}
+                loading={isSubmitting}
+                disabled={isSubmitting || isSavingDraft}
+              >
+                Create {Noun}
+              </AntButton>
             </div>
           </section>
         )}
       </div>
 
       {/* ── Preview modal ────────────────────────────── */}
-      <Modal
-        isOpen={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-        title="Form preview"
-        size="xl"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setPreviewOpen(false)}>
-              Close
-            </Button>
-            <Button
-              onClick={() => {
-                setPreviewOpen(false);
-                handleSubmit();
-              }}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Creating…' : 'Looks good — Create form'}
-            </Button>
-          </>
-        }
+      <AntModal
+        open={previewOpen}
+        onCancel={() => setPreviewOpen(false)}
+        title={`${Noun} preview`}
+        width={900}
+        footer={[
+          <AntButton key="close" onClick={() => setPreviewOpen(false)}>
+            Close
+          </AntButton>,
+          <AntButton
+            key="create"
+            type="primary"
+            loading={isSubmitting}
+            onClick={() => {
+              setPreviewOpen(false);
+              handleSubmit();
+            }}
+          >
+            Looks good — Create {noun}
+          </AntButton>,
+        ]}
       >
         <FormPreview
-          title={title || 'Untitled form'}
+          title={title || `Untitled ${noun}`}
           description={description}
           sections={sections}
         />
-      </Modal>
+      </AntModal>
 
       {/* ── New-type modal ───────────────────────────── */}
-      <Modal
-        isOpen={addTypeOpen}
-        onClose={() => setAddTypeOpen(false)}
-        title="Add new form type"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setAddTypeOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleCreateType}
-              disabled={!newTypeName.trim() || createFormType.isPending}
-            >
-              {createFormType.isPending ? 'Adding…' : 'Add type'}
-            </Button>
-          </>
-        }
+      <AntModal
+        open={addTypeOpen}
+        onCancel={() => setAddTypeOpen(false)}
+        title={`Add new ${noun} type`}
+        footer={[
+          <AntButton key="cancel" onClick={() => setAddTypeOpen(false)}>
+            Cancel
+          </AntButton>,
+          <AntButton
+            key="add"
+            type="primary"
+            loading={createFormType.isPending}
+            disabled={!newTypeName.trim() || createFormType.isPending}
+            onClick={handleCreateType}
+          >
+            Add type
+          </AntButton>,
+        ]}
       >
         <label className="block text-sm font-medium text-slate-700 mb-1.5">
           Type name
         </label>
-        <Input
+        <AntInput
           autoFocus
           value={newTypeName}
           onChange={(e) => setNewTypeName(e.target.value)}
+          onPressEnter={handleCreateType}
           placeholder="e.g. Inspection, Calibration"
         />
-      </Modal>
+      </AntModal>
     </div>
   );
 }

@@ -52,6 +52,8 @@ export interface FormSectionDef {
   fields: FormFieldDef[];
 }
 
+export type FormKind = 'FORM' | 'CHECKLIST';
+
 export interface FormListItem {
   id: string;
   title: string;
@@ -62,6 +64,7 @@ export interface FormListItem {
   version_id: string;
   is_completed: boolean;
   status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  kind: FormKind;
   created_on: string;
   created_by: { id: string; name: string } | null;
   all_versions: Array<{ id: string; version: number }>;
@@ -74,6 +77,7 @@ export interface FormDetailResponse {
     description: string | null;
     version: number;
     version_id: string;
+    kind?: FormKind;
     form_type: string | null;
     workflow_name?: string | null;
     workflow_type?: string | null;

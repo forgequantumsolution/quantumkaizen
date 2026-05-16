@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma, FormStatus } from '@prisma/client';
+import { Prisma, FormStatus, FormKind } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { Conflict, NotFound } from '../../lib/httpError';
 
@@ -197,6 +197,7 @@ export const listForms = async (q: ListFormsQuery) => {
   if (q.search) where.title = { contains: q.search, mode: 'insensitive' };
   if (q.is_completed !== undefined) where.isCompleted = q.is_completed === 'true';
   if (q.form_type_id) where.formTypeId = q.form_type_id;
+  if (q.kind) where.kind = q.kind as FormKind;
 
   const skip = (q.page_number - 1) * q.page_size;
   const [items, total] = await Promise.all([
@@ -269,6 +270,7 @@ export const getFormFields = async (id: string) => {
       description: form.description,
       version: form.version,
       version_id: form.versionId,
+      kind: form.kind,
       form_type: form.formType ? form.formType.name : null,
       workflow_name: form.workflowName,
       workflow_type: form.workflowType,
@@ -307,6 +309,7 @@ export const createForm = async (input: CreateFormInput, userId?: string) => {
       version: 1,
       versionId,
       status: FormStatus.DRAFT,
+      kind: (input.kind ?? 'FORM') as FormKind,
       formTypeId: input.type_id ?? null,
       location: input.location ?? null,
       mainProcess: input.main_process ?? null,
@@ -317,7 +320,7 @@ export const createForm = async (input: CreateFormInput, userId?: string) => {
       createdById: userId ?? null,
     },
   });
-  return { form_id: form.id, id: form.id, version_id: form.versionId };
+  return { form_id: form.id, id: form.id, version_id: form.versionId, kind: form.kind };
 };
 
 export const saveFormFields = async (id: string, input: SaveFormFieldsInput) => {
@@ -502,6 +505,7 @@ const serializeForm = (
   version_id: f!.versionId,
   is_completed: f!.isCompleted,
   status: f!.status,
+  kind: f!.kind,
   workflow_name: f!.workflowName,
   workflow_type: f!.workflowType,
   location: f!.location,

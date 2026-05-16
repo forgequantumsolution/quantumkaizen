@@ -1,105 +1,85 @@
 # Render Blueprint — https://render.com/docs/blueprint-spec
 #
-# What this provisions:
-#   1. qk-db       — managed PostgreSQL 16 (free tier)
-#   2. qk-api      — Node web service for the Express/Prisma backend
-#   3. qk-web      — static site for the Vite React client (optional; you
-#                    can also keep the client on Vercel and just use
-#                    qk-api as the backend)
+# Provisions two services that share this repo:
+#   1. qk-api    — Express/Prisma backend (web service)
+#   2. qk-worker — BullMQ worker (background worker) for SLA + approval crons
+#
+# External services (not provisioned here):
+#   - PostgreSQL  → Neon (https://neon.tech)            — DATABASE_URL / DIRECT_URL
+#   - Redis       → Upstash (https://upstash.com)       — REDIS_URL
+#   - Frontend    → Vercel (vercel.json at repo root)
 #
 # First-time deploy:
-#   - Push this file to the default branch.
-#   - Render Dashboard → "New +" → "Blueprint" → select this repo.
-#   - Render will prompt for the secret JWT env vars; generate with:
-#       openssl rand -base64 48
-#   - Click Apply. First build takes ~5 min (Prisma generate + tsc + vite build).
+#   1. Create the Neon project (or reuse the existing one) and copy its
+#      pooled and direct connection strings.
+#   2. Create an Upstash Redis database (Global / Regional doesn't matter)
+#      and copy the rediss:// connection string.
+#   3. Push this file to your default branch.
+#   4. Render Dashboard → New + → Blueprint → pick this repo.
+#   5. Render will prompt for the secret env vars marked `sync: false`
+#      below. Paste the values from step 1–2 and a long random JWT_SECRET
+#      (generate with: openssl rand -base64 48).
+#   6. Click Apply. First build takes ~5 min (Prisma generate + tsc).
 #
 # Re-deploys: push to the configured branch; Render auto-redeploys.
 
-databases:
-  - name: qk-db
-    databaseName: quantum_kaizen
-    user: qk_app
-    plan: free
-    postgresMajorVersion: '16'
-
 services:
-  # ─── API (Node web service) ─────────────────────────────────────────
+  # ─── API (Express / Prisma) ───────────────────────────────────────
   - type: web
     name: qk-api
     runtime: node
     plan: free
     rootDir: .
-    # Root has an npm workspaces lockfile; install everything, then build
-    # only the server workspace (keeping dev deps so prisma CLI + tsx are
-    # available at runtime for the start script).
-    # Install → generate Prisma client → tsc. Explicit `prisma generate` is
-    # needed because workspaces + Render's runtime don't reliably fire the
-    # postinstall that would normally run it.
-    buildCommand: npm ci --no-audit && npx prisma generate --schema server/prisma/schema.prisma && npm run build --workspace=server
-    startCommand: cd server && ./start-render.sh
+    # Workspaces install everything once. Build only the backend workspace
+    # — `prisma generate` is explicit because workspaces don't always fire
+    # the postinstall hook on Render's runtime.
+    # --include=dev is required: NODE_ENV=production makes npm ci skip
+    # devDependencies by default, which strips @types/* (breaks tsc) and the
+    # prisma CLI (breaks `migrate deploy` in startCommand).
+    buildCommand: npm ci --no-audit --include=dev && npx prisma generate --schema backend/prisma/schema.prisma && npm run build --workspace=backend
+    # Apply any pending migrations on every deploy, then start the API.
+    startCommand: cd backend && npx prisma migrate deploy && node dist/index.js
     healthCheckPath: /health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 5000
+        value: 4000
+      # Secrets — fill in via the Render dashboard on first deploy.
       - key: DATABASE_URL
-        fromDatabase:
-          name: qk-db
-          property: connectionString
-      # Set these in Render dashboard — Blueprint will prompt on first sync.
-      - key: JWT_SECRET
-        generateValue: true
-      - key: JWT_REFRESH_SECRET
-        generateValue: true
-      - key: JWT_ACCESS_EXPIRY
-        value: 15m
-      - key: JWT_REFRESH_EXPIRY
-        value: 7d
-      # Comma-separated origins allowed to call the API. Update after the
-      # client is deployed (e.g. https://quantumkaizen.forgequantumsolution.com).
-      - key: CORS_ORIGIN
-        value: 'https://quantumkaizen.forgequantumsolution.com,https://qk-web.onrender.com'
-      - key: SEED_ON_START
-        value: '1'
-      # Redis / S3 / SMTP — leave blank to disable. Wire up later if needed.
+        sync: false       # Neon pooled connection (postgres://...?sslmode=require)
+      - key: DIRECT_URL
+        sync: false       # Neon direct connection (used by `migrate deploy`)
       - key: REDIS_URL
-        value: ''
-      - key: S3_ENDPOINT
-        value: ''
-      - key: SMTP_HOST
-        value: ''
+        sync: false       # Upstash rediss:// connection string
+      - key: JWT_SECRET
+        sync: false       # openssl rand -base64 48
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: CORS_ORIGIN
+        sync: false       # Vercel URL, e.g. https://your-app.vercel.app
 
-  # ─── Static web client (optional — skip if staying on Vercel) ───────
-  - type: web
-    name: qk-web
-    runtime: static
+  # ─── Worker (BullMQ) ──────────────────────────────────────────────
+  - type: worker
+    name: qk-worker
+    runtime: node
     plan: free
     rootDir: .
-    buildCommand: npm ci --no-audit && npm run build --workspace=client
-    staticPublishPath: ./client/dist
+    # --include=dev is required: NODE_ENV=production makes npm ci skip
+    # devDependencies by default, which strips @types/* (breaks tsc) and the
+    # prisma CLI (breaks `migrate deploy` in startCommand).
+    buildCommand: npm ci --no-audit --include=dev && npx prisma generate --schema backend/prisma/schema.prisma && npm run build --workspace=backend
+    startCommand: cd backend && node dist/jobs/worker.js
     autoDeploy: true
     envVars:
-      # Set this manually in the Render dashboard after qk-api is deployed,
-      # to its full URL e.g. https://qk-api.onrender.com/api/v1
-      # (Render can't interpolate scheme + path in a YAML reference.)
-      - key: VITE_API_BASE_URL
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
         sync: false
-    # SPA fallback — all non-asset requests serve index.html so React Router
-    # client-side routes work on hard reload.
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-    headers:
-      - path: /*
-        name: X-Frame-Options
-        value: DENY
-      - path: /*
-        name: X-Content-Type-Options
-        value: nosniff
-      - path: /assets/*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false

@@ -3,6 +3,7 @@ import api from '@/lib/api';
 import type {
   FieldType,
   FormDetailResponse,
+  FormKind,
   FormListItem,
   FormSectionDef,
   FormType,
@@ -22,6 +23,7 @@ export function useForms(params?: {
   page_size?: number;
   is_completed?: 'true' | 'false';
   form_type_id?: string;
+  kind?: FormKind;
 }) {
   return useQuery({
     queryKey: ['forms', params],
@@ -48,9 +50,15 @@ export function useCreateForm() {
       title: string;
       description?: string;
       type_id?: string | null;
+      kind?: FormKind;
     }) => {
       const r = await api.post('/forms/form/create/', input);
-      return r.data?.data as { form_id: string; id: string; version_id: string };
+      return r.data?.data as {
+        form_id: string;
+        id: string;
+        version_id: string;
+        kind?: FormKind;
+      };
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['forms'] }),
   });
