@@ -68,7 +68,10 @@
       "Bash(echo \"backend_exit=$?\")",
       "Bash(grep -rn 'SELECT 1\\\\|prisma.$queryRaw\\\\|$connect\\\\|isAlive\\\\|ping' /Users/shriyanshkumar/Desktop/Ashish/quantumkaizen/repo/backend/src '--include=*.ts')",
       "Bash(curl -s -o /dev/null -w \"ping: %{time_total}s \\(resolve %{time_namelookup}s, connect %{time_connect}s, tls %{time_appconnect}s\\)\\\\n\" \"https://ep-restless-hat-amtkx32f-pooler.c-5.us-east-1.aws.neon.tech/\")",
-      "Bash(ping -c 3 ep-restless-hat-amtkx32f-pooler.c-5.us-east-1.aws.neon.tech)"
+      "Bash(ping -c 3 ep-restless-hat-amtkx32f-pooler.c-5.us-east-1.aws.neon.tech)",
+      "Bash(echo \"started backend, pid=$!\")",
+      "Bash(pkill -f \"tsx watch src/index.ts\")",
+      "Bash(pkill -f \"node.*vite\")"
     ]
   }
 }

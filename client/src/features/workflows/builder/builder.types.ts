@@ -73,6 +73,10 @@ export interface StageNodeData {
   formBindings?: EmbeddedFormBinding[];
   sla?: EmbeddedSla | null;
   approvalPolicies?: EmbeddedApprovalPolicy[];
+  /** Set by TicketFlowCanvas when this stage is one of the ticket's current stages. */
+  isCurrent?: boolean;
+  /** Direction of the surrounding flow — controls handle placement. Defaults to 'TB'. */
+  flowDirection?: 'TB' | 'LR';
 }
 
 export interface ForkNodeData {

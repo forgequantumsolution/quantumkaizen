@@ -95,4 +95,8 @@ export interface SubmissionListItem {
   createdAt: string;
   form: { id: string; title: string; version: number; versionId: string };
   submittedBy: { id: string; name: string; email: string } | null;
+  stage?: { id: string; name: string; canonicalId: string } | null;
+  ticketId?: string | null;
+  stageId?: string | null;
+  bindingId?: string | null;
 }

@@ -363,6 +363,21 @@ html.dark {
 .btn-ghost:hover     { background-color: #EEF1F6 !important; color: #1A1A2E !important; }
 .btn-ghost:active    { background-color: #E2E7EF !important; }
 
+/* ── Ticket flow canvas: pulse highlight on the active stage ───────────────── */
+@keyframes ticket-stage-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 6px rgba(201, 168, 76, 0.18),
+                0 4px 14px rgba(201, 168, 76, 0.25);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(201, 168, 76, 0.08),
+                0 6px 18px rgba(201, 168, 76, 0.32);
+  }
+}
+.ticket-current-stage {
+  animation: ticket-stage-pulse 2.2s ease-in-out infinite;
+}
+
 /* ── Utility layer ─────────────────────────────────────────────────────────── */
 @layer utilities {
   .scrollbar-none { scrollbar-width: none; }

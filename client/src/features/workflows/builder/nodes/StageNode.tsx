@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { CircleDot, Mail } from 'lucide-react';
+import { CircleDot, Mail, PlayCircle } from 'lucide-react';
 import type { StageNodeData } from '../builder.types';
 
 const HANDLE_STYLE: React.CSSProperties = {
@@ -12,30 +12,61 @@ const HANDLE_STYLE: React.CSSProperties = {
 export default function StageNode({ data, selected }: NodeProps<StageNodeData>) {
   const primary = data.primary_actions ?? [];
   const secondary = data.secondary_actions ?? [];
+  const isCurrent = data.isCurrent === true;
+  const isLR = data.flowDirection === 'LR';
+  const targetPos = isLR ? Position.Left : Position.Top;
+  const sourcePos = isLR ? Position.Right : Position.Bottom;
+
+  // Precedence: isCurrent (gold pulse) > selected (gold) > initial (green) > default
+  const borderColor = isCurrent
+    ? '#C9A84C'
+    : selected
+      ? '#C9A84C'
+      : data.is_initial_stage
+        ? '#22C55E'
+        : '#E8ECF2';
+  const borderWidth = isCurrent ? 3 : selected ? 2 : 1;
+  const boxShadow = isCurrent
+    ? '0 0 0 6px rgba(201,168,76,0.18), 0 4px 14px rgba(201,168,76,0.25)'
+    : selected
+      ? '0 0 0 3px rgba(201,168,76,0.18)'
+      : undefined;
 
   return (
     <div
-      className="rounded-lg border bg-white shadow-sm transition-all"
+      className={`rounded-lg border bg-white shadow-sm transition-all ${
+        isCurrent ? 'ticket-current-stage' : ''
+      }`}
       style={{
         minWidth: 200,
         maxWidth: 260,
-        borderColor: selected ? '#C9A84C' : data.is_initial_stage ? '#22C55E' : '#E8ECF2',
-        borderWidth: selected ? 2 : 1,
-        boxShadow: selected ? '0 0 0 3px rgba(201,168,76,0.18)' : undefined,
+        borderColor,
+        borderWidth,
+        boxShadow,
       }}
     >
-      <Handle type="target" position={Position.Top} style={HANDLE_STYLE} />
+      <Handle type="target" position={targetPos} style={HANDLE_STYLE} />
       <div
         className="px-3 py-2 border-b text-xs font-medium tracking-wide uppercase"
         style={{
-          color: data.is_initial_stage ? '#16A34A' : '#475569',
+          color: isCurrent ? '#8A6C18' : data.is_initial_stage ? '#16A34A' : '#475569',
           borderColor: '#E8ECF2',
-          background: data.is_initial_stage ? '#F0FDF4' : '#FAFAFC',
+          background: isCurrent
+            ? '#FFFBEB'
+            : data.is_initial_stage
+              ? '#F0FDF4'
+              : '#FAFAFC',
         }}
       >
         <div className="flex items-center gap-1.5">
-          {data.is_initial_stage && <CircleDot size={12} />}
-          <span>{data.is_initial_stage ? 'Initial Stage' : 'Stage'}</span>
+          {isCurrent ? (
+            <PlayCircle size={12} />
+          ) : data.is_initial_stage ? (
+            <CircleDot size={12} />
+          ) : null}
+          <span>
+            {isCurrent ? 'Current Stage' : data.is_initial_stage ? 'Initial Stage' : 'Stage'}
+          </span>
           {data.email_notification && <Mail size={12} className="ml-auto" />}
         </div>
       </div>
@@ -64,7 +95,7 @@ export default function StageNode({ data, selected }: NodeProps<StageNodeData>) 
           </div>
         )}
       </div>
-      <Handle type="source" position={Position.Bottom} style={HANDLE_STYLE} />
+      <Handle type="source" position={sourcePos} style={HANDLE_STYLE} />
     </div>
   );
 }

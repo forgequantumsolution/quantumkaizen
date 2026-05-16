@@ -14,6 +14,7 @@ import type {
 const baseInclude = {
   form: { select: { id: true, title: true, version: true, versionId: true } },
   submittedBy: { select: { id: true, name: true, email: true } },
+  stage: { select: { id: true, name: true, canonicalId: true } },
 } satisfies Prisma.FormSubmissionInclude;
 
 export const submit = async (
@@ -84,6 +85,7 @@ export const list = async (q: ListSubmissionsQuery) => {
   if (q.form_id) where.formId = q.form_id;
   if (q.status) where.status = q.status;
   if (q.submitted_by) where.submittedById = q.submitted_by;
+  if (q.ticket_id) where.ticketId = q.ticket_id;
 
   const [items, total] = await Promise.all([
     prisma.formSubmission.findMany({

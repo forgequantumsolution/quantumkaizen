@@ -9,13 +9,22 @@
  * Returns `null` when no bindings exist — keeps the ticket detail layout
  * clean on workflows that don't use forms.
  */
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, Check, Clock, Circle } from 'lucide-react';
+import {
+  ClipboardList,
+  Check,
+  Clock,
+  Circle,
+  ChevronDown,
+  ChevronUp,
+} from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import {
   useTicketStageForms,
   type TicketStageFormBinding,
 } from '@/lib/api/stageForm';
+import InlineSubmissionViewer from './InlineSubmissionViewer';
 
 interface Props {
   ticketId: string;
@@ -47,6 +56,7 @@ const statusPill = (binding: TicketStageFormBinding) => {
 export default function RequiredFormsCard({ ticketId }: Props) {
   const navigate = useNavigate();
   const { data, isLoading } = useTicketStageForms(ticketId);
+  const [openId, setOpenId] = useState<string | null>(null);
   if (isLoading || !data) return null;
   if (data.bindings.length === 0) return null;
 
@@ -68,48 +78,75 @@ export default function RequiredFormsCard({ ticketId }: Props) {
             : b.latestSubmission?.status === 'IN_PROGRESS'
               ? 'Resume'
               : 'Fill';
+          const isOpen = openId === b.id;
+
           return (
             <div
               key={b.id}
-              className="flex items-center gap-2 p-2 rounded border border-gray-100"
+              className="rounded border border-gray-100 overflow-hidden"
             >
-              <div className="flex-1 min-w-0">
-                <div className="text-sm text-gray-900 truncate">
-                  {b.form.title}
-                  {b.isRequired && (
-                    <span className="ml-1.5 text-[10px] px-1 rounded bg-amber-50 text-amber-700">
-                      required
-                    </span>
+              <div className="flex items-center gap-2 p-2">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-900 truncate">
+                    {b.form.title}
+                    {b.isRequired && (
+                      <span className="ml-1.5 text-[10px] px-1 rounded bg-amber-50 text-amber-700">
+                        required
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-gray-500">
+                    {b.latestSubmission?.submittedAt
+                      ? `Submitted ${new Date(b.latestSubmission.submittedAt).toLocaleString()}`
+                      : 'No submission yet'}
+                  </div>
+                </div>
+                <span
+                  className={`inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded ${pill.cls}`}
+                >
+                  <PillIcon size={10} />
+                  {pill.label}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (isSubmitted && b.latestSubmission?.id) {
+                      // Toggle inline read-only view instead of navigating away
+                      setOpenId(isOpen ? null : b.id);
+                      return;
+                    }
+                    const params = new URLSearchParams({
+                      ticketId,
+                      bindingId: b.id,
+                    });
+                    if (b.latestSubmission?.id) {
+                      params.set('submissionId', b.latestSubmission.id);
+                    }
+                    navigate(`/forms/${b.formId}/fill?${params.toString()}`);
+                  }}
+                >
+                  {isSubmitted && isOpen ? (
+                    <>
+                      <ChevronUp size={12} />
+                      <span className="ml-1">Hide</span>
+                    </>
+                  ) : isSubmitted ? (
+                    <>
+                      <ChevronDown size={12} />
+                      <span className="ml-1">{cta}</span>
+                    </>
+                  ) : (
+                    cta
                   )}
-                </div>
-                <div className="text-[11px] text-gray-500">
-                  {b.latestSubmission?.submittedAt
-                    ? `Submitted ${new Date(b.latestSubmission.submittedAt).toLocaleString()}`
-                    : 'No submission yet'}
-                </div>
+                </Button>
               </div>
-              <span
-                className={`inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded ${pill.cls}`}
-              >
-                <PillIcon size={10} />
-                {pill.label}
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const params = new URLSearchParams({
-                    ticketId,
-                    bindingId: b.id,
-                  });
-                  if (b.latestSubmission?.id) {
-                    params.set('submissionId', b.latestSubmission.id);
-                  }
-                  navigate(`/forms/${b.formId}/fill?${params.toString()}`);
-                }}
-              >
-                {cta}
-              </Button>
+              {isOpen && isSubmitted && b.latestSubmission?.id && (
+                <InlineSubmissionViewer
+                  formId={b.formId}
+                  submissionId={b.latestSubmission.id}
+                />
+              )}
             </div>
           );
         })}

@@ -184,7 +184,25 @@ export function useCreateFormType() {
 }
 
 // ─── Submissions ────────────────────────────────────
-export function useSubmissions(params?: { form_id?: string; status?: string }) {
+export function useSubmission(id: string | undefined) {
+  return useQuery({
+    queryKey: ['form-submission', id],
+    queryFn: async () => {
+      const r = await api.get(`/form-submissions/${id}`);
+      return (r.data?.data ?? r.data) as SubmissionListItem & {
+        responses: Record<string, Record<string, unknown>>;
+      };
+    },
+    enabled: !!id,
+  });
+}
+
+export function useSubmissions(params?: {
+  form_id?: string;
+  status?: string;
+  ticket_id?: string;
+  page_size?: number;
+}) {
   return useQuery({
     queryKey: ['form-submissions', params],
     queryFn: async () => {
@@ -194,6 +212,7 @@ export function useSubmissions(params?: { form_id?: string; status?: string }) {
         total: number;
       };
     },
+    enabled: params?.ticket_id !== '' && params?.form_id !== '',
   });
 }
 
