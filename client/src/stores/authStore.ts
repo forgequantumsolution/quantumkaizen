@@ -101,24 +101,28 @@ export const useAuthStore = create<AuthState>()(
 
       login: async (email, password, tenantCode) => {
         set({ isLoading: true });
+
+        // Frontend-only auth: every demo account (pharma + medical device +
+        // dairy + brand) is resolved locally against DEMO_ACCOUNTS. The
+        // industry field on the user template drives which mock dataset
+        // each QMS module pulls — see lib/userIndustry.ts.
+        const offline = tryOfflineLogin(email, password);
+        if (offline) {
+          localStorage.setItem('qk_token', offline.token);
+          localStorage.setItem('qk_user', JSON.stringify(offline.user));
+          set({ user: offline.user, token: offline.token, isAuthenticated: true, isLoading: false });
+          return;
+        }
+
+        // Not a known demo account — fall back to the live backend (if it's
+        // wired up) so real users can still sign in against the API.
         try {
           const response = await api.post('/auth/login', { email, password, tenantCode });
-          // Backend wraps successful responses in { data: {...} }; axios unwraps
-          // the HTTP body into response.data, so the payload is response.data.data.
           const { user, accessToken } = response.data.data;
-
           localStorage.setItem('qk_token', accessToken);
           localStorage.setItem('qk_user', JSON.stringify(user));
           set({ user, token: accessToken, isAuthenticated: true, isLoading: false });
         } catch (error) {
-          // Backend unavailable or returned an error — try the offline demo path.
-          const offline = tryOfflineLogin(email, password);
-          if (offline) {
-            localStorage.setItem('qk_token', offline.token);
-            localStorage.setItem('qk_user', JSON.stringify(offline.user));
-            set({ user: offline.user, token: offline.token, isAuthenticated: true, isLoading: false });
-            return;
-          }
           set({ isLoading: false });
           throw error;
         }
