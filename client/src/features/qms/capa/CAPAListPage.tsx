@@ -22,7 +22,8 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import { cn, formatDate, daysSince } from '@/lib/utils';
-import { useCAPAs, mockCAPAs } from './hooks';
+import { useCAPAs, mockCAPAs, mockMedicalDeviceCAPAs, mockDairyCAPAs } from './hooks';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { CAPARecord } from './hooks';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -73,7 +74,9 @@ export default function CAPAListPage() {
   const { data: result, isLoading } = useCAPAs(filters);
   const capas = (result?.data ?? []).filter((c) => new Date(c.createdAt).getFullYear() === year);
 
-  const yearCAPAs = useMemo(() => mockCAPAs.filter((c) => new Date(c.createdAt).getFullYear() === year), [year]);
+  const industry = useUserIndustry();
+  const summarySource = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs });
+  const yearCAPAs = useMemo(() => summarySource.filter((c) => new Date(c.createdAt).getFullYear() === year), [summarySource, year]);
 
   const openCount = yearCAPAs.filter((c) =>
     ['INITIATED', 'CONTAINMENT', 'ROOT_CAUSE_ANALYSIS', 'ACTION_DEFINITION'].includes(c.status),

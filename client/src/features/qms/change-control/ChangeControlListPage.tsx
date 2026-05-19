@@ -17,7 +17,8 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
-import { useChangeRequests, mockChangeRequests } from './hooks';
+import { useChangeRequests, mockChangeRequests, mockMedicalDeviceChangeRequests, mockDairyChangeRequests } from './hooks';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { ChangeRequest } from './hooks';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -70,7 +71,9 @@ export default function ChangeControlListPage() {
   const { data: result, isLoading } = useChangeRequests(filters);
   const changeRequests = (result?.data ?? [] as ChangeRequest[]).filter((cr: ChangeRequest) => new Date((cr as any).createdAt).getFullYear() === year);
 
-  const yearCRs = useMemo(() => mockChangeRequests.filter((cr) => new Date(cr.createdAt).getFullYear() === year), [year]);
+  const industry = useUserIndustry();
+  const summarySource = pickByIndustry(industry, mockChangeRequests, { medical_device: mockMedicalDeviceChangeRequests, dairy: mockDairyChangeRequests });
+  const yearCRs = useMemo(() => summarySource.filter((cr) => new Date(cr.createdAt).getFullYear() === year), [summarySource, year]);
 
   // Summary counts
   const openCount = yearCRs.filter((cr) =>

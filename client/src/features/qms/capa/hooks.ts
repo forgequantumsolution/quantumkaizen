@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import type { PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -594,6 +595,379 @@ export const mockCAPAs: CAPARecord[] = [
   })(),
 ];
 
+// Medical-device CAPA records — ISO 13485 / 21 CFR 820 themed. Records
+// cross-reference NCs, complaints, change requests, audits and compliance
+// gap actions so the entire medical-device demo tells one coherent story.
+export const mockMedicalDeviceCAPAs: CAPARecord[] = [
+  {
+    id: 'md-capa1', capaNumber: 'CAPA-MD-2026-0019',
+    title: 'CAPA — EO sterilization residuals exceeding ISO 10993-7 on infusion sets',
+    description: 'Aeration cycle on EO sterilizer EOS-02 found running short of validated time after PLC battery replacement reset cycle parameters. CAPA covers parameter recovery validation, IEC 62366 alarm strengthening and operator re-training across the sterilization team.',
+    source: 'NC', severity: 'CRITICAL', status: 'IMPLEMENTATION',
+    department: 'Sterilization', productProcess: 'EO Sterilization · Aeration',
+    linkedSourceRecord: 'NC-MD-2026-0042', owner: 'Karthik Iyer', ownerId: 'u-md2', dueDate: '2026-05-10',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why did EO residuals exceed ISO 10993-7?',                              answer: 'Aeration cycle ran for 8 hours instead of the validated 12 hours.' },
+      { whyNumber: 2, question: 'Why was the aeration cycle shorter?',                                   answer: 'Validated recipe was not reloaded after PLC battery replacement reset stored parameters.' },
+      { whyNumber: 3, question: 'Why was the recipe not reloaded after maintenance?',                    answer: 'Post-maintenance qualification step in WI-MD-EOS-04 was not enforced; alarm did not block start.' },
+      { whyNumber: 4, question: 'Why did the start-up alarm not block the cycle?',                       answer: 'Alarm was downgraded to advisory in firmware v2.1 to reduce false alerts.' },
+      { whyNumber: 5, question: 'Why was a safety-critical alarm downgraded without risk re-assessment?', answer: 'Change-control review missed the ISO 14971 risk control linkage; impact assessment skipped.' },
+    ],
+    fishbone: {
+      man: [{ id: 'mf1', text: 'Operator did not verify recipe after maintenance' }],
+      machine: [{ id: 'mf2', text: 'PLC battery replacement reset stored cycle parameters' }, { id: 'mf3', text: 'Critical alarm downgraded to advisory' }],
+      material: [],
+      method: [{ id: 'mf4', text: 'Post-maintenance qualification step in WI-MD-EOS-04 not enforced' }, { id: 'mf5', text: 'Change-control risk linkage to ISO 14971 missed' }],
+      measurement: [{ id: 'mf6', text: 'EO residual results not trended in real time' }],
+      environment: [],
+    },
+    actions: [
+      { id: 'md-a1', description: 'Reload validated aeration recipe and reset sterilizer EOS-02 alarms to blocking',                                  type: 'CORRECTIVE', owner: 'Rohit Khanna',     dueDate: '2026-04-05', status: 'COMPLETED', completedDate: '2026-04-04' },
+      { id: 'md-a2', description: 'Reprocess lot ISET-26-0118 through full 12-hour aeration cycle and re-test EO/ECH residuals',                     type: 'CORRECTIVE', owner: 'Karthik Iyer',     dueDate: '2026-04-12', status: 'IN_PROGRESS' },
+      { id: 'md-a3', description: 'Update SOP-MD-EOS-01 — mandatory post-maintenance recipe verification with two-person sign-off',                    type: 'PREVENTIVE', owner: 'Dr. Anjali Verma', dueDate: '2026-04-25', status: 'IN_PROGRESS' },
+      { id: 'md-a4', description: 'Re-perform ISO 14971 risk analysis for sterilizer alarm matrix; document linkage to risk controls',                  type: 'PREVENTIVE', owner: 'Sneha Kapoor',     dueDate: '2026-05-02', status: 'PENDING' },
+      { id: 'md-a5', description: 'Training for all sterilization operators on revised SOP-MD-EOS-01 with competency assessment',                       type: 'PREVENTIVE', owner: 'Neha Bansal',      dueDate: '2026-05-08', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero EO/ECH residual OOS over 90-day monitoring period. 100% post-maintenance recipe verifications signed off. All sterilization operators competency-assessed on revised SOP.',
+    monitoringPeriodDays: 90, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'md-h1', timestamp: '2026-03-30T10:00:00Z', user: 'Karthik Iyer',     action: 'CAPA Initiated',          details: 'Triggered from NC-MD-2026-0042' },
+      { id: 'md-h2', timestamp: '2026-04-04T15:30:00Z', user: 'Rohit Khanna',     action: 'Containment Closed',      details: 'Aeration recipe reloaded and alarm matrix restored' },
+    ],
+    createdAt: '2026-03-30T10:00:00Z', updatedAt: '2026-04-04T15:30:00Z', closedAt: null, createdBy: 'Karthik Iyer',
+  },
+  {
+    id: 'md-capa2', capaNumber: 'CAPA-MD-2026-0018',
+    title: 'CAPA — Sterility failure on surgical drape lot SDR-26-0094 (cleanroom HEPA breach)',
+    description: 'Sterility excursion linked to compromised HEPA filter on AHU-MD-03 serving Class 7 cleanroom. CAPA covers HEPA replacement, integrity testing, and a quarterly leak-test schedule.',
+    source: 'NC', severity: 'CRITICAL', status: 'ROOT_CAUSE_ANALYSIS',
+    department: 'Cleanroom Assembly', productProcess: 'Class 7 Cleanroom HVAC',
+    linkedSourceRecord: 'NC-MD-2026-0041', owner: 'Dr. Anjali Verma', ownerId: 'u-md1', dueDate: '2026-05-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why was sterility failure observed?',                          answer: 'Bacillus circulans isolated, consistent with airborne ingress.' },
+      { whyNumber: 2, question: 'Why was airborne ingress possible?',                            answer: 'HEPA filter on AHU-MD-03 found with integrity breach on PAO scan.' },
+      { whyNumber: 3, question: 'Why was the HEPA breach not detected earlier?',                 answer: 'Filter integrity test schedule was annual; last test was 11 months prior.' },
+      { whyNumber: 4, question: 'Why was the integrity test schedule only annual?',              answer: 'SOP-MD-HVAC-02 inherited from a non-sterile process; never updated for sterile use.' },
+    ],
+    fishbone: {
+      man: [],
+      machine: [{ id: 'mf7', text: 'HEPA filter failed PAO integrity test (0.04% leak)' }, { id: 'mf8', text: 'AHU-MD-03 differential pressure dropped 18% over 6 months' }],
+      material: [{ id: 'mf9', text: 'HEPA filter batch from supplier showed earlier-than-expected service-life decline' }],
+      method: [{ id: 'mf10', text: 'SOP-MD-HVAC-02 integrity test schedule only annual; inappropriate for sterile process' }],
+      measurement: [{ id: 'mf11', text: 'AHU pressure trend not reviewed against alert/action limits' }],
+      environment: [{ id: 'mf12', text: 'Monsoon humidity load accelerated filter loading' }],
+    },
+    actions: [
+      { id: 'md-a6', description: 'Replace and PAO-certify all HEPA filters on AHU-MD-03 servicing Class 7 cleanroom', type: 'CORRECTIVE', owner: 'Rohit Khanna',     dueDate: '2026-04-12', status: 'COMPLETED', completedDate: '2026-04-11' },
+      { id: 'md-a7', description: 'Implement quarterly HEPA integrity test schedule for all sterile-process AHUs',     type: 'PREVENTIVE', owner: 'Dr. Anjali Verma', dueDate: '2026-04-25', status: 'IN_PROGRESS' },
+      { id: 'md-a8', description: 'Revise SOP-MD-HVAC-02 with risk-based integrity test frequency tied to room classification', type: 'PREVENTIVE', owner: 'Neha Bansal',      dueDate: '2026-05-05', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero sterility excursions over 180-day monitoring period. 100% HEPAs PAO-certified per quarterly schedule. AHU pressure trends reviewed weekly.',
+    monitoringPeriodDays: 180, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'md-h3', timestamp: '2026-03-28T11:00:00Z', user: 'Dr. Anjali Verma', action: 'CAPA Initiated', details: 'Triggered from NC-MD-2026-0041' },
+    ],
+    createdAt: '2026-03-28T11:00:00Z', updatedAt: '2026-04-11T17:00:00Z', closedAt: null, createdBy: 'Dr. Anjali Verma',
+  },
+  {
+    id: 'md-capa3', capaNumber: 'CAPA-MD-2025-0058',
+    title: 'CAPA — Heart-valve sterile barrier leak (sealing temperature drift on tray sealer TS-04)',
+    description: 'Heat-seal temperature on tray sealer TS-04 drifted 6 °C low due to worn heater element. CAPA covers element replacement, PM frequency increase, and inclusion of seal-strength SPC into release process.',
+    source: 'NC', severity: 'CRITICAL', status: 'CLOSED',
+    department: 'Sterile Barrier Packaging', productProcess: 'Heat Seal · ASTM F2096',
+    linkedSourceRecord: 'NC-MD-2025-0098', owner: 'Neha Bansal', ownerId: 'u-md3', dueDate: '2025-12-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why did pouches fail bubble-emission test?',         answer: 'Seal strength was below specification.' },
+      { whyNumber: 2, question: 'Why was the seal strength low?',                     answer: 'Heat-seal temperature drifted ~6 °C below setpoint.' },
+      { whyNumber: 3, question: 'Why was the temperature drift not detected?',        answer: 'No real-time SPC monitoring on TS-04 — operator only checked at shift start.' },
+    ],
+    fishbone: {
+      man: [], machine: [{ id: 'mf13', text: 'Heater element worn — resistance increased 14%' }], material: [], method: [{ id: 'mf14', text: 'No SPC on seal temperature' }], measurement: [], environment: [],
+    },
+    actions: [
+      { id: 'md-a9',  description: 'Replace heater element on TS-04 and revalidate seal parameters',                  type: 'CORRECTIVE', owner: 'Rohit Khanna', dueDate: '2025-09-25', status: 'COMPLETED', completedDate: '2025-09-24' },
+      { id: 'md-a10', description: 'Increase preventive maintenance frequency on TS-04 heater element to 6-monthly', type: 'PREVENTIVE', owner: 'Neha Bansal',  dueDate: '2025-10-10', status: 'COMPLETED', completedDate: '2025-10-08' },
+      { id: 'md-a11', description: 'Add seal-temperature SPC monitoring to tray sealer SCADA — alert at ±3 °C',       type: 'PREVENTIVE', owner: 'Aditya Menon', dueDate: '2025-11-20', status: 'COMPLETED', completedDate: '2025-11-19' },
+    ],
+    effectivenessCriteria: 'Zero seal-strength failures over 90-day monitoring period. SPC alerts logged and reviewed daily.',
+    monitoringPeriodDays: 90, effectivenessResult: 'PASS', effectivenessEvidence: 'No seal-strength failures Sep 2025 – Dec 2025. SPC dashboards reviewed daily by shift QA.',
+    history: [],
+    createdAt: '2025-09-15T09:00:00Z', updatedAt: '2025-12-15T14:00:00Z', closedAt: '2025-12-15T14:00:00Z', createdBy: 'Neha Bansal',
+  },
+  {
+    id: 'md-capa4', capaNumber: 'CAPA-MD-2026-0011',
+    title: 'CAPA — IOL injection-moulding cavity 03 silicone-particle defect',
+    description: 'Worn injection-moulding cavity 03 produced silicone fragments inside intraocular-lens packaging (NC-MD-2026-0038 / CMP-MD-2025-0048). CAPA covers tooling replacement, revalidation, AOI deployment (CR-MD-2025-0033) and a tighter cavity rotation schedule.',
+    source: 'NC', severity: 'CRITICAL', status: 'CLOSED',
+    department: 'Cleanroom Assembly', productProcess: 'Injection Moulding · Visual Inspection',
+    linkedSourceRecord: 'NC-MD-2026-0038', owner: 'Dr. Anjali Verma', ownerId: 'u-md1', dueDate: '2026-04-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why were silicone particles found inside IOL packaging?',  answer: 'Cavity 03 produced fragments during injection moulding.' },
+      { whyNumber: 2, question: 'Why did cavity 03 produce fragments?',                      answer: 'Tooling wear on the runner gate created stress risers and micro-shearing.' },
+      { whyNumber: 3, question: 'Why was the wear not detected earlier?',                    answer: 'PM rotation schedule was based on cycle count of the press, not per-cavity hours.' },
+    ],
+    fishbone: {
+      man: [], machine: [{ id: 'mf-c4a', text: 'Cavity 03 runner-gate wear' }],
+      material: [], method: [{ id: 'mf-c4b', text: 'PM rotation tracked at press level, not per-cavity' }],
+      measurement: [{ id: 'mf-c4c', text: 'Manual visual inspection missed sub-50 µm particles' }],
+      environment: [],
+    },
+    actions: [
+      { id: 'md-a12', description: 'Replace cavity 03 tooling and revalidate (3-lot OQ)',                       type: 'CORRECTIVE', owner: 'Rohit Khanna',     dueDate: '2026-03-20', status: 'COMPLETED', completedDate: '2026-03-20' },
+      { id: 'md-a13', description: 'Deploy automated optical inspection (AOI) for IOL trays per CR-MD-2025-0033', type: 'PREVENTIVE', owner: 'Dr. Anjali Verma', dueDate: '2025-10-30', status: 'COMPLETED', completedDate: '2025-10-25' },
+      { id: 'md-a14', description: 'Track PM rotation per-cavity hours instead of per-press cycles',             type: 'PREVENTIVE', owner: 'Rohit Khanna',     dueDate: '2026-02-15', status: 'COMPLETED', completedDate: '2026-02-14' },
+    ],
+    effectivenessCriteria: 'Zero particulate-related IOL NCs over 180-day monitoring period. AOI rejection rate trending stable.',
+    monitoringPeriodDays: 180,
+    effectivenessResult: 'PASS',
+    effectivenessEvidence: 'No particulate-related IOL NCs Nov 2025 – Apr 2026. AOI rejection rate stable at 0.8%.',
+    history: [
+      { id: 'md-hc4a', timestamp: '2025-11-10T09:00:00Z', user: 'Dr. Anjali Verma', action: 'CAPA Initiated',           details: 'Triggered from CMP-MD-2025-0048 and NC-MD-2026-0038 trend' },
+      { id: 'md-hc4b', timestamp: '2026-04-15T14:00:00Z', user: 'Dr. Anjali Verma', action: 'Effectiveness Verified',   details: 'PASS — 180-day monitoring complete; CAPA closed' },
+    ],
+    createdAt: '2025-11-10T09:00:00Z', updatedAt: '2026-04-15T14:00:00Z', closedAt: '2026-04-15T14:00:00Z', createdBy: 'Dr. Anjali Verma',
+  },
+  {
+    id: 'md-capa5', capaNumber: 'CAPA-MD-2026-0014',
+    title: 'CAPA — Smart infusion pump firmware over-delivery (rounding error)',
+    description: 'Verification of firmware v3.4 (IEC 62304 Class B) detected over-delivery >4% above setpoint at 1 mL/hr (NC-MD-2025-0117). CAPA delivers fixed-point dosage refactor (CR-MD-2026-0014), full V&V re-run and Letter-to-File to USFDA.',
+    source: 'NC', severity: 'MAJOR', status: 'IMPLEMENTATION',
+    department: 'Design Controls', productProcess: 'Firmware V&V (IEC 62304)',
+    linkedSourceRecord: 'NC-MD-2025-0117', owner: 'Aditya Menon', ownerId: 'u-md6', dueDate: '2026-05-30',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why was delivery over setpoint?',                       answer: 'Floating-point rounding bias accumulated in the dosage calculation module.' },
+      { whyNumber: 2, question: 'Why did the rounding bias exist?',                      answer: 'Implementation used IEEE-754 doubles without bounded fixed-point conversion at output.' },
+      { whyNumber: 3, question: 'Why was this not caught in V&V?',                       answer: 'Unit tests did not include rate-boundary cases at the lowest flow setting.' },
+      { whyNumber: 4, question: 'Why were boundary cases missing?',                      answer: 'IEC 62304 §5.5 code-review checklist treated rounding-tolerance tests as optional.' },
+    ],
+    fishbone: {
+      man: [], machine: [],
+      material: [], method: [{ id: 'mf-c5a', text: 'Floating-point math in safety-critical dosage path' }, { id: 'mf-c5b', text: 'V&V test plan missing rate-boundary cases' }],
+      measurement: [], environment: [],
+    },
+    actions: [
+      { id: 'md-a15', description: 'Refactor dosage calculation to fixed-point math (CR-MD-2026-0014)',                                                       type: 'CORRECTIVE', owner: 'Aditya Menon',  dueDate: '2026-04-25', status: 'COMPLETED', completedDate: '2026-04-22' },
+      { id: 'md-a16', description: 'Re-run full IEC 62304 V&V suite including new rate-boundary tests',                                                       type: 'CORRECTIVE', owner: 'Aditya Menon',  dueDate: '2026-05-10', status: 'IN_PROGRESS' },
+      { id: 'md-a17', description: 'Update IEC 62304 §5.5 code-review checklist to make rounding-tolerance tests mandatory for any numeric safety-critical code', type: 'PREVENTIVE', owner: 'Aditya Menon', dueDate: '2026-05-15', status: 'IN_PROGRESS' },
+      { id: 'md-a18', description: 'Submit Letter-to-File to USFDA for firmware v3.5',                                                                         type: 'CORRECTIVE', owner: 'Sneha Kapoor',  dueDate: '2026-05-25', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero firmware-related dosage-accuracy deviations across 12-month post-deployment field surveillance.',
+    monitoringPeriodDays: 365, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'md-hc5a', timestamp: '2025-10-28T11:00:00Z', user: 'Aditya Menon', action: 'CAPA Initiated',     details: 'Triggered from NC-MD-2025-0117 V&V failure' },
+      { id: 'md-hc5b', timestamp: '2026-04-22T16:30:00Z', user: 'Aditya Menon', action: 'Corrective Closed',  details: 'Fixed-point refactor merged; V&V suite running' },
+    ],
+    createdAt: '2025-10-28T11:00:00Z', updatedAt: '2026-04-22T16:30:00Z', closedAt: null, createdBy: 'Aditya Menon',
+  },
+  {
+    id: 'md-capa6', capaNumber: 'CAPA-MD-2026-0017',
+    title: 'CAPA — UDI labelling system upgrade (vascular catheter scan failures)',
+    description: 'NC-MD-2026-0040 identified 312 cartons of vascular catheters with unreadable UDI barcodes. CAPA covers printer/substrate upgrade (CR-MD-2026-0011), end-of-line scan revalidation and an SLA-based UDI dashboard.',
+    source: 'NC', severity: 'MAJOR', status: 'IMPLEMENTATION',
+    department: 'Packaging', productProcess: 'UDI Labelling · 21 CFR 830 / EU MDR Art. 27',
+    linkedSourceRecord: 'NC-MD-2026-0040', owner: 'Rohit Khanna', ownerId: 'u-md4', dueDate: '2026-05-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why did UDI codes fail end-of-line scans?',         answer: 'GS1-128 grade dropped below C on the affected cartons.' },
+      { whyNumber: 2, question: 'Why did the print grade drop?',                     answer: 'Printer ribbon was past service life and label substrate not optimised for cleanroom conditions.' },
+      { whyNumber: 3, question: 'Why was the substrate not optimised?',              answer: 'Material was carried over from a legacy non-sterile line during 2024 line consolidation.' },
+    ],
+    fishbone: {
+      man: [], machine: [{ id: 'mf-c6a', text: 'Printer ribbon end-of-life not flagged' }, { id: 'mf-c6b', text: 'Inappropriate label substrate' }],
+      material: [], method: [{ id: 'mf-c6c', text: 'PM schedule did not include ribbon wear inspection' }],
+      measurement: [{ id: 'mf-c6d', text: 'No ISO/IEC 15415 grading on end-of-line scanner' }],
+      environment: [],
+    },
+    actions: [
+      { id: 'md-a19', description: '100% relabel of affected cartons (lot VCT-26-0071)',                                  type: 'CORRECTIVE', owner: 'Karthik Iyer',  dueDate: '2026-04-02', status: 'IN_PROGRESS' },
+      { id: 'md-a20', description: 'Install Zebra ZE521 printers with cleanroom-grade substrate (CR-MD-2026-0011)',       type: 'CORRECTIVE', owner: 'Rohit Khanna',  dueDate: '2026-04-15', status: 'COMPLETED', completedDate: '2026-04-15' },
+      { id: 'md-a21', description: 'Add ISO/IEC 15415 grading to end-of-line scanner with auto-reject',                   type: 'PREVENTIVE', owner: 'Aditya Menon',  dueDate: '2026-04-30', status: 'IN_PROGRESS' },
+      { id: 'md-a22', description: 'Update PM checklist to mandate ribbon wear inspection at every changeover',           type: 'PREVENTIVE', owner: 'Rohit Khanna',  dueDate: '2026-05-10', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero UDI scan failures over 90-day monitoring period. 100% of cartons pass ISO/IEC 15415 grade C or better.',
+    monitoringPeriodDays: 90, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'md-hc6a', timestamp: '2026-03-22T10:00:00Z', user: 'Rohit Khanna', action: 'CAPA Initiated',         details: 'Triggered from NC-MD-2026-0040' },
+      { id: 'md-hc6b', timestamp: '2026-04-15T18:00:00Z', user: 'Rohit Khanna', action: 'Printer Replacement OK', details: 'Zebra ZE521 install verified' },
+    ],
+    createdAt: '2026-03-22T10:00:00Z', updatedAt: '2026-04-15T18:00:00Z', closedAt: null, createdBy: 'Rohit Khanna',
+  },
+  // ── Disposables product family ──────────────────────────────────────────
+  {
+    id: 'md-capa7', capaNumber: 'CAPA-MD-2026-0020',
+    title: 'CAPA — Hypodermic needle pin-bend rate exceeding 0.3% on NAM-04',
+    description: 'NC-MD-2026-0036 traced excess pin-bend rate on 23G × 1" needles to a worn cam follower on Needle Assembly Machine NAM-04. CAPA covers cam-follower replacement, OQ revalidation, automated pin-bend AOI deployment and a per-component PM-hours tracking.',
+    source: 'NC', severity: 'MAJOR', status: 'ACTION_DEFINITION',
+    department: 'Needle Manufacturing', productProcess: 'Needle Hub Assembly · ASTM F1816',
+    linkedSourceRecord: 'NC-MD-2026-0036', owner: 'Rohit Khanna', ownerId: 'u-md4', dueDate: '2026-05-25',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why did pin-bend rate exceed 0.3%?',                       answer: 'Cam follower on NAM-04 carriage was worn beyond service spec.' },
+      { whyNumber: 2, question: 'Why was the cam follower not replaced earlier?',            answer: 'PM schedule tracked total machine hours, not per-station load.' },
+      { whyNumber: 3, question: 'Why was the wear not detected on a quality check?',         answer: 'Pin-bend AOI only ran statistical sampling; the cam wear caused drift below detection threshold.' },
+    ],
+    fishbone: {
+      man: [], machine: [{ id: 'mf-c7a', text: 'Worn cam follower on NAM-04 carriage' }],
+      material: [], method: [{ id: 'mf-c7b', text: 'PM tracked machine hours, not station load' }, { id: 'mf-c7c', text: 'AOI used statistical sampling, not 100% inspection' }],
+      measurement: [], environment: [],
+    },
+    actions: [
+      { id: 'md-a23', description: 'Replace cam follower on NAM-04; run 3 OQ lots verifying Cpk ≥ 1.67 on pin-bend rate', type: 'CORRECTIVE', owner: 'Rohit Khanna', dueDate: '2026-04-20', status: 'IN_PROGRESS' },
+      { id: 'md-a24', description: 'Deploy 100% in-line pin-bend AOI vision system on all NAM lines',                     type: 'PREVENTIVE', owner: 'Aditya Menon', dueDate: '2026-05-30', status: 'PENDING' },
+      { id: 'md-a25', description: 'Update PM schedule to track per-station hours with quarterly cam-follower replacement', type: 'PREVENTIVE', owner: 'Rohit Khanna', dueDate: '2026-05-10', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero NC for pin-bend rate >0.3% over 6 OQ lots and 90 days production. AOI false-reject rate <0.5%.',
+    monitoringPeriodDays: 90, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'md-hc7a', timestamp: '2026-04-02T11:00:00Z', user: 'Rohit Khanna', action: 'CAPA Initiated', details: 'Triggered from NC-MD-2026-0036' },
+    ],
+    createdAt: '2026-04-02T11:00:00Z', updatedAt: '2026-04-02T11:00:00Z', closedAt: null, createdBy: 'Rohit Khanna',
+  },
+  {
+    id: 'md-capa8', capaNumber: 'CAPA-MD-2026-0021',
+    title: 'CAPA — Disposable syringe particulate from over-lubrication on Line DSY-3',
+    description: 'NC-MD-2026-0037 identified silicone-oil agglomerates inside 5 mL disposable-syringe barrels from over-lubrication. CAPA closes nozzle-spray calibration, weighs every 5 000th unit and locks operator override of spray volume.',
+    source: 'NC', severity: 'MAJOR', status: 'IMPLEMENTATION',
+    department: 'Cleanroom Assembly', productProcess: 'Plunger Lubrication · USP <788>',
+    linkedSourceRecord: 'NC-MD-2026-0037', owner: 'Sneha Kapoor', ownerId: 'u-md5', dueDate: '2026-05-20',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why were silicone-oil particles found in barrels?',  answer: 'Spray nozzle delivered 1.8 mg/barrel vs. validated 0.5–1.0 mg.' },
+      { whyNumber: 2, question: 'Why was the dose 80% over?',                          answer: 'Nozzle drift since last PM; no in-line dose-weight verification.' },
+      { whyNumber: 3, question: 'Why was nozzle drift not caught?',                    answer: 'Recipe was operator-editable on the HMI; an operator widened spray window manually to compensate for an earlier under-spray complaint.' },
+    ],
+    fishbone: {
+      man: [{ id: 'mf-c8a', text: 'Operator widened spray window without change-control' }],
+      machine: [{ id: 'mf-c8b', text: 'Drifted nozzle spray pattern' }],
+      material: [], method: [{ id: 'mf-c8c', text: 'Recipe editable on HMI without lock' }, { id: 'mf-c8d', text: 'No in-line dose-weight verification' }],
+      measurement: [], environment: [],
+    },
+    actions: [
+      { id: 'md-a26', description: 'Recalibrate spray nozzle to validated 0.5–1.0 mg/barrel; verify on 3 runs',   type: 'CORRECTIVE', owner: 'Rohit Khanna',  dueDate: '2026-04-05', status: 'COMPLETED', completedDate: '2026-04-05' },
+      { id: 'md-a27', description: 'Lock HMI recipe; require QA password to widen spray window',                   type: 'PREVENTIVE', owner: 'Aditya Menon',  dueDate: '2026-04-25', status: 'IN_PROGRESS' },
+      { id: 'md-a28', description: 'Add load-cell dose-weight verification every 5 000th unit on Line DSY-3',     type: 'PREVENTIVE', owner: 'Rohit Khanna',  dueDate: '2026-05-15', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero particulate-related NCs on Line DSY-3 over 90-day monitoring period. Dose weight Cpk ≥ 1.67.',
+    monitoringPeriodDays: 90, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'md-hc8a', timestamp: '2026-04-05T16:00:00Z', user: 'Sneha Kapoor', action: 'CAPA Initiated', details: 'Triggered from NC-MD-2026-0037; nozzle already recalibrated under containment' },
+    ],
+    createdAt: '2026-04-05T16:00:00Z', updatedAt: '2026-04-05T16:00:00Z', closedAt: null, createdBy: 'Sneha Kapoor',
+  },
+];
+
+// Dairy tenant — FSSAI / ISO 22000 / HACCP themed CAPAs.
+export const mockDairyCAPAs: CAPARecord[] = [
+  {
+    id: 'dy-capa1', capaNumber: 'CAPA-DY-2026-0019',
+    title: 'CAPA — Aflatoxin M1 in raw milk above FSSAI limit (Tanker T-2026-0512)',
+    description: 'Aflatoxin M1 detection above 0.5 µg/kg traced to mycotoxin contamination in cattle feed at 4 source villages. CAPA covers supplier-farm feed audits, mandatory pre-monsoon AfM1 screening for all routes and a feed-quality awareness program for farmers.',
+    source: 'NC', severity: 'CRITICAL', status: 'IMPLEMENTATION',
+    department: 'Procurement', productProcess: 'Raw-milk Acceptance · Mycotoxin Control',
+    linkedSourceRecord: 'NC-DY-2026-0042', owner: 'Meera Pillai', ownerId: 'u-dy2', dueDate: '2026-06-30',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why was Aflatoxin M1 above the FSSAI limit?',                            answer: 'Cows at source villages ingested mycotoxin-contaminated feed.' },
+      { whyNumber: 2, question: 'Why was the feed contaminated?',                                        answer: 'High humidity in storage at village collection centres caused fungal growth on cottonseed cake.' },
+      { whyNumber: 3, question: 'Why was the contamination not detected at the farm?',                    answer: 'Routine AfM1 screening was annual; pre-monsoon spike was missed.' },
+      { whyNumber: 4, question: 'Why was AfM1 screening only annual?',                                    answer: 'SOP-DY-PROC-04 inherited from a non-monsoon facility and never updated for Indian seasonal mycotoxin spikes.' },
+    ],
+    fishbone: {
+      man: [{ id: 'dy-mf1', text: 'Farmer awareness of mycotoxin risk in monsoon cottonseed cake low' }],
+      machine: [], material: [{ id: 'dy-mf2', text: 'Cottonseed cake feed with high humidity supplied by feed merchant' }],
+      method: [{ id: 'dy-mf3', text: 'AfM1 screening frequency only annual' }, { id: 'dy-mf4', text: 'No pre-monsoon enhanced sampling' }],
+      measurement: [], environment: [{ id: 'dy-mf5', text: 'Monsoon humidity at collection centres accelerates fungal growth' }],
+    },
+    actions: [
+      { id: 'dy-a1', description: 'Reject tanker T-2026-0512 and audit feed at 4 source villages',                              type: 'CORRECTIVE', owner: 'Meera Pillai',  dueDate: '2026-05-25', status: 'COMPLETED', completedDate: '2026-05-24' },
+      { id: 'dy-a2', description: 'Implement pre-monsoon AfM1 screening (twice-weekly Apr–Sep) for all procurement routes',     type: 'PREVENTIVE', owner: 'Anita Kulkarni', dueDate: '2026-06-10', status: 'IN_PROGRESS' },
+      { id: 'dy-a3', description: 'Roll out feed-quality awareness program for 240 farmer-suppliers in the Pune cluster',       type: 'PREVENTIVE', owner: 'Meera Pillai',  dueDate: '2026-06-20', status: 'IN_PROGRESS' },
+      { id: 'dy-a4', description: 'Update SOP-DY-PROC-04 with risk-based AfM1 sampling tied to season + recent test history',   type: 'PREVENTIVE', owner: 'Sandeep Joshi', dueDate: '2026-06-25', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero AfM1 OOS over 6-month monsoon monitoring period (Jun–Nov 2026). 100% of pre-monsoon screening completed per revised schedule.',
+    monitoringPeriodDays: 180, effectivenessResult: null, effectivenessEvidence: null,
+    history: [{ id: 'dy-hc1', timestamp: '2026-05-16T15:00:00Z', user: 'Meera Pillai', action: 'CAPA Initiated', details: 'Triggered from NC-DY-2026-0042' }],
+    createdAt: '2026-05-16T15:00:00Z', updatedAt: '2026-05-16T15:00:00Z', closedAt: null, createdBy: 'Meera Pillai',
+  },
+  {
+    id: 'dy-capa2', capaNumber: 'CAPA-DY-2026-0018',
+    title: 'CAPA — Pasteurized toned-milk TPC above 30 000 cfu/ml (recontamination at FM-02)',
+    description: 'High TPC on PTM-26-0431 with negative phosphatase points to post-pasteurization recontamination at filling machine FM-02. CAPA covers CIP cycle revision, weekly ATP-swab verification at filler heads, and dedicated PM on FM-02 transfer pipe.',
+    source: 'NC', severity: 'CRITICAL', status: 'ROOT_CAUSE_ANALYSIS',
+    department: 'Microbiology Lab', productProcess: 'Pouch Filling · Post-Pasteurization',
+    linkedSourceRecord: 'NC-DY-2026-0041', owner: 'Anita Kulkarni', ownerId: 'u-dy3', dueDate: '2026-06-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why was the TPC above 30 000 cfu/ml?',                                       answer: 'Recontamination after pasteurization.' },
+      { whyNumber: 2, question: 'Why did recontamination occur?',                                              answer: 'Biofilm build-up at the FM-02 filler-head feed line.' },
+      { whyNumber: 3, question: 'Why did biofilm form?',                                                       answer: 'CIP cycle time on FM-02 was 12 min vs. the validated 18 min.' },
+      { whyNumber: 4, question: 'Why was CIP cycle short?',                                                    answer: 'Operator-edited recipe to keep up with peak shift throughput.' },
+      { whyNumber: 5, question: 'Why could the operator edit CIP recipe?',                                     answer: 'HMI did not lock the CIP parameters; no change-control on recipe.' },
+    ],
+    fishbone: {
+      man: [{ id: 'dy-mf6', text: 'Operator shortened CIP cycle for throughput' }],
+      machine: [{ id: 'dy-mf7', text: 'Biofilm at FM-02 filler-head feed line' }, { id: 'dy-mf8', text: 'HMI recipe editable without password' }],
+      material: [], method: [{ id: 'dy-mf9', text: 'No QA password lock on CIP recipe' }],
+      measurement: [{ id: 'dy-mf10', text: 'ATP-swab verification only post-CIP, not pre-shift' }],
+      environment: [],
+    },
+    actions: [
+      { id: 'dy-a5', description: 'Run extended CIP cycle (90 °C / 30 min) on FM-02; verify via ATP swab',                  type: 'CORRECTIVE', owner: 'Ravi Deshmukh',  dueDate: '2026-05-15', status: 'COMPLETED', completedDate: '2026-05-14' },
+      { id: 'dy-a6', description: 'Lock HMI CIP recipe — QA password required to edit; full audit trail enabled',           type: 'PREVENTIVE', owner: 'Sandeep Joshi',  dueDate: '2026-06-05', status: 'IN_PROGRESS' },
+      { id: 'dy-a7', description: 'Pre-shift ATP-swab verification at all 4 filler heads per SOP-DY-CIP-02',                 type: 'PREVENTIVE', owner: 'Anita Kulkarni', dueDate: '2026-06-10', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero post-pasteurization microbio OOS over 90-day monitoring period. 100% ATP-swab pre-shift compliance.',
+    monitoringPeriodDays: 90, effectivenessResult: null, effectivenessEvidence: null,
+    history: [{ id: 'dy-hc2', timestamp: '2026-05-14T16:00:00Z', user: 'Anita Kulkarni', action: 'CAPA Initiated', details: 'Triggered from NC-DY-2026-0041' }],
+    createdAt: '2026-05-14T16:00:00Z', updatedAt: '2026-05-14T16:00:00Z', closedAt: null, createdBy: 'Anita Kulkarni',
+  },
+  {
+    id: 'dy-capa3', capaNumber: 'CAPA-DY-2026-0017',
+    title: 'CAPA — Antibiotic residue (beta-lactam) at farm; supplier de-listing + farmer training',
+    description: 'Beta-lactam positive on tanker T-2026-0498 traced to a single farm where withdrawal period was not observed. CAPA suspends and re-qualifies the farm, deploys mandatory beta-lactam dipstick at every collection centre and runs a farmer-education refresh.',
+    source: 'NC', severity: 'CRITICAL', status: 'IMPLEMENTATION',
+    department: 'Procurement', productProcess: 'Raw-milk Antibiotic Screening',
+    linkedSourceRecord: 'NC-DY-2026-0040', owner: 'Meera Pillai', ownerId: 'u-dy2', dueDate: '2026-05-30',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why was beta-lactam detected in raw milk?',          answer: 'Cow under amoxicillin treatment was milked into pooled supply.' },
+      { whyNumber: 2, question: 'Why was she milked during the withdrawal period?',    answer: 'Farmer did not segregate her from the herd during the 96-hour withdrawal.' },
+      { whyNumber: 3, question: 'Why was segregation not enforced?',                   answer: 'Farmer was unaware of full withdrawal period; veterinary advice was verbal, not in writing.' },
+    ],
+    fishbone: {
+      man: [{ id: 'dy-mf11', text: 'Farmer unaware of full withdrawal period' }],
+      machine: [], material: [], method: [{ id: 'dy-mf12', text: 'Veterinary advice not formalised in writing' }, { id: 'dy-mf13', text: 'No beta-lactam dipstick at village level' }],
+      measurement: [], environment: [],
+    },
+    actions: [
+      { id: 'dy-a8',  description: 'Suspend procurement from source farm for 14 days; re-qualify via training + 5 clean tests', type: 'CORRECTIVE', owner: 'Meera Pillai', dueDate: '2026-05-12', status: 'COMPLETED', completedDate: '2026-05-10' },
+      { id: 'dy-a9',  description: 'Deploy Charm SL beta-lactam dipsticks at all 18 village collection centres',                 type: 'PREVENTIVE', owner: 'Sandeep Joshi', dueDate: '2026-05-20', status: 'IN_PROGRESS' },
+      { id: 'dy-a10', description: 'Run farmer-education refresh on antibiotic withdrawal periods — 240 farmers across 3 sessions', type: 'PREVENTIVE', owner: 'Priya Khanna', dueDate: '2026-05-28', status: 'IN_PROGRESS' },
+    ],
+    effectivenessCriteria: 'Zero antibiotic residue positives over 90-day monitoring period across all routes.',
+    monitoringPeriodDays: 90, effectivenessResult: null, effectivenessEvidence: null,
+    history: [{ id: 'dy-hc3', timestamp: '2026-05-10T11:00:00Z', user: 'Meera Pillai', action: 'CAPA Initiated', details: 'Triggered from NC-DY-2026-0040; source farm suspended' }],
+    createdAt: '2026-05-10T11:00:00Z', updatedAt: '2026-05-10T11:00:00Z', closedAt: null, createdBy: 'Meera Pillai',
+  },
+  {
+    id: 'dy-capa4', capaNumber: 'CAPA-DY-2025-0044',
+    title: 'CAPA — Pouch leakage 0.8% on 500ml pouches (FFS-04 heat-seal jaw wear)',
+    description: 'Heat-seal jaw wear on FFS-04 caused weak seals and pouch leakage above 0.3% spec. CAPA replaced the jaw, tightened PM frequency from 12 to 6 months and added seal-strength SPC monitoring to the line SCADA.',
+    source: 'NC', severity: 'MAJOR', status: 'CLOSED',
+    department: 'Packaging', productProcess: 'Form-Fill-Seal · Heat Seal',
+    linkedSourceRecord: 'NC-DY-2026-0024', owner: 'Priya Khanna', ownerId: 'u-dy5', dueDate: '2026-03-30',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why did pouches leak?',                  answer: 'Heat seal was below spec strength.' },
+      { whyNumber: 2, question: 'Why was seal strength low?',              answer: 'Worn heat-seal jaw on FFS-04.' },
+      { whyNumber: 3, question: 'Why was the jaw worn beyond service?',    answer: 'PM frequency was 12-monthly; jaw life is ~8 months under daily 3-shift operation.' },
+    ],
+    fishbone: { man: [], machine: [{ id: 'dy-mf14', text: 'Worn heat-seal jaw' }], material: [], method: [{ id: 'dy-mf15', text: 'PM frequency mismatched to actual jaw life' }], measurement: [{ id: 'dy-mf16', text: 'No SPC on seal strength' }], environment: [] },
+    actions: [
+      { id: 'dy-a11', description: 'Replace heat-seal jaw on FFS-04 and revalidate seal strength',                  type: 'CORRECTIVE', owner: 'Priya Khanna', dueDate: '2026-02-20', status: 'COMPLETED', completedDate: '2026-02-18' },
+      { id: 'dy-a12', description: 'Tighten PM frequency on heat-seal jaws from 12 to 6 months across FFS lines',  type: 'PREVENTIVE', owner: 'Priya Khanna', dueDate: '2026-03-10', status: 'COMPLETED', completedDate: '2026-03-08' },
+      { id: 'dy-a13', description: 'Add seal-strength SPC monitoring to FFS line SCADA with auto-stop at -3σ',     type: 'PREVENTIVE', owner: 'Sandeep Joshi', dueDate: '2026-03-25', status: 'COMPLETED', completedDate: '2026-03-22' },
+    ],
+    effectivenessCriteria: 'Pouch leakage rate ≤ 0.3% over 90-day monitoring period. SPC out-of-control events reviewed daily.',
+    monitoringPeriodDays: 90, effectivenessResult: 'PASS', effectivenessEvidence: 'Pouch leakage rate 0.18% (Mar–May 2026). Zero SPC auto-stops on FFS-04 after jaw replacement.',
+    history: [],
+    createdAt: '2026-02-15T10:00:00Z', updatedAt: '2026-05-05T16:00:00Z', closedAt: '2026-05-05T16:00:00Z', createdBy: 'Priya Khanna',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface CAPAFilters {
@@ -607,14 +981,16 @@ interface CAPAFilters {
 }
 
 export function useCAPAs(filters: CAPAFilters = {}) {
+  const industry = useUserIndustry();
   return useQuery<PaginatedResponse<CAPARecord>>({
-    queryKey: ['capas', filters],
+    queryKey: ['capas', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/capas', { params: filters });
         return unwrapList<CAPARecord>(data, flattenCAPA as any);
       } catch {
-        let filtered = [...mockCAPAs];
+        const baseList = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs });
+        let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((c) => c.status === filters.status);
         if (filters.severity) filtered = filtered.filter((c) => c.severity === filters.severity);
         if (filters.source) filtered = filtered.filter((c) => c.source === filters.source);
@@ -635,14 +1011,16 @@ export function useCAPAs(filters: CAPAFilters = {}) {
 }
 
 export function useCAPA(id: string) {
+  const industry = useUserIndustry();
   return useQuery<CAPARecord>({
-    queryKey: ['capas', id],
+    queryKey: ['capas', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/capas/${id}`);
         return unwrapItem<CAPARecord>(data, flattenCAPA as any);
       } catch {
-        const capa = mockCAPAs.find((c) => c.id === id);
+        const baseList = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs });
+        const capa = baseList.find((c) => c.id === id);
         if (!capa) throw new Error('CAPA not found');
         return capa;
       }

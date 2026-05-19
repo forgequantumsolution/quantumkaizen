@@ -3,6 +3,11 @@ import { persist } from 'zustand/middleware';
 import { api } from '@/lib/api';
 import { DEMO_ACCOUNTS } from '@/config/demoCredentials';
 
+// Industry segment the user belongs to. Drives mock-data filtering across
+// the dashboard and QMS modules so a `medical_device` user only sees
+// medical-device records. Optional — existing pharma demos leave it unset.
+export type UserIndustry = 'medical_device' | 'dairy';
+
 interface AuthUser {
   id: string;
   tenantId: string;
@@ -12,6 +17,7 @@ interface AuthUser {
   department?: string;
   site?: string;
   employeeId: string;
+  industry?: UserIndustry;
 }
 
 interface AuthState {
@@ -47,6 +53,12 @@ const DEMO_USER_TEMPLATES: Record<string, Omit<AuthUser, 'email'>> = {
   'lab@forgequantum.com':               { id: 'demo-b3', tenantId: 'demo-tenant', name: 'Rajesh Kumar',       role: 'QUALITY_ENGINEER',    department: 'Laboratory',        site: 'Headquarters',       employeeId: 'FQ-003' },
   'qc@forgequantum.com':                { id: 'demo-b4', tenantId: 'demo-tenant', name: 'Anita Desai',        role: 'QUALITY_ENGINEER',    department: 'Quality Control',   site: 'Headquarters',       employeeId: 'FQ-004' },
   'partner@forgequantum.com':           { id: 'demo-b5', tenantId: 'demo-tenant', name: 'External Partner',   role: 'READ_ONLY',           department: 'External',          site: 'Remote',             employeeId: 'FQ-005' },
+  // Medical-device tenant — drives the medical_device industry filter
+  // across dashboard charts and QMS module mock data.
+  'md.admin@forgequantum.com':          { id: 'demo-md1',tenantId: 'demo-tenant', name: 'Dr. Anjali Verma',   role: 'TENANT_ADMIN',        department: 'Regulatory Affairs',site: 'Bengaluru — MedTech Park', employeeId: 'FQ-MD-001', industry: 'medical_device' },
+  // Dairy tenant — drives the dairy industry filter across dashboard
+  // charts and QMS module mock data.
+  'dairy.admin@forgequantum.com':       { id: 'demo-dy1',tenantId: 'demo-tenant', name: 'Sandeep Joshi',      role: 'TENANT_ADMIN',        department: 'Quality Assurance', site: 'Pune — Dairy Plant',       employeeId: 'FQ-DY-001', industry: 'dairy' },
 };
 
 // Base64-url encode without padding — valid JWT segment.

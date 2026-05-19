@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import type { Document, PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -79,6 +80,245 @@ export const mockDocuments: Document[] = [
   },
 ];
 
+// Medical-device DMS register — ISO 13485 / 21 CFR 820 controlled docs.
+export const mockMedicalDeviceDocuments: Document[] = [
+  {
+    id: 'md-d1', documentNumber: 'MD-QM-2025', title: 'Quality Manual — FQ MedTech Pvt. Ltd.',
+    description: 'Top-tier ISO 13485:2016 / 21 CFR 820 / EU MDR Annex IX QMS manual for the FQ MedTech tenant.',
+    level: 'POLICY', status: 'PUBLISHED', category: 'QMS', department: 'Quality Assurance',
+    departmentId: 'dept-md-qa', version: '4.0', owner: 'Dr. Anjali Verma', ownerId: 'u-md1',
+    effectiveDate: '2025-11-01', expiryDate: '2027-10-31', reviewDate: '2026-11-01',
+    tags: ['ISO 13485', '21 CFR 820', 'EU MDR'], createdAt: '2024-10-01T10:00:00Z', updatedAt: '2025-11-01T09:00:00Z',
+    changeSummary: 'Major revision: integrated EU MDR Annex IX requirements and PRRC role',
+  },
+  {
+    id: 'md-d2', documentNumber: 'SOP-MD-DC-01', title: 'Design Control Procedure',
+    description: 'Design and development planning, inputs, outputs, verification, validation and transfer per ISO 13485 §7.3 and 21 CFR 820.30.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Design Controls', department: 'Design Controls',
+    departmentId: 'dept-md-dc', version: '2.3', owner: 'Aditya Menon', ownerId: 'u-md6',
+    effectiveDate: '2025-08-15', expiryDate: '2027-08-14', reviewDate: '2026-08-15',
+    tags: ['Design Controls', 'ISO 13485', '21 CFR 820'], createdAt: '2023-04-10T10:00:00Z', updatedAt: '2025-08-15T09:00:00Z',
+  },
+  {
+    id: 'md-d3', documentNumber: 'SOP-MD-EOS-01', title: 'EO Sterilization Process Control',
+    description: 'Process parameters, alarm matrix, post-maintenance qualification and aeration cycle per ISO 11135.',
+    level: 'PROCEDURE', status: 'UNDER_REVIEW', category: 'Sterilization', department: 'Sterilization',
+    departmentId: 'dept-md-ster', version: '3.0', owner: 'Karthik Iyer', ownerId: 'u-md2',
+    effectiveDate: null, expiryDate: null, reviewDate: null,
+    tags: ['EO Sterilization', 'ISO 11135'], createdAt: '2023-06-20T09:00:00Z', updatedAt: '2026-04-10T11:00:00Z',
+    changeSummary: 'Revision to require two-person sign-off post-maintenance + extended aeration to 14h',
+  },
+  {
+    id: 'md-d4', documentNumber: 'DHF-DEV-MD-027', title: 'Design History File — Smart Infusion Pump v3.x',
+    description: 'Complete Design History File for Class IIb smart infusion pump including DP, DI/DO, DV, DVa, risk file and transfer records.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'DHF', department: 'Design Controls',
+    departmentId: 'dept-md-dc', version: '3.5', owner: 'Aditya Menon', ownerId: 'u-md6',
+    effectiveDate: '2025-09-01', expiryDate: null, reviewDate: '2026-09-01',
+    tags: ['DHF', 'IEC 62304', 'IEC 62366'], createdAt: '2022-08-12T10:00:00Z', updatedAt: '2026-04-05T15:30:00Z',
+    changeSummary: 'v3.5: incorporated firmware fixed-point dosage refactor per CR-MD-2026-0014',
+  },
+  {
+    id: 'md-d5', documentNumber: 'RMF-ISO14971-v3', title: 'Risk Management File — Infusion Pump Family',
+    description: 'ISO 14971:2019 risk management file covering hazard analysis, risk evaluation, controls, residual risk and overall benefit-risk analysis.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Risk Management', department: 'Design Controls',
+    departmentId: 'dept-md-dc', version: '3.1', owner: 'Aditya Menon', ownerId: 'u-md6',
+    effectiveDate: '2025-12-10', expiryDate: null, reviewDate: '2026-12-10',
+    tags: ['ISO 14971', 'Risk'], createdAt: '2023-06-10T10:00:00Z', updatedAt: '2025-12-10T09:00:00Z',
+  },
+  {
+    id: 'md-d6', documentNumber: 'WI-MD-CLR-019', title: 'Class 7 Cleanroom Gowning Work Instruction',
+    description: 'Step-by-step gowning sequence for Class 7 aseptic assembly area per ISO 14644.',
+    level: 'WORK_INSTRUCTION', status: 'PUBLISHED', category: 'Cleanroom', department: 'Cleanroom Assembly',
+    departmentId: 'dept-md-cr', version: '2.2', owner: 'Neha Bansal', ownerId: 'u-md3',
+    effectiveDate: '2025-12-15', expiryDate: '2027-12-14', reviewDate: '2026-12-15',
+    tags: ['Cleanroom', 'ISO 14644'], createdAt: '2024-01-15T09:00:00Z', updatedAt: '2025-12-15T11:00:00Z',
+  },
+  {
+    id: 'md-d7', documentNumber: 'FRM-MD-UDI-001', title: 'UDI Print/Verify Release Form',
+    description: 'End-of-line UDI verification form recording GS1 scan result, operator and reviewer.',
+    level: 'FORM', status: 'PUBLISHED', category: 'UDI', department: 'Packaging',
+    departmentId: 'dept-md-pkg', version: '1.4', owner: 'Rohit Khanna', ownerId: 'u-md4',
+    effectiveDate: '2026-04-15', expiryDate: '2028-04-14', reviewDate: '2027-04-15',
+    tags: ['UDI', '21 CFR 830', 'EU MDR'], createdAt: '2025-02-10T09:00:00Z', updatedAt: '2026-04-15T13:00:00Z',
+  },
+  {
+    id: 'md-d8', documentNumber: 'SOP-MD-PMS-02', title: 'Post-Market Clinical Follow-Up (PMCF) Process',
+    description: 'Continuous PMCF process aligned with EU MDR Annex XIV Part B and ISO 13485 §8.2.1 feedback.',
+    level: 'PROCEDURE', status: 'PENDING_APPROVAL', category: 'PMS', department: 'Post-Market Surveillance',
+    departmentId: 'dept-md-pms', version: '2.0', owner: 'Sneha Kapoor', ownerId: 'u-md5',
+    effectiveDate: null, expiryDate: null, reviewDate: null,
+    tags: ['PMCF', 'EU MDR', 'Vigilance'], createdAt: '2025-08-22T09:00:00Z', updatedAt: '2026-04-12T11:00:00Z',
+    changeSummary: 'v2.0: introduced quantitative FSN-trend thresholds per product family (closes MD-F3)',
+  },
+  {
+    id: 'md-d9', documentNumber: 'TF-510K-MD-2023', title: '510(k) Technical File — IOL-25 Series',
+    description: 'FDA 510(k) submission technical file for the IOL-25 series intraocular lens family.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Regulatory', department: 'Regulatory Affairs',
+    departmentId: 'dept-md-ra', version: '1.0', owner: 'Sneha Kapoor', ownerId: 'u-md5',
+    effectiveDate: '2023-12-18', expiryDate: null, reviewDate: '2027-12-18',
+    tags: ['510(k)', 'IOL', 'FDA'], createdAt: '2023-08-01T10:00:00Z', updatedAt: '2024-02-01T09:00:00Z',
+  },
+  {
+    id: 'md-d10', documentNumber: 'VMP-MD-2025-04', title: 'Validation Master Plan — Sterilization & Aseptic Assembly',
+    description: 'Master plan for ongoing process validation, requalification and revalidation triggers for sterile-product processes.',
+    level: 'POLICY', status: 'PUBLISHED', category: 'Validation', department: 'Quality Assurance',
+    departmentId: 'dept-md-qa', version: '4.0', owner: 'Dr. Anjali Verma', ownerId: 'u-md1',
+    effectiveDate: '2025-07-01', expiryDate: '2027-06-30', reviewDate: '2026-07-01',
+    tags: ['Validation', 'Sterilization'], createdAt: '2023-05-05T10:00:00Z', updatedAt: '2025-07-01T09:00:00Z',
+  },
+  // ── Disposables product family ──────────────────────────────────────────
+  {
+    id: 'md-d11', documentNumber: 'DHF-DEV-MD-DSY-026', title: 'Design History File — 5 mL Disposable Syringe Family (DSY-26)',
+    description: 'DHF for the 5 mL disposable syringe family — design plan, inputs, outputs, V&V, transfer to production, risk file linkage and CE-mark / 510(k) submission package.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'DHF', department: 'Design Controls',
+    departmentId: 'dept-md-dc', version: '2.1', owner: 'Aditya Menon', ownerId: 'u-md6',
+    effectiveDate: '2024-09-12', expiryDate: null, reviewDate: '2026-09-12',
+    tags: ['DHF', 'Disposable Syringe', 'ISO 11608'], createdAt: '2023-02-04T10:00:00Z', updatedAt: '2026-04-08T15:30:00Z',
+    changeSummary: 'v2.1: silicone-oil dose-control failure mode added post NC-MD-2026-0037',
+  },
+  {
+    id: 'md-d12', documentNumber: 'SOP-MD-NDL-04', title: 'Hypodermic Needle Hub Assembly SOP (NAM Lines)',
+    description: 'Process controls for UV bonding of cannula to hub, pin-bend straightening, lubricant application and blister sealing on NAM-01 to NAM-06 lines.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Manufacturing', department: 'Needle Manufacturing',
+    departmentId: 'dept-md-ndl', version: '3.2', owner: 'Rohit Khanna', ownerId: 'u-md4',
+    effectiveDate: '2025-06-18', expiryDate: '2027-06-17', reviewDate: '2026-06-18',
+    tags: ['Hypodermic Needle', 'ASTM F1816', 'NAM'], createdAt: '2023-09-25T10:00:00Z', updatedAt: '2025-06-18T09:00:00Z',
+  },
+  {
+    id: 'md-d13', documentNumber: 'WI-MD-DSY-12', title: 'Disposable Syringe — Plunger Lubrication Work Instruction',
+    description: 'Step-by-step instructions for silicone-oil spray application on Line DSY-3 with HMI lock-out, dose-weight verification and operator sign-off.',
+    level: 'WORK_INSTRUCTION', status: 'PUBLISHED', category: 'Manufacturing', department: 'Cleanroom Assembly',
+    departmentId: 'dept-md-cr', version: '1.4', owner: 'Rohit Khanna', ownerId: 'u-md4',
+    effectiveDate: '2026-04-15', expiryDate: '2028-04-14', reviewDate: '2027-04-15',
+    tags: ['Disposable Syringe', 'Lubrication', 'USP <788>'], createdAt: '2024-01-10T09:00:00Z', updatedAt: '2026-04-15T13:00:00Z',
+    changeSummary: 'v1.4: HMI recipe lock; dose-weight verification every 5 000th unit (CAPA-MD-2026-0021)',
+  },
+  {
+    id: 'md-d14', documentNumber: 'DHF-DEV-MD-AD-001', title: 'Design History File — Auto-disable Syringe (ADS-26)',
+    description: 'DHF for WHO PQS-compliant auto-disable syringes used in immunization programs; covers plunger-lock mechanism, IFU, biocompatibility and PQS E13/IM01.3 verification.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'DHF', department: 'Design Controls',
+    departmentId: 'dept-md-dc', version: '1.3', owner: 'Aditya Menon', ownerId: 'u-md6',
+    effectiveDate: '2024-11-22', expiryDate: null, reviewDate: '2026-11-22',
+    tags: ['DHF', 'AD-Syringe', 'WHO PQS'], createdAt: '2023-06-01T10:00:00Z', updatedAt: '2026-04-10T11:00:00Z',
+  },
+  {
+    id: 'md-d15', documentNumber: 'SOP-MD-FCT-02', title: 'Foley Catheter Silicone Dip-Moulding SOP',
+    description: 'Process controls for silicone-bath temperature, dwell time, dip-count and burst-volume QA on FCT-MC lines; thermocouple calibration tightened to 3-monthly.',
+    level: 'PROCEDURE', status: 'UNDER_REVIEW', category: 'Manufacturing', department: 'Production',
+    departmentId: 'dept-md-prod', version: '2.5', owner: 'Karthik Iyer', ownerId: 'u-md2',
+    effectiveDate: null, expiryDate: null, reviewDate: null,
+    tags: ['Foley Catheter', 'ISO 20696', 'Dip Moulding'], createdAt: '2024-02-12T10:00:00Z', updatedAt: '2026-04-13T11:00:00Z',
+    changeSummary: 'v2.5: thermocouple calibration moved from 12 → 3-monthly (post NC-MD-2026-0033)',
+  },
+];
+
+// Dairy tenant — FSSAI / ISO 22000 / HACCP controlled documents.
+export const mockDairyDocuments: Document[] = [
+  {
+    id: 'dy-d1', documentNumber: 'DY-QM-2025', title: 'Food Safety Quality Manual',
+    description: 'Top-tier FSSAI / ISO 22000:2018 quality manual covering FSMS scope, leadership, hazard analysis, PRPs, OPRPs and HACCP plan governance.',
+    level: 'POLICY', status: 'PUBLISHED', category: 'QMS', department: 'Quality Assurance',
+    departmentId: 'dept-dy-qa', version: '5.0', owner: 'Sandeep Joshi', ownerId: 'u-dy1',
+    effectiveDate: '2025-10-01', expiryDate: '2027-09-30', reviewDate: '2026-10-01',
+    tags: ['FSSAI', 'ISO 22000', 'FSMS'], createdAt: '2023-08-01T10:00:00Z', updatedAt: '2025-10-01T09:00:00Z',
+    changeSummary: 'v5.0: aligned with FSSAI Eat Right amendments and ISO 22000:2018 revisions',
+  },
+  {
+    id: 'dy-d2', documentNumber: 'HACCP-PLAN-MILK-v6', title: 'HACCP Plan — Liquid Milk (Toned, Full-cream, Double-toned)',
+    description: 'Hazard analysis and CCPs for liquid milk: raw-milk reception (antibiotic residue, AfM1), pasteurization (HTST 72 °C / 15 s), post-pasteurization handling, packaging and cold-chain distribution.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'HACCP', department: 'Quality Assurance',
+    departmentId: 'dept-dy-qa', version: '6.0', owner: 'Sandeep Joshi', ownerId: 'u-dy1',
+    effectiveDate: '2026-05-12', expiryDate: '2028-05-11', reviewDate: '2027-05-12',
+    tags: ['HACCP', 'Milk', 'FSSAI 2.1.1'], createdAt: '2023-06-12T10:00:00Z', updatedAt: '2026-05-12T15:30:00Z',
+    changeSummary: 'v6.0: added pre-monsoon AfM1 sampling CCP (CAPA-DY-2026-0019)',
+  },
+  {
+    id: 'dy-d3', documentNumber: 'HACCP-PLAN-CURD-v3', title: 'HACCP Plan — Set Curd / Dahi',
+    description: 'Hazards and CCPs for set curd: starter culture inoculation, fermentation control, CIP between batches, cup-filling sealing.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'HACCP', department: 'Quality Assurance',
+    departmentId: 'dept-dy-qa', version: '3.0', owner: 'Anita Kulkarni', ownerId: 'u-dy3',
+    effectiveDate: '2025-11-15', expiryDate: '2027-11-14', reviewDate: '2026-11-15',
+    tags: ['HACCP', 'Curd'], createdAt: '2023-11-10T10:00:00Z', updatedAt: '2025-11-15T11:00:00Z',
+  },
+  {
+    id: 'dy-d4', documentNumber: 'HACCP-PLAN-GHEE-v2', title: 'HACCP Plan — Ghee (Cow + Buffalo)',
+    description: 'Hazards and CCPs for ghee: butter ageing, clarification kettle temperature, FFA monitoring (NMT 3.0% per IS 3508), tin filling and sealing.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'HACCP', department: 'Quality Assurance',
+    departmentId: 'dept-dy-qa', version: '2.0', owner: 'Ravi Deshmukh', ownerId: 'u-dy4',
+    effectiveDate: '2026-03-30', expiryDate: '2028-03-29', reviewDate: '2027-03-30',
+    tags: ['HACCP', 'Ghee', 'BIS IS 3508'], createdAt: '2024-01-12T10:00:00Z', updatedAt: '2026-03-30T11:00:00Z',
+    changeSummary: 'v2.0: tightened butter-to-ghee turnaround to 48 h (CAPA from NC-DY-2026-0029)',
+  },
+  {
+    id: 'dy-d5', documentNumber: 'SOP-DY-PAST-03', title: 'HTST Pasteurization SOP (PHE-01 / PHE-02)',
+    description: 'Operating SOP for HTST pasteurization — feed temperature, holding-tube residence-time, divert valve actuation, phosphatase verification and CIP between batches.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Manufacturing', department: 'Pasteurization',
+    departmentId: 'dept-dy-past', version: '3.2', owner: 'Ravi Deshmukh', ownerId: 'u-dy4',
+    effectiveDate: '2026-05-05', expiryDate: '2028-05-04', reviewDate: '2027-05-05',
+    tags: ['Pasteurization', 'FSSAI 2.1.1'], createdAt: '2023-07-18T10:00:00Z', updatedAt: '2026-05-05T13:00:00Z',
+    changeSummary: 'v3.2: mandatory dual-temperature verification post NC-DY-2026-0038',
+  },
+  {
+    id: 'dy-d6', documentNumber: 'SOP-DY-PROC-04', title: 'Raw-Milk Acceptance & Antibiotic Screening SOP',
+    description: 'Procedure for raw-milk reception at the dock — temperature check, organoleptic, fat / SNF on Lactoscan, COB / alcohol test, antibiotic dipstick, AfM1 sampling cadence.',
+    level: 'PROCEDURE', status: 'UNDER_REVIEW', category: 'QC', department: 'Receiving Dock',
+    departmentId: 'dept-dy-dock', version: '4.0', owner: 'Sandeep Joshi', ownerId: 'u-dy1',
+    effectiveDate: null, expiryDate: null, reviewDate: null,
+    tags: ['Raw Milk', 'FSSAI 2.3.4', 'AfM1'], createdAt: '2023-09-25T10:00:00Z', updatedAt: '2026-05-14T11:00:00Z',
+    changeSummary: 'v4.0 draft: risk-based AfM1 sampling tied to season + recent history (CAPA-DY-2026-0019)',
+  },
+  {
+    id: 'dy-d7', documentNumber: 'SOP-DY-CIP-02', title: 'Clean-In-Place (CIP) SOP',
+    description: 'CIP cycles for milk pipework, pasteurizer, fermentation tanks, filling-line product loop — water rinse → alkali → water rinse → acid → final water rinse + ATP-swab verification.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Manufacturing', department: 'Production',
+    departmentId: 'dept-dy-prod', version: '2.5', owner: 'Priya Khanna', ownerId: 'u-dy5',
+    effectiveDate: '2026-05-15', expiryDate: '2028-05-14', reviewDate: '2027-05-15',
+    tags: ['CIP', 'Sanitation'], createdAt: '2024-02-20T10:00:00Z', updatedAt: '2026-05-15T11:00:00Z',
+    changeSummary: 'v2.5: pre-shift ATP-swab verification + HMI recipe lock (CAPA-DY-2026-0018)',
+  },
+  {
+    id: 'dy-d8', documentNumber: 'BMR-FM-CHOC-200', title: 'Batch Manufacturing Record — Chocolate Flavoured Milk 200 ml',
+    description: 'BMR template for chocolate flavoured milk 200 ml — recipe sheet, dosing, homogenization, UHT, aseptic packaging, release testing.',
+    level: 'FORM', status: 'PUBLISHED', category: 'Manufacturing', department: 'Production',
+    departmentId: 'dept-dy-prod', version: '1.8', owner: 'Sunita Borade', ownerId: 'u-dy6',
+    effectiveDate: '2025-08-12', expiryDate: '2027-08-11', reviewDate: '2026-08-12',
+    tags: ['Flavoured Milk', 'BMR'], createdAt: '2024-03-04T10:00:00Z', updatedAt: '2025-08-12T11:00:00Z',
+  },
+  {
+    id: 'dy-d9', documentNumber: 'SOP-DY-LAB-08', title: 'Aflatoxin M1 ELISA Analysis SOP',
+    description: 'Procedure for ELISA-based AfM1 quantification in raw and processed milk per FSSAI 2.3.5 limit of 0.5 µg/kg.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Laboratory', department: 'Microbiology Lab',
+    departmentId: 'dept-dy-micro', version: '2.0', owner: 'Anita Kulkarni', ownerId: 'u-dy3',
+    effectiveDate: '2025-04-10', expiryDate: '2027-04-09', reviewDate: '2026-04-10',
+    tags: ['Aflatoxin M1', 'ELISA', 'FSSAI 2.3.5'], createdAt: '2023-12-08T10:00:00Z', updatedAt: '2025-04-10T09:00:00Z',
+  },
+  {
+    id: 'dy-d10', documentNumber: 'SOP-DY-LABEL-04', title: 'Pre-Packaged Food Labelling SOP',
+    description: 'Label generation, artwork approval, FSSAI logo + licence number, ingredient list, nutritional info, vegetarian symbol, MRP / best-before date setting.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Packaging', department: 'Packaging',
+    departmentId: 'dept-dy-pkg', version: '4.2', owner: 'Priya Khanna', ownerId: 'u-dy5',
+    effectiveDate: '2025-10-20', expiryDate: '2027-10-19', reviewDate: '2026-10-20',
+    tags: ['Labelling', 'FSSAI Labelling 2020'], createdAt: '2023-02-22T10:00:00Z', updatedAt: '2025-10-20T11:00:00Z',
+  },
+  {
+    id: 'dy-d11', documentNumber: 'SOP-DY-COLD-04', title: 'Cold Chain SOP — Refrigerated Transport',
+    description: 'Pre-loading, in-transit and depot temperature monitoring for refrigerated vans and tankers. IoT logger procedure and alert escalation.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Distribution', department: 'Cold Chain',
+    departmentId: 'dept-dy-cold', version: '3.0', owner: 'Priya Khanna', ownerId: 'u-dy5',
+    effectiveDate: '2026-02-15', expiryDate: '2028-02-14', reviewDate: '2027-02-15',
+    tags: ['Cold Chain', 'Logistics'], createdAt: '2024-05-04T10:00:00Z', updatedAt: '2026-02-15T11:00:00Z',
+    changeSummary: 'v3.0: IoT logger + GSM-alert workflow (CR-DY-2026-0006)',
+  },
+  {
+    id: 'dy-d12', documentNumber: 'FSSAI-LIC-2024', title: 'FSSAI Central Licence Certificate (Renewed 2024)',
+    description: 'Central FSSAI Licence — manufacturing of milk and milk products, valid 2024-06-18 to 2029-06-17. Includes amended product schedule (sweets, ice-cream).',
+    level: 'EXTERNAL', status: 'PUBLISHED', category: 'Regulatory', department: 'Regulatory Affairs',
+    departmentId: 'dept-dy-reg', version: '1.0', owner: 'Sandeep Joshi', ownerId: 'u-dy1',
+    effectiveDate: '2024-06-18', expiryDate: '2029-06-17', reviewDate: '2027-06-18',
+    tags: ['FSSAI Licence'], createdAt: '2024-06-18T10:00:00Z', updatedAt: '2024-06-18T10:00:00Z',
+  },
+];
+
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
 interface DocumentFilters {
@@ -91,15 +331,17 @@ interface DocumentFilters {
 }
 
 export function useDocuments(filters: DocumentFilters = {}) {
+  const industry = useUserIndustry();
   return useQuery<PaginatedResponse<Document>>({
-    queryKey: ['documents', filters],
+    queryKey: ['documents', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get('/dms/documents', { params: filters });
         return unwrapList<Document>(data, flattenDoc as any);
       } catch {
         // Mock fallback
-        let filtered = [...mockDocuments];
+        const baseList = pickByIndustry(industry, mockDocuments, { medical_device: mockMedicalDeviceDocuments, dairy: mockDairyDocuments });
+        let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((d) => d.status === filters.status);
         if (filters.level) filtered = filtered.filter((d) => d.level === filters.level);
         if (filters.department) filtered = filtered.filter((d) => d.department === filters.department);
@@ -125,14 +367,16 @@ export function useDocuments(filters: DocumentFilters = {}) {
 }
 
 export function useDocument(id: string) {
+  const industry = useUserIndustry();
   return useQuery<Document>({
-    queryKey: ['documents', id],
+    queryKey: ['documents', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/dms/documents/${id}`);
         return unwrapItem<Document>(data, flattenDoc as any);
       } catch {
-        const doc = mockDocuments.find((d) => d.id === id);
+        const baseList = pickByIndustry(industry, mockDocuments, { medical_device: mockMedicalDeviceDocuments, dairy: mockDairyDocuments });
+        const doc = baseList.find((d) => d.id === id);
         if (!doc) throw new Error('Document not found');
         return doc;
       }

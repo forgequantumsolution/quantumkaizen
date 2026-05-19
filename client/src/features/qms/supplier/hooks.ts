@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import toast from 'react-hot-toast';
 
 // Backend supplier shape differs from the UI's expected shape in a few places:
@@ -406,6 +407,295 @@ export const mockSuppliers: Supplier[] = [
   })(),
 ];
 
+// Medical-device supplier base — ISO 13485 §7.4 / 21 CFR 820.50 vendors.
+const md = (q: number, d: number) => ({
+  quality: q, delivery: d, cost: 78, responsiveness: 84, innovation: 76, overallScore: Math.round((q + d) / 2),
+  monthlyTrend: [
+    { month: 'Oct 25', score: Math.round((q + d) / 2) - 2 },
+    { month: 'Nov 25', score: Math.round((q + d) / 2) - 1 },
+    { month: 'Dec 25', score: Math.round((q + d) / 2)     },
+    { month: 'Jan 26', score: Math.round((q + d) / 2) + 1 },
+    { month: 'Feb 26', score: Math.round((q + d) / 2) + 1 },
+    { month: 'Mar 26', score: Math.round((q + d) / 2) + 2 },
+  ],
+});
+
+export const mockMedicalDeviceSuppliers: Supplier[] = [
+  {
+    id: 'md-sup1', code: 'MDV-101', name: 'Sterimed Medical Devices Pvt. Ltd.', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Vikas Saxena', email: 'vikas.saxena@sterimed.in', phone: '+91 11 4708 0000',
+    address: 'Plot 92, Sector 6, IMT Manesar', city: 'Gurugram', state: 'Haryana',
+    productsServices: ['Sterile blister packaging', 'Tyvek lidding'],
+    rating: 4.6, performance: md(94, 92), certExpiry: '2027-03-31', lastAuditDate: '2025-09-18',
+    certifications: [
+      { id: 'md-sc1', name: 'ISO 13485:2016', certificateNumber: 'BSI-MD-104812', issuedBy: 'BSI', issuedDate: '2024-04-01', expiryDate: '2027-03-31', status: 'VALID' },
+      { id: 'md-sc2', name: 'ISO 11607-1 / -2',  certificateNumber: 'TUV-PAK-22019', issuedBy: 'TÜV SÜD', issuedDate: '2024-06-12', expiryDate: '2027-06-11', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa1', type: 'On-site GMP', date: '2025-09-18', auditor: 'Neha Bansal', score: 92, status: 'COMPLETED', findings: '1 Minor (CAR closed), 1 OFI', ncCount: 1 }],
+    createdAt: '2024-04-12T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'md-sup2', code: 'MDV-102', name: 'Sandvik Materials Technology India', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Anand Pradeep', email: 'anand.pradeep@sandvik.com', phone: '+91 20 6712 2000',
+    address: 'Survey 119, Chinchwad', city: 'Pune', state: 'Maharashtra',
+    productsServices: ['Medical-grade titanium alloy', 'Stainless 316LVM wire'],
+    rating: 4.8, performance: md(97, 93), certExpiry: '2027-08-30', lastAuditDate: '2025-08-04',
+    certifications: [
+      { id: 'md-sc3', name: 'ISO 13485:2016',     certificateNumber: 'DNV-MD-7611',  issuedBy: 'DNV',   issuedDate: '2024-08-31', expiryDate: '2027-08-30', status: 'VALID' },
+      { id: 'md-sc4', name: 'ASTM F136 (Ti-6Al-4V ELI)', certificateNumber: 'INSP-2024-1144', issuedBy: 'In-house Lab', issuedDate: '2024-01-15', expiryDate: '2026-12-31', status: 'EXPIRING_SOON' },
+    ],
+    audits: [{ id: 'md-sa2', type: 'Tier-1 Material Supplier', date: '2025-08-04', auditor: 'Sneha Kapoor', score: 95, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2023-12-01T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'md-sup3', code: 'MDV-103', name: 'Specur Polymers Pvt. Ltd.', category: 'MAJOR', status: 'CONDITIONAL',
+    contactPerson: 'Manish Bhardwaj', email: 'manish@specur.in', phone: '+91 79 2675 1111',
+    address: 'GIDC Naroda, Phase III', city: 'Ahmedabad', state: 'Gujarat',
+    productsServices: ['PLA bioresorbable resin', 'Medical-grade PEEK'],
+    rating: 3.6, performance: md(78, 82), certExpiry: '2026-09-30', lastAuditDate: '2025-09-19',
+    certifications: [
+      { id: 'md-sc5', name: 'ISO 13485:2016', certificateNumber: 'IRQS-MD-3320', issuedBy: 'IRQS', issuedDate: '2023-10-01', expiryDate: '2026-09-30', status: 'EXPIRING_SOON' },
+      { id: 'md-sc6', name: 'ISO 10993 panel',  certificateNumber: 'TPL-3411',    issuedBy: 'Sigma Lab', issuedDate: '2024-04-21', expiryDate: '2026-04-21', status: 'EXPIRING_SOON' },
+    ],
+    audits: [{ id: 'md-sa3', type: 'For-cause audit (change-notification breach)', date: '2025-09-19', auditor: 'Neha Bansal', score: 74, status: 'COMPLETED', findings: '1 Major, 1 Minor — CAR open', ncCount: 2 }],
+    createdAt: '2023-04-01T09:00:00Z', updatedAt: '2026-03-22T15:00:00Z',
+  },
+  {
+    id: 'md-sup4', code: 'MDV-104', name: 'BD Becton Dickinson India Pvt. Ltd.', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Geetika Sharma', email: 'geetika.sharma@bd.com', phone: '+91 124 488 0000',
+    address: 'Plot 305A, Phase II, Udyog Vihar', city: 'Gurugram', state: 'Haryana',
+    productsServices: ['Needle hubs', 'Catheter components'],
+    rating: 4.7, performance: md(95, 94), certExpiry: '2027-11-30', lastAuditDate: '2025-11-12',
+    certifications: [
+      { id: 'md-sc7', name: 'ISO 13485:2016',  certificateNumber: 'BSI-MD-22414', issuedBy: 'BSI',       issuedDate: '2024-12-01', expiryDate: '2027-11-30', status: 'VALID' },
+      { id: 'md-sc8', name: 'US FDA 510(k) — component', certificateNumber: 'K224118', issuedBy: 'USFDA',     issuedDate: '2022-09-12', expiryDate: '2027-09-12', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa4', type: 'Routine surveillance', date: '2025-11-12', auditor: 'Karthik Iyer', score: 96, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2022-02-15T09:00:00Z', updatedAt: '2026-03-12T11:00:00Z',
+  },
+  {
+    id: 'md-sup5', code: 'MDV-105', name: 'Aravali Sterilization Services Ltd.', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Pradeep Joshi', email: 'pradeep.joshi@aravali-sterile.in', phone: '+91 1276 274 999',
+    address: 'IMT Manesar, Plot 18', city: 'Manesar', state: 'Haryana',
+    productsServices: ['Contract EO sterilization', 'Gamma sterilization'],
+    rating: 4.4, performance: md(91, 90), certExpiry: '2027-04-30', lastAuditDate: '2025-10-15',
+    certifications: [
+      { id: 'md-sc9',  name: 'ISO 13485:2016',  certificateNumber: 'TUV-2222',   issuedBy: 'TÜV SÜD',  issuedDate: '2024-05-01', expiryDate: '2027-04-30', status: 'VALID' },
+      { id: 'md-sc10', name: 'ISO 11135 EO',    certificateNumber: 'INTERTEK-991',issuedBy: 'Intertek', issuedDate: '2024-09-12', expiryDate: '2026-09-12', status: 'EXPIRING_SOON' },
+    ],
+    audits: [{ id: 'md-sa5', type: 'Sterilization vendor audit', date: '2025-10-15', auditor: 'Karthik Iyer', score: 88, status: 'COMPLETED', findings: '2 Minor', ncCount: 2 }],
+    createdAt: '2023-05-10T09:00:00Z', updatedAt: '2026-03-12T11:00:00Z',
+  },
+  {
+    id: 'md-sup6', code: 'MDV-106', name: 'Nelipak Healthcare Packaging', category: 'MAJOR', status: 'APPROVED',
+    contactPerson: 'Sanjay Krishnan', email: 'sanjay.k@nelipak.com', phone: '+91 80 4185 4000',
+    address: 'Plot 31, KIADB Industrial Area', city: 'Bengaluru', state: 'Karnataka',
+    productsServices: ['Thermoformed trays', 'Sterile barrier systems'],
+    rating: 4.5, performance: md(92, 91), certExpiry: '2027-02-15', lastAuditDate: '2025-12-09',
+    certifications: [
+      { id: 'md-sc11', name: 'ISO 11607-1 / -2', certificateNumber: 'DNV-MD-4477', issuedBy: 'DNV',      issuedDate: '2024-02-16', expiryDate: '2027-02-15', status: 'VALID' },
+      { id: 'md-sc12', name: 'ISO 13485:2016',   certificateNumber: 'DNV-MD-4478', issuedBy: 'DNV',      issuedDate: '2024-02-16', expiryDate: '2027-02-15', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa6', type: 'Packaging vendor surveillance', date: '2025-12-09', auditor: 'Neha Bansal', score: 93, status: 'COMPLETED', findings: '1 OFI', ncCount: 0 }],
+    createdAt: '2024-02-20T09:00:00Z', updatedAt: '2026-03-12T11:00:00Z',
+  },
+  {
+    id: 'md-sup7', code: 'MDV-107', name: 'Resonetics India LLP', category: 'MAJOR', status: 'PENDING',
+    contactPerson: 'Reema Jaiswal', email: 'reema.jaiswal@resonetics.com', phone: '+91 80 4123 5678',
+    address: 'EPIP Zone, Whitefield', city: 'Bengaluru', state: 'Karnataka',
+    productsServices: ['Laser-cut Nitinol stents', 'Precision micro-machining'],
+    rating: 4.0, performance: md(86, 84), certExpiry: '2027-05-31', lastAuditDate: '2026-02-04',
+    certifications: [
+      { id: 'md-sc13', name: 'ISO 13485:2016 (under transfer)', certificateNumber: 'BSI-MD-66501', issuedBy: 'BSI', issuedDate: '2024-06-01', expiryDate: '2027-05-31', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa7', type: 'Initial qualification audit', date: '2026-02-04', auditor: 'Sneha Kapoor', score: 84, status: 'COMPLETED', findings: '3 Minor — qualification in progress', ncCount: 3 }],
+    createdAt: '2025-12-10T09:00:00Z', updatedAt: '2026-02-15T11:00:00Z',
+  },
+  {
+    id: 'md-sup9', code: 'MDV-109', name: 'NIPRO India Corporation Pvt. Ltd.', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Hemant Joshi', email: 'hemant.joshi@nipro.in', phone: '+91 22 6612 8000',
+    address: 'Plot 14, MIDC Andheri (East)', city: 'Mumbai', state: 'Maharashtra',
+    productsServices: ['Medical-grade stainless steel needle tubing (304 / 316L)', 'Drawn micro-cannula stock'],
+    rating: 4.7, performance: md(96, 95), certExpiry: '2027-07-31', lastAuditDate: '2025-08-22',
+    certifications: [
+      { id: 'md-sc16', name: 'ISO 13485:2016',         certificateNumber: 'DNV-MD-9912', issuedBy: 'DNV',     issuedDate: '2024-08-01', expiryDate: '2027-07-31', status: 'VALID' },
+      { id: 'md-sc17', name: 'ASTM A249 / IS 6911',     certificateNumber: 'NABL-T-3344', issuedBy: 'NABL',   issuedDate: '2024-04-15', expiryDate: '2027-04-14', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa9', type: 'Tier-1 needle-tubing audit', date: '2025-08-22', auditor: 'Sneha Kapoor', score: 95, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2023-08-12T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'md-sup10', code: 'MDV-110', name: 'Reliance Industries Ltd. — Polymers Division', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Rajiv Bansal', email: 'rajiv.bansal@ril.com', phone: '+91 22 2278 5000',
+    address: 'Maker Chambers IV, Nariman Point', city: 'Mumbai', state: 'Maharashtra',
+    productsServices: ['Medical-grade polypropylene homopolymer (USP Class VI)', 'Medical-grade polyethylene resin'],
+    rating: 4.5, performance: md(94, 92), certExpiry: '2027-09-30', lastAuditDate: '2025-09-04',
+    certifications: [
+      { id: 'md-sc18', name: 'ISO 13485:2016 — material supplier', certificateNumber: 'BSI-MD-21077', issuedBy: 'BSI',  issuedDate: '2024-10-01', expiryDate: '2027-09-30', status: 'VALID' },
+      { id: 'md-sc19', name: 'USP Class VI Biocompatibility',     certificateNumber: 'IRQS-USP-2244', issuedBy: 'IRQS', issuedDate: '2024-02-15', expiryDate: '2027-02-14', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa10', type: 'Annual resin supplier audit', date: '2025-09-04', auditor: 'Sneha Kapoor', score: 93, status: 'COMPLETED', findings: '1 OFI on lot-traceability documentation', ncCount: 0 }],
+    createdAt: '2022-11-18T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'md-sup11', code: 'MDV-111', name: 'Mitsubishi Chemical Performance Polymers India', category: 'MAJOR', status: 'APPROVED',
+    contactPerson: 'Pradeep Iyer', email: 'pradeep.iyer@mcppolymers.in', phone: '+91 79 6612 0001',
+    address: 'Sanand GIDC, Phase II', city: 'Ahmedabad', state: 'Gujarat',
+    productsServices: ['Medical-grade silicone elastomer (Foley catheter dip)', 'TPE pellets (cannula septa / IV set tubing)'],
+    rating: 4.4, performance: md(91, 90), certExpiry: '2027-05-31', lastAuditDate: '2025-12-04',
+    certifications: [
+      { id: 'md-sc20', name: 'ISO 13485:2016',          certificateNumber: 'DNV-MD-8104',   issuedBy: 'DNV',       issuedDate: '2024-06-01', expiryDate: '2027-05-31', status: 'VALID' },
+      { id: 'md-sc21', name: 'ISO 10993 panel',          certificateNumber: 'TPL-MD-4011',   issuedBy: 'Sigma Lab', issuedDate: '2024-08-12', expiryDate: '2027-08-11', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa11', type: 'Silicone supplier audit', date: '2025-12-04', auditor: 'Neha Bansal', score: 92, status: 'COMPLETED', findings: '1 Minor — incoming-CoA template', ncCount: 1 }],
+    createdAt: '2024-05-08T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'md-sup12', code: 'MDV-112', name: 'Amcor Healthcare Packaging India', category: 'MAJOR', status: 'APPROVED',
+    contactPerson: 'Anuja Deshpande', email: 'anuja.deshpande@amcor.com', phone: '+91 124 469 9000',
+    address: 'Sector 18 IMT Manesar', city: 'Manesar', state: 'Haryana',
+    productsServices: ['PVC/Aclar blister films (syringe & cannula)', 'Tyvek-foil pouch laminates'],
+    rating: 4.6, performance: md(95, 94), certExpiry: '2027-02-15', lastAuditDate: '2025-12-09',
+    certifications: [
+      { id: 'md-sc22', name: 'ISO 11607-1 / -2', certificateNumber: 'DNV-PKG-2102',    issuedBy: 'DNV',  issuedDate: '2024-02-16', expiryDate: '2027-02-15', status: 'VALID' },
+      { id: 'md-sc23', name: 'ISO 13485:2016',   certificateNumber: 'DNV-MD-2103',    issuedBy: 'DNV',  issuedDate: '2024-02-16', expiryDate: '2027-02-15', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa12', type: 'Healthcare packaging audit', date: '2025-12-09', auditor: 'Neha Bansal', score: 94, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2024-02-12T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'md-sup8', code: 'MDV-108', name: 'Bioseparation Technologies CRO Pune', category: 'MAJOR', status: 'APPROVED',
+    contactPerson: 'Dr. Ramya Iyer', email: 'ramya.iyer@bst-cro.in', phone: '+91 20 6512 1212',
+    address: 'Pirangut MIDC, Block B', city: 'Pune', state: 'Maharashtra',
+    productsServices: ['ISO 10993 biocompatibility testing', 'USP <85> endotoxin LAL'],
+    rating: 4.4, performance: md(93, 88), certExpiry: '2027-10-30', lastAuditDate: '2025-11-22',
+    certifications: [
+      { id: 'md-sc14', name: 'NABL ISO 17025', certificateNumber: 'NABL-T-2031',   issuedBy: 'NABL',    issuedDate: '2024-10-31', expiryDate: '2027-10-30', status: 'VALID' },
+      { id: 'md-sc15', name: 'GLP — CDSCO',    certificateNumber: 'CDSCO-GLP-552', issuedBy: 'CDSCO',   issuedDate: '2024-04-12', expiryDate: '2027-04-11', status: 'VALID' },
+    ],
+    audits: [{ id: 'md-sa8', type: 'Contract lab audit', date: '2025-11-22', auditor: 'Sneha Kapoor', score: 91, status: 'COMPLETED', findings: '1 Minor, 1 OFI', ncCount: 1 }],
+    createdAt: '2024-10-12T09:00:00Z', updatedAt: '2026-03-01T11:00:00Z',
+  },
+];
+
+// Dairy tenant — typical supplier mix for an Indian dairy plant.
+const dy = (q: number, d: number) => ({
+  quality: q, delivery: d, cost: 80, responsiveness: 85, innovation: 70, overallScore: Math.round((q + d) / 2),
+  monthlyTrend: [
+    { month: 'Nov 25', score: Math.round((q + d) / 2) - 2 },
+    { month: 'Dec 25', score: Math.round((q + d) / 2) - 1 },
+    { month: 'Jan 26', score: Math.round((q + d) / 2) },
+    { month: 'Feb 26', score: Math.round((q + d) / 2) + 1 },
+    { month: 'Mar 26', score: Math.round((q + d) / 2) + 1 },
+    { month: 'Apr 26', score: Math.round((q + d) / 2) + 2 },
+  ],
+});
+
+export const mockDairySuppliers: Supplier[] = [
+  {
+    id: 'dy-sup1', code: 'DY-001', name: 'Pune Cluster Farmer Co-operative (Cluster A)', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Co-op Secretary Vijay Pawar', email: 'vp.cluster.a@dairycoop.in', phone: '+91 20 2421 1111',
+    address: 'Village Wagholi, Tal. Haveli', city: 'Pune', state: 'Maharashtra',
+    productsServices: ['Raw cow milk (3.5%+ fat)', 'Raw buffalo milk (6%+ fat)'],
+    rating: 4.4, performance: dy(91, 94), certExpiry: '2027-03-31', lastAuditDate: '2025-09-15',
+    certifications: [
+      { id: 'dy-sc1', name: 'FSSAI Petty Licence (group)', certificateNumber: 'FSSAI-PMC-MAH-12188', issuedBy: 'FSSAI',          issuedDate: '2024-04-01', expiryDate: '2027-03-31', status: 'VALID' },
+      { id: 'dy-sc2', name: 'Quality Agreement (signed)',   certificateNumber: 'QAA-DY-2024-04',     issuedBy: 'In-house',       issuedDate: '2024-04-01', expiryDate: '2026-04-01', status: 'EXPIRED' },
+    ],
+    audits: [{ id: 'dy-sa1', type: 'Farm Audit', date: '2025-09-15', auditor: 'Meera Pillai', score: 86, status: 'COMPLETED', findings: '1 Major, 1 Minor — antibiotic-withdrawal log (closed)', ncCount: 2 }],
+    createdAt: '2023-03-12T09:00:00Z', updatedAt: '2026-05-12T11:00:00Z',
+  },
+  {
+    id: 'dy-sup2', code: 'DY-002', name: 'Pune Cluster Farmer Co-operative (Cluster B)', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Co-op Secretary Sundar Jadhav', email: 'sj.cluster.b@dairycoop.in', phone: '+91 20 2421 2222',
+    address: 'Village Talegaon, Tal. Maval', city: 'Pune', state: 'Maharashtra',
+    productsServices: ['Raw cow milk (3.5%+ fat)'],
+    rating: 4.6, performance: dy(94, 95), certExpiry: '2027-04-30', lastAuditDate: '2025-09-19',
+    certifications: [
+      { id: 'dy-sc3', name: 'FSSAI Petty Licence (group)', certificateNumber: 'FSSAI-PMC-MAH-13044', issuedBy: 'FSSAI',          issuedDate: '2024-05-01', expiryDate: '2027-04-30', status: 'VALID' },
+    ],
+    audits: [{ id: 'dy-sa2', type: 'Farm Audit', date: '2025-09-19', auditor: 'Meera Pillai', score: 93, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2023-04-18T09:00:00Z', updatedAt: '2026-05-12T11:00:00Z',
+  },
+  {
+    id: 'dy-sup3', code: 'DY-003', name: 'Pune Cluster Farmer Co-operative (Cluster C)', category: 'MAJOR', status: 'CONDITIONAL',
+    contactPerson: 'Co-op Secretary Ramesh Kale', email: 'rk.cluster.c@dairycoop.in', phone: '+91 20 2421 3333',
+    address: 'Village Khed, Tal. Khed', city: 'Pune', state: 'Maharashtra',
+    productsServices: ['Raw cow milk (3.5%+ fat)', 'Raw buffalo milk (6%+ fat)'],
+    rating: 3.7, performance: dy(82, 86), certExpiry: '2026-09-30', lastAuditDate: '2026-05-10',
+    certifications: [
+      { id: 'dy-sc4', name: 'FSSAI Petty Licence (group)', certificateNumber: 'FSSAI-PMC-MAH-14502', issuedBy: 'FSSAI',          issuedDate: '2023-10-01', expiryDate: '2026-09-30', status: 'EXPIRING_SOON' },
+    ],
+    audits: [{ id: 'dy-sa3', type: 'For-cause audit (antibiotic residue)', date: '2026-05-10', auditor: 'Meera Pillai', score: 76, status: 'COMPLETED', findings: '1 Major (open) — antibiotic-withdrawal documentation', ncCount: 1 }],
+    createdAt: '2023-05-22T09:00:00Z', updatedAt: '2026-05-12T15:00:00Z',
+  },
+  {
+    id: 'dy-sup4', code: 'DY-004', name: 'Uflex Healthcare Films', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Rohan Garg', email: 'rohan.garg@uflex.in', phone: '+91 120 4779 0000',
+    address: 'A-1, Sector 60', city: 'Noida', state: 'Uttar Pradesh',
+    productsServices: ['3-layer LDPE milk-pouch film', 'Co-extruded barrier curd-cup laminate'],
+    rating: 4.5, performance: dy(93, 92), certExpiry: '2027-06-30', lastAuditDate: '2025-11-12',
+    certifications: [
+      { id: 'dy-sc5', name: 'BRCGS Packaging — AA',      certificateNumber: 'BRC-PKG-2024-7711',  issuedBy: 'BRC',             issuedDate: '2024-07-01', expiryDate: '2027-06-30', status: 'VALID' },
+      { id: 'dy-sc6', name: 'Food-contact compliance',   certificateNumber: 'FSSAI-21-2024-2244', issuedBy: 'FSSAI',           issuedDate: '2024-08-15', expiryDate: '2026-08-14', status: 'EXPIRING_SOON' },
+    ],
+    audits: [{ id: 'dy-sa4', type: 'Routine surveillance', date: '2025-11-12', auditor: 'Priya Khanna', score: 95, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2022-08-15T09:00:00Z', updatedAt: '2026-04-20T11:00:00Z',
+  },
+  {
+    id: 'dy-sup5', code: 'DY-005', name: 'Chr. Hansen India Pvt. Ltd.', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Dr. Sangeeta Iyer', email: 'sangeeta.iyer@chr-hansen.com', phone: '+91 20 4044 0000',
+    address: 'Hinjewadi Phase II, Plot 24', city: 'Pune', state: 'Maharashtra',
+    productsServices: ['DVS starter cultures (curd, dahi)', 'Probiotic strains (BB-12, LA-5)', 'Rennet for paneer'],
+    rating: 4.8, performance: dy(97, 95), certExpiry: '2027-08-31', lastAuditDate: '2025-10-04',
+    certifications: [
+      { id: 'dy-sc7', name: 'FSSC 22000:V6', certificateNumber: 'FSSC-VAS-22000-99012', issuedBy: 'Bureau Veritas', issuedDate: '2024-09-01', expiryDate: '2027-08-31', status: 'VALID' },
+      { id: 'dy-sc8', name: 'ISO 22000:2018', certificateNumber: 'BVQ-22000-11122',     issuedBy: 'Bureau Veritas', issuedDate: '2024-09-01', expiryDate: '2027-08-31', status: 'VALID' },
+    ],
+    audits: [{ id: 'dy-sa5', type: 'Tier-1 ingredient supplier audit', date: '2025-10-04', auditor: 'Anita Kulkarni', score: 96, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2023-09-14T09:00:00Z', updatedAt: '2026-03-30T11:00:00Z',
+  },
+  {
+    id: 'dy-sup6', code: 'DY-006', name: 'Parry Sugar Industries', category: 'MAJOR', status: 'APPROVED',
+    contactPerson: 'Kaushik Subramanian', email: 'kaushik.s@parrysugar.in', phone: '+91 80 3001 4000',
+    address: 'Crystal Plant, Bagalkot', city: 'Bagalkot', state: 'Karnataka',
+    productsServices: ['Crystallised sugar (M30)', 'Liquid sugar (66% Brix)'],
+    rating: 4.3, performance: dy(90, 92), certExpiry: '2027-05-31', lastAuditDate: '2025-12-04',
+    certifications: [
+      { id: 'dy-sc9',  name: 'FSSC 22000:V6', certificateNumber: 'FSSC-PSI-22-04412', issuedBy: 'TÜV India',      issuedDate: '2024-06-01', expiryDate: '2027-05-31', status: 'VALID' },
+      { id: 'dy-sc10', name: 'BIS IS 5982 (M30 sugar)', certificateNumber: 'BIS-9112-1', issuedBy: 'BIS',          issuedDate: '2024-04-15', expiryDate: '2027-04-14', status: 'VALID' },
+    ],
+    audits: [{ id: 'dy-sa6', type: 'Sugar supplier audit', date: '2025-12-04', auditor: 'Anita Kulkarni', score: 91, status: 'COMPLETED', findings: '1 Minor — moisture variability', ncCount: 1 }],
+    createdAt: '2023-06-19T09:00:00Z', updatedAt: '2026-03-30T11:00:00Z',
+  },
+  {
+    id: 'dy-sup7', code: 'DY-007', name: 'TGV Group SRA — Dairy Whitener Manufacturer', category: 'MAJOR', status: 'APPROVED',
+    contactPerson: 'Pradeep Reddy', email: 'pradeep.reddy@tgvgroup.in', phone: '+91 40 2349 6000',
+    address: 'Plot 17, Patancheru SEZ', city: 'Hyderabad', state: 'Telangana',
+    productsServices: ['Skim milk powder', 'Whole milk powder'],
+    rating: 4.4, performance: dy(91, 90), certExpiry: '2027-09-30', lastAuditDate: '2025-12-09',
+    certifications: [
+      { id: 'dy-sc11', name: 'BIS IS 1165 (SMP)', certificateNumber: 'BIS-1165-552', issuedBy: 'BIS',         issuedDate: '2024-10-01', expiryDate: '2027-09-30', status: 'VALID' },
+      { id: 'dy-sc12', name: 'FSSAI Central Licence', certificateNumber: 'FSSAI-CL-TS-21099', issuedBy: 'FSSAI', issuedDate: '2024-10-01', expiryDate: '2026-10-01', status: 'VALID' },
+    ],
+    audits: [{ id: 'dy-sa7', type: 'Milk-powder supplier audit', date: '2025-12-09', auditor: 'Anita Kulkarni', score: 92, status: 'COMPLETED', findings: '1 OFI on Pseudomonas trend reporting', ncCount: 0 }],
+    createdAt: '2024-02-12T09:00:00Z', updatedAt: '2026-03-30T11:00:00Z',
+  },
+  {
+    id: 'dy-sup8', code: 'DY-008', name: 'Tetra Pak India Pvt. Ltd.', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Sanjay Rao', email: 'sanjay.rao@tetrapak.com', phone: '+91 124 469 9000',
+    address: 'Cyber City, DLF Phase II', city: 'Gurugram', state: 'Haryana',
+    productsServices: ['Aseptic packaging machines + spares', '180/200/500ml TBA carton material'],
+    rating: 4.7, performance: dy(95, 94), certExpiry: '2027-02-15', lastAuditDate: '2025-11-21',
+    certifications: [
+      { id: 'dy-sc13', name: 'ISO 22000:2018', certificateNumber: 'DNV-TPK-22-7711', issuedBy: 'DNV',     issuedDate: '2024-02-16', expiryDate: '2027-02-15', status: 'VALID' },
+      { id: 'dy-sc14', name: 'FSSC 22000:V6',  certificateNumber: 'FSSC-TPK-22-771', issuedBy: 'DNV',     issuedDate: '2024-02-16', expiryDate: '2027-02-15', status: 'VALID' },
+    ],
+    audits: [{ id: 'dy-sa8', type: 'Equipment + packaging audit', date: '2025-11-21', auditor: 'Priya Khanna', score: 94, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2022-04-22T09:00:00Z', updatedAt: '2026-04-10T11:00:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface SupplierFilters {
@@ -415,14 +705,16 @@ interface SupplierFilters {
 }
 
 export function useSuppliers(filters: SupplierFilters = {}) {
+  const industry = useUserIndustry();
   return useQuery({
-    queryKey: ['suppliers', filters],
+    queryKey: ['suppliers', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/suppliers', { params: filters });
         return unwrapList<Supplier>(data, normalizeSupplier);
       } catch {
-        let filtered = [...mockSuppliers];
+        const baseList = pickByIndustry(industry, mockSuppliers, { medical_device: mockMedicalDeviceSuppliers, dairy: mockDairySuppliers });
+        let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((s) => s.status === filters.status);
         if (filters.category) filtered = filtered.filter((s) => s.category === filters.category);
         if (filters.search) {
@@ -441,14 +733,16 @@ export function useSuppliers(filters: SupplierFilters = {}) {
 }
 
 export function useSupplier(id: string) {
+  const industry = useUserIndustry();
   return useQuery<Supplier>({
-    queryKey: ['suppliers', id],
+    queryKey: ['suppliers', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/suppliers/${id}`);
         return unwrapItem<Supplier>(data, normalizeSupplier);
       } catch {
-        const supplier = mockSuppliers.find((s) => s.id === id);
+        const baseList = pickByIndustry(industry, mockSuppliers, { medical_device: mockMedicalDeviceSuppliers, dairy: mockDairySuppliers });
+        const supplier = baseList.find((s) => s.id === id);
         if (!supplier) throw new Error('Supplier not found');
         return supplier;
       }

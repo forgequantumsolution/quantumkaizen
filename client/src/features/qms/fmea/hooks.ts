@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import toast from 'react-hot-toast';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -312,6 +313,206 @@ export const mockFMEAs: FMEA[] = [
   })(),
 ];
 
+// Medical-device FMEAs — ISO 14971 / IEC 62366 aligned (DFMEA + PFMEA).
+const mockMedicalDeviceFailureModes: FMEAFailureMode[] = [
+  {
+    id: 'md-fm1', function: 'Deliver intravenous fluid at prescribed flow rate ±5%',
+    failureMode: 'Over-delivery >10% above setpoint',
+    effect: 'Fluid overload, pulmonary oedema, cardiac stress — potential patient harm',
+    severity: 9, cause: 'Software rounding error in dosage calculation (IEC 62304 Class B)',
+    occurrence: 3,
+    preventionControl: 'Code review checklist + unit tests covering rounding boundaries (IEC 62304 §5.5)',
+    detectionControl: 'Hardware-independent flow sensor cross-check; alarm at ±7% deviation',
+    detection: 3, rpn: 81, actionPriority: 'HIGH',
+    recommendedAction: 'Replace floating-point math with fixed-point dosage calc; re-run full IEC 62304 V&V',
+    responsible: 'Aditya Menon', targetDate: '2026-05-30',
+    actionTaken: 'Fixed-point refactor merged; V&V suite passed (CAPA-MD-2026-0014)',
+    newSeverity: 9, newOccurrence: 1, newDetection: 2, newRPN: 18,
+  },
+  {
+    id: 'md-fm2', function: 'Maintain sterile barrier through declared shelf life (3 years)',
+    failureMode: 'Sterile barrier failure (seal delamination)',
+    effect: 'Loss of sterility — surgical site infection or sepsis risk',
+    severity: 10, cause: 'Heat-seal temperature drift on tray sealer TS-04 (heater element wear)',
+    occurrence: 3,
+    preventionControl: 'Quarterly PM on heater elements; validated process window per ASTM F2096',
+    detectionControl: 'Daily seal-strength burst test on retention samples; SPC on seal temperature',
+    detection: 2, rpn: 60, actionPriority: 'HIGH',
+    recommendedAction: 'SPC with auto-stop on ±3 °C drift; replace heater elements on shorter interval',
+    responsible: 'Neha Bansal', targetDate: '2026-04-20',
+    actionTaken: 'Auto-stop SPC live; heater PM moved from 12-month to 6-month interval',
+    newSeverity: 10, newOccurrence: 1, newDetection: 2, newRPN: 20,
+  },
+  {
+    id: 'md-fm3', function: 'Allow safe over-the-needle vascular access',
+    failureMode: 'Catheter tip fracture during insertion',
+    effect: 'Retained foreign body; risk of embolism — severe patient harm',
+    severity: 10, cause: 'Polymer extrusion defect creating stress riser at hub-to-shaft transition',
+    occurrence: 2,
+    preventionControl: 'Extrusion process Cpk ≥ 1.67 monitored daily',
+    detectionControl: '100% visual inspection + tensile test (ASTM F640) on 0.1% AQL sample',
+    detection: 3, rpn: 60, actionPriority: 'HIGH',
+    recommendedAction: 'Add in-line laser micrometer for continuous wall-thickness verification',
+    responsible: 'Sneha Kapoor', targetDate: '2026-06-30',
+    actionTaken: 'PO raised for laser micrometer; install Q3 2026',
+    newSeverity: 10, newOccurrence: 1, newDetection: 2, newRPN: 20,
+  },
+];
+
+export const mockMedicalDeviceFMEAs: FMEA[] = [
+  {
+    id: 'md-fmea1', fmeaNumber: 'FMEA-MD-2026-001',
+    title: 'DFMEA — Smart Infusion Pump v3.x (firmware + flow control)',
+    type: 'DFMEA', productProcess: 'Smart Infusion Pump — Class IIb',
+    status: 'ACTIVE', owner: 'Aditya Menon', ownerId: 'u-md6',
+    teamMembers: ['Dr. Anjali Verma', 'Sneha Kapoor', 'Karthik Iyer'],
+    scope: 'Design failure modes for firmware-driven peristaltic infusion pump intended for adult ICU use; covers software, motor control, sensors, alarms and HMI per IEC 62366-1.',
+    maxRPN: 81, failureModes: mockMedicalDeviceFailureModes,
+    revisionHistory: [
+      { version: '1.0', date: '2025-11-12', author: 'Aditya Menon', changes: 'Initial DFMEA release supporting 510(k) submission' },
+      { version: '1.1', date: '2026-04-04', author: 'Aditya Menon', changes: 'Updated RPN for FM1 post-CAPA-MD-2026-0014 verification' },
+    ],
+    createdAt: '2025-11-12T09:00:00Z', updatedAt: '2026-04-04T15:00:00Z',
+  },
+  {
+    id: 'md-fmea2', fmeaNumber: 'FMEA-MD-2026-002',
+    title: 'PFMEA — EO Sterilization Process (infusion sets, surgical drapes)',
+    type: 'PFMEA', productProcess: 'EO Sterilization · 12-hour aeration cycle',
+    status: 'ACTIVE', owner: 'Karthik Iyer', ownerId: 'u-md2',
+    teamMembers: ['Dr. Anjali Verma', 'Rohit Khanna', 'Neha Bansal'],
+    scope: 'Sterilization process failure modes from product loading through bioburden challenge, EO exposure, aeration and release per ISO 11135.',
+    maxRPN: 90,
+    failureModes: [mockMedicalDeviceFailureModes[1]],
+    revisionHistory: [
+      { version: '2.0', date: '2026-04-08', author: 'Karthik Iyer', changes: 'Major revision post-NC-MD-2026-0042; added PLC alarm controls' },
+    ],
+    createdAt: '2024-06-01T09:00:00Z', updatedAt: '2026-04-08T11:00:00Z',
+  },
+  {
+    id: 'md-fmea3', fmeaNumber: 'FMEA-MD-2025-007',
+    title: 'DFMEA — Intraocular Lens Assembly (haptic-optic junction)',
+    type: 'DFMEA', productProcess: 'Intraocular Lens — Class IIb',
+    status: 'ACTIVE', owner: 'Sneha Kapoor', ownerId: 'u-md5',
+    teamMembers: ['Dr. Anjali Verma', 'Aditya Menon'],
+    scope: 'Design failure modes covering optic geometry, haptic angulation, biocompatibility of acrylic copolymer and edge-glistening risk over 10-year implant horizon.',
+    maxRPN: 75,
+    failureModes: [],
+    revisionHistory: [{ version: '1.0', date: '2025-08-12', author: 'Sneha Kapoor', changes: 'Initial release supporting CE-mark technical documentation' }],
+    createdAt: '2025-08-12T09:00:00Z', updatedAt: '2025-12-04T14:00:00Z',
+  },
+  {
+    id: 'md-fmea4', fmeaNumber: 'FMEA-MD-2025-005',
+    title: 'PFMEA — Cleanroom (Class 7) Aseptic Assembly Process',
+    type: 'PFMEA', productProcess: 'Class 7 Aseptic Assembly · ISO 14644',
+    status: 'ACTIVE', owner: 'Dr. Anjali Verma', ownerId: 'u-md1',
+    teamMembers: ['Neha Bansal', 'Karthik Iyer'],
+    scope: 'Process failure modes for cleanroom gowning, materials transfer, equipment cleaning, environmental monitoring and product handover to packaging.',
+    maxRPN: 84,
+    failureModes: [],
+    revisionHistory: [
+      { version: '1.0', date: '2024-11-21', author: 'Dr. Anjali Verma', changes: 'Initial release' },
+      { version: '1.1', date: '2026-04-10', author: 'Dr. Anjali Verma', changes: 'Added HEPA degradation failure mode post-NC-MD-2026-0041' },
+    ],
+    createdAt: '2024-11-21T09:00:00Z', updatedAt: '2026-04-10T11:00:00Z',
+  },
+  // ── Disposables product family ──────────────────────────────────────────
+  {
+    id: 'md-fmea5', fmeaNumber: 'FMEA-MD-2026-005',
+    title: 'DFMEA — 5 mL Disposable Syringe (DSY-26 family)',
+    type: 'DFMEA', productProcess: 'Disposable Syringe — Class IIa',
+    status: 'ACTIVE', owner: 'Aditya Menon', ownerId: 'u-md6',
+    teamMembers: ['Dr. Anjali Verma', 'Sneha Kapoor', 'Rohit Khanna'],
+    scope: 'Design failure modes covering barrel material, plunger lubrication, needle-hub bond, graduation accuracy and primary packaging sterile-barrier integrity for the 5 mL DSY-26 series.',
+    maxRPN: 72,
+    failureModes: [],
+    revisionHistory: [
+      { version: '1.0', date: '2025-01-12', author: 'Aditya Menon', changes: 'Initial DFMEA release supporting BIS / FDA 510(k) submission' },
+      { version: '1.1', date: '2026-04-08', author: 'Aditya Menon', changes: 'Added silicone-oil over-lubrication failure mode (post-NC-MD-2026-0037)' },
+    ],
+    createdAt: '2025-01-12T09:00:00Z', updatedAt: '2026-04-08T15:00:00Z',
+  },
+  {
+    id: 'md-fmea6', fmeaNumber: 'FMEA-MD-2026-006',
+    title: 'PFMEA — Hypodermic Needle Hub Assembly (NAM-04 Line)',
+    type: 'PFMEA', productProcess: 'Needle Hub Assembly · ASTM F1816',
+    status: 'ACTIVE', owner: 'Rohit Khanna', ownerId: 'u-md4',
+    teamMembers: ['Karthik Iyer', 'Aditya Menon'],
+    scope: 'Process failure modes for hub-to-cannula UV bonding, pin-bend straightening, lubrication application and blister sealing on Needle Assembly Machine NAM-04.',
+    maxRPN: 90,
+    failureModes: [],
+    revisionHistory: [{ version: '2.0', date: '2026-04-04', author: 'Rohit Khanna', changes: 'Major revision post-NC-MD-2026-0036; cam-follower wear pathway added' }],
+    createdAt: '2024-03-10T09:00:00Z', updatedAt: '2026-04-04T11:00:00Z',
+  },
+  {
+    id: 'md-fmea7', fmeaNumber: 'FMEA-MD-2026-007',
+    title: 'PFMEA — Foley Catheter Silicone Dip Moulding (FCT-MC-02)',
+    type: 'PFMEA', productProcess: 'Silicone Dip Moulding · ISO 20696',
+    status: 'ACTIVE', owner: 'Karthik Iyer', ownerId: 'u-md2',
+    teamMembers: ['Rohit Khanna', 'Sneha Kapoor'],
+    scope: 'Process failure modes for silicone bath temperature, dwell time, dip-cycle count, balloon wall thickness and burst-volume QA for the FCT-26 series Foley catheter family.',
+    maxRPN: 80,
+    failureModes: [],
+    revisionHistory: [{ version: '1.0', date: '2025-03-22', author: 'Karthik Iyer', changes: 'Initial release' }, { version: '1.1', date: '2026-04-12', author: 'Karthik Iyer', changes: 'Added thermocouple drift failure mode (post-NC-MD-2026-0033)' }],
+    createdAt: '2025-03-22T09:00:00Z', updatedAt: '2026-04-12T11:00:00Z',
+  },
+];
+
+// Dairy tenant — HACCP-aligned PFMEAs across raw-milk receiving, pasteurization,
+// curd / paneer / ghee processes and packaging.
+export const mockDairyFMEAs: FMEA[] = [
+  {
+    id: 'dy-fmea1', fmeaNumber: 'FMEA-DY-2026-001',
+    title: 'PFMEA — HTST Pasteurization (PHE-01 / PHE-02)',
+    type: 'PFMEA', productProcess: 'HTST Pasteurization · 72 °C / 15 s',
+    status: 'ACTIVE', owner: 'Ravi Deshmukh', ownerId: 'u-dy4',
+    teamMembers: ['Sandeep Joshi', 'Anita Kulkarni'],
+    scope: 'Failure modes for raw-milk reception into PHE feed tank, temperature control on PHE-01 / PHE-02, holding-tube residence-time, flow-diversion valve actuation and CIP recovery between batches.',
+    maxRPN: 90,
+    failureModes: [],
+    revisionHistory: [{ version: '2.0', date: '2026-04-25', author: 'Ravi Deshmukh', changes: 'Major revision post-NC-DY-2026-0038; thermometer-drift mode added' }],
+    createdAt: '2024-03-12T09:00:00Z', updatedAt: '2026-04-25T11:00:00Z',
+  },
+  {
+    id: 'dy-fmea2', fmeaNumber: 'FMEA-DY-2026-002',
+    title: 'PFMEA — Curd Fermentation & Cup Filling',
+    type: 'PFMEA', productProcess: 'Curd Fermentation · 42 °C / 6 h',
+    status: 'ACTIVE', owner: 'Anita Kulkarni', ownerId: 'u-dy3',
+    teamMembers: ['Ravi Deshmukh', 'Priya Khanna'],
+    scope: 'Failure modes for starter-culture inoculation, fermentation tank temperature uniformity, pH end-point, CIP between batches and cup-filling sealing integrity.',
+    maxRPN: 84,
+    failureModes: [],
+    revisionHistory: [{ version: '1.1', date: '2026-04-12', author: 'Anita Kulkarni', changes: 'Added CIP-shortcut failure mode (post NC-DY-2026-0034)' }],
+    createdAt: '2024-11-10T09:00:00Z', updatedAt: '2026-04-12T11:00:00Z',
+  },
+  {
+    id: 'dy-fmea3', fmeaNumber: 'FMEA-DY-2026-003',
+    title: 'PFMEA — Ghee Boiling & Clarification',
+    type: 'PFMEA', productProcess: 'Ghee Clarification · BIS IS 3508',
+    status: 'ACTIVE', owner: 'Ravi Deshmukh', ownerId: 'u-dy4',
+    teamMembers: ['Anita Kulkarni'],
+    scope: 'Failure modes for butter ageing, boiling-kettle temperature profile, sediment removal, FFA monitoring and 1L tin filling on the ghee line.',
+    maxRPN: 72,
+    failureModes: [],
+    revisionHistory: [{ version: '1.2', date: '2026-03-28', author: 'Ravi Deshmukh', changes: 'Tightened butter-to-ghee turnaround to 48 h post NC-DY-2026-0029' }],
+    createdAt: '2025-02-19T09:00:00Z', updatedAt: '2026-03-28T11:00:00Z',
+  },
+  {
+    id: 'dy-fmea4', fmeaNumber: 'FMEA-DY-2026-004',
+    title: 'PFMEA — Form-Fill-Seal Milk Pouch Lines',
+    type: 'PFMEA', productProcess: 'FFS Milk-Pouch Filling',
+    status: 'ACTIVE', owner: 'Priya Khanna', ownerId: 'u-dy5',
+    teamMembers: ['Sandeep Joshi', 'Ravi Deshmukh'],
+    scope: 'Failure modes for product feed temperature, fill-volume accuracy, heat-seal jaw temperature, dwell time, date/MRP printing and drop-test reject rate across FFS-01 to FFS-04.',
+    maxRPN: 80,
+    failureModes: [],
+    revisionHistory: [
+      { version: '2.0', date: '2026-03-15', author: 'Priya Khanna', changes: 'Heat-seal jaw wear failure mode added post NC-DY-2026-0024' },
+      { version: '2.1', date: '2026-04-28', author: 'Priya Khanna', changes: 'Best-before / MRP misprint failure mode added post NC-DY-2025-0118' },
+    ],
+    createdAt: '2024-08-05T09:00:00Z', updatedAt: '2026-04-28T11:00:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface FMEAFilters {
@@ -321,15 +522,17 @@ interface FMEAFilters {
 }
 
 export function useFMEAs(filters: FMEAFilters = {}) {
+  const industry = useUserIndustry();
   return useQuery({
-    queryKey: ['fmeas', filters],
+    queryKey: ['fmeas', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         // Backend mount is /qms/fmea (singular)
         const { data } = await api.get('/qms/fmea', { params: filters });
         return unwrapList<FMEA>(data);
       } catch {
-        let filtered = [...mockFMEAs];
+        const baseList = pickByIndustry(industry, mockFMEAs, { medical_device: mockMedicalDeviceFMEAs, dairy: mockDairyFMEAs });
+        let filtered = [...baseList];
         if (filters.type) filtered = filtered.filter((f) => f.type === filters.type);
         if (filters.status) filtered = filtered.filter((f) => f.status === filters.status);
         if (filters.search) {
@@ -348,18 +551,24 @@ export function useFMEAs(filters: FMEAFilters = {}) {
 }
 
 export function useFMEA(id: string) {
+  const industry = useUserIndustry();
   return useQuery<FMEA>({
-    queryKey: ['fmeas', id],
+    queryKey: ['fmeas', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/fmea/${id}`);
         return unwrapItem<FMEA>(data);
       } catch {
-        const fmea = mockFMEAs.find((f) => f.id === id);
+        const baseList = pickByIndustry(industry, mockFMEAs, { medical_device: mockMedicalDeviceFMEAs, dairy: mockDairyFMEAs });
+        const fmea = baseList.find((f) => f.id === id);
         if (!fmea) throw new Error('FMEA not found');
-        // For fmea1, return with failure modes; for others, generate some
-        if (fmea.id === 'fmea1') return fmea;
-        return { ...fmea, failureModes: mockFailureModes1.slice(0, 3) };
+        // For records with no failure modes, lazily attach a representative
+        // sample so the detail page has data to render.
+        if (fmea.failureModes && fmea.failureModes.length > 0) return fmea;
+        const fallbackModes = industry === 'medical_device'
+          ? mockMedicalDeviceFailureModes
+          : mockFailureModes1.slice(0, 3);
+        return { ...fmea, failureModes: fallbackModes };
       }
     },
     enabled: !!id,

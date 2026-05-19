@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem } from '@/lib/apiShape';
+import { useUserIndustry } from '@/lib/userIndustry';
 
 // Backend row shape is a subset of the UI's. Default missing arrays to [] so
 // list-page `.slice()/.length/.map()` calls don't crash on real data.
@@ -384,11 +385,302 @@ export const mockPharmaRequirements: ComplianceRequirement[] = [
   pharmaRow('pr-usp-7',   'USP <797>', '7',   'Environmental controls',                                'Primary engineering controls (PEC) shall be located in a SEC.', 'COMPLIANT', 'Kavita Menon', 'Class 5 isolator qualification; EM trending.'),
 ];
 
+// Medical-device compliance register — ISO 13485 / 21 CFR 820 / EU MDR / ISO 14971.
+export const mockMedicalDeviceRequirements: ComplianceRequirement[] = [
+  {
+    id: 'md-cr1', standard: 'ISO 13485', clauseNumber: '4.2.3', clauseTitle: 'Medical device file',
+    clauseText: 'The organization shall establish and maintain one or more files containing documents generated to demonstrate conformity to the requirement of this International Standard and compliance with applicable regulatory requirements.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-MD-QMS-04 Medical Device File Management'],
+    linkedDocuments: ['DHF-DEV-MD-027 Smart Infusion Pump', 'DHF-DEV-MD-019 IOL Family'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-02-10', nextReview: '2026-08-10', assessor: 'Dr. Anjali Verma',
+    findings: 'All product-family DHFs maintained per SOP. Spot-checked 3 files — controlled, traceable.',
+    gapActions: [], assessmentHistory: [{ date: '2026-02-10', assessor: 'Dr. Anjali Verma', status: 'COMPLIANT', notes: 'No gaps.' }],
+  },
+  {
+    id: 'md-cr2', standard: 'ISO 13485', clauseNumber: '7.3.2', clauseTitle: 'Design and development planning',
+    clauseText: 'The organization shall plan and control the design and development of product. Design and development plans shall be maintained.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-MD-DC-01 Design Control Procedure'],
+    linkedDocuments: ['DP-INF-PUMP-v3 Design Plan'],
+    linkedCAPAs: [], lastAssessed: '2026-03-01', nextReview: '2026-09-01', assessor: 'Aditya Menon',
+    findings: 'Design plans current; phase gates documented in DHF.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'md-cr3', standard: 'ISO 13485', clauseNumber: '7.3.7', clauseTitle: 'Design and development verification',
+    clauseText: 'Design and development verification shall be performed in accordance with planned and documented arrangements to ensure that the design and development outputs have met the design and development input requirements.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-MD-DC-03 Design Verification'],
+    linkedDocuments: ['DV-PROT-MD-019'],
+    linkedCAPAs: ['CAPA-MD-2026-0014'],
+    lastAssessed: '2026-04-15', nextReview: '2026-07-15', assessor: 'Dr. Anjali Verma',
+    findings: 'Internal audit MD-F1 noted DV-PROT-MD-019 missing pre-defined acceptance criteria on one bench test. Open NC.',
+    gapActions: [
+      { id: 'md-ga1', action: 'Revise DV-PROT-MD-019 — add quantitative acceptance criteria for all bench tests', owner: 'Aditya Menon', dueDate: '2026-05-15', status: 'Open' },
+    ],
+    assessmentHistory: [{ date: '2026-04-15', assessor: 'Dr. Anjali Verma', status: 'PARTIAL', notes: 'Open from MD-F1' }],
+  },
+  {
+    id: 'md-cr4', standard: 'ISO 13485', clauseNumber: '7.5.7', clauseTitle: 'Particular requirements for sterile medical devices',
+    clauseText: 'The organization shall maintain records of the parameters of the sterilization process used for each sterilization batch. Sterilization records shall be traceable to each production batch of medical devices.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-MD-EOS-01 EO Sterilization', 'SOP-MD-EOS-02 Sterilization Records'],
+    linkedDocuments: ['VMP-MD-2025-04 Sterilization Master Plan'],
+    linkedCAPAs: ['CAPA-MD-2026-0019'],
+    lastAssessed: '2026-04-12', nextReview: '2026-10-12', assessor: 'Karthik Iyer',
+    findings: 'Sterilization records traceable to each batch; CAPA-MD-2026-0019 strengthening parameter-recovery controls.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'md-cr5', standard: 'ISO 13485', clauseNumber: '8.2.1', clauseTitle: 'Feedback (Complaints / Vigilance)',
+    clauseText: 'The organization shall document procedures for the feedback process. This feedback process shall include provisions to gather data from production as well as post-production activities.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-MD-PMS-01 Post-Market Surveillance'],
+    linkedDocuments: ['Q3-2025 Vigilance Trend Report'],
+    linkedCAPAs: [],
+    lastAssessed: '2025-11-08', nextReview: '2026-05-08', assessor: 'Dr. Anjali Verma',
+    findings: 'Q3 2025 vigilance trend report missed PRRC sign-off (audit finding MD-F4).',
+    gapActions: [
+      { id: 'md-ga2', action: 'Implement auto-escalation rule: serious event → PRRC notification ≤24h', owner: 'Aditya Menon', dueDate: '2026-05-30', status: 'In Progress' },
+    ],
+    assessmentHistory: [],
+  },
+  {
+    id: 'md-cr6', standard: '21 CFR 820', clauseNumber: '820.30', clauseTitle: 'Design Controls',
+    clauseText: 'Each manufacturer of any class III or class II device shall establish and maintain procedures to control the design of the device in order to ensure that specified design requirements are met.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-MD-DC-01', 'SOP-MD-DC-02', 'SOP-MD-DC-03'],
+    linkedDocuments: ['DHF-DEV-MD-027', 'DHF-DEV-MD-019'],
+    linkedCAPAs: [], lastAssessed: '2026-02-25', nextReview: '2026-08-25', assessor: 'Aditya Menon',
+    findings: 'Design control system aligned with 21 CFR 820.30 (a)–(j). Last FDA inspection: no observations.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'md-cr7', standard: '21 CFR 820', clauseNumber: '820.198', clauseTitle: 'Complaint Files',
+    clauseText: 'Each manufacturer shall maintain complaint files and establish and maintain procedures for receiving, reviewing, and evaluating complaints by a formally designated unit.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-MD-CMP-01 Complaint Handling'],
+    linkedDocuments: ['Complaint Master Register'],
+    linkedCAPAs: [], lastAssessed: '2026-03-15', nextReview: '2026-09-15', assessor: 'Neha Bansal',
+    findings: 'Formally designated complaint unit in place. MDR-reportability decision tree updated 2026-Q1.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'md-cr8', standard: '21 CFR 820', clauseNumber: '820.50', clauseTitle: 'Purchasing Controls',
+    clauseText: 'Each manufacturer shall establish and maintain procedures to ensure that all purchased or otherwise received product and services conform to specified requirements.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-MD-PUR-01 Supplier Qualification'],
+    linkedDocuments: ['Approved Supplier List'],
+    linkedCAPAs: [],
+    lastAssessed: '2025-09-25', nextReview: '2026-03-25', assessor: 'Neha Bansal',
+    findings: 'Supplier audit AUD-MD-2025-005 identified unauthorised manufacturing-site change at Specur Polymers (MDV-103). CAR open.',
+    gapActions: [{ id: 'md-ga3', action: 'Close Specur Polymers CAR; tighten change-notification SLA in QAA', owner: 'Neha Bansal', dueDate: '2026-05-15', status: 'In Progress' }],
+    assessmentHistory: [],
+  },
+  {
+    id: 'md-cr9', standard: 'EU MDR 2017/745', clauseNumber: 'Art. 10(9)', clauseTitle: 'Quality management system obligations',
+    clauseText: 'Manufacturers shall establish, document, implement, maintain, keep up to date and continually improve a quality management system that shall ensure compliance in the most effective manner and in a manner that is proportionate to the risk class.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-MD-QMS-01 Quality Manual'],
+    linkedDocuments: ['Quality Manual MD-QM-2025'],
+    linkedCAPAs: [], lastAssessed: '2025-11-05', nextReview: '2026-05-05', assessor: 'Dr. Anjali Verma',
+    findings: 'QMS aligned with EU MDR Article 10(9). Recent TÜV SÜD surveillance audit closed with all findings addressed.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'md-cr10', standard: 'EU MDR 2017/745', clauseNumber: 'Annex XIV Part B', clauseTitle: 'Post-market clinical follow-up (PMCF)',
+    clauseText: 'PMCF shall be understood to be a continuous process that updates the clinical evaluation referred to in Article 61 and Part A of this Annex and shall be addressed in the manufacturer\'s post-market surveillance plan.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-MD-PMS-02 PMCF Process'],
+    linkedDocuments: ['PMS Plan v3'],
+    linkedCAPAs: [],
+    lastAssessed: '2025-11-05', nextReview: '2026-05-05', assessor: 'Sneha Kapoor',
+    findings: 'PMS plan did not include quantitative criteria for trending FSNs across product families (notified body finding MD-F3).',
+    gapActions: [{ id: 'md-ga4', action: 'Revise PMS plan with quantitative FSN-trend thresholds per product family', owner: 'Sneha Kapoor', dueDate: '2026-05-15', status: 'In Progress' }],
+    assessmentHistory: [],
+  },
+  {
+    id: 'md-cr11', standard: 'EU MDR 2017/745', clauseNumber: 'Art. 27', clauseTitle: 'Unique Device Identification system',
+    clauseText: 'In order to allow the identification and to facilitate the traceability of devices, other than custom-made and investigational devices, the UDI system shall be established and shall allow the identification of devices through their distribution and use.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-MD-UDI-01 UDI Assignment', 'SOP-MD-UDI-02 UDI Print/Verify'],
+    linkedDocuments: ['UDI Master Register'],
+    linkedCAPAs: ['CAPA-MD-2026-0017'],
+    lastAssessed: '2026-04-01', nextReview: '2026-10-01', assessor: 'Aditya Menon',
+    findings: 'UDI assigned per product family; EUDAMED submission current. NC-MD-2026-0040 corrective action verified.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'md-cr12', standard: 'ISO 14971', clauseNumber: '4.4', clauseTitle: 'Risk management file',
+    clauseText: 'The risk management file shall provide traceability for each identified hazard to: (a) the risk analysis; (b) the risk evaluation; (c) the implementation and verification of the risk control measures; (d) the assessment of the acceptability of any residual risks.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-MD-RM-01 Risk Management'],
+    linkedDocuments: ['RMF-ISO14971-v3'],
+    linkedCAPAs: [], lastAssessed: '2026-03-20', nextReview: '2026-09-20', assessor: 'Dr. Anjali Verma',
+    findings: 'RMF traceability matrix current. Hazards linked to design outputs and risk controls.',
+    gapActions: [], assessmentHistory: [],
+  },
+];
+
+// Dairy tenant — FSSAI Schedule 4 / FSS Act / ISO 22000 / BIS / Codex.
+export const mockDairyRequirements: ComplianceRequirement[] = [
+  {
+    id: 'dy-cr1', standard: 'FSSAI Schedule 4', clauseNumber: 'Part II §1', clauseTitle: 'General hygienic requirements — sanitary food premises',
+    clauseText: 'The food premises shall be located, designed and constructed to ensure that food is not contaminated and is suitable for the intended use, including pest control and waste disposal arrangements.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-DY-HYG-01 Sanitary Premises'],
+    linkedDocuments: ['Plant Layout Drawing 2026', 'Pest Control Service Contract 2026'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-04-22', nextReview: '2026-10-22', assessor: 'Sandeep Joshi',
+    findings: 'Plant layout, hygienic-zone segregation and pest-control program align with FSSAI Schedule 4 Part II §1.',
+    gapActions: [], assessmentHistory: [{ date: '2026-04-22', assessor: 'Sandeep Joshi', status: 'COMPLIANT', notes: 'No gaps.' }],
+  },
+  {
+    id: 'dy-cr2', standard: 'FSSAI Schedule 4', clauseNumber: 'Part II §3', clauseTitle: 'Personal hygiene of food handlers',
+    clauseText: 'Food handlers shall maintain personal hygiene and undergo medical examination once a year. Handlers shall be free from any communicable disease.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-DY-HYG-02 Personal Hygiene'],
+    linkedDocuments: ['Annual Medical Examination Register 2026'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-04-22', nextReview: '2027-04-22', assessor: 'Priya Khanna',
+    findings: 'All 124 food handlers had annual medical examinations completed by Apr 2026; gowning/hairnet/gloves SOP enforced.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr3', standard: 'FSSAI 2.1.1', clauseNumber: '2.1.1.1', clauseTitle: 'Milk — Standards & label declarations',
+    clauseText: 'Milk shall conform to the standards specified for the named variety (toned, double-toned, full-cream, standardised) with respect to minimum milk fat and minimum SNF percentage.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-DY-LAB-12 Fat / SNF Analysis'],
+    linkedDocuments: ['Fat-SNF release register'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-05-07', nextReview: '2026-08-07', assessor: 'Anita Kulkarni',
+    findings: 'NC-DY-2026-0039 identified Full-Cream Milk batch PFC-26-0218 at 5.7% fat vs. 6.0% minimum. CAPA under definition.',
+    gapActions: [
+      { id: 'dy-ga1', action: 'Recalibrate cream-separator standardisation set-point on Line PHE-01', owner: 'Ravi Deshmukh', dueDate: '2026-05-25', status: 'In Progress' },
+    ],
+    assessmentHistory: [{ date: '2026-05-07', assessor: 'Anita Kulkarni', status: 'PARTIAL', notes: 'Open from NC-DY-2026-0039' }],
+  },
+  {
+    id: 'dy-cr4', standard: 'FSSAI 2.3.4', clauseNumber: '2.3.4 (i)', clauseTitle: 'Antibiotic residues in milk and milk products',
+    clauseText: 'Veterinary drug residues in milk and milk products shall not exceed the maximum residue limits as prescribed by Codex Alimentarius.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-DY-PROC-04 Raw-milk Acceptance'],
+    linkedDocuments: ['Charm SL beta-lactam screening log'],
+    linkedCAPAs: ['CAPA-DY-2026-0017'],
+    lastAssessed: '2026-05-10', nextReview: '2026-08-10', assessor: 'Meera Pillai',
+    findings: 'NC-DY-2026-0040 beta-lactam positive on Tanker T-2026-0498. Source farm suspended; CAPA in implementation.',
+    gapActions: [
+      { id: 'dy-ga2', action: 'Deploy Charm SL beta-lactam dipsticks at all 18 village collection centres', owner: 'Sandeep Joshi', dueDate: '2026-05-20', status: 'In Progress' },
+    ],
+    assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr5', standard: 'FSSAI 2.3.5', clauseNumber: '2.3.5', clauseTitle: 'Aflatoxin M1 in milk',
+    clauseText: 'The level of Aflatoxin M1 in milk and milk products shall not exceed 0.5 µg/kg.',
+    status: 'NON_COMPLIANT',
+    linkedProcedures: ['SOP-DY-LAB-08 Aflatoxin M1 ELISA'],
+    linkedDocuments: ['Aflatoxin M1 Test Register'],
+    linkedCAPAs: ['CAPA-DY-2026-0019'],
+    lastAssessed: '2026-05-16', nextReview: '2026-07-16', assessor: 'Anita Kulkarni',
+    findings: 'NC-DY-2026-0042 — AfM1 at 0.71 µg/kg on Tanker T-2026-0512. Tanker rejected; feed audit + monsoon-screening program in CAPA-DY-2026-0019.',
+    gapActions: [
+      { id: 'dy-ga3', action: 'Pre-monsoon AfM1 sampling (twice-weekly Apr–Sep) for all procurement routes', owner: 'Anita Kulkarni', dueDate: '2026-06-10', status: 'In Progress' },
+    ],
+    assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr6', standard: 'FSSAI 2.3.2', clauseNumber: '2.3.2', clauseTitle: 'Microbiological standards — pasteurized milk',
+    clauseText: 'Pasteurized milk shall conform to the specified microbiological standards: Total Plate Count NMT 30 000 cfu/ml, Coliforms NMT 10 cfu/ml, Phosphatase test negative.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-DY-MICRO-02 Microbial Limits Testing'],
+    linkedDocuments: ['Microbiology Release Register Q1 2026'],
+    linkedCAPAs: ['CAPA-DY-2026-0018'],
+    lastAssessed: '2026-05-14', nextReview: '2026-08-14', assessor: 'Anita Kulkarni',
+    findings: 'NC-DY-2026-0041 TPC 95 000 cfu/ml on batch PTM-26-0431. CIP recipe lock + ATP-swab verification in CAPA-DY-2026-0018.',
+    gapActions: [],
+    assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr7', standard: 'ISO 22000', clauseNumber: '7.1.3', clauseTitle: 'Externally provided processes, products and services',
+    clauseText: 'The organization shall establish criteria for the evaluation, selection, monitoring of performance and re-evaluation of external providers of processes, products and services.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-DY-PROC-01 Supplier Qualification'],
+    linkedDocuments: ['Approved Supplier List', 'Annual Supplier Scorecards'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-04-12', nextReview: '2026-10-12', assessor: 'Meera Pillai',
+    findings: 'Supplier qualification, approval and re-evaluation cadence aligned with ISO 22000 §7.1.3. Annual scorecard distributed Apr 2026.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr8', standard: 'ISO 22000', clauseNumber: '8.5.1', clauseTitle: 'Establishment of HACCP plan',
+    clauseText: 'The HACCP plan shall be developed, documented and maintained for each product or process, identifying significant hazards, CCPs, critical limits, monitoring and verification.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-DY-HACCP-01 HACCP Plan Authoring'],
+    linkedDocuments: ['HACCP-PLAN-MILK-v6', 'HACCP-PLAN-CURD-v3', 'HACCP-PLAN-GHEE-v2'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-04-12', nextReview: '2026-10-12', assessor: 'Sandeep Joshi',
+    findings: 'HACCP plans for milk, curd, paneer, ghee and sweets all current. CCP monitoring records 100% complete in Q1 2026.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr9', standard: 'ISO 22000', clauseNumber: '8.6.1', clauseTitle: 'Calibration / verification of monitoring and measuring equipment',
+    clauseText: 'The organization shall ensure that monitoring and measuring activities required for food safety control are reliable, including calibration / verification of measuring equipment.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-DY-CAL-01 Equipment Calibration'],
+    linkedDocuments: ['Calibration Master Schedule'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-04-22', nextReview: '2026-07-22', assessor: 'Priya Khanna',
+    findings: 'Audit DY-F1 noted pasteurizer-outlet thermometer drift not captured in shift-handover log on 2026-04-18. Calibration tightened.',
+    gapActions: [{ id: 'dy-ga4', action: 'Add temperature-drift column to shift handover log', owner: 'Priya Khanna', dueDate: '2026-05-30', status: 'In Progress' }],
+    assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr10', standard: 'BIS IS 3508', clauseNumber: '§5.1', clauseTitle: 'Ghee — chemical requirements',
+    clauseText: 'Ghee shall conform to the requirements for moisture (NMT 0.5%), butyro-refractometer reading at 40 °C (40-43), Reichert value (NMT 31), free fatty acids (NMT 3.0%) as oleic acid and other parameters as specified in IS 3508.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-DY-LAB-15 Ghee Chemistry'],
+    linkedDocuments: ['Ghee batch release register'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-03-25', nextReview: '2026-06-25', assessor: 'Anita Kulkarni',
+    findings: 'NC-DY-2026-0029 — Ghee batch GHC-26-0091 FFA 3.4% vs. NMT 3.0%. CAPA closed; butter-to-ghee turnaround now 48 h.',
+    gapActions: [],
+    assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr11', standard: 'BIS IS 1166', clauseNumber: '§4', clauseTitle: 'Skim Milk Powder — chemical & microbiological requirements',
+    clauseText: 'Skim milk powder shall conform to the requirements specified — moisture NMT 4.5%, fat NMT 1.5%, protein NLT 34%, solubility, scorched particles and microbiological limits as per IS 1166.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-DY-LAB-09 Powder Analysis'],
+    linkedDocuments: ['Dairy Whitener QA File'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-03-18', nextReview: '2026-09-18', assessor: 'Anita Kulkarni',
+    findings: 'Dairy whitener / SMP release lots Q1 2026 within IS 1166 limits. Supplier audit AUD-DY-2025-FARM closed.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'dy-cr12', standard: 'FSSAI Labelling 2020', clauseNumber: 'Reg 2.2', clauseTitle: 'Pre-packaged food labelling — best-before, MRP, FSSAI logo & licence',
+    clauseText: 'Pre-packaged food labels shall declare name, list of ingredients, nutritional information, vegetarian / non-vegetarian symbol, FSSAI logo + licence number, net quantity, MRP, best-before / use-by date and address of manufacturer.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-DY-LABEL-04 Label Generation'],
+    linkedDocuments: ['Artwork master register'],
+    linkedCAPAs: [],
+    lastAssessed: '2025-09-22', nextReview: '2026-03-22', assessor: 'Priya Khanna',
+    findings: 'NC-DY-2025-0118 — date-print error on lot PFC-25-0612 quarantined. Two-person sign-off on FFS date change now mandatory.',
+    gapActions: [
+      { id: 'dy-ga5', action: 'Deploy vision-system best-before / MRP verification at end-of-line on FFS-02/03/04', owner: 'Sandeep Joshi', dueDate: '2026-09-30', status: 'Open' },
+    ],
+    assessmentHistory: [],
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 export function useComplianceRequirements(standard?: string) {
+  const industry = useUserIndustry();
   return useQuery({
-    queryKey: ['compliance', standard],
+    queryKey: ['compliance', standard, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/compliance', {
@@ -399,34 +691,44 @@ export function useComplianceRequirements(standard?: string) {
         });
         return unwrapList<ComplianceRequirement>(data, normalizeCompliance);
       } catch {
-        // Offline fallback — the pharma register (matches server/prisma/seedMore.ts)
-        // is the default dataset; legacy ISO/IATF mocks handle their named tabs.
+        // Industry-scoped tenants see their own clause register. Pharma + ISO
+        // defaults are reserved for the legacy multi-industry view.
         let requirements: ComplianceRequirement[];
-        switch (standard) {
-          case 'IATF 16949':
-            requirements = mockIATFRequirements;
-            break;
-          case 'ISO 14001':
-            requirements = mockISO14001Requirements;
-            break;
-          case 'ISO 45001':
-            requirements = mockISO45001Requirements;
-            break;
-          case 'ISO 9001':
-            requirements = mockRequirements;
-            break;
-          default:
-            // "All" tab + any pharma-specific standard — return all 40 pharma reqs
-            // and also the three ISO/IATF entries so every page-level tab has data.
-            requirements = [
-              ...mockPharmaRequirements,
-              ...mockRequirements,
-              ...mockIATFRequirements,
-              ...mockISO14001Requirements,
-              ...mockISO45001Requirements,
-            ];
-            // If a specific pharma standard was requested, filter down.
-            if (standard) requirements = requirements.filter(r => r.standard === standard);
+        if (industry === 'medical_device') {
+          requirements = standard
+            ? mockMedicalDeviceRequirements.filter(r => r.standard === standard)
+            : mockMedicalDeviceRequirements;
+        } else if (industry === 'dairy') {
+          requirements = standard
+            ? mockDairyRequirements.filter(r => r.standard === standard)
+            : mockDairyRequirements;
+        } else {
+          switch (standard) {
+            case 'IATF 16949':
+              requirements = mockIATFRequirements;
+              break;
+            case 'ISO 14001':
+              requirements = mockISO14001Requirements;
+              break;
+            case 'ISO 45001':
+              requirements = mockISO45001Requirements;
+              break;
+            case 'ISO 9001':
+              requirements = mockRequirements;
+              break;
+            default:
+              // "All" tab + any pharma-specific standard — return all 40 pharma reqs
+              // and also the three ISO/IATF entries so every page-level tab has data.
+              requirements = [
+                ...mockPharmaRequirements,
+                ...mockRequirements,
+                ...mockIATFRequirements,
+                ...mockISO14001Requirements,
+                ...mockISO45001Requirements,
+              ];
+              // If a specific pharma standard was requested, filter down.
+              if (standard) requirements = requirements.filter(r => r.standard === standard);
+          }
         }
         return { data: requirements, total: requirements.length, page: 1, pageSize: requirements.length, totalPages: 1 };
       }
@@ -436,14 +738,18 @@ export function useComplianceRequirements(standard?: string) {
 }
 
 export function useComplianceRequirement(id: string) {
+  const industry = useUserIndustry();
   return useQuery<ComplianceRequirement>({
-    queryKey: ['compliance', 'detail', id],
+    queryKey: ['compliance', 'detail', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/compliance/${id}`);
         return unwrapItem<ComplianceRequirement>(data, normalizeCompliance);
       } catch {
-        const all = [...mockRequirements, ...mockIATFRequirements, ...mockISO14001Requirements, ...mockISO45001Requirements];
+        const all =
+          industry === 'medical_device' ? mockMedicalDeviceRequirements :
+          industry === 'dairy'          ? mockDairyRequirements :
+          [...mockRequirements, ...mockIATFRequirements, ...mockISO14001Requirements, ...mockISO45001Requirements, ...mockPharmaRequirements];
         const req = all.find((r) => r.id === id);
         if (!req) throw new Error('Requirement not found');
         return req;

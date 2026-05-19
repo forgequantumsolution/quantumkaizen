@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 
 const flattenAudit = (a: Record<string, unknown>) => flattenUsers(a, ['createdBy']);
 
@@ -189,16 +190,142 @@ const mockAudits: Audit[] = [
   },
 ];
 
+// Medical-device audits — ISO 13485, 21 CFR Part 820, MDSAP and EU MDR themed.
+const mockMedicalDeviceAudits: Audit[] = [
+  {
+    id: 'AUD-MD-001', auditNumber: 'AUD-MD-2026-001', title: 'MDSAP Recertification Audit',
+    type: 'CERTIFICATION', status: 'PLANNED', standard: 'MDSAP / ISO 13485:2016',
+    scope: 'Full QMS recertification covering design controls, sterilization, production, post-market surveillance and regulatory reporting across infusion-set, IOL and orthopaedic-screw product families',
+    department: 'Quality Assurance', leadAuditor: 'BSI Lead Assessor (External)', auditTeam: [],
+    plannedStart: '2026-06-15', plannedEnd: '2026-06-19',
+    findings: [],
+    majorFindings: 0, minorFindings: 0, ofiCount: 0, createdAt: '2026-03-01',
+  },
+  {
+    id: 'AUD-MD-002', auditNumber: 'AUD-MD-2026-002', title: 'Internal Audit — Design Controls & Risk Management',
+    type: 'INTERNAL', status: 'IN_PROGRESS', standard: 'ISO 13485 §7.3 / ISO 14971',
+    scope: 'Design history files, design reviews and ISO 14971 risk-management files for infusion pump v3.x and orthopaedic screw OBS family',
+    department: 'Design Controls', leadAuditor: 'Dr. Anjali Verma', auditTeam: ['Aditya Menon', 'Sneha Kapoor'],
+    plannedStart: '2026-04-15', plannedEnd: '2026-04-17',
+    actualStart: '2026-04-15',
+    findings: [
+      { id: 'MD-F1', type: 'MINOR', clause: 'ISO 13485 §7.3.7', description: 'Design verification protocol DV-PROT-MD-019 missing pre-defined acceptance criteria for one bench test', status: 'OPEN' },
+      { id: 'MD-F2', type: 'OFI',   clause: 'ISO 14971 §5.5',  description: 'Hazard analysis worksheet for infusion pump could traceably link each hazard to a specific risk control in the DHF', status: 'OPEN' },
+    ],
+    majorFindings: 0, minorFindings: 1, ofiCount: 1, createdAt: '2026-04-01',
+  },
+  {
+    id: 'AUD-MD-003', auditNumber: 'AUD-MD-2026-003', title: 'Internal Audit — Sterilization & Cleanroom Operations',
+    type: 'INTERNAL', status: 'PLANNED', standard: 'ISO 11135 / ISO 14644 / ISO 13485 §7.5',
+    scope: 'EO sterilization cycles, cleanroom classification monitoring, gowning practices and aseptic-packaging integrity testing for surgical-drape and heart-valve lines',
+    department: 'Sterilization', leadAuditor: 'Dr. Anjali Verma', auditTeam: ['Karthik Iyer', 'Rohit Khanna'],
+    plannedStart: '2026-05-13', plannedEnd: '2026-05-15',
+    findings: [],
+    majorFindings: 0, minorFindings: 0, ofiCount: 0, createdAt: '2026-04-01',
+  },
+  {
+    id: 'AUD-MD-004', auditNumber: 'AUD-MD-2025-007', title: 'EU MDR Notified Body Surveillance Audit',
+    type: 'EXTERNAL', status: 'COMPLETED', standard: 'EU MDR 2017/745 / ISO 13485:2016',
+    scope: 'Surveillance audit covering technical documentation, PMS plan, vigilance reporting and PSUR for Class IIb infusion sets and Class III heart valves',
+    department: 'Regulatory Affairs', leadAuditor: 'TÜV SÜD Lead Auditor (External)', auditTeam: [],
+    plannedStart: '2025-11-04', plannedEnd: '2025-11-06',
+    actualStart: '2025-11-04', actualEnd: '2025-11-06',
+    findings: [
+      { id: 'MD-F3', type: 'MAJOR', clause: 'MDR Annex XIV Part B', description: 'PMS plan did not include quantitative criteria for trending Field Safety Notices across product families',                                                                                            status: 'CLOSED' },
+      { id: 'MD-F4', type: 'MINOR', clause: 'ISO 13485 §8.2.1',     description: 'Customer-complaint trend report Q3 2025 not signed by the Person Responsible for Regulatory Compliance (PRRC)',                                                                                            status: 'CLOSED' },
+      { id: 'MD-F5', type: 'OFI',   clause: 'MDR Article 83',       description: 'Strengthen integration of vigilance trending into the management review input package; current process relies on manual collation',                                                                       status: 'CLOSED' },
+    ],
+    majorFindings: 1, minorFindings: 1, ofiCount: 1, createdAt: '2025-09-10',
+  },
+  {
+    id: 'AUD-MD-005', auditNumber: 'AUD-MD-2025-005', title: 'Supplier Audit — Resin Vendor for Orthopaedic Coating',
+    type: 'SUPPLIER', status: 'COMPLETED', standard: 'ISO 13485 §7.4 / 21 CFR 820.50',
+    scope: 'Process controls, biocompatibility data, change-notification practices and CoA accuracy at PLA-coating resin supplier (Pune)',
+    department: 'Procurement', leadAuditor: 'Neha Bansal', auditTeam: ['Sneha Kapoor'],
+    plannedStart: '2025-09-18', plannedEnd: '2025-09-19',
+    actualStart: '2025-09-18', actualEnd: '2025-09-19',
+    findings: [
+      { id: 'MD-F6', type: 'MAJOR', clause: '21 CFR 820.50(b)',  description: 'Supplier shipped resin from a new manufacturing site without prior change notification to the customer',                                                                       status: 'CLOSED' },
+      { id: 'MD-F7', type: 'MINOR', clause: 'ISO 13485 §7.4.3',  description: 'Incoming-inspection sampling plan not aligned with the agreed AQL in the quality agreement',                                                                                    status: 'CLOSED' },
+    ],
+    majorFindings: 1, minorFindings: 1, ofiCount: 0, createdAt: '2025-09-01',
+  },
+];
+
+// Dairy tenant — FSSAI / ISO 22000 / HACCP themed audits.
+const mockDairyAudits: Audit[] = [
+  {
+    id: 'AUD-DY-001', auditNumber: 'AUD-DY-2026-001', title: 'FSSAI Annual Inspection — Central Licence Renewal',
+    type: 'CERTIFICATION', status: 'PLANNED', standard: 'FSSAI Schedule 4 / Food Safety and Standards Act',
+    scope: 'Full-site FSSAI inspection covering raw-milk reception, pasteurization, packaging, cold-chain, microbiology lab, sweets and ghee sections; pre-requisite for FSSAI Central licence renewal',
+    department: 'Quality Assurance', leadAuditor: 'FSSAI Designated Officer', auditTeam: [],
+    plannedStart: '2026-07-15', plannedEnd: '2026-07-17',
+    findings: [],
+    majorFindings: 0, minorFindings: 0, ofiCount: 0, createdAt: '2026-04-15',
+  },
+  {
+    id: 'AUD-DY-002', auditNumber: 'AUD-DY-2026-002', title: 'Internal Audit — Pasteurization & Cold Chain Integrity',
+    type: 'INTERNAL', status: 'IN_PROGRESS', standard: 'FSSAI Schedule 4 / ISO 22000:2018',
+    scope: 'Pasteurizer PHE-01 and PHE-02 operating parameters, phosphatase testing, post-pasteurization recontamination control, refrigerated tanker fleet and depot cold-chain temperature compliance',
+    department: 'Pasteurization', leadAuditor: 'Sandeep Joshi', auditTeam: ['Ravi Deshmukh', 'Anita Kulkarni'],
+    plannedStart: '2026-05-02', plannedEnd: '2026-05-05',
+    actualStart: '2026-05-02',
+    findings: [
+      { id: 'DY-F1', type: 'MINOR', clause: 'FSSAI 2.1.1', description: 'Pasteurizer outlet thermometer drift not captured in shift-handover log on 2026-04-18',           status: 'OPEN' },
+      { id: 'DY-F2', type: 'OFI',   clause: 'ISO 22000 §8.5.1', description: 'Cold-chain depot temperature audit data could be aggregated daily into a single dashboard for proactive trending', status: 'OPEN' },
+    ],
+    majorFindings: 0, minorFindings: 1, ofiCount: 1, createdAt: '2026-04-20',
+  },
+  {
+    id: 'AUD-DY-003', auditNumber: 'AUD-DY-2026-003', title: 'Internal Audit — Curd, Paneer & Ghee Production Lines',
+    type: 'INTERNAL', status: 'PLANNED', standard: 'FSSAI 2.1.1 / BIS IS 3508 / ISO 22000',
+    scope: 'Curd fermentation tanks (FT-01 to FT-04), paneer chhana presses, ghee clarification kettles, CIP cycles between batches, ATP-swab verification, FFA monitoring on finished ghee',
+    department: 'Production', leadAuditor: 'Sandeep Joshi', auditTeam: ['Anita Kulkarni', 'Ravi Deshmukh'],
+    plannedStart: '2026-06-10', plannedEnd: '2026-06-12',
+    findings: [],
+    majorFindings: 0, minorFindings: 0, ofiCount: 0, createdAt: '2026-05-05',
+  },
+  {
+    id: 'AUD-DY-004', auditNumber: 'AUD-DY-2025-FSSAI', title: 'FSSAI Surveillance Inspection (Q4 2025)',
+    type: 'EXTERNAL', status: 'COMPLETED', standard: 'FSSAI Schedule 4 / Food Safety and Standards Act',
+    scope: 'Routine surveillance: raw-milk testing log, antibiotic residue compliance, label declarations on all SKUs, microbiology records, recall and traceability records',
+    department: 'Quality Assurance', leadAuditor: 'FSSAI Designated Officer', auditTeam: [],
+    plannedStart: '2025-11-04', plannedEnd: '2025-11-05',
+    actualStart: '2025-11-04', actualEnd: '2025-11-05',
+    findings: [
+      { id: 'DY-F3', type: 'MAJOR', clause: 'FSSAI 2.3.4', description: 'Antibiotic residue dipstick frequency at village collection centres was not documented for 12 of 18 centres for Q3 2025', status: 'CLOSED' },
+      { id: 'DY-F4', type: 'MINOR', clause: 'FSSAI Sch 4 §2.4', description: 'Visitor-entry log at receiving dock missing PPE compliance column on 2 of 30 sampled days', status: 'CLOSED' },
+      { id: 'DY-F5', type: 'OFI',   clause: 'FSSAI 2.1.1', description: 'Pasteurized milk shelf-life claim could be backed with stronger accelerated-aging data; current data 30 days, claim 5 days', status: 'CLOSED' },
+    ],
+    majorFindings: 1, minorFindings: 1, ofiCount: 1, createdAt: '2025-09-10',
+  },
+  {
+    id: 'AUD-DY-005', auditNumber: 'AUD-DY-2025-FARM', title: 'Supplier Farm Audit — Cluster of 12 Village Collection Centres',
+    type: 'SUPPLIER', status: 'COMPLETED', standard: 'FSSAI 2.3.4 / Internal Quality Agreement',
+    scope: 'Cattle health, feed quality, milking-hygiene practices, water source, antibiotic-withdrawal compliance and tanker hygiene at 12 village collection centres in the Pune cluster',
+    department: 'Procurement', leadAuditor: 'Meera Pillai', auditTeam: ['Sandeep Joshi'],
+    plannedStart: '2025-09-15', plannedEnd: '2025-09-19',
+    actualStart: '2025-09-15', actualEnd: '2025-09-19',
+    findings: [
+      { id: 'DY-F6', type: 'MAJOR', clause: 'FSSAI 2.3.4', description: 'Antibiotic withdrawal log not maintained at 4 of 12 centres', status: 'CLOSED' },
+      { id: 'DY-F7', type: 'MINOR', clause: 'Quality Agreement §4.2', description: 'Tanker pre-cleaning record missing on 3 days at 2 centres',     status: 'CLOSED' },
+    ],
+    majorFindings: 1, minorFindings: 1, ofiCount: 0, createdAt: '2025-09-01',
+  },
+];
+
 export function useAudits(filters?: { status?: string; type?: string }) {
+  const industry = useUserIndustry();
   return useQuery({
-    queryKey: ['audits', filters],
+    queryKey: ['audits', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/audits', { params: filters });
         const unwrapped = unwrapList<Audit>(data, flattenAudit as any);
         return unwrapped.data;
       } catch {
-        let result = [...mockAudits];
+        const baseList = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits });
+        let result = [...baseList];
         if (filters?.status) result = result.filter(a => a.status === filters.status);
         if (filters?.type) result = result.filter(a => a.type === filters.type);
         return result;
@@ -208,8 +335,9 @@ export function useAudits(filters?: { status?: string; type?: string }) {
 }
 
 export function useAudit(id: string) {
+  const industry = useUserIndustry();
   return useQuery({
-    queryKey: ['audits', id],
+    queryKey: ['audits', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/audits/${id}`);
@@ -217,7 +345,8 @@ export function useAudit(id: string) {
         if (!item?.id) throw new Error('unexpected response');
         return item;
       } catch {
-        return mockAudits.find(a => a.id === id) ?? mockAudits[0];
+        const baseList = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits });
+        return baseList.find(a => a.id === id) ?? baseList[0];
       }
     },
     enabled: !!id,
@@ -255,10 +384,11 @@ export function useUpdateAuditStatus() {
 
 export function useAuditStats() {
   // Backend doesn't expose a /qms/audits/stats endpoint; compute from the list.
+  const industry = useUserIndustry();
   return useQuery({
-    queryKey: ['audits', 'stats'],
+    queryKey: ['audits', 'stats', industry ?? 'default'],
     queryFn: async () => {
-      let audits: Audit[] = mockAudits;
+      let audits: Audit[] = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits });
       try {
         const { data } = await api.get('/qms/audits');
         const unwrapped = unwrapList<Audit>(data, flattenAudit as any).data;

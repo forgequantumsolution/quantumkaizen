@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import type { NonConformance, PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -244,6 +245,344 @@ export const mockNCs: NonConformance[] = [
   },
 ];
 
+// Medical-device tenant (ISO 13485 / 21 CFR Part 820) — FQ MedTech, a
+// diversified manufacturer spanning the full medical-device range: Class IIa
+// disposables (syringes, hypodermic needles, IV cannulae, IV/infusion sets,
+// Foley catheters, surgical drapes), Class IIb/III implants (heart valves,
+// intraocular lenses, orthopaedic screws) and connected devices (smart
+// infusion pumps). Records cover the failure modes each product family
+// actually exhibits: EO sterility, particulate, biocompat, barrel/needle
+// dimensional defects, UDI, sterile-barrier integrity, design-controls and
+// software V&V breakdowns.
+export const mockMedicalDeviceNCs: NonConformance[] = [
+  {
+    id: 'md-nc1', ncNumber: 'NC-MD-2026-0042', title: 'EO sterilization residuals exceed ISO 10993-7 limit — Infusion Set Lot ISET-26-0118',
+    description: 'Ethylene oxide residual testing on infusion set lot ISET-26-0118 reported 14.2 mg/device EO and 9.8 mg/device ECH against ISO 10993-7 limits of 4 mg/device and 9 mg/device respectively. Two replicate GC-MS injections confirmed the result. Aeration cycle parameter deviation suspected.',
+    type: 'OOS', severity: 'CRITICAL', status: 'OPEN',
+    source: 'Final Inspection', department: 'Sterilization', departmentId: 'dept-md1',
+    productProcess: 'EO Sterilization · Aeration', batchLot: 'ISET-26-0118',
+    assignedTo: 'Karthik Iyer', assignedToId: 'u-md2', dueDate: '2026-04-12',
+    priorityJustification: 'Lot on hold; distribution to Apollo and Fortis hospitals deferred. Patient exposure risk under 21 CFR 820.198.',
+    containmentActions: [
+      { id: 'md-ca1', description: 'Quarantine lot ISET-26-0118 in bonded sterile store', owner: 'Karthik Iyer', dueDate: '2026-03-30', status: 'COMPLETED' },
+      { id: 'md-ca2', description: 'Halt EO sterilizer EOS-02 pending aeration cycle requalification', owner: 'Rohit Khanna',  dueDate: '2026-03-31', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-03-29T10:00:00Z', updatedAt: '2026-03-31T12:00:00Z', closedAt: null, createdBy: 'Karthik Iyer',
+  },
+  {
+    id: 'md-nc2', ncNumber: 'NC-MD-2026-0041', title: 'Sterility test failure (USP <71>) — Single-use surgical drape Lot SDR-26-0094',
+    description: 'Sterility testing of surgical drape lot SDR-26-0094 by membrane filtration showed growth in 2 of 20 test units after 14 days incubation. Isolate identified as Bacillus circulans. Possible cleanroom HEPA breach during packaging.',
+    type: 'PRODUCT_NC', severity: 'CRITICAL', status: 'INVESTIGATION',
+    source: 'Final Inspection', department: 'Cleanroom Assembly', departmentId: 'dept-md2',
+    productProcess: 'Class 7 Cleanroom Packaging', batchLot: 'SDR-26-0094',
+    assignedTo: 'Dr. Anjali Verma', assignedToId: 'u-md1', dueDate: '2026-04-15',
+    priorityJustification: 'Sterility critical — vigilance report to CDSCO under MDR 2017 may be required.',
+    containmentActions: [
+      { id: 'md-ca3', description: 'Reject and destroy lot SDR-26-0094 under dual control', owner: 'Dr. Anjali Verma', dueDate: '2026-03-28', status: 'COMPLETED' },
+      { id: 'md-ca4', description: 'Initiate full cleanroom re-qualification (smoke study + viable air sampling)', owner: 'Neha Bansal', dueDate: '2026-04-05', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-03-26T09:30:00Z', updatedAt: '2026-03-30T15:00:00Z', closedAt: null, createdBy: 'Dr. Anjali Verma',
+  },
+  {
+    id: 'md-nc3', ncNumber: 'NC-MD-2026-0040', title: 'UDI barcode unreadable on 312 vascular catheter cartons',
+    description: 'During end-of-line UDI verification, 312 cartons of vascular catheters (VCT-26-0071) failed GS1 barcode scan with high reject rate (>4%). Root cause attributed to printer ribbon wear and incorrect label substrate.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'ROOT_CAUSE',
+    source: 'Internal Audit', department: 'Secondary Packaging', departmentId: 'dept-md3',
+    productProcess: 'UDI Labelling · 21 CFR 830', batchLot: 'VCT-26-0071',
+    assignedTo: 'Rohit Khanna', assignedToId: 'u-md4', dueDate: '2026-04-08',
+    priorityJustification: 'Distribution blocked; UDI compliance breach is reportable under FDA UDI rule.',
+    containmentActions: [
+      { id: 'md-ca5', description: 'Halt packaging line PL-MD-01 and quarantine all affected cartons', owner: 'Rohit Khanna', dueDate: '2026-03-22', status: 'COMPLETED' },
+      { id: 'md-ca6', description: '100% relabelling of cartons with new compliant labels', owner: 'Karthik Iyer', dueDate: '2026-04-02', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-03-22T08:00:00Z', updatedAt: '2026-03-28T11:30:00Z', closedAt: null, createdBy: 'Neha Bansal',
+  },
+  {
+    id: 'md-nc4', ncNumber: 'NC-MD-2026-0039', title: 'Biocompatibility shift — cytotoxicity grade 3 on orthopaedic screw coating',
+    description: 'ISO 10993-5 cytotoxicity testing of orthopaedic bone screw coating lot OBS-26-0048 returned MEM Elution grade 3 reactivity against the pass threshold of grade ≤2. Suspected supplier change in PLA coating resin.',
+    type: 'OOS', severity: 'MAJOR', status: 'CAPA_PLANNING',
+    source: 'Supplier Material Receipt', department: 'QC Lab', departmentId: 'dept-md4',
+    productProcess: 'Biocompatibility (ISO 10993-5)', batchLot: 'OBS-26-0048',
+    assignedTo: 'Sneha Kapoor', assignedToId: 'u-md5', dueDate: '2026-04-20',
+    priorityJustification: 'Lot held. Supplier qualification review triggered for coating resin vendor.',
+    containmentActions: [
+      { id: 'md-ca7', description: 'Quarantine lot OBS-26-0048 and adjacent lots produced from same resin batch', owner: 'Sneha Kapoor', dueDate: '2026-03-20', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-03-19T10:30:00Z', updatedAt: '2026-03-24T16:00:00Z', closedAt: null, createdBy: 'Sneha Kapoor',
+  },
+  {
+    id: 'md-nc5', ncNumber: 'NC-MD-2026-0038', title: 'Visual inspection rejection — particulate matter on intraocular lens Lot IOL-26-0033',
+    description: 'AOI rejected 24 IOLs from lot IOL-26-0033 due to detection of >50µm sub-visible particles. Manual re-inspection confirmed silicone fragments in 17 units. Root cause traced to tooling wear in injection moulding cavity 03.',
+    type: 'PRODUCT_NC', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Cleanroom Assembly', departmentId: 'dept-md2',
+    productProcess: 'Injection Moulding · Visual Inspection', batchLot: 'IOL-26-0033',
+    assignedTo: 'Dr. Anjali Verma', assignedToId: 'u-md1', dueDate: '2026-03-22',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'md-ca8', description: 'Reject and destroy all 24 flagged IOLs', owner: 'Dr. Anjali Verma', dueDate: '2026-03-15', status: 'COMPLETED' },
+      { id: 'md-ca9', description: 'Replace cavity 03 tooling and revalidate (3 lot OQ)',     owner: 'Rohit Khanna',      dueDate: '2026-03-20', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-03-10T09:00:00Z', updatedAt: '2026-03-22T11:00:00Z', closedAt: '2026-03-22T11:00:00Z', createdBy: 'Karthik Iyer',
+  },
+  {
+    id: 'md-nc6', ncNumber: 'NC-MD-2025-0117', title: 'Software anomaly in infusion pump firmware v3.4 — over-delivery 4% above setpoint',
+    description: 'Verification testing of infusion pump firmware v3.4 (IEC 62304 Class B) detected delivery rate 4.2% above setpoint at 1 mL/hr. Root cause: floating-point rounding in dosage calculation module. CAPA includes algorithm fix and full V&V re-run.',
+    type: 'PRODUCT_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Design Verification', department: 'Design Controls', departmentId: 'dept-md5',
+    productProcess: 'Firmware V&V (IEC 62304)', batchLot: 'FW-v3.4',
+    assignedTo: 'Aditya Menon', assignedToId: 'u-md6', dueDate: '2025-11-10',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'md-ca10', description: 'Hold firmware v3.4 release; revert deployed dev units to v3.3', owner: 'Aditya Menon', dueDate: '2025-10-28', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-10-25T11:00:00Z', updatedAt: '2025-11-10T14:00:00Z', closedAt: '2025-11-10T14:00:00Z', createdBy: 'Aditya Menon',
+  },
+  {
+    id: 'md-nc7', ncNumber: 'NC-MD-2025-0098', title: 'Out-of-spec leak rate on heart valve packaging — Lot HV-25-0061',
+    description: 'Bubble-emission leak testing per ASTM F2096 of heart valve sterile barrier pouches showed 3 of 50 units with detectable leaks. Sealing temperature drift on tray sealer TS-04 identified as root cause. CAPA-MD-2025-0058 raised.',
+    type: 'PROCESS_NC', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Sterile Barrier Packaging', departmentId: 'dept-md3',
+    productProcess: 'Heat Seal · ASTM F2096', batchLot: 'HV-25-0061',
+    assignedTo: 'Neha Bansal', assignedToId: 'u-md3', dueDate: '2025-09-30',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'md-ca11', description: 'Quarantine lot and adjacent lots, halt tray sealer TS-04', owner: 'Neha Bansal', dueDate: '2025-09-15', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-09-12T08:30:00Z', updatedAt: '2025-09-30T16:00:00Z', closedAt: '2025-09-30T16:00:00Z', createdBy: 'Neha Bansal',
+  },
+  {
+    id: 'md-nc8', ncNumber: 'NC-MD-2025-0064', title: 'Process-validation deviation — pulsed-light disinfection cycle below 6-log reduction',
+    description: 'IQ/OQ/PQ revalidation of pulsed-light disinfection chamber PLD-01 showed bacterial log reduction of 5.4-log against the 6-log specification. Lamp degradation beyond expected service life identified as root cause.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Internal Audit', department: 'Sterilization', departmentId: 'dept-md1',
+    productProcess: 'Pulsed-Light Disinfection · PQ', batchLot: null,
+    assignedTo: 'Karthik Iyer', assignedToId: 'u-md2', dueDate: '2025-07-05',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'md-ca12', description: 'Replace pulsed-light lamps and re-run full IQ/OQ/PQ',     owner: 'Karthik Iyer',      dueDate: '2025-06-25', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-06-15T09:00:00Z', updatedAt: '2025-07-05T11:30:00Z', closedAt: '2025-07-05T11:30:00Z', createdBy: 'Karthik Iyer',
+  },
+  // ── Disposables product family ──────────────────────────────────────────
+  {
+    id: 'md-nc9', ncNumber: 'NC-MD-2026-0037', title: 'Sub-visible particles inside 5 mL Disposable Syringe barrels — Lot DSY-26-0204',
+    description: 'AOI rejected 38 of 4 800 sampled units from 5 mL disposable-syringe lot DSY-26-0204 due to sub-visible particles (>25 µm) inside the polypropylene barrel. FTIR identified silicone-oil agglomerates from over-lubrication of the plunger.',
+    type: 'PRODUCT_NC', severity: 'MAJOR', status: 'CAPA_PLANNING',
+    source: 'Final Inspection', department: 'Cleanroom Assembly', departmentId: 'dept-md2',
+    productProcess: 'Plunger Lubrication · USP <788>', batchLot: 'DSY-26-0204',
+    assignedTo: 'Sneha Kapoor', assignedToId: 'u-md5', dueDate: '2026-04-22',
+    priorityJustification: 'Particulate hazard for IV and IM injection; lot held pending CAPA effectiveness.',
+    containmentActions: [
+      { id: 'md-ca13', description: 'Quarantine lot DSY-26-0204 and adjacent lots produced on Line DSY-3 on the same day', owner: 'Sneha Kapoor', dueDate: '2026-04-02', status: 'COMPLETED' },
+      { id: 'md-ca14', description: 'Recalibrate silicone-oil spray nozzle on Line DSY-3 to validated 0.5–1.0 mg per barrel', owner: 'Rohit Khanna',  dueDate: '2026-04-05', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-04-01T10:30:00Z', updatedAt: '2026-04-05T15:00:00Z', closedAt: null, createdBy: 'Sneha Kapoor',
+  },
+  {
+    id: 'md-nc10', ncNumber: 'NC-MD-2026-0036', title: 'Hypodermic needle pin-bend rate above 0.3% on 23G × 1" — Lot HYP-26-0312',
+    description: 'In-process pin-bend inspection (ASTM F1816 / IS 10654) of 23G × 1" hypodermic needle lot HYP-26-0312 returned a defect rate of 0.42% against the validated process limit of NMT 0.30%. Cause traced to a worn cam follower on Needle Assembly Machine NAM-04.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'ROOT_CAUSE',
+    source: 'In-Process Inspection', department: 'Needle Manufacturing', departmentId: 'dept-md6',
+    productProcess: 'Needle Hub Assembly · NAM-04', batchLot: 'HYP-26-0312',
+    assignedTo: 'Rohit Khanna', assignedToId: 'u-md4', dueDate: '2026-04-12',
+    priorityJustification: 'Pin bend during use can cause needle stick injury — patient safety hazard.',
+    containmentActions: [
+      { id: 'md-ca15', description: '100% visual + pin-bend re-inspection on quarantined lot HYP-26-0312', owner: 'Karthik Iyer', dueDate: '2026-03-28', status: 'COMPLETED' },
+      { id: 'md-ca16', description: 'Stop NAM-04 and replace worn cam follower; verify CpK ≥ 1.67 on 3 OQ lots', owner: 'Rohit Khanna', dueDate: '2026-04-08', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-03-27T08:00:00Z', updatedAt: '2026-04-02T11:00:00Z', closedAt: null, createdBy: 'Rohit Khanna',
+  },
+  {
+    id: 'md-nc11', ncNumber: 'NC-MD-2026-0035', title: 'IV cannula flow-rate below specification — 20G Lot IVC-26-0089',
+    description: 'Gravity flow-rate testing per ISO 10555-5 on 20G IV cannula lot IVC-26-0089 measured 49 mL/min against the specification of NLT 55 mL/min. Mean of 20 samples 51.2 mL/min, 4 of 20 below spec. Suspected wall-thickness drift on extrusion line EX-02.',
+    type: 'PRODUCT_NC', severity: 'MAJOR', status: 'INVESTIGATION',
+    source: 'Final Inspection', department: 'Quality Control', departmentId: 'dept-md4',
+    productProcess: 'Cannula Extrusion · ISO 10555-5', batchLot: 'IVC-26-0089',
+    assignedTo: 'Sneha Kapoor', assignedToId: 'u-md5', dueDate: '2026-04-18',
+    priorityJustification: 'Under-flow lengthens infusion time; clinically significant in emergency settings.',
+    containmentActions: [
+      { id: 'md-ca17', description: 'Quarantine lot IVC-26-0089 and pull retention samples for laser-micrometer wall analysis', owner: 'Sneha Kapoor', dueDate: '2026-04-04', status: 'COMPLETED' },
+      { id: 'md-ca18', description: 'Re-zero EX-02 die-gap and run 3 validation lots',                                          owner: 'Rohit Khanna',  dueDate: '2026-04-15', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-04-03T09:00:00Z', updatedAt: '2026-04-06T16:30:00Z', closedAt: null, createdBy: 'Sneha Kapoor',
+  },
+  {
+    id: 'md-nc12', ncNumber: 'NC-MD-2026-0034', title: 'Auto-disable mechanism failed to lock on 1 mL AD-syringe — Lot ADS-26-0048',
+    description: 'Auto-disable function verification on 1 mL immunization AD-syringe lot ADS-26-0048 showed 3 of 200 sampled units where the plunger could be retracted after a single use, against the WHO PQS E13/IM01.3 specification. Lock-tab dimensional drift suspected.',
+    type: 'PRODUCT_NC', severity: 'CRITICAL', status: 'CAPA_PLANNING',
+    source: 'Final Inspection', department: 'Cleanroom Assembly', departmentId: 'dept-md2',
+    productProcess: 'AD-Syringe Plunger Lock Assembly · WHO PQS E13', batchLot: 'ADS-26-0048',
+    assignedTo: 'Dr. Anjali Verma', assignedToId: 'u-md1', dueDate: '2026-04-25',
+    priorityJustification: 'WHO PQS critical defect — single-use AD function is a patient-safety design control. Lot tagged for immunization tender to UNICEF; release blocked.',
+    containmentActions: [
+      { id: 'md-ca19', description: 'Quarantine lot ADS-26-0048 and notify UNICEF supply chain', owner: 'Dr. Anjali Verma', dueDate: '2026-04-08', status: 'COMPLETED' },
+      { id: 'md-ca20', description: 'Pull retention samples and run 100% AD-function verification per WHO PQS E13/IM01.3', owner: 'Karthik Iyer', dueDate: '2026-04-15', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-04-07T10:00:00Z', updatedAt: '2026-04-10T14:30:00Z', closedAt: null, createdBy: 'Dr. Anjali Verma',
+  },
+  {
+    id: 'md-nc13', ncNumber: 'NC-MD-2026-0033', title: 'Foley catheter balloon burst-volume above limit — 18Fr Lot FCT-26-0067',
+    description: 'Balloon burst-volume testing per ISO 20696 of 18Fr silicone Foley catheter lot FCT-26-0067 returned mean burst of 78 mL against the specification of NMT 50 mL (declared 10 mL balloon). Over-thinned balloon wall suspected from dip-moulding cycle drift on line FCT-MC-02.',
+    type: 'PRODUCT_NC', severity: 'MAJOR', status: 'OPEN',
+    source: 'Final Inspection', department: 'Quality Control', departmentId: 'dept-md4',
+    productProcess: 'Silicone Dip Moulding · ISO 20696', batchLot: 'FCT-26-0067',
+    assignedTo: 'Karthik Iyer', assignedToId: 'u-md2', dueDate: '2026-04-30',
+    priorityJustification: 'Over-inflation risk in urology use can cause bladder trauma; recall already initiated for distributed cartons.',
+    containmentActions: [
+      { id: 'md-ca21', description: 'Initiate recall of lot FCT-26-0067 from 4 distributors; quarantine remaining stock', owner: 'Neha Bansal', dueDate: '2026-04-14', status: 'IN_PROGRESS' },
+      { id: 'md-ca22', description: 'Halt dip-moulding line FCT-MC-02; recalibrate silicone bath temperature and dwell time', owner: 'Rohit Khanna', dueDate: '2026-04-12', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-04-10T08:00:00Z', updatedAt: '2026-04-12T15:00:00Z', closedAt: null, createdBy: 'Karthik Iyer',
+  },
+];
+
+// Dairy tenant — FSSAI / ISO 22000 / HACCP themed records covering the
+// full Indian dairy product range: liquid milk (toned, full-cream, A2),
+// curd / dahi, paneer, ghee, butter, buttermilk / lassi, flavoured milk,
+// ice cream, sweets and dairy whitener. Failure modes include microbial
+// limits (TPC, coliform, E. coli, Listeria), fat / SNF shortfall, aflatoxin
+// M1, antibiotic residues, pasteurization deviations, cold-chain breaks
+// and packaging seal defects.
+export const mockDairyNCs: NonConformance[] = [
+  {
+    id: 'dy-nc1', ncNumber: 'NC-DY-2026-0042', title: 'Aflatoxin M1 in raw milk above FSSAI limit — Tanker T-2026-0512',
+    description: 'Aflatoxin M1 testing by ELISA on raw-milk tanker T-2026-0512 reported 0.71 µg/kg against the FSSAI limit of NMT 0.5 µg/kg. Tanker sourced from 4 village collection centres in the Pune cluster. Suspected mycotoxin contamination in cattle feed.',
+    type: 'OOS', severity: 'CRITICAL', status: 'OPEN',
+    source: 'Raw Milk Receiving', department: 'Receiving Dock', departmentId: 'dept-dy1',
+    productProcess: 'Raw-milk Acceptance · FSSAI 2.1.1', batchLot: 'T-2026-0512',
+    assignedTo: 'Sandeep Joshi', assignedToId: 'u-dy1', dueDate: '2026-05-28',
+    priorityJustification: 'Tanker on hold; entire 6 000 L volume cannot be released to processing. Risk of regulatory adverse action under FSSAI Schedule 4.',
+    containmentActions: [
+      { id: 'dy-ca1', description: 'Reject tanker T-2026-0512; divert to non-food disposal route under dual control', owner: 'Sandeep Joshi', dueDate: '2026-05-16', status: 'COMPLETED' },
+      { id: 'dy-ca2', description: 'Notify 4 source collection centres; suspend procurement pending feed audit',       owner: 'Meera Pillai',  dueDate: '2026-05-18', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-05-15T09:00:00Z', updatedAt: '2026-05-16T15:30:00Z', closedAt: null, createdBy: 'Sandeep Joshi',
+  },
+  {
+    id: 'dy-nc2', ncNumber: 'NC-DY-2026-0041', title: 'Total Plate Count above limit on pasteurized toned milk — Batch PTM-26-0431',
+    description: 'Microbial testing of pasteurized toned-milk batch PTM-26-0431 (1 L pouches) returned TPC of 95 000 cfu/ml against the FSSAI limit of NMT 30 000 cfu/ml. Phosphatase test negative (under-pasteurization ruled out). Recontamination at filling-machine FM-02 suspected.',
+    type: 'PRODUCT_NC', severity: 'CRITICAL', status: 'INVESTIGATION',
+    source: 'Final Inspection', department: 'Microbiology Lab', departmentId: 'dept-dy4',
+    productProcess: 'Pouch Filling · Post-pasteurization', batchLot: 'PTM-26-0431',
+    assignedTo: 'Anita Kulkarni', assignedToId: 'u-dy3', dueDate: '2026-05-22',
+    priorityJustification: 'Batch already distributed to 12 retail depots; recall initiation may be required. Risk under FSSAI 2.1.1 dairy microbio limits.',
+    containmentActions: [
+      { id: 'dy-ca3', description: 'Halt filling machine FM-02; quarantine all post-pasteurization stock from same shift',   owner: 'Ravi Deshmukh',   dueDate: '2026-05-12', status: 'COMPLETED' },
+      { id: 'dy-ca4', description: 'Initiate recall of distributed batch PTM-26-0431 from 12 retail depots',                  owner: 'Sandeep Joshi',   dueDate: '2026-05-15', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-05-11T08:30:00Z', updatedAt: '2026-05-14T16:00:00Z', closedAt: null, createdBy: 'Anita Kulkarni',
+  },
+  {
+    id: 'dy-nc3', ncNumber: 'NC-DY-2026-0040', title: 'Antibiotic residue (beta-lactam) detected in raw milk — Tanker T-2026-0498',
+    description: 'Charm SL beta-lactam screening on raw-milk tanker T-2026-0498 returned positive on first and confirmatory tests. Source traced to a single supplier farm where a cow was under treatment with amoxicillin without observing the 96-hour withdrawal period.',
+    type: 'OOS', severity: 'CRITICAL', status: 'ROOT_CAUSE',
+    source: 'Raw Milk Receiving', department: 'Receiving Dock', departmentId: 'dept-dy1',
+    productProcess: 'Antibiotic Residue Screening', batchLot: 'T-2026-0498',
+    assignedTo: 'Sandeep Joshi', assignedToId: 'u-dy1', dueDate: '2026-05-18',
+    priorityJustification: 'Antibiotic residue is a regulatory red flag under FSSAI 2.3.4 — recurrence triggers supplier de-listing.',
+    containmentActions: [
+      { id: 'dy-ca5', description: 'Reject tanker T-2026-0498; segregate at receiving bay until disposal authorised', owner: 'Sandeep Joshi', dueDate: '2026-05-08', status: 'COMPLETED' },
+      { id: 'dy-ca6', description: 'Suspend procurement from the source farm for 14 days pending investigation',       owner: 'Meera Pillai',  dueDate: '2026-05-10', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-05-07T07:30:00Z', updatedAt: '2026-05-10T11:00:00Z', closedAt: null, createdBy: 'Sandeep Joshi',
+  },
+  {
+    id: 'dy-nc4', ncNumber: 'NC-DY-2026-0039', title: 'Fat content below FSSAI minimum on full-cream milk — Batch PFC-26-0218',
+    description: 'Gerber fat testing on full-cream milk batch PFC-26-0218 returned 5.7% fat against FSSAI Standard 2.1.1 minimum of 6.0% fat. SNF within spec at 9.1%. Suspected standardisation error at the cream separator.',
+    type: 'PRODUCT_NC', severity: 'MAJOR', status: 'CAPA_PLANNING',
+    source: 'In-Process Inspection', department: 'Quality Control', departmentId: 'dept-dy5',
+    productProcess: 'Standardisation · FSSAI 2.1.1', batchLot: 'PFC-26-0218',
+    assignedTo: 'Anita Kulkarni', assignedToId: 'u-dy3', dueDate: '2026-05-25',
+    priorityJustification: 'Mis-labelling risk; batch cannot be released as "full-cream" without recalibration. FSSAI label-claim deviation.',
+    containmentActions: [
+      { id: 'dy-ca7', description: 'Quarantine batch PFC-26-0218 in chilled holding tank; rework via fat-correction',  owner: 'Ravi Deshmukh', dueDate: '2026-05-06', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-05-04T10:30:00Z', updatedAt: '2026-05-07T15:00:00Z', closedAt: null, createdBy: 'Anita Kulkarni',
+  },
+  {
+    id: 'dy-nc5', ncNumber: 'NC-DY-2026-0038', title: 'Phosphatase test positive on pasteurized milk — under-pasteurization — Batch PTM-26-0413',
+    description: 'Phosphatase test on pasteurized toned-milk batch PTM-26-0413 returned positive (>10 mg/L p-nitrophenol), indicating incomplete pasteurization. PHE-01 outlet thermometer was reading 71.5 °C instead of validated 72 °C for 15 s. Suspected drift on temperature controller.',
+    type: 'PROCESS_NC', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'In-Process Inspection', department: 'Pasteurization', departmentId: 'dept-dy2',
+    productProcess: 'HTST Pasteurization · 72 °C / 15 s', batchLot: 'PTM-26-0413',
+    assignedTo: 'Ravi Deshmukh', assignedToId: 'u-dy4', dueDate: '2026-05-02',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'dy-ca8', description: 'Re-pasteurize batch PTM-26-0413 through PHE-01 after temperature controller recalibration', owner: 'Ravi Deshmukh', dueDate: '2026-04-22', status: 'COMPLETED' },
+      { id: 'dy-ca9', description: 'Halt PHE-01 production; recalibrate thermometer and temperature controller with NABL-traceable references', owner: 'Priya Khanna', dueDate: '2026-04-23', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-04-18T11:15:00Z', updatedAt: '2026-05-02T11:00:00Z', closedAt: '2026-05-02T11:00:00Z', createdBy: 'Sandeep Joshi',
+  },
+  {
+    id: 'dy-nc6', ncNumber: 'NC-DY-2026-0034', title: 'Coliform count positive on curd — Lot DAH-26-0167',
+    description: 'Set curd lot DAH-26-0167 (200g cups) showed coliform count of 12 cfu/g against FSSAI limit of <10 cfu/g. Possible CIP-cleaning gap at fermentation tank FT-03 between batches.',
+    type: 'PRODUCT_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Microbiology Lab', departmentId: 'dept-dy4',
+    productProcess: 'Curd Fermentation · 42 °C / 6 h', batchLot: 'DAH-26-0167',
+    assignedTo: 'Anita Kulkarni', assignedToId: 'u-dy3', dueDate: '2026-04-12',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'dy-ca10', description: 'Reject lot DAH-26-0167 and divert to non-food disposal',                         owner: 'Anita Kulkarni', dueDate: '2026-04-05', status: 'COMPLETED' },
+      { id: 'dy-ca11', description: 'Run intensive CIP cycle (90 °C / 30 min) on FT-03; ATP-swab verification',       owner: 'Priya Khanna',   dueDate: '2026-04-07', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-04-02T09:30:00Z', updatedAt: '2026-04-10T16:00:00Z', closedAt: '2026-04-10T16:00:00Z', createdBy: 'Anita Kulkarni',
+  },
+  {
+    id: 'dy-nc7', ncNumber: 'NC-DY-2026-0029', title: 'Ghee Free Fatty Acid (FFA) above limit — Batch GHC-26-0091',
+    description: 'FFA analysis on cow-ghee batch GHC-26-0091 (1 L tins) returned 3.4% (as oleic acid) against the FSSAI / BIS IS 3508 limit of NMT 3.0%. Suspected over-aging of butter before clarification.',
+    type: 'OOS', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Quality Control', departmentId: 'dept-dy5',
+    productProcess: 'Ghee Clarification · BIS IS 3508', batchLot: 'GHC-26-0091',
+    assignedTo: 'Anita Kulkarni', assignedToId: 'u-dy3', dueDate: '2026-03-25',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'dy-ca12', description: 'Quarantine batch GHC-26-0091 and adjacent tins from same boiling kettle',         owner: 'Ravi Deshmukh',  dueDate: '2026-03-18', status: 'COMPLETED' },
+      { id: 'dy-ca13', description: 'Discard 60 kg of over-aged white butter; tighten butter-to-ghee turnaround to 48 h', owner: 'Ravi Deshmukh', dueDate: '2026-03-20', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-03-15T08:00:00Z', updatedAt: '2026-03-25T14:30:00Z', closedAt: '2026-03-25T14:30:00Z', createdBy: 'Anita Kulkarni',
+  },
+  {
+    id: 'dy-nc8', ncNumber: 'NC-DY-2026-0024', title: 'Pouch leakage rate 0.8% on 500ml toned-milk pouches — Line PL-04',
+    description: 'Drop-test reject rate on 500 ml toned-milk pouches from filling line PL-04 measured 0.8% against the validated specification of NMT 0.3%. Heat-seal jaw wear on FFS-04 identified as root cause.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'In-Process Inspection', department: 'Packaging', departmentId: 'dept-dy6',
+    productProcess: 'Form-Fill-Seal · Drop Test', batchLot: 'PTM-26-0290',
+    assignedTo: 'Priya Khanna', assignedToId: 'u-dy5', dueDate: '2026-02-28',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'dy-ca14', description: 'Halt FFS-04; replace heat-seal jaw and re-validate seal strength', owner: 'Priya Khanna', dueDate: '2026-02-15', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-02-12T10:00:00Z', updatedAt: '2026-02-28T11:00:00Z', closedAt: '2026-02-28T11:00:00Z', createdBy: 'Priya Khanna',
+  },
+  {
+    id: 'dy-nc9', ncNumber: 'NC-DY-2025-0156', title: 'Cold-chain temperature excursion on milk delivery route DEL-N3',
+    description: 'Refrigerated delivery van VAN-N3 on the Pune-Mumbai milk route logged 14 °C cargo-area temperature for 47 minutes against the validated cold-chain limit of NMT 8 °C. Suspected refrigeration unit failure during traffic stop.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Distribution Audit', department: 'Cold Chain', departmentId: 'dept-dy7',
+    productProcess: 'Cold-chain Distribution', batchLot: 'PTM-25-0931',
+    assignedTo: 'Ravi Deshmukh', assignedToId: 'u-dy4', dueDate: '2025-12-15',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'dy-ca15', description: 'Quarantine all pouches delivered on VAN-N3 that day; re-test microbio at depots', owner: 'Anita Kulkarni', dueDate: '2025-12-05', status: 'COMPLETED' },
+      { id: 'dy-ca16', description: 'Service refrigeration unit on VAN-N3; install IoT temperature logger',             owner: 'Priya Khanna',   dueDate: '2025-12-12', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-12-02T09:30:00Z', updatedAt: '2025-12-15T16:30:00Z', closedAt: '2025-12-15T16:30:00Z', createdBy: 'Ravi Deshmukh',
+  },
+  {
+    id: 'dy-nc10', ncNumber: 'NC-DY-2025-0118', title: 'MRP / Best-Before label print error on 1L full-cream milk pouches — Lot PFC-25-0612',
+    description: 'Pre-shipment label inspection on lot PFC-25-0612 (full-cream 1L pouches) found best-before date printed as "DD-MM-2026" instead of "DD-MM-2025" on a sub-lot of ~3 200 pouches. Suspected operator entry error at FFS-02 when changing date setting.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Pre-shipment Inspection', department: 'Packaging', departmentId: 'dept-dy6',
+    productProcess: 'Form-Fill-Seal · Date Printing', batchLot: 'PFC-25-0612',
+    assignedTo: 'Priya Khanna', assignedToId: 'u-dy5', dueDate: '2025-09-22',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'dy-ca17', description: 'Quarantine sub-lot of 3 200 pouches; over-print correct date or destroy', owner: 'Priya Khanna', dueDate: '2025-09-15', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-09-12T08:00:00Z', updatedAt: '2025-09-22T16:00:00Z', closedAt: '2025-09-22T16:00:00Z', createdBy: 'Priya Khanna',
+  },
+];
+
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
 const flattenNC = (nc: Record<string, unknown>) =>
@@ -260,14 +599,16 @@ interface NCFilters {
 }
 
 export function useNonConformances(filters: NCFilters = {}) {
+  const industry = useUserIndustry();
   return useQuery<PaginatedResponse<NonConformance>>({
-    queryKey: ['non-conformances', filters],
+    queryKey: ['non-conformances', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data: payload } = await api.get('/qms/non-conformances', { params: filters });
         return unwrapList<NonConformance>(payload, flattenNC as any);
       } catch {
-        let filtered = [...mockNCs];
+        const baseList = pickByIndustry(industry, mockNCs, { medical_device: mockMedicalDeviceNCs, dairy: mockDairyNCs });
+        let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((nc) => nc.status === filters.status);
         if (filters.severity) filtered = filtered.filter((nc) => nc.severity === filters.severity);
         if (filters.type) filtered = filtered.filter((nc) => nc.type === filters.type);
@@ -288,14 +629,16 @@ export function useNonConformances(filters: NCFilters = {}) {
 }
 
 export function useNonConformance(id: string) {
+  const industry = useUserIndustry();
   return useQuery<NonConformance>({
-    queryKey: ['non-conformances', id],
+    queryKey: ['non-conformances', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data: payload } = await api.get(`/qms/non-conformances/${id}`);
         return unwrapItem<NonConformance>(payload, flattenNC as any);
       } catch {
-        const nc = mockNCs.find((n) => n.id === id);
+        const baseList = pickByIndustry(industry, mockNCs, { medical_device: mockMedicalDeviceNCs, dairy: mockDairyNCs });
+        const nc = baseList.find((n) => n.id === id);
         if (!nc) throw new Error('NC not found');
         return nc;
       }

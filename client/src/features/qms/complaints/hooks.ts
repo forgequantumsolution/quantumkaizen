@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import toast from 'react-hot-toast';
 
 const flattenComplaint = (c: Record<string, unknown>) => flattenUsers(c, ['assignedTo', 'investigator']);
@@ -628,6 +629,227 @@ export const mockComplaints: Complaint[] = [
 
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
+// Medical-device complaints (MDR / vigilance themed).
+export const mockMedicalDeviceComplaints: Complaint[] = [
+  {
+    id: 'md-cmp1', complaintNumber: 'CMP-MD-2026-0014',
+    customerName: 'Apollo Hospitals Enterprise — Chennai', customerContact: 'Dr. Ramesh Iyer', customerEmail: 'ramesh.iyer@apollohospitals.com',
+    subject: 'Cracked outer barrel reported on three infusion sets (Lot ISET-26-0102)',
+    description: 'OT staff at Apollo Chennai reported visible micro-cracks on the outer barrel of three infusion sets from lot ISET-26-0102 during pre-use inspection. No patient harm. Hospital has set aside the entire shipment.',
+    severity: 'Major', status: 'Under Investigation',
+    productService: 'Infusion Set — ISET-26', batchOrderRef: 'Lot ISET-26-0102',
+    receivedDate: '2026-03-25', responseDue: '2026-04-08',
+    assignedTo: 'Neha Bansal', assignedToId: 'u-md3',
+    containmentActions: [
+      { id: 'md-cmp-ca1', description: 'Hold all unshipped units from lot ISET-26-0102 and 0103', owner: 'Karthik Iyer', dueDate: '2026-03-26', status: 'Completed' },
+      { id: 'md-cmp-ca2', description: 'Recall affected units from Apollo Chennai under reverse logistics', owner: 'Neha Bansal', dueDate: '2026-04-02', status: 'In Progress' },
+    ],
+    investigation: null, resolution: null,
+    communications: [
+      { id: 'md-cm1', date: '2026-03-25', type: 'Email', direction: 'Inbound', summary: 'Initial complaint with photos of three cracked units', contactPerson: 'Dr. Ramesh Iyer', user: 'Neha Bansal' },
+      { id: 'md-cm2', date: '2026-03-26', type: 'Phone', direction: 'Outbound', summary: 'Acknowledgement call, requested return of units for failure analysis', contactPerson: 'Dr. Ramesh Iyer', user: 'Neha Bansal' },
+    ],
+    linkedCAPAs: [], history: [
+      { id: 'md-cmh1', timestamp: '2026-03-25T10:00:00Z', user: 'Neha Bansal',      action: 'Complaint received', details: 'Logged from email; assessed as Major due to lot-level risk' },
+      { id: 'md-cmh2', timestamp: '2026-03-26T15:00:00Z', user: 'Dr. Anjali Verma', action: 'Vigilance review',    details: 'Confirmed not reportable as MDR — no patient harm; failure pre-use' },
+    ],
+    createdAt: '2026-03-25T10:00:00Z', updatedAt: '2026-03-26T15:00:00Z',
+  },
+  {
+    id: 'md-cmp2', complaintNumber: 'CMP-MD-2026-0013',
+    customerName: 'Fortis Memorial Research Institute — Gurugram', customerContact: 'Sister-in-Charge Priya Anand', customerEmail: 'priya.anand@fortishealthcare.com',
+    subject: 'Heart valve packaging found with breached sterile barrier (Lot HV-26-0007)',
+    description: 'Cath lab nurse identified delamination of Tyvek lid on one heart-valve pouch during pre-procedure setup. Unit was not used. Hospital flagged as potential sterility risk and quarantined the remaining 11 pouches from the shipment.',
+    severity: 'Critical', status: 'Resolution Proposed',
+    productService: 'Heart Valve — HV-26 series', batchOrderRef: 'Lot HV-26-0007',
+    receivedDate: '2026-03-12', responseDue: '2026-03-26',
+    assignedTo: 'Dr. Anjali Verma', assignedToId: 'u-md1',
+    containmentActions: [
+      { id: 'md-cmp-ca3', description: 'Recall all 12 pouches from Fortis Gurugram and replace with verified stock',                                                         owner: 'Neha Bansal',      dueDate: '2026-03-15', status: 'Completed' },
+      { id: 'md-cmp-ca4', description: 'Pull retention samples from lot HV-26-0007 for accelerated ageing and seal-integrity testing',                                       owner: 'Karthik Iyer',     dueDate: '2026-03-18', status: 'Completed' },
+    ],
+    investigation: {
+      rootCause: 'Sealing temperature drift on tray sealer TS-04 (heater element wear) caused weakened seals on a portion of lot HV-26-0007. Identical root cause as NC-MD-2025-0098 — CAPA effectiveness gap.',
+      methodology: '5-Why + seal-strength burst testing + sealer-process data review',
+      fiveWhys: [
+        { whyNumber: 1, question: 'Why was the Tyvek lid delaminated?',                              answer: 'Seal strength was below specification at one corner of the pouch.' },
+        { whyNumber: 2, question: 'Why was the seal strength low?',                                  answer: 'Heat-seal temperature on TS-04 drifted below the validated range.' },
+        { whyNumber: 3, question: 'Why did temperature drift recur after the 2025 CAPA?',            answer: 'New heater element supplied in 2026 was from a different vendor with shorter service life; no re-validation triggered.' },
+      ],
+      findings: 'CAPA-MD-2025-0058 effectiveness check passed on original element; replacement element introduced a new failure mode that bypassed the change-control review.',
+      investigatedBy: 'Dr. Anjali Verma', completedDate: '2026-03-22',
+    },
+    resolution: {
+      proposedResolution: 'Replace heater element with original-vendor part, revalidate seal parameters, and re-trigger CAPA-MD-2025-0058 effectiveness with a 180-day monitoring extension. Provide CoA & seal-strength data to Fortis.',
+      customerAccepted: true, acceptedDate: '2026-03-24',
+      resolutionDetails: 'New parts ordered; seal revalidation scheduled for week of 2026-03-31. Fortis to receive replacement stock and root-cause report.',
+      compensationOffered: 'Replacement units at no charge; clinical-education session offered for cath-lab staff',
+      resolvedBy: 'Dr. Anjali Verma',
+    },
+    communications: [], linkedCAPAs: [{ id: 'md-capa3', capaNumber: 'CAPA-MD-2025-0058', title: 'Heart-valve sterile barrier leak', status: 'CLOSED', type: 'CORRECTIVE' }],
+    history: [],
+    createdAt: '2026-03-12T08:30:00Z', updatedAt: '2026-03-24T14:00:00Z',
+  },
+  {
+    id: 'md-cmp3', complaintNumber: 'CMP-MD-2025-0048',
+    customerName: 'Bengaluru Eye Hospital', customerContact: 'Dr. Suchitra Rao', customerEmail: 'suchitra.rao@beh.in',
+    subject: 'Foreign particle inside intraocular lens packaging (Lot IOL-25-0119)',
+    description: 'Surgeon noticed a sub-visible particle within the saline-filled packaging of one IOL prior to implantation. Procedure was paused, alternate unit used. Patient unharmed. Single unit; patient case logged.',
+    severity: 'Major', status: 'Closed',
+    productService: 'Intraocular Lens — IOL-25', batchOrderRef: 'Lot IOL-25-0119',
+    receivedDate: '2025-11-08', responseDue: '2025-11-22',
+    assignedTo: 'Sneha Kapoor', assignedToId: 'u-md5',
+    containmentActions: [
+      { id: 'md-cmp-ca5', description: 'Quarantine remaining units from lot IOL-25-0119 and pull retention samples',                                                          owner: 'Karthik Iyer',   dueDate: '2025-11-10', status: 'Completed' },
+    ],
+    investigation: {
+      rootCause: 'Tooling wear on injection-moulding cavity 03 (same family as NC-MD-2026-0038). Particle identified as silicone fragment.',
+      methodology: '5-Why + FTIR particle ID', fiveWhys: [], findings: 'Cavity 03 wear pattern matched previous occurrence; rotation schedule had been missed.',
+      investigatedBy: 'Sneha Kapoor', completedDate: '2025-11-20',
+    },
+    resolution: {
+      proposedResolution: 'Replace cavity 03 tooling, revalidate (3-lot OQ), strengthen visual inspection criteria.',
+      customerAccepted: true, acceptedDate: '2025-11-21', resolutionDetails: 'Tooling replaced; lot IOL-25-0119 disposed.', compensationOffered: 'Replacement units; root-cause report shared',
+      resolvedBy: 'Sneha Kapoor',
+    },
+    communications: [], linkedCAPAs: [], history: [],
+    createdAt: '2025-11-08T09:00:00Z', updatedAt: '2025-11-22T16:00:00Z',
+  },
+  // ── Disposables product family ──────────────────────────────────────────
+  {
+    id: 'md-cmp4', complaintNumber: 'CMP-MD-2026-0017',
+    customerName: 'Max Super Speciality Hospital — Saket, New Delhi', customerContact: 'Sr. Sister Anju Bhalla', customerEmail: 'anju.bhalla@maxhealthcare.com',
+    subject: '14 syringes from lot DSY-26-0204 felt gritty during draw; visible particles confirmed by pharmacist',
+    description: 'OT pharmacy at Max Saket reported that 14 of 50 inspected syringes from lot DSY-26-0204 had a gritty plunger feel during draw and visible white particles in the barrel. Procedure stock substituted from a different lot; no patient exposure reported.',
+    severity: 'Major', status: 'Under Investigation',
+    productService: '5 mL Disposable Syringe — DSY-26', batchOrderRef: 'Lot DSY-26-0204',
+    receivedDate: '2026-04-03', responseDue: '2026-04-17',
+    assignedTo: 'Sneha Kapoor', assignedToId: 'u-md5',
+    containmentActions: [
+      { id: 'md-cmp-ca6', description: 'Recall all 12 cartons sold to Max Saket; replace from a different validated lot', owner: 'Neha Bansal', dueDate: '2026-04-07', status: 'Completed' },
+      { id: 'md-cmp-ca7', description: 'Pull retention samples from lot DSY-26-0204 for particle ID (FTIR + microscope)',  owner: 'Sneha Kapoor', dueDate: '2026-04-10', status: 'Completed' },
+    ],
+    investigation: null, resolution: null,
+    communications: [
+      { id: 'md-cm3', date: '2026-04-03', type: 'Email', direction: 'Inbound',  summary: 'Initial complaint with photos of barrel particles', contactPerson: 'Sr. Sister Anju Bhalla', user: 'Sneha Kapoor' },
+      { id: 'md-cm4', date: '2026-04-04', type: 'Phone', direction: 'Outbound', summary: 'Acknowledgement call; arranged for return of 14 units for failure analysis', contactPerson: 'Sr. Sister Anju Bhalla', user: 'Sneha Kapoor' },
+    ],
+    linkedCAPAs: [{ id: 'md-capa8', capaNumber: 'CAPA-MD-2026-0021', title: 'Disposable syringe particulate from over-lubrication', status: 'IMPLEMENTATION', type: 'CORRECTIVE' }],
+    history: [{ id: 'md-cmh3', timestamp: '2026-04-03T11:30:00Z', user: 'Sneha Kapoor', action: 'Complaint received', details: 'Logged from email; linked to NC-MD-2026-0037 already in investigation' }],
+    createdAt: '2026-04-03T11:30:00Z', updatedAt: '2026-04-07T15:00:00Z',
+  },
+  {
+    id: 'md-cmp5', complaintNumber: 'CMP-MD-2026-0016',
+    customerName: 'Tata Memorial Hospital — Mumbai', customerContact: 'Pharm. Pranay Khurana', customerEmail: 'pranay.khurana@tmc.gov.in',
+    subject: 'Foley catheter balloon over-inflated and burst during routine placement — Lot FCT-26-0067',
+    description: 'Urology resident reported that a 18Fr Foley catheter from lot FCT-26-0067 over-inflated past the declared 10 mL balloon and ruptured at ~65 mL during routine bladder catheterization. Catheter replaced; patient unharmed. Single unit; bladder ultrasound clean.',
+    severity: 'Critical', status: 'Resolution Proposed',
+    productService: 'Foley Catheter — 18Fr FCT-26', batchOrderRef: 'Lot FCT-26-0067',
+    receivedDate: '2026-04-11', responseDue: '2026-04-25',
+    assignedTo: 'Karthik Iyer', assignedToId: 'u-md2',
+    containmentActions: [
+      { id: 'md-cmp-ca8', description: 'Recall all 240 catheters from lot FCT-26-0067 across 4 distributors', owner: 'Neha Bansal',  dueDate: '2026-04-14', status: 'In Progress' },
+      { id: 'md-cmp-ca9', description: 'Quarantine adjacent lots produced on FCT-MC-02 same week',           owner: 'Karthik Iyer', dueDate: '2026-04-12', status: 'Completed' },
+    ],
+    investigation: {
+      rootCause: 'Silicone dip-moulding cycle drift on line FCT-MC-02 produced over-thinned balloon walls. Bath temperature was 4 °C above setpoint; dwell time within spec.',
+      methodology: 'Burst-volume re-test of retention samples + DSC analysis of dipped balloons + thermocouple verification on FCT-MC-02 dip tank',
+      fiveWhys: [
+        { whyNumber: 1, question: 'Why did the balloon burst at 65 mL?',         answer: 'Balloon wall was thinner than spec.' },
+        { whyNumber: 2, question: 'Why was the wall thinner?',                   answer: 'Silicone bath temperature drifted 4 °C above setpoint, lowering viscosity and reducing pick-up per dip.' },
+        { whyNumber: 3, question: 'Why did temperature drift go undetected?',     answer: 'Bath thermocouple was calibrated 9 months ago; out-of-cal by +3.8 °C.' },
+      ],
+      findings: 'Calibration cycle for dip-tank thermocouples is 12-monthly; needs to be 3- or 6-monthly for sterile-process equipment.',
+      investigatedBy: 'Karthik Iyer', completedDate: '2026-04-18',
+    },
+    resolution: {
+      proposedResolution: 'Replace dip-tank thermocouple, revalidate FCT-MC-02 cycle, tighten calibration to 3-monthly. Recall lot FCT-26-0067 with full replacement and root-cause report shared with Tata Memorial.',
+      customerAccepted: true, acceptedDate: '2026-04-20',
+      resolutionDetails: 'Replacement stock dispatched 2026-04-22; root-cause + revalidation report shared 2026-04-25.',
+      compensationOffered: 'Replacement units at no charge; on-site clinical-engineering visit',
+      resolvedBy: 'Karthik Iyer',
+    },
+    communications: [], linkedCAPAs: [], history: [],
+    createdAt: '2026-04-11T09:00:00Z', updatedAt: '2026-04-20T15:00:00Z',
+  },
+];
+
+// Dairy tenant — FSSAI / ISO 22000 themed complaints.
+export const mockDairyComplaints: Complaint[] = [
+  {
+    id: 'dy-cmp1', complaintNumber: 'CMP-DY-2026-0011',
+    customerName: 'Reliance Smart — Aundh, Pune', customerContact: 'Store Manager Rajan Bhandari', customerEmail: 'rajan.bhandari@relianceretail.com',
+    subject: 'Customer returns: 22 pouches of 1L toned milk turned sour before best-before date — Batch PTM-26-0431',
+    description: 'Aundh Reliance Smart store has received 22 customer complaints in 5 days about sour 1L toned-milk pouches from batch PTM-26-0431, all returned before printed best-before. Store has pulled remaining 38 pouches and quarantined them.',
+    severity: 'Critical', status: 'Under Investigation',
+    productService: 'Pasteurized Toned Milk — 1L pouch', batchOrderRef: 'Batch PTM-26-0431',
+    receivedDate: '2026-05-13', responseDue: '2026-05-27',
+    assignedTo: 'Anita Kulkarni', assignedToId: 'u-dy3',
+    containmentActions: [
+      { id: 'dy-cmp-ca1', description: 'Recall remaining stock of PTM-26-0431 across all 12 distributing retail depots', owner: 'Sandeep Joshi',  dueDate: '2026-05-16', status: 'In Progress' },
+      { id: 'dy-cmp-ca2', description: 'Pull and re-test 60 retention pouches for TPC + coliform + Pseudomonas',          owner: 'Anita Kulkarni', dueDate: '2026-05-15', status: 'Completed' },
+    ],
+    investigation: null, resolution: null,
+    communications: [
+      { id: 'dy-cm1', date: '2026-05-13', type: 'Phone', direction: 'Inbound', summary: '22 customer returns, all from batch PTM-26-0431, sour smell pre-BB', contactPerson: 'Rajan Bhandari', user: 'Anita Kulkarni' },
+      { id: 'dy-cm2', date: '2026-05-14', type: 'Email', direction: 'Outbound', summary: 'Acknowledgement + replacement stock dispatch + recall coordination', contactPerson: 'Rajan Bhandari', user: 'Sandeep Joshi' },
+    ],
+    linkedCAPAs: [{ id: 'dy-capa2', capaNumber: 'CAPA-DY-2026-0018', title: 'Pasteurized milk TPC recontamination at FM-02', status: 'ROOT_CAUSE_ANALYSIS', type: 'CORRECTIVE' }],
+    history: [{ id: 'dy-cmh1', timestamp: '2026-05-13T11:00:00Z', user: 'Anita Kulkarni', action: 'Complaint received', details: 'Linked to NC-DY-2026-0041 — same batch already in investigation' }],
+    createdAt: '2026-05-13T11:00:00Z', updatedAt: '2026-05-16T15:30:00Z',
+  },
+  {
+    id: 'dy-cmp2', complaintNumber: 'CMP-DY-2026-0010',
+    customerName: 'D-Mart — Wakad, Pune', customerContact: 'QC Officer Vandana Joshi', customerEmail: 'vandana.joshi@dmartindia.com',
+    subject: 'Curd pots from lot DAH-26-0167 show whey separation and off-taste',
+    description: '3 customer complaints in 2 days plus shelf observations: 200g set-curd pots from lot DAH-26-0167 are showing premature whey separation and slight off-taste before best-before date.',
+    severity: 'Major', status: 'Resolution Proposed',
+    productService: 'Set Curd — 200g cup', batchOrderRef: 'Lot DAH-26-0167',
+    receivedDate: '2026-04-04', responseDue: '2026-04-18',
+    assignedTo: 'Anita Kulkarni', assignedToId: 'u-dy3',
+    containmentActions: [
+      { id: 'dy-cmp-ca3', description: 'Recall remaining DAH-26-0167 cups from store and adjacent stores', owner: 'Sandeep Joshi',  dueDate: '2026-04-06', status: 'Completed' },
+      { id: 'dy-cmp-ca4', description: 'Pull retention samples and run extended microbio panel',           owner: 'Anita Kulkarni', dueDate: '2026-04-07', status: 'Completed' },
+    ],
+    investigation: {
+      rootCause: 'Coliform-positive curd from inadequate CIP on fermentation tank FT-03 between batches (also surfaced in NC-DY-2026-0034). Coliform contamination accelerated whey separation and off-taste.',
+      methodology: '5-Why + CIP swab analysis + retention-sample microbio panel',
+      fiveWhys: [
+        { whyNumber: 1, question: 'Why is whey separating prematurely?',     answer: 'Coliform contamination accelerated lactic acid drop and gel breakdown.' },
+        { whyNumber: 2, question: 'Why was coliform present?',                answer: 'CIP cycle on FT-03 between batches was inadequate.' },
+        { whyNumber: 3, question: 'Why was CIP inadequate?',                  answer: 'CIP cycle time shortened by operator during peak shift; biofilm developed.' },
+      ],
+      findings: 'Same root cause as CAPA-DY-2026-0018 — operator CIP override. CAPA effectiveness must also apply to fermentation tanks.',
+      investigatedBy: 'Anita Kulkarni', completedDate: '2026-04-12',
+    },
+    resolution: {
+      proposedResolution: 'Extend CAPA-DY-2026-0018 scope to cover all CIP recipes on fermentation tanks; tighten ATP-swab pre-shift checks. Replace lot DAH-26-0167 with verified new lot at customer cost.',
+      customerAccepted: true, acceptedDate: '2026-04-14', resolutionDetails: 'Replacement stock dispatched; root-cause report shared with D-Mart QA.', compensationOffered: 'Replacement units + on-site QA verification visit',
+      resolvedBy: 'Anita Kulkarni',
+    },
+    communications: [], linkedCAPAs: [{ id: 'dy-capa2', capaNumber: 'CAPA-DY-2026-0018', title: 'CIP recontamination', status: 'ROOT_CAUSE_ANALYSIS', type: 'CORRECTIVE' }],
+    history: [],
+    createdAt: '2026-04-04T09:00:00Z', updatedAt: '2026-04-14T15:00:00Z',
+  },
+  {
+    id: 'dy-cmp3', complaintNumber: 'CMP-DY-2026-0009',
+    customerName: 'Big Basket — Pune Distribution Centre', customerContact: 'QA Lead Kavita Bhatia', customerEmail: 'kavita.bhatia@bigbasket.com',
+    subject: 'Ghee from batch GHC-26-0091 reported as "slightly rancid"',
+    description: 'Online review aggregator flagged 9 customer complaints in 3 weeks for 1L cow-ghee tins from batch GHC-26-0091 with "stale" or "rancid" smell. Big Basket QA tested 6 unsold tins — FFA 3.6% (FSSAI / BIS limit NMT 3.0%).',
+    severity: 'Major', status: 'Closed',
+    productService: 'Cow Ghee — 1L tin', batchOrderRef: 'Batch GHC-26-0091',
+    receivedDate: '2026-03-18', responseDue: '2026-04-01',
+    assignedTo: 'Anita Kulkarni', assignedToId: 'u-dy3',
+    containmentActions: [
+      { id: 'dy-cmp-ca5', description: 'Recall remaining stock of GHC-26-0091 across Big Basket DC and adjacent retailers', owner: 'Sandeep Joshi', dueDate: '2026-03-22', status: 'Completed' },
+    ],
+    investigation: { rootCause: 'Same root cause as NC-DY-2026-0029 — over-aged butter caused elevated FFA in finished ghee.', methodology: '5-Why + FFA re-test', fiveWhys: [], findings: 'Butter-to-ghee turnaround was 70 h vs. the new validated 48 h.', investigatedBy: 'Anita Kulkarni', completedDate: '2026-03-25' },
+    resolution: { proposedResolution: 'Replace lot with fresh GHC-26-0094; root-cause + revalidation report shared. Butter-to-ghee turnaround SOP revised to 48 h max.', customerAccepted: true, acceptedDate: '2026-03-27', resolutionDetails: 'Replacement stock + signed FFA test certificates supplied.', compensationOffered: 'Replacement units + FFA certificates with every shipment for 90 days', resolvedBy: 'Anita Kulkarni' },
+    communications: [], linkedCAPAs: [], history: [],
+    createdAt: '2026-03-18T09:00:00Z', updatedAt: '2026-04-01T16:00:00Z',
+  },
+];
+
 interface ComplaintFilters {
   status?: string;
   severity?: string;
@@ -635,14 +857,16 @@ interface ComplaintFilters {
 }
 
 export function useComplaints(filters: ComplaintFilters = {}) {
+  const industry = useUserIndustry();
   return useQuery({
-    queryKey: ['complaints', filters],
+    queryKey: ['complaints', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/complaints', { params: filters });
         return unwrapList<Complaint>(data, flattenComplaint as any);
       } catch {
-        let filtered = [...mockComplaints];
+        const baseList = pickByIndustry(industry, mockComplaints, { medical_device: mockMedicalDeviceComplaints, dairy: mockDairyComplaints });
+        let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((c) => c.status === filters.status);
         if (filters.severity) filtered = filtered.filter((c) => c.severity === filters.severity);
         if (filters.search) {
@@ -662,14 +886,16 @@ export function useComplaints(filters: ComplaintFilters = {}) {
 }
 
 export function useComplaint(id: string) {
+  const industry = useUserIndustry();
   return useQuery<Complaint>({
-    queryKey: ['complaints', id],
+    queryKey: ['complaints', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/complaints/${id}`);
         return unwrapItem<Complaint>(data, flattenComplaint as any);
       } catch {
-        const complaint = mockComplaints.find((c) => c.id === id);
+        const baseList = pickByIndustry(industry, mockComplaints, { medical_device: mockMedicalDeviceComplaints, dairy: mockDairyComplaints });
+        const complaint = baseList.find((c) => c.id === id);
         if (!complaint) throw new Error('Complaint not found');
         return complaint;
       }

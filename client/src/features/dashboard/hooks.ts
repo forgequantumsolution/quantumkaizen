@@ -4,15 +4,17 @@ import type { AuditLogEntry } from '@/types';
 // ─────────────────────────────────────────────────────────────────────────────
 // INDUSTRIES
 // ─────────────────────────────────────────────────────────────────────────────
-export type IndustryKey = 'pharma' | 'food' | 'chemical' | 'automotive' | 'vehicle' | 'machinery';
+export type IndustryKey = 'pharma' | 'food' | 'chemical' | 'automotive' | 'vehicle' | 'machinery' | 'medicaldevice' | 'dairy';
 
 export const INDUSTRIES: { key: IndustryKey; label: string; plant: string; city: string; products: string; color: string }[] = [
-  { key: 'pharma',     label: 'Pharma & Life Sciences', plant: 'FQS Pharma Pvt. Ltd.',         city: 'Pune',          products: 'Solid Oral Dosage',         color: '#0a1628' },
-  { key: 'food',       label: 'Food & Beverage',        plant: 'FQS FoodTech Pvt. Ltd.',        city: 'Hyderabad',     products: 'Packaged Snacks & Beverages', color: '#10b981' },
-  { key: 'chemical',   label: 'Chemical Manufacturing', plant: 'FQS ChemWorks Pvt. Ltd.',       city: 'Dahej, Gujarat', products: 'Specialty Chemicals',        color: '#f59e0b' },
-  { key: 'automotive', label: 'Automotive Components',  plant: 'FQS AutoParts Pvt. Ltd.',       city: 'Chakan, Pune',  products: 'Machined Components',        color: '#0ea5e9' },
-  { key: 'vehicle',    label: 'Vehicle Assembly',        plant: 'FQS VehicleWorks Pvt. Ltd.',    city: 'Chennai',       products: 'LCV Assembly',               color: '#8b5cf6' },
-  { key: 'machinery',  label: 'Heavy Machinery',         plant: 'FQS HeavyTech Pvt. Ltd.',       city: 'Coimbatore',    products: 'Hydraulic Presses',          color: '#ef4444' },
+  { key: 'pharma',        label: 'Pharma & Life Sciences', plant: 'FQS Pharma Pvt. Ltd.',         city: 'Pune',                     products: 'Solid Oral Dosage',                color: '#0a1628' },
+  { key: 'food',          label: 'Food & Beverage',        plant: 'FQS FoodTech Pvt. Ltd.',        city: 'Hyderabad',                products: 'Packaged Snacks & Beverages',      color: '#10b981' },
+  { key: 'chemical',      label: 'Chemical Manufacturing', plant: 'FQS ChemWorks Pvt. Ltd.',       city: 'Dahej, Gujarat',            products: 'Specialty Chemicals',              color: '#f59e0b' },
+  { key: 'automotive',    label: 'Automotive Components',  plant: 'FQS AutoParts Pvt. Ltd.',       city: 'Chakan, Pune',             products: 'Machined Components',              color: '#0ea5e9' },
+  { key: 'vehicle',       label: 'Vehicle Assembly',        plant: 'FQS VehicleWorks Pvt. Ltd.',    city: 'Chennai',                   products: 'LCV Assembly',                     color: '#8b5cf6' },
+  { key: 'machinery',     label: 'Heavy Machinery',         plant: 'FQS HeavyTech Pvt. Ltd.',       city: 'Coimbatore',                products: 'Hydraulic Presses',                color: '#ef4444' },
+  { key: 'medicaldevice', label: 'Medical Devices',         plant: 'FQS MedTech Pvt. Ltd.',         city: 'Bengaluru — MedTech Park', products: 'Disposables · Implants · Connected · ISO 13485', color: '#06b6d4' },
+  { key: 'dairy',         label: 'Dairy & Milk Products',   plant: 'FQS Dairy Pvt. Ltd.',           city: 'Pune — Dairy Plant',       products: 'Milk · Curd · Ghee · Butter · Sweets · FSSAI', color: '#f97316' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,6 +44,10 @@ const NC_COUNT: Record<IndustryKey, number[]> = {
   vehicle:    [16,15,18,14,16,13,15,12,14,13,15,11, 12,11,13,10,12,9,11,10,12,9,11,10, 9,8,10,7,9,7,9,8,10,7,8,9],
   // Heavy Machinery: CE/welding quality, improves with NDT investment in 2023
   machinery:  [11,10,12,9,11,8,10,8,9,8,10,7, 8,7,9,6,8,6,8,6,7,6,8,6, 5,5,6,4,6,4,5,4,5,4,5,6],
+  // Medical Devices: ISO 13485 / 21 CFR 820 — sterility & UDI driven, steady CAPA loop
+  medicaldevice:[17,16,15,17,14,16,13,14,13,12,11,12, 11,10,11,9,10,9,11,8,9,8,10,8, 8,7,8,6,7,6,8,7,8,5,6,7],
+  // Dairy: FSSAI / ISO 22000 — seasonal (summer microbio peaks), monsoon adulteration
+  dairy:        [12,11,10,11,15,18,19,17,13,11,10,9,  10,9,10,11,14,17,18,16,12,10,9,9,   9,8,9,10,13,16,17,15,11,8,9,10],
 };
 
 // Severity split per industry (Critical%, Major%, Minor% — rest is Minor)
@@ -52,6 +58,8 @@ const SEV_SPLIT: Record<IndustryKey, { crit: number; major: number }> = {
   automotive: { crit: 0.10, major: 0.45 },
   vehicle:    { crit: 0.08, major: 0.44 },
   machinery:  { crit: 0.12, major: 0.48 },
+  medicaldevice:{ crit: 0.16, major: 0.49 },
+  dairy:        { crit: 0.12, major: 0.44 },
 };
 
 function buildNCSeverity(industry: IndustryKey, indices: number[]) {
@@ -140,6 +148,23 @@ const COMPLAINT_DATA: Record<IndustryKey, { received: number; resolved: number }
     {received:2,resolved:2},{received:1,resolved:2},{received:2,resolved:2},{received:1,resolved:2},{received:2,resolved:1},{received:1,resolved:2},
     {received:2,resolved:2},{received:1,resolved:2},{received:2,resolved:2},{received:1,resolved:2},{received:2,resolved:2},{received:1,resolved:2},
   ],
+  medicaldevice: [
+    {received:6,resolved:5},{received:5,resolved:5},{received:7,resolved:6},{received:6,resolved:6},{received:8,resolved:7},{received:6,resolved:7},
+    {received:7,resolved:6},{received:5,resolved:7},{received:6,resolved:6},{received:5,resolved:6},{received:7,resolved:6},{received:5,resolved:6},
+    {received:6,resolved:6},{received:5,resolved:6},{received:6,resolved:5},{received:5,resolved:6},{received:7,resolved:6},{received:5,resolved:6},
+    {received:6,resolved:6},{received:4,resolved:6},{received:5,resolved:5},{received:4,resolved:5},{received:6,resolved:5},{received:4,resolved:5},
+    {received:5,resolved:5},{received:4,resolved:5},{received:5,resolved:4},{received:3,resolved:5},{received:5,resolved:4},{received:3,resolved:5},
+    {received:4,resolved:4},{received:3,resolved:4},{received:5,resolved:4},{received:3,resolved:4},{received:4,resolved:4},{received:3,resolved:4},
+  ],
+  // Dairy: seasonal — summer + monsoon complaint peaks (curd over-acid, packet leak, butter rancidity)
+  dairy: [
+    {received:9,resolved:7},{received:8,resolved:8},{received:10,resolved:8},{received:12,resolved:9},{received:16,resolved:12},{received:18,resolved:14},
+    {received:15,resolved:14},{received:11,resolved:13},{received:10,resolved:11},{received:8,resolved:9},{received:7,resolved:8},{received:6,resolved:7},
+    {received:8,resolved:7},{received:7,resolved:8},{received:9,resolved:7},{received:11,resolved:9},{received:15,resolved:12},{received:17,resolved:14},
+    {received:14,resolved:14},{received:10,resolved:12},{received:9,resolved:10},{received:7,resolved:8},{received:6,resolved:7},{received:5,resolved:6},
+    {received:7,resolved:6},{received:6,resolved:7},{received:8,resolved:7},{received:10,resolved:8},{received:14,resolved:11},{received:16,resolved:13},
+    {received:13,resolved:13},{received:9,resolved:11},{received:8,resolved:9},{received:6,resolved:7},{received:5,resolved:6},{received:5,resolved:5},
+  ],
 };
 
 function buildComplaint(industry: IndustryKey, indices: number[]) {
@@ -177,6 +202,8 @@ const CAPA_BASE: Record<IndustryKey, CAPAStage[]> = {
   automotive: [{stage:'Initiated',count:3},{stage:'Containment',count:2},{stage:'Root Cause',count:6},{stage:'Action Defn',count:4},{stage:'Implementation',count:9},{stage:'Effectiveness',count:3},{stage:'Closed',count:22}],
   vehicle:    [{stage:'Initiated',count:4},{stage:'Containment',count:3},{stage:'Root Cause',count:6},{stage:'Action Defn',count:5},{stage:'Implementation',count:10},{stage:'Effectiveness',count:3},{stage:'Closed',count:25}],
   machinery:  [{stage:'Initiated',count:2},{stage:'Containment',count:2},{stage:'Root Cause',count:4},{stage:'Action Defn',count:3},{stage:'Implementation',count:7},{stage:'Effectiveness',count:2},{stage:'Closed',count:16}],
+  medicaldevice:[{stage:'Initiated',count:3},{stage:'Containment',count:3},{stage:'Root Cause',count:6},{stage:'Action Defn',count:5},{stage:'Implementation',count:10},{stage:'Effectiveness',count:4},{stage:'Closed',count:24}],
+  dairy:        [{stage:'Initiated',count:4},{stage:'Containment',count:3},{stage:'Root Cause',count:6},{stage:'Action Defn',count:4},{stage:'Implementation',count:9},{stage:'Effectiveness',count:3},{stage:'Closed',count:21}],
 };
 
 function scaleCapa(industry: IndustryKey, range: string): CAPAStage[] {
@@ -192,6 +219,8 @@ const AUDIT_BASE: Record<IndustryKey, AuditFinding[]> = {
   automotive: [{dept:'Machining',Major:3,Minor:6,OFI:3},{dept:'Assembly',Major:2,Minor:5,OFI:4},{dept:'QC',Major:2,Minor:4,OFI:5},{dept:'Supplier QA',Major:3,Minor:4,OFI:2},{dept:'Engineering',Major:1,Minor:3,OFI:3}],
   vehicle:    [{dept:'Body Shop',Major:4,Minor:7,OFI:3},{dept:'Paint',Major:3,Minor:5,OFI:4},{dept:'Assembly',Major:3,Minor:6,OFI:3},{dept:'QC',Major:2,Minor:4,OFI:4},{dept:'Logistics',Major:1,Minor:3,OFI:2}],
   machinery:  [{dept:'Fabrication',Major:3,Minor:5,OFI:2},{dept:'Welding',Major:4,Minor:6,OFI:2},{dept:'Machining',Major:2,Minor:4,OFI:3},{dept:'Assembly',Major:2,Minor:3,OFI:2},{dept:'QC',Major:1,Minor:3,OFI:3}],
+  medicaldevice:[{dept:'Sterilization',Major:3,Minor:5,OFI:3},{dept:'Cleanroom Assembly',Major:2,Minor:6,OFI:4},{dept:'Design Controls',Major:2,Minor:4,OFI:5},{dept:'Regulatory Affairs',Major:3,Minor:3,OFI:2},{dept:'QC Lab',Major:1,Minor:3,OFI:3}],
+  dairy:        [{dept:'Receiving Dock',Major:3,Minor:5,OFI:3},{dept:'Pasteurization',Major:2,Minor:5,OFI:4},{dept:'Packaging',Major:2,Minor:4,OFI:3},{dept:'Microbiology Lab',Major:2,Minor:6,OFI:3},{dept:'Cold Chain',Major:1,Minor:3,OFI:2}],
 };
 
 function scaleAudit(industry: IndustryKey, range: string): AuditFinding[] {
@@ -212,6 +241,8 @@ const DOC_BASE: Record<IndustryKey, DocEntry[]> = {
   automotive: [{status:'Draft',count:8,fill:'#94a3b8'},{status:'Under Review',count:5,fill:'#f59e0b'},{status:'Pending Approval',count:3,fill:'#0ea5e9'},{status:'Approved',count:12,fill:'#10b981'},{status:'Published',count:44,fill:'#0a1628'},{status:'Obsolete',count:7,fill:'#e2e8f0'}],
   vehicle:    [{status:'Draft',count:6,fill:'#94a3b8'},{status:'Under Review',count:4,fill:'#f59e0b'},{status:'Pending Approval',count:2,fill:'#0ea5e9'},{status:'Approved',count:9,fill:'#10b981'},{status:'Published',count:33,fill:'#0a1628'},{status:'Obsolete',count:5,fill:'#e2e8f0'}],
   machinery:  [{status:'Draft',count:5,fill:'#94a3b8'},{status:'Under Review',count:3,fill:'#f59e0b'},{status:'Pending Approval',count:2,fill:'#0ea5e9'},{status:'Approved',count:8,fill:'#10b981'},{status:'Published',count:29,fill:'#0a1628'},{status:'Obsolete',count:4,fill:'#e2e8f0'}],
+  medicaldevice:[{status:'Draft',count:8,fill:'#94a3b8'},{status:'Under Review',count:5,fill:'#f59e0b'},{status:'Pending Approval',count:4,fill:'#0ea5e9'},{status:'Approved',count:13,fill:'#10b981'},{status:'Published',count:48,fill:'#0a1628'},{status:'Obsolete',count:7,fill:'#e2e8f0'}],
+  dairy:        [{status:'Draft',count:6,fill:'#94a3b8'},{status:'Under Review',count:4,fill:'#f59e0b'},{status:'Pending Approval',count:3,fill:'#0ea5e9'},{status:'Approved',count:11,fill:'#10b981'},{status:'Published',count:41,fill:'#0a1628'},{status:'Obsolete',count:6,fill:'#e2e8f0'}],
 };
 
 function scaleDoc(industry: IndustryKey, range: string): DocEntry[] {
@@ -231,6 +262,8 @@ const TRAINING_BASE: Record<IndustryKey, TrainingEntry[]> = {
   automotive: [{dept:'Quality',compliance:97},{dept:'Machining',compliance:92},{dept:'Engineering',compliance:94},{dept:'Assembly',compliance:89},{dept:'Supplier QA',compliance:85},{dept:'Warehouse',compliance:81}],
   vehicle:    [{dept:'Quality',compliance:95},{dept:'Body Shop',compliance:90},{dept:'Paint Shop',compliance:88},{dept:'Assembly',compliance:92},{dept:'Logistics',compliance:84},{dept:'Maintenance',compliance:80}],
   machinery:  [{dept:'Design',compliance:93},{dept:'Fabrication',compliance:86},{dept:'Welding',compliance:88},{dept:'Assembly',compliance:90},{dept:'QC',compliance:91},{dept:'Service',compliance:82}],
+  medicaldevice:[{dept:'Regulatory Affairs',compliance:97},{dept:'Design Controls',compliance:94},{dept:'Cleanroom Assembly',compliance:92},{dept:'Sterilization',compliance:95},{dept:'QC Lab',compliance:93},{dept:'Post-Market Surveillance',compliance:89}],
+  dairy:        [{dept:'QA / HACCP Team',compliance:96},{dept:'Microbiology Lab',compliance:94},{dept:'Pasteurization',compliance:91},{dept:'Packaging',compliance:88},{dept:'Cold Chain',compliance:86},{dept:'Receiving Dock',compliance:84}],
 };
 
 function scaleTraining(industry: IndustryKey, range: string): TrainingEntry[] {
@@ -249,6 +282,8 @@ const SUPPLIER_BASE: Record<IndustryKey, RadarEntry[]> = {
   automotive: [{metric:'Quality',score:94},{metric:'Delivery',score:91},{metric:'Cost',score:80},{metric:'Responsive',score:89},{metric:'Innovation',score:78},{metric:'Compliance',score:97}],
   vehicle:    [{metric:'Quality',score:89},{metric:'Delivery',score:93},{metric:'Cost',score:83},{metric:'Responsive',score:87},{metric:'Innovation',score:71},{metric:'Compliance',score:91}],
   machinery:  [{metric:'Quality',score:87},{metric:'Delivery',score:84},{metric:'Cost',score:79},{metric:'Responsive',score:82},{metric:'Innovation',score:76},{metric:'Compliance',score:88}],
+  medicaldevice:[{metric:'Quality',score:93},{metric:'Delivery',score:86},{metric:'Cost',score:77},{metric:'Responsive',score:87},{metric:'Innovation',score:81},{metric:'Compliance',score:95}],
+  dairy:        [{metric:'Quality',score:89},{metric:'Delivery',score:92},{metric:'Cost',score:81},{metric:'Responsive',score:87},{metric:'Innovation',score:70},{metric:'Compliance',score:91}],
 };
 
 function scaleSupplier(industry: IndustryKey, range: string): RadarEntry[] {
@@ -267,6 +302,8 @@ const RISK_BASE: Record<IndustryKey, RiskPoint[]> = {
   automotive: [{x:1,y:2,z:3,label:'Low'},{x:2,y:2,z:5,label:'Low'},{x:3,y:2,z:3,label:'Medium'},{x:2,y:3,z:4,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:1,label:'High'},{x:4,y:4,z:1,label:'Critical'}],
   vehicle:    [{x:1,y:1,z:2,label:'Low'},{x:2,y:2,z:4,label:'Low'},{x:3,y:2,z:3,label:'Medium'},{x:2,y:3,z:3,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:1,label:'High'},{x:4,y:4,z:1,label:'Critical'}],
   machinery:  [{x:1,y:2,z:2,label:'Low'},{x:2,y:2,z:3,label:'Low'},{x:3,y:3,z:2,label:'Medium'},{x:4,y:2,z:2,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:1,label:'High'},{x:5,y:4,z:1,label:'Critical'}],
+  medicaldevice:[{x:2,y:2,z:4,label:'Low'},{x:3,y:2,z:3,label:'Medium'},{x:2,y:3,z:3,label:'Medium'},{x:3,y:3,z:2,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:2,label:'High'},{x:4,y:4,z:1,label:'Critical'},{x:5,y:4,z:1,label:'Critical'}],
+  dairy:        [{x:2,y:2,z:3,label:'Low'},{x:3,y:2,z:3,label:'Medium'},{x:2,y:3,z:2,label:'Medium'},{x:4,y:2,z:2,label:'Medium'},{x:3,y:3,z:2,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:1,label:'High'},{x:5,y:4,z:1,label:'Critical'}],
 };
 
 function scaleRisk(industry: IndustryKey, range: string): RiskPoint[] {
@@ -299,6 +336,15 @@ const STATS_90D: Record<IndustryKey, Stats> = {
   automotive: { openNCs:30, openCAPAs:16, pendingApprovals:10, expiringDocuments:7,  overdueActions:5,  trainingCompliance:91, supplierScore:88, auditCompliance:94 },
   vehicle:    { openNCs:32, openCAPAs:17, pendingApprovals:11, expiringDocuments:6,  overdueActions:5,  trainingCompliance:89, supplierScore:85, auditCompliance:90 },
   machinery:  { openNCs:22, openCAPAs:11, pendingApprovals:7,  expiringDocuments:4,  overdueActions:3,  trainingCompliance:87, supplierScore:82, auditCompliance:88 },
+  // Counts reflect the actual medical-device mock data — 9 visible non-closed
+  // NCs across disposables + implants + connected, 6 open CAPAs, 4 CRs in
+  // workflow + 2 docs pending, plus a credible background tail.
+  medicaldevice:{ openNCs:17, openCAPAs:11, pendingApprovals:8,  expiringDocuments:7,  overdueActions:5,  trainingCompliance:89, supplierScore:88, auditCompliance:93 },
+  // Dairy — FSSAI / ISO 22000. Counts reflect the dairy mocks: 4 visible
+  // open NCs + 5 background tail; 3 visible open CAPAs + 3 tail; 5 CRs in
+  // workflow + 2 docs awaiting approval; mean training 89% across 12 programs;
+  // mean supplier rating 4.4 / 5 (× 20 = 88).
+  dairy:        { openNCs:9,  openCAPAs:6,  pendingApprovals:5,  expiringDocuments:4,  overdueActions:4,  trainingCompliance:89, supplierScore:88, auditCompliance:90 },
 };
 
 const RANGE_SCALE_STATS: Record<string, { nc: number; capa: number; approvals: number; docs: number; actions: number; training: number; supplier: number; audit: number }> = {
@@ -396,6 +442,43 @@ const ACTIVITY: Record<IndustryKey, AuditLogEntry[]> = {
     {id:'m7', timestamp:'2023-10-05T10:30:00Z', userId:'u2', userName:'Selvi Rajan',     action:'APPROVE',         entityType:'CHANGE_REQUEST',  entityId:'CR-2023-0031', changedFields:null, ipAddress:'10.6.1.10'},
     {id:'m8', timestamp:'2022-05-20T08:30:00Z', userId:'u3', userName:'Anbazhagan K',    action:'CREATE',          entityType:'NON_CONFORMANCE', entityId:'NC-2022-0045', changedFields:null, ipAddress:'10.6.1.15'},
   ],
+  medicaldevice: [
+    // All entityIds map to actual records in the medical-device mocks
+    // (NCs, CAPAs, CRs, audits, complaints, DMS) so the activity feed is a
+    // live cross-reference, not just decoration.
+    {id:'md1',  timestamp:'2026-04-15T18:00:00Z', userId:'u-md4', userName:'Rohit Khanna',     action:'UPDATE',           entityType:'CAPA',            entityId:'CAPA-MD-2026-0017', changedFields:{status:{before:'ROOT_CAUSE_ANALYSIS',after:'IMPLEMENTATION'}}, ipAddress:'10.7.1.6'},
+    {id:'md2',  timestamp:'2026-04-15T14:00:00Z', userId:'u-md1', userName:'Dr. Anjali Verma',  action:'CLOSE',           entityType:'CAPA',            entityId:'CAPA-MD-2026-0011', changedFields:null, ipAddress:'10.7.1.11'},
+    {id:'md3',  timestamp:'2026-04-12T11:00:00Z', userId:'u-md2', userName:'Karthik Iyer',     action:'CREATE',           entityType:'NON_CONFORMANCE', entityId:'NC-MD-2026-0033',   changedFields:null, ipAddress:'10.7.1.14'},
+    {id:'md4',  timestamp:'2026-04-11T09:00:00Z', userId:'u-md2', userName:'Karthik Iyer',     action:'CREATE',           entityType:'COMPLAINT',       entityId:'CMP-MD-2026-0016',  changedFields:null, ipAddress:'10.7.1.14'},
+    {id:'md5',  timestamp:'2026-04-10T11:00:00Z', userId:'u-md1', userName:'Dr. Anjali Verma',  action:'CREATE',          entityType:'NON_CONFORMANCE', entityId:'NC-MD-2026-0034',   changedFields:null, ipAddress:'10.7.1.11'},
+    {id:'md6',  timestamp:'2026-04-08T11:00:00Z', userId:'u-md1', userName:'Dr. Anjali Verma',  action:'APPROVE',         entityType:'CHANGE_REQUEST',  entityId:'CR-MD-2026-0013',   changedFields:null, ipAddress:'10.7.1.11'},
+    {id:'md7',  timestamp:'2026-04-05T16:00:00Z', userId:'u-md5', userName:'Sneha Kapoor',     action:'CREATE',           entityType:'CAPA',            entityId:'CAPA-MD-2026-0021', changedFields:null, ipAddress:'10.7.1.22'},
+    {id:'md8',  timestamp:'2026-04-03T11:30:00Z', userId:'u-md5', userName:'Sneha Kapoor',     action:'CREATE',           entityType:'COMPLAINT',       entityId:'CMP-MD-2026-0017',  changedFields:null, ipAddress:'10.7.1.22'},
+    {id:'md9',  timestamp:'2026-04-02T11:00:00Z', userId:'u-md4', userName:'Rohit Khanna',     action:'CREATE',           entityType:'CAPA',            entityId:'CAPA-MD-2026-0020', changedFields:null, ipAddress:'10.7.1.6'},
+    {id:'md10', timestamp:'2026-03-30T10:00:00Z', userId:'u-md2', userName:'Karthik Iyer',     action:'CREATE',           entityType:'NON_CONFORMANCE', entityId:'NC-MD-2026-0042',   changedFields:null, ipAddress:'10.7.1.14'},
+    {id:'md11', timestamp:'2026-03-28T09:30:00Z', userId:'u-md1', userName:'Dr. Anjali Verma',  action:'CREATE',          entityType:'NON_CONFORMANCE', entityId:'NC-MD-2026-0041',   changedFields:null, ipAddress:'10.7.1.11'},
+    {id:'md12', timestamp:'2026-03-25T10:00:00Z', userId:'u-md3', userName:'Neha Bansal',      action:'CREATE',           entityType:'COMPLAINT',       entityId:'CMP-MD-2026-0014',  changedFields:null, ipAddress:'10.7.1.19'},
+    {id:'md13', timestamp:'2026-03-22T11:00:00Z', userId:'u-md1', userName:'Dr. Anjali Verma',  action:'CLOSE',           entityType:'NON_CONFORMANCE', entityId:'NC-MD-2026-0038',   changedFields:null, ipAddress:'10.7.1.11'},
+    {id:'md14', timestamp:'2025-12-15T14:00:00Z', userId:'u-md3', userName:'Neha Bansal',      action:'CLOSE',            entityType:'CAPA',            entityId:'CAPA-MD-2025-0058', changedFields:null, ipAddress:'10.7.1.19'},
+    {id:'md15', timestamp:'2023-12-18T10:30:00Z', userId:'u-md1', userName:'Dr. Anjali Verma',  action:'APPROVE',         entityType:'DOCUMENT',        entityId:'TF-510K-MD-2023',   changedFields:null, ipAddress:'10.7.1.11'},
+  ],
+  dairy: [
+    {id:'dy1',  timestamp:'2026-05-15T09:00:00Z', userId:'u-dy1', userName:'Sandeep Joshi',     action:'CREATE',           entityType:'NON_CONFORMANCE', entityId:'NC-DY-2026-0042',   changedFields:null, ipAddress:'10.8.1.11'},
+    {id:'dy2',  timestamp:'2026-05-12T14:30:00Z', userId:'u-dy2', userName:'Meera Pillai',     action:'APPROVE',          entityType:'DOCUMENT',        entityId:'HACCP-PLAN-MILK-v6', changedFields:null, ipAddress:'10.8.1.14'},
+    {id:'dy3',  timestamp:'2026-05-10T11:00:00Z', userId:'u-dy3', userName:'Anita Kulkarni',   action:'UPDATE',           entityType:'CAPA',            entityId:'CAPA-DY-2026-0018', changedFields:{status:{before:'CONTAINMENT',after:'ROOT_CAUSE_ANALYSIS'}}, ipAddress:'10.8.1.19'},
+    {id:'dy4',  timestamp:'2026-05-08T15:00:00Z', userId:'u-dy4', userName:'Ravi Deshmukh',    action:'UPDATE',           entityType:'NON_CONFORMANCE', entityId:'NC-DY-2026-0040',   changedFields:{status:{before:'OPEN',after:'INVESTIGATION'}}, ipAddress:'10.8.1.6'},
+    {id:'dy5',  timestamp:'2026-05-05T10:30:00Z', userId:'u-dy5', userName:'Priya Khanna',     action:'PUBLISH',          entityType:'DOCUMENT',        entityId:'SOP-DY-PAST-03',    changedFields:null, ipAddress:'10.8.1.22'},
+    {id:'dy6',  timestamp:'2026-05-02T08:45:00Z', userId:'u-dy1', userName:'Sandeep Joshi',    action:'CREATE',           entityType:'AUDIT',           entityId:'AUD-DY-2026-002',   changedFields:null, ipAddress:'10.8.1.11'},
+    {id:'dy7',  timestamp:'2026-04-28T13:30:00Z', userId:'u-dy3', userName:'Anita Kulkarni',   action:'CREATE',           entityType:'COMPLAINT',       entityId:'CMP-DY-2026-0011',  changedFields:null, ipAddress:'10.8.1.19'},
+    {id:'dy8',  timestamp:'2026-04-22T09:30:00Z', userId:'u-dy2', userName:'Meera Pillai',     action:'APPROVE',          entityType:'CHANGE_REQUEST',  entityId:'CR-DY-2026-0007',   changedFields:null, ipAddress:'10.8.1.14'},
+    {id:'dy9',  timestamp:'2026-04-18T11:15:00Z', userId:'u-dy1', userName:'Sandeep Joshi',    action:'CREATE',           entityType:'NON_CONFORMANCE', entityId:'NC-DY-2026-0038',   changedFields:null, ipAddress:'10.8.1.11'},
+    {id:'dy10', timestamp:'2026-04-10T10:00:00Z', userId:'u-dy4', userName:'Ravi Deshmukh',    action:'CLOSE',            entityType:'NON_CONFORMANCE', entityId:'NC-DY-2026-0034',   changedFields:null, ipAddress:'10.8.1.6'},
+    {id:'dy11', timestamp:'2026-03-30T09:00:00Z', userId:'u-dy3', userName:'Anita Kulkarni',   action:'CREATE',           entityType:'CAPA',            entityId:'CAPA-DY-2026-0017', changedFields:null, ipAddress:'10.8.1.19'},
+    {id:'dy12', timestamp:'2026-02-05T15:30:00Z', userId:'u-dy1', userName:'Sandeep Joshi',    action:'PUBLISH',          entityType:'MANAGEMENT_REVIEW',entityId:'MR-DY-Q1-2026',     changedFields:null, ipAddress:'10.8.1.11'},
+    {id:'dy13', timestamp:'2025-12-12T14:00:00Z', userId:'u-dy3', userName:'Anita Kulkarni',   action:'CLOSE',            entityType:'CAPA',            entityId:'CAPA-DY-2025-0044', changedFields:null, ipAddress:'10.8.1.19'},
+    {id:'dy14', timestamp:'2025-11-04T11:00:00Z', userId:'u-dy2', userName:'Meera Pillai',     action:'CREATE',           entityType:'AUDIT',           entityId:'AUD-DY-2025-FSSAI', changedFields:null, ipAddress:'10.8.1.14'},
+    {id:'dy15', timestamp:'2024-06-18T10:00:00Z', userId:'u-dy1', userName:'Sandeep Joshi',    action:'APPROVE',          entityType:'DOCUMENT',        entityId:'FSSAI-LIC-2024',    changedFields:null, ipAddress:'10.8.1.11'},
+  ],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -428,6 +511,8 @@ const INSPECTION_PASS: Record<IndustryKey, number[]> = {
   automotive: [98,97,98,99,96,97,97,98,97,99,97,98],
   vehicle:    [97,96,97,98,95,96,96,97,96,98,96,97],
   machinery:  [95,94,96,97,92,93,94,95,94,96,93,95],
+  medicaldevice:[96,95,96,98,94,95,95,96,95,97,95,96],
+  dairy:        [93,92,94,93,89,87,88,91,93,94,93,94],
 };
 
 const MONTH_12_2024 = ['Jan-24','Feb-24','Mar-24','Apr-24','May-24','Jun-24','Jul-24','Aug-24','Sep-24','Oct-24','Nov-24','Dec-24'];
@@ -447,6 +532,8 @@ const INSPECTION_RESULTS: Record<IndustryKey, InspResult[]> = {
   automotive: [{ result: 'Pass', count: 231 }, { result: 'Fail', count: 8  }, { result: 'Conditional', count: 14 }, { result: 'Pending', count: 3 }],
   vehicle:    [{ result: 'Pass', count: 194 }, { result: 'Fail', count: 10 }, { result: 'Conditional', count: 12 }, { result: 'Pending', count: 4 }],
   machinery:  [{ result: 'Pass', count: 76  }, { result: 'Fail', count: 9  }, { result: 'Conditional', count: 7  }, { result: 'Pending', count: 3 }],
+  medicaldevice:[{ result: 'Pass', count: 128 }, { result: 'Fail', count: 9  }, { result: 'Conditional', count: 13 }, { result: 'Pending', count: 5 }],
+  dairy:        [{ result: 'Pass', count: 168 }, { result: 'Fail', count: 17 }, { result: 'Conditional', count: 14 }, { result: 'Pending', count: 6 }],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,6 +547,8 @@ const CALIBRATION_STATUS: Record<IndustryKey, CalibEntry[]> = {
   automotive: [{ status: 'Current', count: 22, fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
   vehicle:    [{ status: 'Current', count: 18, fill: '#22C55E' }, { status: 'Due Soon', count: 2, fill: '#F59E0B' }, { status: 'Overdue', count: 1, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
   machinery:  [{ status: 'Current', count: 9,  fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
+  medicaldevice:[{ status: 'Current', count: 14, fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
+  dairy:        [{ status: 'Current', count: 11, fill: '#22C55E' }, { status: 'Due Soon', count: 4, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -473,6 +562,8 @@ const QUALITY_KPIS: Record<IndustryKey, QualityKPI[]> = {
   automotive: [{ label: 'CAPA Closure Rate', value: '92%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '97.1%', sub: 'vs 96% target', color: '#22C55E' }, { label: 'Batch Release OT', value: '95%', sub: 'On-time release rate', color: '#22C55E' }, { label: 'OOS Rate', value: '1.4%', sub: 'Out-of-specification events', color: '#22C55E' }],
   vehicle:    [{ label: 'CAPA Closure Rate', value: '89%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '95.8%', sub: 'vs 95% target', color: '#22C55E' }, { label: 'Batch Release OT', value: '93%', sub: 'On-time release rate', color: '#22C55E' }, { label: 'OOS Rate', value: '1.8%', sub: 'Out-of-specification events', color: '#22C55E' }],
   machinery:  [{ label: 'CAPA Closure Rate', value: '85%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '93.2%', sub: 'vs 92% target', color: '#22C55E' }, { label: 'Batch Release OT', value: '90%', sub: 'On-time release rate', color: '#22C55E' }, { label: 'OOS Rate', value: '2.8%', sub: 'Out-of-specification events', color: '#F59E0B' }],
+  medicaldevice:[{ label: 'CAPA Closure Rate', value: '91%', sub: 'Within 30-day target — 2 of 8 closed', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '94.2%', sub: 'vs 95% target — 11 of 18 PASS', color: '#C9A84C' }, { label: 'DHR Release OT', value: '93%', sub: 'Device History Record on-time', color: '#22C55E' }, { label: 'MDR/Vigilance Rate', value: '1.8%', sub: 'Reportable events per 1000 units', color: '#F59E0B' }],
+  dairy:        [{ label: 'CAPA Closure Rate', value: '88%', sub: 'Within 30-day target — 1 of 4 closed PASS', color: '#22C55E' }, { label: 'Raw-Milk Pass Rate', value: '92.4%', sub: 'vs 94% target — fat/SNF · antibio · AfM1 screen', color: '#C9A84C' }, { label: 'Pasteurization OT', value: '95%', sub: 'On-time release of pasteurized batches', color: '#22C55E' }, { label: 'Cold-Chain Excursions', value: '2.1%', sub: 'Routes with >0.5 °C drift / month', color: '#F59E0B' }],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -536,6 +627,8 @@ export function useDashboardData(dateRange: string, industryKey: IndustryKey = '
       automotive: [0.15, 0.30, 0.28, 0.06, 0.21],
       vehicle:    [0.12, 0.32, 0.31, 0.05, 0.20],
       machinery:  [0.22, 0.28, 0.30, 0.08, 0.12],
+      medicaldevice:[0.16, 0.26, 0.30, 0.10, 0.18],
+      dairy:        [0.18, 0.24, 0.30, 0.12, 0.16],
     };
     const ncTypes = ['Deviation','Product NC','Process NC','OOS','Complaint'];
     const ncByType = ncTypes.map((type, i) => ({

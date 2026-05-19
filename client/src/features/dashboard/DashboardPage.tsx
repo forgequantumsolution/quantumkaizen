@@ -92,7 +92,13 @@ export default function DashboardPage() {
   const user = useAuthStore(s => s.user);
   const [dateRange, setDateRange] = useState('30d');
 
-  const d = useDashboardData(dateRange);
+  // Industry-scoped users see a tailored dashboard; every other account
+  // falls through to the default pharma view.
+  const industryKey =
+    user?.industry === 'medical_device' ? 'medicaldevice' :
+    user?.industry === 'dairy'          ? 'dairy' :
+    'pharma';
+  const d = useDashboardData(dateRange, industryKey);
 
   const activityColumns: Column<AuditLogEntry>[] = [
     {

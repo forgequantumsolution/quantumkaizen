@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import toast from 'react-hot-toast';
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -520,6 +521,286 @@ export const mockChangeRequests: ChangeRequest[] = [
   })(),
 ];
 
+// Medical-device change requests — ISO 13485 §4.1.4 / 21 CFR 820.30(i) themed.
+export const mockMedicalDeviceChangeRequests: ChangeRequest[] = [
+  {
+    id: 'md-cr1', crNumber: 'CR-MD-2026-0014',
+    title: 'Firmware update v3.5 — fix dosage rounding error on smart infusion pump',
+    description: 'Replace floating-point dosage calculation with fixed-point arithmetic in firmware v3.5 of the smart infusion pump. Closes NC-MD-2025-0117 verification gap and FMEA-MD-2026-001 failure mode FM1.',
+    reasonForChange: 'Post-NC root-cause and DFMEA confirmed rounding error in firmware v3.4. Risk control redesign required per ISO 14971 risk-management plan; submission as Letter-to-File to USFDA and notification to TÜV SÜD for EU MDR Class IIb.',
+    changeType: 'Product', impactLevel: 'High', status: 'In Implementation',
+    requestor: 'Aditya Menon', requestorId: 'u-md6', department: 'Design Controls',
+    targetDate: '2026-05-30',
+    impactAssessment: 'Software-only change; no hardware impact. Re-running IEC 62304 V&V suite including PG-1100 dosage-accuracy test; clinical safety unchanged.',
+    affectedDocuments: ['DHF-DEV-MD-027', 'RMF-ISO14971-v3', 'DV-PROT-MD-019'],
+    affectedProcesses: ['Firmware Build/Release', 'V&V Testing', 'Field Update Distribution'],
+    riskAssessment: 'Reduces RPN of FM1 from 81 to 18. No new failure modes introduced per design review.',
+    regulatoryNotification: true, notifyDepartments: ['Regulatory Affairs', 'Post-Market Surveillance', 'Field Service'],
+    implementationTasks: [
+      { id: 'md-it1', description: 'Refactor dosage calc to fixed-point math', owner: 'Aditya Menon', dueDate: '2026-04-25', status: 'Completed' },
+      { id: 'md-it2', description: 'Re-run IEC 62304 V&V suite incl. boundary tests', owner: 'Aditya Menon', dueDate: '2026-05-10', status: 'In Progress' },
+      { id: 'md-it3', description: 'Submit Letter-to-File to USFDA', owner: 'Sneha Kapoor', dueDate: '2026-05-25', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',          status: 'completed', approver: 'Aditya Menon',      timestamp: '2026-03-30T10:00:00Z' },
+      { name: 'QA Review',          status: 'completed', approver: 'Dr. Anjali Verma',  timestamp: '2026-04-01T14:00:00Z' },
+      { name: 'Regulatory Review',  status: 'active',    approver: 'Sneha Kapoor' },
+      { name: 'Management Approval',status: 'pending' },
+    ],
+    validationResults: null,
+    history: [{ id: 'md-ch1', timestamp: '2026-03-30T10:00:00Z', user: 'Aditya Menon', action: 'CR opened', details: 'Triggered by CAPA-MD-2026-0014' }],
+    createdAt: '2026-03-30T10:00:00Z', updatedAt: '2026-04-04T15:30:00Z',
+  },
+  {
+    id: 'md-cr2', crNumber: 'CR-MD-2026-0013',
+    title: 'Sterilization recipe change — extend aeration cycle from 12 h to 14 h',
+    description: 'Increase EO sterilization aeration cycle from 12 h to 14 h on EOS-02 to provide built-in safety margin against PLC-reset incidents identified in NC-MD-2026-0042.',
+    reasonForChange: 'Risk reduction in response to NC and CAPA. Slightly higher cycle time accepted vs. revalidation cost; throughput impact ~6% absorbed by reduced re-work.',
+    changeType: 'Process', impactLevel: 'Medium', status: 'Approved',
+    requestor: 'Karthik Iyer', requestorId: 'u-md2', department: 'Sterilization',
+    targetDate: '2026-05-15',
+    impactAssessment: 'Aeration extension requires re-qualification of cycle (1 IQ + 3 OQ + 3 PQ runs). No change to bioburden challenge or EO exposure stage.',
+    affectedDocuments: ['SOP-MD-EOS-01', 'VMP-MD-2025-04'],
+    affectedProcesses: ['EO Sterilization Cycle', 'Release Testing'],
+    riskAssessment: 'Reduces residual likelihood of EO/ECH OOS from 2 to 1. No new hazards.',
+    regulatoryNotification: false, notifyDepartments: ['QA', 'Production Planning'],
+    implementationTasks: [
+      { id: 'md-it4', description: 'Update SOP-MD-EOS-01 cycle recipe',                                  owner: 'Karthik Iyer',     dueDate: '2026-04-25', status: 'In Progress' },
+      { id: 'md-it5', description: 'Perform 1+3+3 IQ/OQ/PQ runs with biological indicators',             owner: 'Rohit Khanna',     dueDate: '2026-05-12', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Karthik Iyer',     timestamp: '2026-04-02T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Dr. Anjali Verma', timestamp: '2026-04-05T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Dr. Anjali Verma', timestamp: '2026-04-08T11:00:00Z' },
+    ],
+    validationResults: null,
+    history: [],
+    createdAt: '2026-04-02T09:00:00Z', updatedAt: '2026-04-08T11:00:00Z',
+  },
+  {
+    id: 'md-cr3', crNumber: 'CR-MD-2026-0012',
+    title: 'Supplier change — secondary titanium alloy vendor qualification',
+    description: 'Qualify Resonetics India LLP (MDV-107) as secondary vendor for medical-grade titanium screws to mitigate single-source risk RSK-MD-2026-0014.',
+    reasonForChange: 'Single-source risk on Class III orthopaedic implants. Supplier qualified to ISO 13485 with biocompatibility data per ISO 10993 panel.',
+    changeType: 'Product', impactLevel: 'High', status: 'Under Review',
+    requestor: 'Neha Bansal', requestorId: 'u-md3', department: 'Procurement',
+    targetDate: '2026-07-31',
+    impactAssessment: 'Material change requires 3-lot OQ + ISO 10993-5/-10 retesting. Updates to DMR for affected screw families.',
+    affectedDocuments: ['DMR-OBS-2024', 'QAA-MDV-107'],
+    affectedProcesses: ['Incoming Inspection', 'Production'],
+    riskAssessment: 'Reduces operational risk; introduces transient quality risk during qualification (mitigated by 3-lot validation).',
+    regulatoryNotification: true, notifyDepartments: ['Regulatory Affairs'],
+    implementationTasks: [
+      { id: 'md-it6', description: '3-lot OQ run with secondary vendor titanium',          owner: 'Sneha Kapoor', dueDate: '2026-06-15', status: 'Pending' },
+      { id: 'md-it7', description: 'ISO 10993-5/-10 retest on representative components', owner: 'Sneha Kapoor', dueDate: '2026-06-30', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator', status: 'completed', approver: 'Neha Bansal',     timestamp: '2026-04-01T09:00:00Z' },
+      { name: 'QA Review', status: 'active',    approver: 'Dr. Anjali Verma' },
+      { name: 'Management Approval', status: 'pending' },
+    ],
+    validationResults: null, history: [],
+    createdAt: '2026-04-01T09:00:00Z', updatedAt: '2026-04-05T15:00:00Z',
+  },
+  {
+    id: 'md-cr4', crNumber: 'CR-MD-2026-0011',
+    title: 'UDI labelling system upgrade — replace printer ribbons + label substrate',
+    description: 'Upgrade UDI labelling on packaging line PL-MD-01 (Zebra ZE521 printer with cleanroom-grade substrate) and re-validate GS1 barcode scan quality at end-of-line.',
+    reasonForChange: 'NC-MD-2026-0040 root cause and CAPA-MD-2026-0017 corrective action.',
+    changeType: 'System', impactLevel: 'Medium', status: 'In Implementation',
+    requestor: 'Rohit Khanna', requestorId: 'u-md4', department: 'Packaging',
+    targetDate: '2026-04-30',
+    impactAssessment: 'No product change. Equipment qualification + re-validation of GS1 scan readability across all SKUs.',
+    affectedDocuments: ['SOP-MD-UDI-02'],
+    affectedProcesses: ['UDI Labelling', 'End-of-Line Inspection'],
+    riskAssessment: 'Reduces UDI non-compliance risk RSK-MD-2026-0019 occurrence from 3 to 2.',
+    regulatoryNotification: false, notifyDepartments: ['QA', 'Regulatory Affairs'],
+    implementationTasks: [
+      { id: 'md-it8', description: 'Install Zebra ZE521 printers + cleanroom substrate', owner: 'Rohit Khanna',  dueDate: '2026-04-15', status: 'Completed' },
+      { id: 'md-it9', description: 'Re-validate scan readability across 200-unit sample', owner: 'Karthik Iyer',  dueDate: '2026-04-25', status: 'In Progress' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Rohit Khanna',     timestamp: '2026-03-25T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Dr. Anjali Verma', timestamp: '2026-03-28T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Dr. Anjali Verma', timestamp: '2026-04-01T11:00:00Z' },
+    ],
+    validationResults: null, history: [],
+    createdAt: '2026-03-25T09:00:00Z', updatedAt: '2026-04-15T16:00:00Z',
+  },
+  {
+    id: 'md-cr5', crNumber: 'CR-MD-2025-0048',
+    title: 'Document change — incorporate IEC 81001-5-1 cybersecurity controls into DHF',
+    description: 'Update DHF and risk-management file for smart infusion pump to incorporate IEC 81001-5-1 cybersecurity lifecycle controls and SBOM (SPDX 2.3) per FDA 2023 guidance.',
+    reasonForChange: 'Mitigates RSK-MD-2026-0018 (cybersecurity/SBOM gap). Required for 510(k) refresh and EU MDR Article 17 compliance.',
+    changeType: 'Document', impactLevel: 'Medium', status: 'Closed',
+    requestor: 'Aditya Menon', requestorId: 'u-md6', department: 'Design Controls',
+    targetDate: '2025-12-15',
+    impactAssessment: 'Document-only change. No production impact. Risk file expanded with cybersecurity-specific hazards.',
+    affectedDocuments: ['DHF-DEV-MD-027', 'RMF-ISO14971-v3'],
+    affectedProcesses: ['Design Reviews'],
+    riskAssessment: 'No new physical hazards introduced; cybersecurity hazards now formally tracked.',
+    regulatoryNotification: false, notifyDepartments: ['Regulatory Affairs'],
+    implementationTasks: [],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Aditya Menon',      timestamp: '2025-10-15T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Dr. Anjali Verma',  timestamp: '2025-11-08T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Dr. Anjali Verma',  timestamp: '2025-12-01T11:00:00Z' },
+    ],
+    validationResults: { validated: true, validatedBy: 'Dr. Anjali Verma', validationDate: '2025-12-10', effectivenessConfirmed: true, notes: 'DHF/RMF updates reviewed at management review 2025-Q4' },
+    history: [],
+    createdAt: '2025-10-15T09:00:00Z', updatedAt: '2025-12-15T14:00:00Z',
+  },
+  {
+    id: 'md-cr6', crNumber: 'CR-MD-2025-0033',
+    title: 'Process change — switch from manual to automated visual inspection of IOL trays',
+    description: 'Introduce AOI (automated optical inspection) system for IOL trays to replace manual visual inspection; expected reduction in particulate-related rejections.',
+    reasonForChange: 'Continual improvement initiative; reduces operator subjectivity per ISO 13485 §8.5.1.',
+    changeType: 'Process', impactLevel: 'High', status: 'Validated',
+    requestor: 'Dr. Anjali Verma', requestorId: 'u-md1', department: 'Cleanroom Assembly',
+    targetDate: '2025-10-30',
+    impactAssessment: 'New AOI system requires URS/IQ/OQ/PQ. Operator role change from inspector to AOI verifier; retraining required.',
+    affectedDocuments: ['SOP-MD-IOL-INSP-01'],
+    affectedProcesses: ['Visual Inspection', 'Operator Training'],
+    riskAssessment: 'Reduces detection score of IOL particulate hazards from 4 to 2; positive net risk reduction.',
+    regulatoryNotification: false, notifyDepartments: ['QA', 'Operations'],
+    implementationTasks: [],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Dr. Anjali Verma', timestamp: '2025-07-08T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Karthik Iyer',     timestamp: '2025-08-12T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Dr. Anjali Verma', timestamp: '2025-09-01T11:00:00Z' },
+    ],
+    validationResults: { validated: true, validatedBy: 'Sneha Kapoor', validationDate: '2025-10-25', effectivenessConfirmed: true, notes: 'IOL particulate-related NCs dropped 64% in first 3 months post-deployment' },
+    history: [],
+    createdAt: '2025-07-08T09:00:00Z', updatedAt: '2025-10-30T14:00:00Z',
+  },
+];
+
+// Dairy tenant — FSSAI / ISO 22000 themed change requests.
+export const mockDairyChangeRequests: ChangeRequest[] = [
+  {
+    id: 'dy-cr1', crNumber: 'CR-DY-2026-0007',
+    title: 'Extend shelf-life of pasteurized toned milk from 2 days to 4 days with longer holding-tube',
+    description: 'Modify HTST pasteurizer PHE-02 to use a 21-second holding tube (vs. validated 15 s) and pre-cooling tunnel re-tune. Expected shelf-life extension from 2 days to 4 days at 4-6 °C, validated by accelerated-aging study.',
+    reasonForChange: 'Retail-distribution requests longer shelf life for Tier-2 cities. Competitor benchmarking shows 3-5 day shelf life standard.',
+    changeType: 'Process', impactLevel: 'High', status: 'Approved',
+    requestor: 'Sandeep Joshi', requestorId: 'u-dy1', department: 'Quality Assurance',
+    targetDate: '2026-06-30',
+    impactAssessment: 'Process change — IQ/OQ/PQ required on extended holding tube. No impact on FSSAI standard. Microbiology shelf-life study (n=60 samples × 8 days) required before commercial rollout.',
+    affectedDocuments: ['SOP-DY-PAST-03', 'HACCP-PLAN-MILK-v6', 'VMP-DY-2025-02'],
+    affectedProcesses: ['HTST Pasteurization', 'Microbiology Release Testing', 'Date-Print Setting'],
+    riskAssessment: 'No new hazards introduced; extends thermal kill margin. Sensitivity to phosphatase test critical (covered by SOP-DY-PAST-03 v3.2).',
+    regulatoryNotification: false, notifyDepartments: ['Microbiology', 'Production Planning', 'Logistics'],
+    implementationTasks: [
+      { id: 'dy-it1', description: 'Install extended 21 s holding tube on PHE-02', owner: 'Priya Khanna',  dueDate: '2026-05-25', status: 'Completed' },
+      { id: 'dy-it2', description: 'IQ/OQ/PQ — 3 validation runs across day/night shifts', owner: 'Ravi Deshmukh',  dueDate: '2026-06-10', status: 'In Progress' },
+      { id: 'dy-it3', description: '8-day microbio shelf-life study (n=60 samples)',       owner: 'Anita Kulkarni', dueDate: '2026-06-22', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Sandeep Joshi', timestamp: '2026-04-15T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Anita Kulkarni', timestamp: '2026-04-18T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Sandeep Joshi',  timestamp: '2026-04-22T11:00:00Z' },
+    ],
+    validationResults: null,
+    history: [{ id: 'dy-ch1', timestamp: '2026-04-15T09:00:00Z', user: 'Sandeep Joshi', action: 'CR opened', details: 'Triggered by retail demand for longer shelf life' }],
+    createdAt: '2026-04-15T09:00:00Z', updatedAt: '2026-05-25T16:00:00Z',
+  },
+  {
+    id: 'dy-cr2', crNumber: 'CR-DY-2026-0006',
+    title: 'Deploy IoT temperature loggers + GSM alerts on the full refrigerated delivery fleet',
+    description: 'Equip all 14 refrigerated vans with GSM-enabled IoT temperature loggers reporting to a central cold-chain dashboard. Auto-alert at >0.5 °C drift sustained for >10 min.',
+    reasonForChange: 'Mitigates RSK-DY-2026-0010 (cold-chain temperature excursion). Recurrence of NC-DY-2025-0156 must be prevented.',
+    changeType: 'System', impactLevel: 'Medium', status: 'In Implementation',
+    requestor: 'Priya Khanna', requestorId: 'u-dy5', department: 'Cold Chain',
+    targetDate: '2026-06-15',
+    impactAssessment: 'IT + procurement change; no product impact. Drivers and dispatch team to be trained on dashboard alerts.',
+    affectedDocuments: ['SOP-DY-COLD-04'],
+    affectedProcesses: ['Cold-chain Distribution', 'Recall Decision Trigger'],
+    riskAssessment: 'Reduces residual risk of RSK-DY-2026-0010 from 6 to 3.',
+    regulatoryNotification: false, notifyDepartments: ['QA', 'Distribution'],
+    implementationTasks: [
+      { id: 'dy-it4', description: 'Procure + install 14 IoT loggers (Sensitech ColdLink)', owner: 'Priya Khanna', dueDate: '2026-05-30', status: 'In Progress' },
+      { id: 'dy-it5', description: 'Build cold-chain alert dashboard on Power BI',           owner: 'Sandeep Joshi', dueDate: '2026-06-08', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Priya Khanna',   timestamp: '2026-04-02T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Anita Kulkarni', timestamp: '2026-04-08T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Sandeep Joshi',  timestamp: '2026-04-15T11:00:00Z' },
+    ],
+    validationResults: null, history: [],
+    createdAt: '2026-04-02T09:00:00Z', updatedAt: '2026-05-15T16:00:00Z',
+  },
+  {
+    id: 'dy-cr3', crNumber: 'CR-DY-2026-0005',
+    title: 'Add A2 cow milk SKU (500 ml + 1 L pouches)',
+    description: 'Introduce A2 Beta-casein cow milk as a premium SKU, sourced from genotype-verified Gir / Sahiwal cattle. Pack sizes 500 ml + 1 L pouches. FSSAI label as "A2 Cow Milk".',
+    reasonForChange: 'Premium-tier consumer demand; supplier (Cluster B) has 240 verified A2 cattle. New revenue stream.',
+    changeType: 'Product', impactLevel: 'High', status: 'Under Review',
+    requestor: 'Sandeep Joshi', requestorId: 'u-dy1', department: 'R&D',
+    targetDate: '2026-08-31',
+    impactAssessment: 'New SKU — needs A2 genotype verification protocol, dedicated cold-chain segregation, FSSAI label review, A2 ELISA testing for release.',
+    affectedDocuments: ['HACCP-PLAN-MILK-v6', 'SOP-DY-LABEL-04'],
+    affectedProcesses: ['Raw-milk Reception', 'Standardisation', 'Packaging', 'Label Generation'],
+    riskAssessment: 'Genotype mis-claim risk — mitigated by mandatory ELISA + farm audit.',
+    regulatoryNotification: true, notifyDepartments: ['Regulatory Affairs', 'Marketing'],
+    implementationTasks: [],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Sandeep Joshi', timestamp: '2026-05-08T09:00:00Z' },
+      { name: 'QA Review',           status: 'active',    approver: 'Anita Kulkarni' },
+      { name: 'Management Approval', status: 'pending' },
+    ],
+    validationResults: null, history: [],
+    createdAt: '2026-05-08T09:00:00Z', updatedAt: '2026-05-12T15:00:00Z',
+  },
+  {
+    id: 'dy-cr4', crNumber: 'CR-DY-2026-0004',
+    title: 'Reduce sugar in 200 ml flavoured milk SKUs by 15% with stevia substitution',
+    description: 'Reformulate chocolate, kesar and badam-pista 200 ml flavoured milk to substitute 15% of added sugar with stevia. Maintain target sweetness via consumer panel.',
+    reasonForChange: 'FSSAI "Eat Right" initiative and consumer demand for reduced-sugar SKUs. Health-positioning trend.',
+    changeType: 'Product', impactLevel: 'Medium', status: 'In Implementation',
+    requestor: 'Anita Kulkarni', requestorId: 'u-dy3', department: 'R&D',
+    targetDate: '2026-07-15',
+    impactAssessment: 'Recipe + label declaration change. No process change. Consumer-panel sensory testing required.',
+    affectedDocuments: ['BMR-FM-CHOC-200', 'BMR-FM-KESAR-200', 'BMR-FM-BAD-200', 'SOP-DY-LABEL-04'],
+    affectedProcesses: ['Recipe Dosing', 'Label Generation'],
+    riskAssessment: 'No new hazards. Stevia is GRAS / FSSAI permitted.',
+    regulatoryNotification: false, notifyDepartments: ['Marketing'],
+    implementationTasks: [
+      { id: 'dy-it6', description: 'Trial run (3 batches) with 15% stevia substitution', owner: 'Anita Kulkarni', dueDate: '2026-06-10', status: 'In Progress' },
+      { id: 'dy-it7', description: 'Sensory panel of 12 trained tasters',                owner: 'Anita Kulkarni', dueDate: '2026-06-25', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Anita Kulkarni', timestamp: '2026-04-20T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Sandeep Joshi',  timestamp: '2026-04-25T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Sandeep Joshi',  timestamp: '2026-05-02T11:00:00Z' },
+    ],
+    validationResults: null, history: [],
+    createdAt: '2026-04-20T09:00:00Z', updatedAt: '2026-05-15T11:00:00Z',
+  },
+  {
+    id: 'dy-cr5', crNumber: 'CR-DY-2025-0042',
+    title: 'Replace heat-seal jaws on FFS-04 + tighten PM to 6 months',
+    description: 'Replace worn heat-seal jaws on FFS-04 and tighten PM frequency from 12 to 6 months across all FFS lines to prevent pouch-leakage recurrence (CAPA-DY-2025-0044).',
+    reasonForChange: 'CAPA action — closes NC-DY-2026-0024.',
+    changeType: 'System', impactLevel: 'Low', status: 'Closed',
+    requestor: 'Priya Khanna', requestorId: 'u-dy5', department: 'Packaging',
+    targetDate: '2026-03-30',
+    impactAssessment: 'Equipment + maintenance schedule change; no product impact. Operator training on revised PM schedule.',
+    affectedDocuments: ['SOP-DY-PM-FFS-01'],
+    affectedProcesses: ['Form-Fill-Seal', 'Preventive Maintenance'],
+    riskAssessment: 'Reduces residual risk of pouch-seal failures.',
+    regulatoryNotification: false, notifyDepartments: ['QA', 'Production'],
+    implementationTasks: [],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Priya Khanna',  timestamp: '2026-02-16T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Sandeep Joshi', timestamp: '2026-02-20T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Sandeep Joshi', timestamp: '2026-02-25T11:00:00Z' },
+    ],
+    validationResults: { validated: true, validatedBy: 'Priya Khanna', validationDate: '2026-05-05', effectivenessConfirmed: true, notes: 'Pouch leakage rate 0.18% (3 months post-CAPA) — within spec.' },
+    history: [],
+    createdAt: '2026-02-16T09:00:00Z', updatedAt: '2026-05-05T16:00:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface CRFilters {
@@ -530,15 +811,17 @@ interface CRFilters {
 }
 
 export function useChangeRequests(filters: CRFilters = {}) {
+  const industry = useUserIndustry();
   return useQuery({
-    queryKey: ['change-requests', filters],
+    queryKey: ['change-requests', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         // Backend mount is /qms/change-control, not /qms/change-requests
         const { data } = await api.get('/qms/change-control', { params: filters });
         return unwrapList<ChangeRequest>(data);
       } catch {
-        let filtered = [...mockChangeRequests];
+        const baseList = pickByIndustry(industry, mockChangeRequests, { medical_device: mockMedicalDeviceChangeRequests, dairy: mockDairyChangeRequests });
+        let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((cr) => cr.status === filters.status);
         if (filters.changeType) filtered = filtered.filter((cr) => cr.changeType === filters.changeType);
         if (filters.impactLevel) filtered = filtered.filter((cr) => cr.impactLevel === filters.impactLevel);
@@ -558,14 +841,16 @@ export function useChangeRequests(filters: CRFilters = {}) {
 }
 
 export function useChangeRequest(id: string) {
+  const industry = useUserIndustry();
   return useQuery<ChangeRequest>({
-    queryKey: ['change-requests', id],
+    queryKey: ['change-requests', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/change-control/${id}`);
         return unwrapItem<ChangeRequest>(data);
       } catch {
-        const cr = mockChangeRequests.find((c) => c.id === id);
+        const baseList = pickByIndustry(industry, mockChangeRequests, { medical_device: mockMedicalDeviceChangeRequests, dairy: mockDairyChangeRequests });
+        const cr = baseList.find((c) => c.id === id);
         if (!cr) throw new Error('Change request not found');
         return cr;
       }

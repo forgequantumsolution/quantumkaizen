@@ -14,7 +14,8 @@ import {
 import type { Column } from '@/components/ui';
 import type { NonConformance } from '@/types';
 import { cn, formatDate, daysSince } from '@/lib/utils';
-import { useNonConformances, mockNCs } from './hooks';
+import { useNonConformances, mockNCs, mockMedicalDeviceNCs, mockDairyNCs } from './hooks';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -46,7 +47,9 @@ export default function NCListPage() {
   const { data: result, isLoading } = useNonConformances(filters);
   const ncs = (result?.data ?? []).filter((nc) => new Date(nc.createdAt).getFullYear() === year);
 
-  const yearNCs = useMemo(() => mockNCs.filter((n) => new Date(n.createdAt).getFullYear() === year), [year]);
+  const industry = useUserIndustry();
+  const summarySource = pickByIndustry(industry, mockNCs, { medical_device: mockMedicalDeviceNCs, dairy: mockDairyNCs });
+  const yearNCs = useMemo(() => summarySource.filter((n) => new Date(n.createdAt).getFullYear() === year), [summarySource, year]);
 
   // Summary counts (from full mock data for cards)
   const openCount = yearNCs.filter((nc) => nc.status === 'OPEN').length;

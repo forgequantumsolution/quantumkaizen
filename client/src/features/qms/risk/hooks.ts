@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
 import { unwrapList, unwrapItem, flattenUsers } from '@/lib/apiShape';
+import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import type { PaginatedResponse } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -474,6 +475,309 @@ export const mockRisks: RiskRecord[] = [
   })(),
 ];
 
+// Medical-device risk register — ISO 14971 / 21 CFR 820.30 themed.
+export const mockMedicalDeviceRisks: RiskRecord[] = [
+  {
+    id: 'md-r1', riskNumber: 'RSK-MD-2026-0021',
+    title: 'EO sterilization residuals exceeding ISO 10993-7 limits — patient toxicity hazard',
+    description: 'Insufficient aeration on EO sterilizer EOS-02 can leave EO/ECH residuals above ISO 10993-7 limits in finished devices. Adverse-event risk includes mucosal irritation and sensitization. Repeat occurrence after PLC maintenance (see NC-MD-2026-0042 / CAPA-MD-2026-0019).',
+    category: 'SAFETY', department: 'Sterilization',
+    likelihood: 3, consequence: 5, riskScore: 15, riskLevel: 'CRITICAL',
+    controls: [
+      { id: 'md-rc1', hierarchy: 'ENGINEERING',    description: 'Blocking PLC alarm if recipe not loaded post-maintenance', owner: 'Rohit Khanna',     status: 'IMPLEMENTED' },
+      { id: 'md-rc2', hierarchy: 'ADMINISTRATIVE', description: 'Two-person sign-off on post-maintenance qualification step', owner: 'Karthik Iyer',     status: 'PLANNED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Karthik Iyer', ownerId: 'u-md2', reviewDate: '2026-07-01', history: [],
+    createdAt: '2026-04-01T09:00:00Z', updatedAt: '2026-04-01T09:00:00Z',
+  },
+  {
+    id: 'md-r2', riskNumber: 'RSK-MD-2026-0020',
+    title: 'Sterile-barrier failure (Class III implantables) — sepsis risk',
+    description: 'Compromised Tyvek-foil seals on heart-valve or vascular implant pouches can result in non-sterile delivery to OT. Patient-safety hazard: surgical-site infection or sepsis. ISO 11607-2 seal integrity controls required.',
+    category: 'SAFETY', department: 'Sterile Barrier Packaging',
+    likelihood: 2, consequence: 5, riskScore: 10, riskLevel: 'HIGH',
+    controls: [
+      { id: 'md-rc3', hierarchy: 'ENGINEERING',    description: 'SPC on heat-seal temperature with ±3 °C alert', owner: 'Aditya Menon', status: 'IMPLEMENTED' },
+      { id: 'md-rc4', hierarchy: 'ADMINISTRATIVE', description: 'Daily release-time seal-strength burst tests',  owner: 'Neha Bansal',  status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Neha Bansal', ownerId: 'u-md3', reviewDate: '2026-06-15', history: [],
+    createdAt: '2026-04-02T10:00:00Z', updatedAt: '2026-04-02T10:00:00Z',
+  },
+  {
+    id: 'md-r3', riskNumber: 'RSK-MD-2026-0019',
+    title: 'UDI non-compliance for EU MDR / US FDA submissions',
+    description: 'Failure to maintain accurate UDI-DI records and submit to GUDID / EUDAMED on schedule risks distribution suspension under EU MDR Article 27 and 21 CFR Part 830. Recent NC-MD-2026-0040 highlighted printer issues; broader process gaps remain.',
+    category: 'OPERATIONAL', department: 'Regulatory Affairs',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'md-rc5', hierarchy: 'ENGINEERING',    description: 'End-of-line vision system UDI verification with auto-reject', owner: 'Aditya Menon', status: 'IMPLEMENTED' },
+      { id: 'md-rc6', hierarchy: 'ADMINISTRATIVE', description: 'Quarterly GUDID/EUDAMED reconciliation against ERP master', owner: 'Sneha Kapoor', status: 'PLANNED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Sneha Kapoor', ownerId: 'u-md5', reviewDate: '2026-09-01', history: [],
+    createdAt: '2026-04-03T11:00:00Z', updatedAt: '2026-04-03T11:00:00Z',
+  },
+  {
+    id: 'md-r4', riskNumber: 'RSK-MD-2026-0018',
+    title: 'Cybersecurity / SBOM gaps in connected infusion pump firmware',
+    description: 'Connected infusion pumps (Bluetooth + Wi-Fi) lack a documented SBOM and threat model per FDA September 2023 cybersecurity guidance. Unaddressed vulnerabilities could lead to unauthorised parameter changes and patient harm.',
+    category: 'SAFETY', department: 'Design Controls',
+    likelihood: 3, consequence: 5, riskScore: 15, riskLevel: 'CRITICAL',
+    controls: [
+      { id: 'md-rc7', hierarchy: 'ENGINEERING', description: 'Signed firmware updates with hardware-root-of-trust verification', owner: 'Aditya Menon', status: 'IMPLEMENTED' },
+      { id: 'md-rc8', hierarchy: 'ENGINEERING', description: 'SBOM (SPDX 2.3) maintained per IEC 81001-5-1; submission with 510(k)', owner: 'Aditya Menon', status: 'PLANNED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 4, residualScore: 8, residualLevel: 'MEDIUM',
+    owner: 'Aditya Menon', ownerId: 'u-md6', reviewDate: '2026-08-01', history: [],
+    createdAt: '2026-04-04T09:00:00Z', updatedAt: '2026-04-04T09:00:00Z',
+  },
+  {
+    id: 'md-r5', riskNumber: 'RSK-MD-2026-0017',
+    title: 'Biocompatibility regression from coating supplier change',
+    description: 'Coating-resin supplier consolidation may introduce undisclosed material changes affecting ISO 10993-5/-10/-11 results. Patient harm risk: cytotoxicity, sensitization, systemic toxicity. Recent NC-MD-2026-0039 confirmed sensitivity to this hazard.',
+    category: 'QUALITY', department: 'Procurement',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'md-rc9',  hierarchy: 'ADMINISTRATIVE', description: 'Quality agreement clause: 90-day advance change notification',     owner: 'Neha Bansal',  status: 'IMPLEMENTED' },
+      { id: 'md-rc10', hierarchy: 'ADMINISTRATIVE', description: 'Pre-shipment CoA review with biocompatibility-relevant fields',     owner: 'Sneha Kapoor', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Sneha Kapoor', ownerId: 'u-md5', reviewDate: '2026-07-15', history: [],
+    createdAt: '2026-04-05T08:30:00Z', updatedAt: '2026-04-05T08:30:00Z',
+  },
+  {
+    id: 'md-r6', riskNumber: 'RSK-MD-2026-0016',
+    title: 'Particulate ingress during cleanroom Class 7 packaging — IOL contamination',
+    description: 'HEPA filter degradation or pressure-cascade loss in Class 7 cleanrooms can result in particulate contamination of intraocular lenses (NC-MD-2026-0038 reference). Patient harm: post-operative endophthalmitis, vision impairment.',
+    category: 'SAFETY', department: 'Cleanroom Assembly',
+    likelihood: 2, consequence: 5, riskScore: 10, riskLevel: 'HIGH',
+    controls: [
+      { id: 'md-rc11', hierarchy: 'ENGINEERING',    description: 'Quarterly HEPA integrity testing (PAO) per ISO 14644',           owner: 'Dr. Anjali Verma', status: 'IMPLEMENTED' },
+      { id: 'md-rc12', hierarchy: 'ENGINEERING',    description: 'Continuous differential-pressure monitoring with audible alarm', owner: 'Rohit Khanna',     status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Dr. Anjali Verma', ownerId: 'u-md1', reviewDate: '2026-06-30', history: [],
+    createdAt: '2026-04-06T09:00:00Z', updatedAt: '2026-04-06T09:00:00Z',
+  },
+  {
+    id: 'md-r7', riskNumber: 'RSK-MD-2026-0015',
+    title: 'PMS / vigilance reporting delay — EU MDR Article 87 non-compliance',
+    description: 'Failure to report serious incidents within 15 days (10 days for serious public-health threats) under EU MDR Article 87 exposes the company to administrative fines and CE-mark suspension. Q3 2025 vigilance trend report missed PRRC sign-off (audit finding MD-F4).',
+    category: 'OPERATIONAL', department: 'Post-Market Surveillance',
+    likelihood: 2, consequence: 4, riskScore: 8, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'md-rc13', hierarchy: 'ENGINEERING',    description: 'Auto-escalation rule in vigilance tool: serious event → PRRC notification within 24h', owner: 'Aditya Menon', status: 'IMPLEMENTED' },
+      { id: 'md-rc14', hierarchy: 'ADMINISTRATIVE', description: 'PRRC backup designated; monthly delegation review',                                       owner: 'Dr. Anjali Verma', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 4, residualScore: 4, residualLevel: 'LOW',
+    owner: 'Dr. Anjali Verma', ownerId: 'u-md1', reviewDate: '2026-08-30', history: [],
+    createdAt: '2026-04-07T10:00:00Z', updatedAt: '2026-04-07T10:00:00Z',
+  },
+  {
+    id: 'md-r8', riskNumber: 'RSK-MD-2026-0014',
+    title: 'Single-source supplier dependency for titanium alloy implants',
+    description: 'Orthopaedic implants (titanium screws, plates) sourced from a single vendor with no qualified backup. Supply disruption risk could halt Class III production for 8-12 weeks.',
+    category: 'OPERATIONAL', department: 'Procurement',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'md-rc15', hierarchy: 'ADMINISTRATIVE', description: 'Initiate qualification of secondary titanium alloy vendor (CRO Pune)', owner: 'Neha Bansal', status: 'PLANNED' },
+      { id: 'md-rc16', hierarchy: 'ADMINISTRATIVE', description: '12-week safety stock buffer at FQ MedTech warehouse',                   owner: 'Karthik Iyer', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Neha Bansal', ownerId: 'u-md3', reviewDate: '2026-10-01', history: [],
+    createdAt: '2026-04-08T11:00:00Z', updatedAt: '2026-04-08T11:00:00Z',
+  },
+  // ── Disposables product family ──────────────────────────────────────────
+  {
+    id: 'md-r9', riskNumber: 'RSK-MD-2026-0013',
+    title: 'Needle-stick injury risk from non-safety hypodermic needles',
+    description: 'Standard hypodermic needles (HYP series) without an integrated safety mechanism expose healthcare workers to needle-stick injuries during disposal. Risk regulated under the EU Sharps Directive 2010/32/EU and the US Needlestick Safety and Prevention Act.',
+    category: 'SAFETY', department: 'Design Controls',
+    likelihood: 4, consequence: 4, riskScore: 16, riskLevel: 'CRITICAL',
+    controls: [
+      { id: 'md-rc17', hierarchy: 'ENGINEERING',    description: 'Transition all hypodermic SKUs to integrated safety-shield design by 2027 Q1',     owner: 'Aditya Menon', status: 'PLANNED' },
+      { id: 'md-rc18', hierarchy: 'ADMINISTRATIVE', description: 'IFU emphasises safe disposal in puncture-resistant sharps container',                owner: 'Sneha Kapoor', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 4, residualScore: 8, residualLevel: 'MEDIUM',
+    owner: 'Aditya Menon', ownerId: 'u-md6', reviewDate: '2026-09-01', history: [],
+    createdAt: '2026-04-10T09:00:00Z', updatedAt: '2026-04-10T09:00:00Z',
+  },
+  {
+    id: 'md-r10', riskNumber: 'RSK-MD-2026-0012',
+    title: 'Plunger leakage / loss of dose accuracy on Disposable Syringes',
+    description: 'Silicone-oil over-lubrication or plunger-piston dimensional drift can cause leakage and inaccurate dose delivery on the DSY series. Particulate hazard already realised under NC-MD-2026-0037; further drift could lead to under- or over-delivery for vaccines and antibiotics.',
+    category: 'QUALITY', department: 'Cleanroom Assembly',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'md-rc19', hierarchy: 'ENGINEERING',    description: 'Lock HMI recipe on plunger-spray station; QA-only override (CAPA-MD-2026-0021)', owner: 'Aditya Menon', status: 'IMPLEMENTED' },
+      { id: 'md-rc20', hierarchy: 'ENGINEERING',    description: 'In-line dose-weight verification every 5 000th unit',                              owner: 'Rohit Khanna', status: 'PLANNED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Sneha Kapoor', ownerId: 'u-md5', reviewDate: '2026-08-01', history: [],
+    createdAt: '2026-04-11T10:00:00Z', updatedAt: '2026-04-11T10:00:00Z',
+  },
+  {
+    id: 'md-r11', riskNumber: 'RSK-MD-2026-0011',
+    title: 'Latex allergic-reaction hazard on legacy IV cannula hub material',
+    description: 'Legacy 20G IV cannula SKUs still use a natural-rubber-latex (NRL) backflow valve. Latex sensitivity affects ~1–6% of healthcare workers and ~17% of spina bifida patients; EU MDR and FDA expect a latex-free transition for new submissions.',
+    category: 'SAFETY', department: 'Design Controls',
+    likelihood: 2, consequence: 4, riskScore: 8, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'md-rc21', hierarchy: 'SUBSTITUTION',   description: 'Replace NRL backflow valve with thermoplastic elastomer (TPE) across all IVC SKUs', owner: 'Aditya Menon', status: 'PLANNED' },
+      { id: 'md-rc22', hierarchy: 'ADMINISTRATIVE', description: 'IFU clearly labels NRL content per ISO 15223-1 symbol 5.4.5',                        owner: 'Sneha Kapoor', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 4, residualScore: 4, residualLevel: 'LOW',
+    owner: 'Aditya Menon', ownerId: 'u-md6', reviewDate: '2026-11-01', history: [],
+    createdAt: '2026-04-12T09:30:00Z', updatedAt: '2026-04-12T09:30:00Z',
+  },
+  {
+    id: 'md-r12', riskNumber: 'RSK-MD-2026-0010',
+    title: 'AD-syringe single-use lock bypass — counterfeit / re-use hazard',
+    description: 'Auto-disable (AD) syringes for WHO immunization programs must lock after a single use (WHO PQS E13/IM01.3). Lock failure (see NC-MD-2026-0034) could enable re-use in low-resource settings and HIV/HBV cross-infection.',
+    category: 'SAFETY', department: 'Cleanroom Assembly',
+    likelihood: 2, consequence: 5, riskScore: 10, riskLevel: 'HIGH',
+    controls: [
+      { id: 'md-rc23', hierarchy: 'ENGINEERING', description: '100% AD-function verification per WHO PQS E13/IM01.3 on every lot prior to release', owner: 'Karthik Iyer', status: 'IMPLEMENTED' },
+      { id: 'md-rc24', hierarchy: 'ENGINEERING', description: 'Dimensional Cpk ≥ 1.67 monitoring on plunger lock-tab on Line ADS-2',                  owner: 'Rohit Khanna', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Karthik Iyer', ownerId: 'u-md2', reviewDate: '2026-07-15', history: [],
+    createdAt: '2026-04-13T10:00:00Z', updatedAt: '2026-04-13T10:00:00Z',
+  },
+  {
+    id: 'md-r13', riskNumber: 'RSK-MD-2026-0009',
+    title: 'Foley catheter balloon over-inflation — bladder trauma',
+    description: 'Dip-moulded silicone balloons on Foley catheters can over-inflate beyond the declared volume if wall thickness drifts during manufacture. Realised under NC-MD-2026-0033 / CMP-MD-2026-0016. Patient harm: bladder trauma, urethral injury.',
+    category: 'SAFETY', department: 'Quality Control',
+    likelihood: 2, consequence: 4, riskScore: 8, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'md-rc25', hierarchy: 'ENGINEERING',    description: 'Tighten dip-tank thermocouple calibration to 3-monthly across FCT-MC lines', owner: 'Rohit Khanna', status: 'PLANNED' },
+      { id: 'md-rc26', hierarchy: 'ADMINISTRATIVE', description: '100% burst-volume sampling per ISO 20696 release plan',                        owner: 'Karthik Iyer', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 4, residualScore: 4, residualLevel: 'LOW',
+    owner: 'Karthik Iyer', ownerId: 'u-md2', reviewDate: '2026-10-01', history: [],
+    createdAt: '2026-04-14T09:30:00Z', updatedAt: '2026-04-14T09:30:00Z',
+  },
+];
+
+// Dairy tenant — FSSAI / ISO 22000 / HACCP themed risk register.
+export const mockDairyRisks: RiskRecord[] = [
+  {
+    id: 'dy-r1', riskNumber: 'RSK-DY-2026-0012',
+    title: 'Aflatoxin M1 in raw milk above FSSAI limit — monsoon spike',
+    description: 'Indian monsoon humidity (Jun–Sep) accelerates fungal growth on cottonseed cake and groundnut cake at village storage. Resultant Aflatoxin M1 carry-over in milk poses chronic carcinogen risk for consumers and FSSAI non-compliance.',
+    category: 'SAFETY', department: 'Procurement',
+    likelihood: 4, consequence: 5, riskScore: 20, riskLevel: 'CRITICAL',
+    controls: [
+      { id: 'dy-rc1', hierarchy: 'ADMINISTRATIVE', description: 'Pre-monsoon enhanced AfM1 sampling (twice-weekly Apr–Sep) per CAPA-DY-2026-0019', owner: 'Anita Kulkarni', status: 'IMPLEMENTED' },
+      { id: 'dy-rc2', hierarchy: 'ADMINISTRATIVE', description: 'Mandatory dry-feed storage protocols at all 18 village collection centres',         owner: 'Meera Pillai',  status: 'PLANNED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 5, residualScore: 10, residualLevel: 'HIGH',
+    owner: 'Meera Pillai', ownerId: 'u-dy2', reviewDate: '2026-08-15', history: [],
+    createdAt: '2026-05-16T09:00:00Z', updatedAt: '2026-05-16T09:00:00Z',
+  },
+  {
+    id: 'dy-r2', riskNumber: 'RSK-DY-2026-0011',
+    title: 'Antibiotic residue carry-over into pooled milk',
+    description: 'Sick cattle under antibiotic treatment milked before withdrawal period results in residues (beta-lactam, tetracycline, sulfonamide) in pooled raw milk. Regulatory red flag under FSSAI 2.3.4; risk of supplier de-listing and brand damage.',
+    category: 'SAFETY', department: 'Procurement',
+    likelihood: 3, consequence: 5, riskScore: 15, riskLevel: 'CRITICAL',
+    controls: [
+      { id: 'dy-rc3', hierarchy: 'ENGINEERING',    description: 'Charm SL beta-lactam dipstick at all 18 village collection centres', owner: 'Sandeep Joshi', status: 'IMPLEMENTED' },
+      { id: 'dy-rc4', hierarchy: 'ADMINISTRATIVE', description: 'Farmer training on antibiotic withdrawal — 240 farmers per CAPA-DY-2026-0017', owner: 'Priya Khanna', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Meera Pillai', ownerId: 'u-dy2', reviewDate: '2026-08-30', history: [],
+    createdAt: '2026-05-12T10:00:00Z', updatedAt: '2026-05-12T10:00:00Z',
+  },
+  {
+    id: 'dy-r3', riskNumber: 'RSK-DY-2026-0010',
+    title: 'Cold-chain temperature excursion in distribution fleet',
+    description: 'Refrigerated tanker / van breakdowns or traffic stops can lead to ≥4 °C cargo-area temperature for >30 min, accelerating microbial growth in pasteurized milk / curd / paneer. Consumer-safety hazard; FSSAI 2.1.1 non-conformance.',
+    category: 'QUALITY', department: 'Cold Chain',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'dy-rc5', hierarchy: 'ENGINEERING',    description: 'IoT temperature loggers with GSM alert on all 14 refrigerated vans',  owner: 'Priya Khanna', status: 'IMPLEMENTED' },
+      { id: 'dy-rc6', hierarchy: 'ADMINISTRATIVE', description: 'PM frequency on van refrigeration units tightened to 3-monthly',       owner: 'Priya Khanna', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Priya Khanna', ownerId: 'u-dy5', reviewDate: '2026-09-01', history: [],
+    createdAt: '2026-05-08T09:00:00Z', updatedAt: '2026-05-08T09:00:00Z',
+  },
+  {
+    id: 'dy-r4', riskNumber: 'RSK-DY-2026-0009',
+    title: 'Post-pasteurization recontamination at filling lines',
+    description: 'Biofilm build-up on filling-machine product-contact surfaces leads to microbial recontamination (TPC, coliform, Pseudomonas) after thermal kill. Recurrence already observed under NC-DY-2026-0041.',
+    category: 'QUALITY', department: 'Pasteurization',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'dy-rc7', hierarchy: 'ENGINEERING',    description: 'Lock CIP recipe on HMI — QA-only password override (CAPA-DY-2026-0018)', owner: 'Sandeep Joshi', status: 'IMPLEMENTED' },
+      { id: 'dy-rc8', hierarchy: 'ADMINISTRATIVE', description: 'Pre-shift ATP-swab verification at all 4 filler heads',                    owner: 'Anita Kulkarni', status: 'PLANNED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 4, residualScore: 4, residualLevel: 'LOW',
+    owner: 'Anita Kulkarni', ownerId: 'u-dy3', reviewDate: '2026-08-15', history: [],
+    createdAt: '2026-05-14T10:00:00Z', updatedAt: '2026-05-14T10:00:00Z',
+  },
+  {
+    id: 'dy-r5', riskNumber: 'RSK-DY-2026-0008',
+    title: 'Adulteration of raw milk at village collection (water, urea, detergent)',
+    description: 'Economic adulteration with water, urea, detergent or maltodextrin to inflate volume / SNF is a known industry risk in pooled raw-milk supply chains. Consumer-safety hazard; FSSAI 2.3.1 violation.',
+    category: 'QUALITY', department: 'Receiving Dock',
+    likelihood: 2, consequence: 5, riskScore: 10, riskLevel: 'HIGH',
+    controls: [
+      { id: 'dy-rc9',  hierarchy: 'ENGINEERING',    description: 'Lactoscan auto-analyser at receiving dock — Freezing Point Depression flag', owner: 'Sandeep Joshi', status: 'IMPLEMENTED' },
+      { id: 'dy-rc10', hierarchy: 'ADMINISTRATIVE', description: 'Random urea / detergent dipstick tests on 1 in 10 tankers, daily',           owner: 'Anita Kulkarni', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Sandeep Joshi', ownerId: 'u-dy1', reviewDate: '2026-09-01', history: [],
+    createdAt: '2026-05-06T09:30:00Z', updatedAt: '2026-05-06T09:30:00Z',
+  },
+  {
+    id: 'dy-r6', riskNumber: 'RSK-DY-2026-0007',
+    title: 'Foreign matter contamination in pouches / cups',
+    description: 'Plant debris, plastic shards from packaging film slitter or filler-head wear can contaminate finished product. Consumer-safety hazard plus brand damage.',
+    category: 'QUALITY', department: 'Packaging',
+    likelihood: 2, consequence: 4, riskScore: 8, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'dy-rc11', hierarchy: 'ENGINEERING',    description: 'In-line metal detector + X-ray inspection on every FFS line',  owner: 'Priya Khanna', status: 'IMPLEMENTED' },
+      { id: 'dy-rc12', hierarchy: 'ENGINEERING',    description: 'Magnetic strainers in pre-filler product loop',                  owner: 'Ravi Deshmukh', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 4, residualScore: 4, residualLevel: 'LOW',
+    owner: 'Priya Khanna', ownerId: 'u-dy5', reviewDate: '2026-10-01', history: [],
+    createdAt: '2026-05-04T10:00:00Z', updatedAt: '2026-05-04T10:00:00Z',
+  },
+  {
+    id: 'dy-r7', riskNumber: 'RSK-DY-2026-0006',
+    title: 'Allergen cross-contact between milk-based and nut-based dairy sweets',
+    description: 'Shared kettles and packaging line between plain peda and badam peda creates potential undeclared tree-nut allergen exposure for plain-peda consumers. FSSAI labelling violation + ISO 22000 §8.5.2 risk.',
+    category: 'SAFETY', department: 'Production',
+    likelihood: 2, consequence: 4, riskScore: 8, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'dy-rc13', hierarchy: 'SUBSTITUTION', description: 'Dedicated kettle DK-04 for nut-based products; full CIP between SKUs', owner: 'Ravi Deshmukh', status: 'IMPLEMENTED' },
+      { id: 'dy-rc14', hierarchy: 'ADMINISTRATIVE', description: 'Allergen-cleaning verification record + visual line clearance per SOP', owner: 'Priya Khanna', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 4, residualScore: 4, residualLevel: 'LOW',
+    owner: 'Ravi Deshmukh', ownerId: 'u-dy4', reviewDate: '2026-09-15', history: [],
+    createdAt: '2026-05-09T09:30:00Z', updatedAt: '2026-05-09T09:30:00Z',
+  },
+  {
+    id: 'dy-r8', riskNumber: 'RSK-DY-2026-0005',
+    title: 'Best-before / MRP label print errors',
+    description: 'Operator entry error or date-setting drift on FFS lines can cause incorrect best-before / MRP on retail pouches. FSSAI labelling non-compliance; consumer-safety hazard for stale-stock risk.',
+    category: 'OPERATIONAL', department: 'Packaging',
+    likelihood: 3, consequence: 3, riskScore: 9, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'dy-rc15', hierarchy: 'ENGINEERING',    description: 'Vision-system best-before / MRP verification at end-of-line with auto-reject', owner: 'Sandeep Joshi', status: 'PLANNED' },
+      { id: 'dy-rc16', hierarchy: 'ADMINISTRATIVE', description: 'Two-person sign-off on date-change at FFS-02 / 03 / 04 every shift',           owner: 'Priya Khanna', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Priya Khanna', ownerId: 'u-dy5', reviewDate: '2026-09-30', history: [],
+    createdAt: '2026-05-11T11:00:00Z', updatedAt: '2026-05-11T11:00:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface RiskFilters {
@@ -485,14 +789,16 @@ interface RiskFilters {
 }
 
 export function useRisks(filters: RiskFilters = {}) {
+  const industry = useUserIndustry();
   return useQuery<PaginatedResponse<RiskRecord>>({
-    queryKey: ['risks', filters],
+    queryKey: ['risks', filters, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get('/qms/risks', { params: filters });
         return unwrapList<RiskRecord>(data, flattenRisk as any);
       } catch {
-        let filtered = [...mockRisks];
+        const baseList = pickByIndustry(industry, mockRisks, { medical_device: mockMedicalDeviceRisks, dairy: mockDairyRisks });
+        let filtered = [...baseList];
         if (filters.riskLevel) filtered = filtered.filter((r) => r.riskLevel === filters.riskLevel);
         if (filters.department) filtered = filtered.filter((r) => r.department === filters.department);
         if (filters.category) filtered = filtered.filter((r) => r.category === filters.category);
@@ -511,14 +817,16 @@ export function useRisks(filters: RiskFilters = {}) {
 }
 
 export function useRisk(id: string) {
+  const industry = useUserIndustry();
   return useQuery<RiskRecord>({
-    queryKey: ['risks', id],
+    queryKey: ['risks', id, industry ?? 'default'],
     queryFn: async () => {
       try {
         const { data } = await api.get(`/qms/risks/${id}`);
         return unwrapItem<RiskRecord>(data, flattenRisk as any);
       } catch {
-        const risk = mockRisks.find((r) => r.id === id);
+        const baseList = pickByIndustry(industry, mockRisks, { medical_device: mockMedicalDeviceRisks, dairy: mockDairyRisks });
+        const risk = baseList.find((r) => r.id === id);
         if (!risk) throw new Error('Risk not found');
         return risk;
       }
