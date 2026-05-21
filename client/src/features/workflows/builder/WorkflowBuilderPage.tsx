@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Save } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Pause, Play, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ReactFlow, {
   addEdge,
@@ -21,6 +21,7 @@ import {
   useDeleteDraft,
   useSaveDraft,
   useSaveWorkflow,
+  useSetWorkflowStatus,
   useWorkflow,
   useWorkflowDraft,
 } from '@/lib/api/workflow';
@@ -72,6 +73,7 @@ export default function WorkflowBuilderPage() {
   const saveDraft = useSaveDraft(id);
   const deleteDraft = useDeleteDraft(id);
   const publish = useSaveWorkflow(id);
+  const setStatus = useSetWorkflowStatus(id);
 
   // Has the user ever touched the canvas this session? Used to flip the
   // load preference back to published once they explicitly discard the draft.
@@ -262,6 +264,20 @@ export default function WorkflowBuilderPage() {
     }
   };
 
+  const handleSetStatus = async (next: 'ACTIVE' | 'INACTIVE') => {
+    try {
+      await setStatus.mutateAsync(next);
+      toast.success(
+        next === 'ACTIVE' ? 'Workflow activated' : 'Workflow deactivated',
+      );
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message ?? 'Failed to change status';
+      toast.error(msg);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-16">
@@ -305,6 +321,50 @@ export default function WorkflowBuilderPage() {
             {nodes.length} node{nodes.length === 1 ? '' : 's'} · {edges.length} edge
             {edges.length === 1 ? '' : 's'}
           </span>
+
+          {/* Current status pill + flip control. Activate is enabled only
+              once at least one stage exists (mirrors the backend guard). */}
+          <span
+            className={
+              data.workflow.workflowStatus === 'ACTIVE'
+                ? 'text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800'
+                : data.workflow.workflowStatus === 'INACTIVE'
+                  ? 'text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700'
+                  : 'text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800'
+            }
+            title={`Workflow status: ${data.workflow.workflowStatus}`}
+          >
+            {data.workflow.workflowStatus}
+          </span>
+
+          {data.workflow.workflowStatus === 'ACTIVE' ? (
+            <Button
+              variant="outline"
+              onClick={() => handleSetStatus('INACTIVE')}
+              isLoading={setStatus.isPending}
+              disabled={setStatus.isPending}
+              title="Set status to INACTIVE. Doesn't rebuild stages or touch policies."
+            >
+              <Pause size={16} />
+              <span className="ml-1.5">Deactivate</span>
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => handleSetStatus('ACTIVE')}
+              isLoading={setStatus.isPending}
+              disabled={setStatus.isPending || nodes.length === 0}
+              title={
+                nodes.length === 0
+                  ? 'Add at least one stage before activating'
+                  : 'Flip status to ACTIVE. Does NOT rebuild the graph — use Publish for that.'
+              }
+            >
+              <Play size={16} />
+              <span className="ml-1.5">Activate</span>
+            </Button>
+          )}
+
           <Button
             variant="outline"
             onClick={handleSaveDraft}

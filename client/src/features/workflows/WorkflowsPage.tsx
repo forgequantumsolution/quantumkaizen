@@ -8,6 +8,8 @@ import {
   Clock,
   Trash2,
   Edit3,
+  Play,
+  Pause,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Card, Button, EmptyState, Spinner, Input, Select } from '@/components/ui';
@@ -16,6 +18,7 @@ import { cn, formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import {
   useWorkflows,
+  useSetWorkflowStatus,
   useSoftDeleteWorkflow,
   type WorkflowSummary,
   type WorkflowLifecycleStatus,
@@ -187,6 +190,23 @@ function WorkflowCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  // Each card holds its own status-flip mutation. Hooks in a loop are fine
+  // here because each `WorkflowCard` instance is a separate React component.
+  const setStatus = useSetWorkflowStatus(workflow.id);
+  const handleSetStatus = async (next: 'ACTIVE' | 'INACTIVE') => {
+    try {
+      await setStatus.mutateAsync(next);
+      toast.success(
+        next === 'ACTIVE' ? 'Workflow activated' : 'Workflow deactivated',
+      );
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message ?? 'Failed to change status';
+      toast.error(msg);
+    }
+  };
+
   return (
     <Card
       className={cn(
@@ -234,6 +254,41 @@ function WorkflowCard({
             <span className="ml-1">Edit</span>
           </Button>
         )}
+        {canUpdate &&
+          (workflow.workflowStatus === 'ACTIVE' ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSetStatus('INACTIVE');
+              }}
+              isLoading={setStatus.isPending}
+              disabled={setStatus.isPending}
+            >
+              <Pause size={14} className="text-amber-600" />
+              <span className="ml-1">Deactivate</span>
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSetStatus('ACTIVE');
+              }}
+              isLoading={setStatus.isPending}
+              disabled={setStatus.isPending || workflow.stageCount === 0}
+              title={
+                workflow.stageCount === 0
+                  ? 'Open the builder and add at least one stage before activating'
+                  : 'Flip status to ACTIVE'
+              }
+            >
+              <Play size={14} className="text-green-600" />
+              <span className="ml-1">Activate</span>
+            </Button>
+          ))}
         {canDelete && (
           <Button
             variant="ghost"
