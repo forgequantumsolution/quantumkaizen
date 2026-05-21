@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Pause, Play, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { App } from 'antd';
 import ReactFlow, {
   addEdge,
   Background,
@@ -74,6 +75,7 @@ export default function WorkflowBuilderPage() {
   const deleteDraft = useDeleteDraft(id);
   const publish = useSaveWorkflow(id);
   const setStatus = useSetWorkflowStatus(id);
+  const { modal } = App.useApp();
 
   // Has the user ever touched the canvas this session? Used to flip the
   // load preference back to published once they explicitly discard the draft.
@@ -226,16 +228,7 @@ export default function WorkflowBuilderPage() {
    * — that's the pre-existing builder behavior. See WORKFLOW_PHASE_3_5_PLAN
    * §Risks for the planned reconciliation fix.
    */
-  const handlePublish = async () => {
-    if (
-      !confirm(
-        'Publish will create a new version of this workflow and activate it.\n\n' +
-          'Existing tickets stay on the previous version they were raised against. ' +
-          'New tickets will use this new version. Continue?',
-      )
-    ) {
-      return;
-    }
+  const runPublish = async () => {
     setValidationErrors([]);
     const payload = serializeFlow(
       nodes as WorkflowReactFlowNode[],
@@ -252,7 +245,7 @@ export default function WorkflowBuilderPage() {
       // If the save bumped the version, the workflow's id changed — navigate
       // to the new builder URL so subsequent edits target the latest version.
       if (res.meta?.versionBumped && res.workflow.id !== id) {
-        toast.success(`Workflow published as new version`);
+        toast.success('Workflow published as new version');
         navigate(`/workflows/${res.workflow.id}/builder`, { replace: true });
       } else {
         toast.success('Workflow published');
@@ -268,6 +261,18 @@ export default function WorkflowBuilderPage() {
         toast.error(msg);
       }
     }
+  };
+
+  const handlePublish = () => {
+    modal.confirm({
+      title: 'Publish workflow',
+      content:
+        'A new version of this workflow will be created and activated. Existing tickets stay on the previous version they were raised against; new tickets will use this version.',
+      okText: 'Publish',
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: () => runPublish(),
+    });
   };
 
   const handleSetStatus = async (next: 'ACTIVE' | 'INACTIVE') => {

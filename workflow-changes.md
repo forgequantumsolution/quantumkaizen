@@ -1819,6 +1819,19 @@ Re-ran the full set together — all green:
 | `workflow-versioning-formbindings.spec.ts` (this bug) | ✅ 22s |
 | `stage-form-refresh.spec.ts` (cache-invalidation regression from earlier) | ✅ 33s |
 
+### P1.10.2 — Publish confirmation: antd modal instead of window.confirm
+
+**Date:** 2026-05-22
+**File:** [`client/src/features/workflows/builder/WorkflowBuilderPage.tsx`](client/src/features/workflows/builder/WorkflowBuilderPage.tsx)
+
+The Publish button in the builder used a native `window.confirm()` alert — inconsistent with the rest of the app (ticket delete, form submit) which uses centered antd `modal.confirm`. Swapped over.
+
+- Imported `App` from `antd` and pulled `modal` via `App.useApp()`.
+- Split the old `handlePublish` into two pieces: `runPublish()` does the actual work (serialize → mutateAsync → cache invalidation → toast → navigate on version bump), and `handlePublish()` just opens the modal. `onOk: () => runPublish()` returns the promise so the modal's OK button stays in its own loading state until the backend responds — layered on top of the toolbar Publish button's existing `isLoading={publish.isPending}` spinner.
+- Modal copy: title "Publish workflow", body "A new version of this workflow will be created and activated. Existing tickets stay on the previous version they were raised against; new tickets will use this version.", buttons "Cancel" / "Publish", `centered: true` (same styling as the delete-ticket and form-submit modals).
+
+**Spec update:** [`tests/e2e/workflow-versioning-ui.spec.ts`](tests/e2e/workflow-versioning-ui.spec.ts) — the previous version of the spec used `page.once('dialog', d => d.accept())` to handle the browser `confirm()`. With the modal-based flow that listener never fires; the spec now scopes the OK click to `.ant-modal-confirm` and clicks the inner `Publish` button via `getByRole('button', { name: 'Publish', exact: true })`. Re-ran the spec: ✅ 60s.
+
 ### Known follow-ups (not addressed this turn)
 
 - The detail page (`WorkflowDetailPage`) doesn't yet show "this version was superseded — view latest" when viewing an `isLatestVersion=false` row; the builder will at least block the save with a 400 if the user lands on a stale URL via bookmark.
