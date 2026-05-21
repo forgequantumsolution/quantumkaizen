@@ -3,6 +3,7 @@ import { api } from '@/lib/api';
 import type { NamedRef, StageActionBehavior, UserRef } from './workflow';
 import { approvalKeys } from './approval';
 import { slaKeys } from './sla';
+import { stageFormKeys } from './stageForm';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -246,6 +247,7 @@ export const useTransition = (id: string) => {
       // would lag by up to a full poll window.
       qc.invalidateQueries({ queryKey: approvalKeys.ticketInstances(id) });
       qc.invalidateQueries({ queryKey: slaKeys.ticketSla(id) });
+      qc.invalidateQueries({ queryKey: stageFormKeys.ticket(id) });
     },
   });
 };

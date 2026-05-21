@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
+import { App, Table } from 'antd';
+import type { ColumnsType } from 'antd/es/table';
 import {
   Plus,
   Search,
@@ -8,13 +11,10 @@ import {
   TimerReset,
   Circle,
   CheckCircle2,
-  LayoutGrid,
-  Rows3,
   Filter as FilterIcon,
   X,
-  ChevronRight,
   Network,
-  Clock,
+  Trash2,
 } from 'lucide-react';
 import {
   Card,
@@ -28,24 +28,25 @@ import {
 import PageContainer from '@/components/layout/PageContainer';
 import { cn, formatDate } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
-import { useTickets, type ListTicketsQuery, type TicketSummary } from '@/lib/api/ticket';
+import {
+  useDeleteTicket,
+  useTickets,
+  type ListTicketsQuery,
+  type TicketSummary,
+} from '@/lib/api/ticket';
 import { useWorkflows } from '@/lib/api/workflow';
 import { usePriorities } from '@/lib/api/workflowLookups';
 import { useSlaTimers, type SlaTimer } from '@/lib/api/sla';
 import RaiseTicketDrawer from './shared/RaiseTicketDrawer';
-import TicketCard from './shared/TicketCard';
 import TicketStatusBadge from './shared/TicketStatusBadge';
 
 type StatusFilter = NonNullable<ListTicketsQuery['status']>;
-type ViewMode = 'grid' | 'list';
 
 const STATUS_TABS: { value: StatusFilter; label: string }[] = [
   { value: 'all', label: 'All' },
   { value: 'open', label: 'Open' },
   { value: 'completed', label: 'Completed' },
 ];
-
-const VIEW_STORAGE_KEY = 'tickets.viewMode';
 
 const computeElapsedSec = (timer: SlaTimer, now = Date.now()) => {
   if (timer.status === 'PAUSED' || !timer.lastResumedAt) {
@@ -78,6 +79,31 @@ export default function TicketsPage() {
   const navigate = useNavigate();
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canCreate = hasPermission('ticket.create');
+  const canDelete = hasPermission('ticket.delete');
+  const deleteTicket = useDeleteTicket();
+  const { modal } = App.useApp();
+
+  const handleDelete = (t: TicketSummary) => {
+    modal.confirm({
+      title: 'Delete ticket',
+      content: `Are you sure you want to delete ${t.uniqueId}?`,
+      okText: 'Delete',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: async () => {
+        try {
+          await deleteTicket.mutateAsync(t.id);
+          toast.success('Ticket deleted');
+        } catch (err) {
+          const msg =
+            (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+              ?.error?.message ?? 'Failed to delete';
+          toast.error(msg);
+        }
+      },
+    });
+  };
 
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounced(searchInput, 250);
@@ -87,14 +113,6 @@ export default function TicketsPage() {
   const [workflowFilterId, setWorkflowFilterId] = useState<string>('');
   const [pageSize, setPageSize] = useState(50);
   const [createOpen, setCreateOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window === 'undefined') return 'grid';
-    return (localStorage.getItem(VIEW_STORAGE_KEY) as ViewMode | null) ?? 'grid';
-  });
-
-  useEffect(() => {
-    localStorage.setItem(VIEW_STORAGE_KEY, viewMode);
-  }, [viewMode]);
 
   const filters: ListTicketsQuery = useMemo(
     () => ({
@@ -245,34 +263,6 @@ export default function TicketsPage() {
               ))}
             </div>
 
-            <div className="ml-auto inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode('grid')}
-                className={cn(
-                  'px-2.5 py-1.5 rounded-md transition-colors',
-                  viewMode === 'grid'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900',
-                )}
-                aria-label="Grid view"
-              >
-                <LayoutGrid size={14} />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode('list')}
-                className={cn(
-                  'px-2.5 py-1.5 rounded-md transition-colors',
-                  viewMode === 'list'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900',
-                )}
-                aria-label="List view"
-              >
-                <Rows3 size={14} />
-              </button>
-            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
@@ -363,21 +353,23 @@ export default function TicketsPage() {
               }
             />
           </Card>
-        ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {items.map((t) => (
-              <TicketCard
-                key={t.id}
-                ticket={t}
-                onClick={() => navigate(`/tickets/${t.id}`)}
-              />
-            ))}
-          </div>
         ) : (
-          <TicketListView
-            items={items}
-            onOpen={(id) => navigate(`/tickets/${id}`)}
-          />
+          <Card noPadding className="overflow-hidden">
+            <Table<TicketSummary>
+              rowKey="id"
+              dataSource={items}
+              columns={buildColumns({
+                canDelete,
+                onDelete: handleDelete,
+              })}
+              pagination={false}
+              size="middle"
+              onRow={(t) => ({
+                onClick: () => navigate(`/tickets/${t.id}`),
+                style: { cursor: 'pointer' },
+              })}
+            />
+          </Card>
         )}
 
         {!isLoading && totalAll > items.length && !priorityId && (
@@ -397,71 +389,105 @@ export default function TicketsPage() {
   );
 }
 
-// ─── List view ──────────────────────────────────────────────────────────────
-function TicketListView({
-  items,
-  onOpen,
+// ─── Table columns ──────────────────────────────────────────────────────────
+function buildColumns({
+  canDelete,
+  onDelete,
 }: {
-  items: TicketSummary[];
-  onOpen: (id: string) => void;
-}) {
-  return (
-    <Card noPadding className="overflow-hidden">
-      <div className="hidden md:grid grid-cols-[110px_1fr_180px_120px_120px_120px_36px] gap-3 px-4 py-2 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-        <span>ID</span>
-        <span>Title</span>
-        <span>Workflow · Stage</span>
-        <span>Priority</span>
-        <span>Status</span>
-        <span>Updated</span>
-        <span />
-      </div>
-      <ul className="divide-y divide-gray-100">
-        {items.map((t) => {
-          const flow = t.flows[0];
-          return (
-            <li
-              key={t.id}
-              onClick={() => onOpen(t.id)}
-              className="px-4 py-3 grid grid-cols-1 md:grid-cols-[110px_1fr_180px_120px_120px_120px_36px] gap-3 items-center cursor-pointer hover:bg-gray-50 transition-colors"
-            >
-              <span className="text-[10px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded w-fit">
-                {t.uniqueId}
-              </span>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-gray-900 truncate">{t.title}</div>
-              </div>
-              <div className="min-w-0 text-xs text-gray-600 truncate">
-                {flow ? (
-                  <span className="inline-flex items-center gap-1">
-                    <Network size={11} className="text-gray-400" />
-                    <span className="truncate">{flow.workflowName}</span>
-                    {flow.currentStages[0] && (
-                      <>
-                        <span className="text-gray-300">·</span>
-                        <span className="text-blue-700 truncate">
-                          {flow.currentStages[0].name}
-                        </span>
-                      </>
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-gray-400">—</span>
-                )}
-              </div>
-              <div className="text-xs text-gray-700 truncate">{t.priority?.name ?? '—'}</div>
-              <div>
-                <TicketStatusBadge ticket={t} />
-              </div>
-              <div className="text-xs text-gray-500 flex items-center gap-1">
-                <Clock size={11} />
-                {formatDate(t.updatedAt)}
-              </div>
-              <ChevronRight size={14} className="text-gray-300" />
-            </li>
-          );
-        })}
-      </ul>
-    </Card>
-  );
+  canDelete: boolean;
+  onDelete: (t: TicketSummary) => void;
+}): ColumnsType<TicketSummary> {
+  const cols: ColumnsType<TicketSummary> = [
+    {
+      title: 'ID',
+      dataIndex: 'uniqueId',
+      key: 'uniqueId',
+      width: 130,
+      render: (uniqueId: string) => (
+        <span className="text-[11px] font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
+          {uniqueId}
+        </span>
+      ),
+    },
+    {
+      title: 'Title',
+      dataIndex: 'title',
+      key: 'title',
+      ellipsis: true,
+      render: (title: string) => (
+        <span className="text-sm font-semibold text-gray-900">{title}</span>
+      ),
+    },
+    {
+      title: 'Workflow · Stage',
+      key: 'workflow',
+      width: 220,
+      ellipsis: true,
+      render: (_, t) => {
+        const flow = t.flows[0];
+        if (!flow) return <span className="text-gray-400">—</span>;
+        return (
+          <span className="inline-flex items-center gap-1 text-xs text-gray-600">
+            <Network size={11} className="text-gray-400 shrink-0" />
+            <span className="truncate">{flow.workflowName}</span>
+            {flow.currentStages[0] && (
+              <>
+                <span className="text-gray-300">·</span>
+                <span className="text-blue-700 truncate">
+                  {flow.currentStages[0].name}
+                </span>
+              </>
+            )}
+          </span>
+        );
+      },
+    },
+    {
+      title: 'Priority',
+      key: 'priority',
+      width: 110,
+      render: (_, t) => (
+        <span className="text-xs text-gray-700">{t.priority?.name ?? '—'}</span>
+      ),
+    },
+    {
+      title: 'Status',
+      key: 'status',
+      width: 130,
+      render: (_, t) => <TicketStatusBadge ticket={t} />,
+    },
+    {
+      title: 'Updated',
+      dataIndex: 'updatedAt',
+      key: 'updatedAt',
+      width: 120,
+      render: (updatedAt: string) => (
+        <span className="text-xs text-gray-500">{formatDate(updatedAt)}</span>
+      ),
+    },
+  ];
+
+  if (canDelete) {
+    cols.push({
+      title: '',
+      key: 'actions',
+      width: 50,
+      align: 'center',
+      render: (_, t) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(t);
+          }}
+          className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded"
+          title="Delete ticket"
+        >
+          <Trash2 size={14} />
+        </button>
+      ),
+    });
+  }
+
+  return cols;
 }

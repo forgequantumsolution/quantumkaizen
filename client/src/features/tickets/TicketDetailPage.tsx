@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
+import { App } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -12,12 +14,13 @@ import {
   CheckCircle2,
   CircleDot,
   PauseCircle,
+  Trash2,
 } from 'lucide-react';
 import { Button, Card, Spinner, Tabs } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
-import { useTicket } from '@/lib/api/ticket';
+import { useDeleteTicket, useTicket } from '@/lib/api/ticket';
 import TicketStatusBadge from './shared/TicketStatusBadge';
 import ActionBar from './detail/ActionBar';
 import TimelineTab from './detail/TimelineTab';
@@ -43,6 +46,9 @@ export default function TicketDetailPage() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canTransition = hasPermission('ticket.transition');
   const canUpdate = hasPermission('ticket.update');
+  const canDelete = hasPermission('ticket.delete');
+  const deleteTicket = useDeleteTicket();
+  const { modal } = App.useApp();
   const [activeTab, setActiveTab] = useState('timeline');
   const [flowOpen, setFlowOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -54,6 +60,30 @@ export default function TicketDetailPage() {
   }, [flowOpen]);
 
   const { data: ticket, isLoading, error } = useTicket(id);
+
+  const handleDelete = () => {
+    if (!ticket) return;
+    modal.confirm({
+      title: 'Delete ticket',
+      content: `Are you sure you want to delete ${ticket.uniqueId}?`,
+      okText: 'Delete',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: async () => {
+        try {
+          await deleteTicket.mutateAsync(ticket.id);
+          toast.success('Ticket deleted');
+          navigate('/tickets');
+        } catch (err) {
+          const msg =
+            (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+              ?.error?.message ?? 'Failed to delete';
+          toast.error(msg);
+        }
+      },
+    });
+  };
 
   if (isLoading) {
     return (
@@ -119,6 +149,18 @@ export default function TicketDetailPage() {
             >
               {flowOpen ? <EyeOff size={14} /> : <Eye size={14} />}
               <span className="ml-1.5">{flowOpen ? 'Hide stages' : 'View stages'}</span>
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDelete}
+              isLoading={deleteTicket.isPending}
+              disabled={deleteTicket.isPending}
+              title="Delete ticket"
+            >
+              <Trash2 size={14} className="text-red-500" />
             </Button>
           )}
         </div>
