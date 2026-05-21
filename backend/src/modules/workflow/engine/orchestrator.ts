@@ -29,7 +29,7 @@ const TX_OPTIONS = { timeout: 30_000, maxWait: 5_000 };
 // ─── Ticket ID generation ───────────────────────────────────────────────────
 
 /**
- * Generate a unique ticket ID like `DOC-NEX-001` per workflow.
+ * Generate a unique ticket ID like `DOC-FQS-001` per workflow.
  * Concurrent raises are serialised by the surrounding transaction's row lock
  * on the workflow row (acquired via `SELECT FOR UPDATE` below).
  */
@@ -53,7 +53,7 @@ const generateUniqueTicketId = async (
   // parses to NaN and would reset the counter to 1.
   const last = await tx.ticket.findFirst({
     where: {
-      uniqueId: { startsWith: `${prefix}-NEX-` },
+      uniqueId: { startsWith: `${prefix}-FQS-` },
       parentTicketId: null,
     },
     orderBy: { uniqueId: 'desc' },
@@ -68,7 +68,7 @@ const generateUniqueTicketId = async (
   }
 
   for (let i = 0; i < 5; i++) {
-    const candidate = `${prefix}-NEX-${String(next).padStart(3, '0')}`;
+    const candidate = `${prefix}-FQS-${String(next).padStart(3, '0')}`;
     const exists = await tx.ticket.findUnique({
       where: { uniqueId: candidate },
       select: { id: true },

@@ -1,12 +1,13 @@
 # Workflow System — Phase 3.5 Forms Integration Plan
 
-**Status:** ⏳ Drafted — pending sign-off on cross-cutting questions (Q1–Q8)
+**Status:** ✅ Shipped + refactored to embed-in-JSON architecture (2026-05-16)
 **Owner:** Backend + Frontend (single slice)
 **Depends on:** Phase 1 (workflow definitions), Phase 2 (tickets, engine, action behaviors), the existing `dynamic-form` module
 **Reference:** `core-prod-scaling/backend/workflows/{models/stage_form.py, engine/engines/form_handler.py}` (Django port) and the existing `backend/src/modules/dynamic-form/`
 **Master plan section:** `docs/WORKFLOW_MASTER_PLAN.md` §0 (called out as "Form attachments per stage (DMS-backed)" — never broken out into its own phase)
 **Revision history:**
 - 2026-05-16: initial draft. Inserted between Phase 3 and Phase 4 because Phase 4's `FORM_SUBMITTED` audit event has nothing to attach to without this binding.
+- 2026-05-16: **shipped + immediately refactored** following real-use feedback. The plan-doc-as-drafted assumed `StageFormBinding` rows would be created via dedicated CRUD endpoints (`POST /api/workflows/:id/stage-form-bindings`). After live testing surfaced the "saving wipes my policies" cascade-delete bug, the architecture was reshaped to **embed-in-JSON**: form binding intent (alongside SLA + approval intent) lives inside `node.data` on the canvas; the backend materialises rows on Publish. The plan body below is preserved for historical context — see workflow-changes.md §"Phase 3.5+ — Architecture refactors" for the post-refactor architecture as it actually shipped.
 
 ---
 

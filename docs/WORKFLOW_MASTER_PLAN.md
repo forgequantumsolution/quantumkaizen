@@ -31,16 +31,24 @@ Each backend phase is paired with a frontend phase. Default scheduling is **sequ
 
 | Phase | Theme | BE Tables | BE API | Engine | Frontend |
 |---|---|---|---|---|---|
-| **1** | Workflow Builder | 11 ✅ | Workflow CRUD, lookups, layout ✅ (versioning removed P1.8) | None (definitions only) | React Flow builder canvas, lookup admin ✅ |
+| **1** | Workflow Builder | 11 ✅ | Workflow CRUD, lookups ✅ (versioning removed P1.8; layout removed in P3.5+ refactor — now client-side dagre) | None (definitions only) | React Flow builder canvas, lookup admin ✅ |
 | **2** | Tickets + Engine | 7 ✅ | Ticket CRUD, transitions, tracking, comments ✅ | Orchestrator, transitions, fork/join, decision ✅ | Ticket list/detail, action bar, timeline, comments, docs ✅ |
-| **3** | Approvals + SLA | 9 | Approvals, SLA queries, business calendars | Approval intercept, SLA timers (BullMQ) | Approval modal, SLA badges, calendar admin |
+| **3** | Approvals + SLA | 9 ✅ | Approvals, SLA queries, business calendars ✅ | Approval intercept, SLA timers (BullMQ) ✅ | Approval modal, SLA badges, calendar admin ✅ |
+| **3.5** | Forms ↔ Workflow Integration | +1 ✅ | (canvas-JSON-embedded — see refactor note) | Form-required intercept in orchestrator ✅ | Forms section in inspector, Forms card on ticket detail, ActionBar gating, FormFillPage workflow-bound submit ✅ |
 | **4** | Audit + E-signatures | 4 | Audit query, integrity verify, sign actions | Hash-chained logging, signature gates | Audit log viewer, signature PIN modal |
 | **5** | Audit Scheduling + Dashboards | 3 | Audit schedules, timeline, dashboards | Cron-spawned tickets, periodic review | Schedule admin, dashboard widgets |
 
-Total new BE tables across all phases: **~34**. Total new BE endpoints: **~50**.
-Total new FE LoC across all phases: **~8,800** (rough — typed API clients, TanStack Query hooks, pages, modals).
+Total new BE tables across all phases: **~35** (Phase 3.5 added `StageFormBinding`). Total new BE endpoints: **~55**.
+Total new FE LoC across all phases: **~10,500** (revised — Phase 3.5+ refactor added ~1.8k LoC over plan; client-side dagre layout absorbed ~250 LoC; embed-in-JSON consolidated three editor surfaces).
 
 Each backend phase is self-contained and independently shippable. Frontend phases follow per the §8 schedule.
+
+### Architecture deltas from original plan (logged in workflow-changes.md)
+
+- **Layout storage** dropped from the backend in P3.5+. `WorkflowStage.position` removed; the builder + detail-page renders compute positions on demand via `dagre`. No more `save-layout` endpoint, no per-drag autosave.
+- **Save semantics split** in P3.5+. The Save button is now non-destructive — writes to `TemporaryWorkflow.flowJson`. A new **Publish** button does the destructive `buildWorkflowGraph` rebuild and flips `workflowStatus` to ACTIVE. The dedicated `PATCH /workflows/:id/status` endpoint handles status-only transitions without rebuilding.
+- **Embed-in-JSON for policies (P3.5+)**: `ApprovalPolicy`, `SlaPolicy`, and `StageFormBinding` rows are still the source-of-truth for the engine, but their **intent** travels inside the canvas JSON (`node.data.approvalPolicies` / `node.data.sla` / `node.data.formBindings`). `buildWorkflowGraph` materialises rows from the JSON on Publish; `toFlowJson` embeds them back on read. The dedicated POST endpoints for each policy type still exist for surgical live edits, but the build flow no longer uses them.
+- **Phase 4's `FORM_SUBMITTED` audit event** now has a meaningful `ticketId` to attach to (Phase 3.5 added the `FormSubmission.ticketId/stageId/flowId/bindingId` FKs).
 
 ---
 
@@ -137,7 +145,7 @@ Make workflows executable. Users can raise a ticket against a workflow, and the 
 ```prisma
 model Ticket {
   id              String  @id @default(uuid())
-  uniqueId        String  @unique           -- "CAPA-NEX-001" (prefix from WorkflowType.codePrefix)
+  uniqueId        String  @unique           -- "CAPA-FQS-001" (prefix from WorkflowType.codePrefix)
   title           String
   description     String?
   parentTicketId  String?                    -- nested tickets
@@ -867,14 +875,17 @@ Con: requires API contract freeze at end of each backend phase. Frontend builds 
 
 ## 9. Total Effort
 
-| Phase | Estimate | Cumulative LoC |
-|---|---|---|
-| Phase 1 | 2-3 days | ~1,800 |
-| Phase 2 | 5-7 days | ~5,300 |
-| Phase 3 | 5-7 days | ~9,300 |
-| Phase 4 | 3-4 days | ~11,300 |
-| Phase 5 | 3-5 days | ~13,800 |
-| **Total** | **18-26 days** (~4-5 weeks) | **~13,800** |
+| Phase | Estimate | Status | Cumulative LoC |
+|---|---|---|---|
+| Phase 1 | 2-3 days | ✅ Shipped | ~1,800 |
+| Phase 2 | 5-7 days | ✅ Shipped | ~5,300 |
+| Phase 3 | 5-7 days | ✅ Shipped | ~9,300 |
+| Phase 3.5 + 3.5+ refactor | 1 day planned → 3 days actual | ✅ Shipped (tests pending) | ~12,400 |
+| Phase 4 | 3-4 days | ⏳ Next | ~14,400 |
+| Phase 5 | 3-5 days | ⏳ Queued | ~17,000 |
+| **Total** | **20-28 days** (~5 weeks) | | **~17,000** |
+
+LoC estimate revised up by ~3,200 vs original plan due to Phase 3.5 not being scoped in the original five-phase map plus the embed-in-JSON refactor.
 
 This compares to ~50,000 LoC in the prod Django backend's `workflows/` app — we're shedding the auth-service migration shim, dual-mode FK fields, plugin/circuit-breaker infrastructure, and some governance features.
 
@@ -957,7 +968,7 @@ The master plan stays at the level of "what each phase covers". Detailed schema,
 
 | Phase | Question |
 |---|---|
-| 2 | Ticket ID format — confirm `{TYPE_PREFIX}-NEX-{seq:003d}` matches frontend expectation, or is `seq` global vs per-workflow? |
+| 2 | Ticket ID format — confirm `{TYPE_PREFIX}-FQS-{seq:003d}` matches frontend expectation, or is `seq` global vs per-workflow? |
 | 2 | Custom fields on Ticket — one `Json` column, or separate `TicketCustomField` rows? |
 | 3 | BullMQ vs `node-cron` — is Redis available in your infra? |
 | 3 | Approval SLA — separate timer or sub-clock of stage SLA? |

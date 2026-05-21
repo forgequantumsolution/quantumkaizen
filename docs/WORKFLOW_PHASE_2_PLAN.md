@@ -28,7 +28,7 @@ These extend §2 of the master plan and need sign-off before code generation:
 
 | # | Decision | Default | Alternatives |
 |---|---|---|---|
-| Q1 | **Ticket ID format** | `{TYPE_PREFIX}-NEX-{seq:003d}` per workflow | Per-org global seq, ULID, no human-readable ID |
+| Q1 | **Ticket ID format** | `{TYPE_PREFIX}-FQS-{seq:003d}` per workflow | Per-org global seq, ULID, no human-readable ID |
 | Q2 | **Counter source** | `SELECT MAX(seq) FOR UPDATE` per workflow | Separate `WorkflowCounter` row, Postgres sequence per workflow |
 | Q3 | **Custom fields on Ticket** | Single `customFields Json?` column | Separate `TicketCustomField` rows, schemaful JSON-per-workflow |
 | Q4 | **File upload** | Out of scope — `TicketDoc.fileUrl` is opaque string; presigned-URL flow added in DMS phase | S3 presigned upload now, multipart upload now |
@@ -83,7 +83,7 @@ enum ParallelBranchStatus {
 ```prisma
 model Ticket {
   id              String   @id @default(uuid())
-  uniqueId        String   @unique                    // "DOC-NEX-001"
+  uniqueId        String   @unique                    // "DOC-FQS-001"
   title           String
   description     String?
   ticketReason    String?
@@ -357,7 +357,7 @@ export const resumeTicket = async (
    a. Generate uniqueId:
       - Lock the workflow's TicketFlow rows: SELECT MAX(unique_id_seq) ... FOR UPDATE
       - Or insert into a counter table (see Q2)
-      - Format: `{type.codePrefix}-NEX-{n:03d}`
+      - Format: `{type.codePrefix}-FQS-{n:03d}`
    b. Create Ticket
    c. Create TicketFlow with:
       - workflowName, workflowVersion snapshotted from workflow row

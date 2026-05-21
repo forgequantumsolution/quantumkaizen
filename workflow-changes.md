@@ -200,8 +200,8 @@ Per user request, the workflow versioning feature was removed entirely from the 
 | Re-save with smaller graph (3 stages → 1 stage) → in-place update | ✅ |
 | `GET /workflows/compare` | 400 (route gone, falls through to `/:id` which fails UUID validation) |
 | `GET /workflows/:id/versions` | 404 (route not found) |
-| Existing tickets (DOC-NEX-001/002/003) still link to workflow by snapshot | ✅ |
-| Raise new ticket DOC-NEX-004 against simplified workflow | ✅ |
+| Existing tickets (DOC-FQS-001/002/003) still link to workflow by snapshot | ✅ |
+| Raise new ticket DOC-FQS-004 against simplified workflow | ✅ |
 
 ## P1.9 — Performance fixes + Playwright perf harness (post-launch, 2026-05-10)
 
@@ -468,7 +468,7 @@ enum ParallelBranchStatus { ACTIVE COMPLETED CANCELLED }
 
 | Table | Purpose |
 |---|---|
-| `Ticket` | Workflow instance — `uniqueId` like `DOC-NEX-001`, `customFields Json?`, soft delete + hold flags |
+| `Ticket` | Workflow instance — `uniqueId` like `DOC-FQS-001`, `customFields Json?`, soft delete + hold flags |
 | `TicketFlow` | One per ticket+workflow; snapshots `workflowName`/`workflowVersion`; m2m to `WorkflowStage` for `currentStages` |
 | `TicketStageTracking` | Immutable stage history — `enteredAt`, `exitedAt`, `durationSec`, `postActionId`, `returnedFromStageId`, snapshots `stageName`/`stageWorkflowId` so deletion of stage doesn't lose history |
 | `TicketComment` | Flat comments (no threading per Q7 default) |
@@ -529,7 +529,7 @@ Bumped seed transaction timeout to 30s (`{ timeout: 30_000, maxWait: 5_000 }`) �
 | `orchestrator.ts` | ~580 | Public entry points: `raiseTicket`, `getCurrentStageActions`, `performAction`, `holdTicket`, `resumeTicket`. Action dispatch: FORWARD, REJECT, HOLD, UNHOLD, RETURN, REASSIGN |
 
 Key behaviors:
-- **`raiseTicket`**: Generates `{prefix}-NEX-{seq:003d}` ticket id with `SELECT ... FOR UPDATE` on the workflow row to serialise concurrent raises (Q1, Q2, Q9).
+- **`raiseTicket`**: Generates `{prefix}-FQS-{seq:003d}` ticket id with `SELECT ... FOR UPDATE` on the workflow row to serialise concurrent raises (Q1, Q2, Q9).
 - **`performAction`**: `SELECT ... FOR UPDATE` on the Ticket row at start of transaction so concurrent transitions on the same ticket queue up.
 - **Fork/Join (Q5)**: When entering a fork, creates `ParallelBranchTracking` rows. When arriving at a join, marks one branch completed and either advances past the join (AND: all complete; OR: first through wins, siblings cancelled).
 - **REJECT**: Walks the most-recent inactive `TicketStageTracking` row to find the previous stage.
@@ -596,7 +596,7 @@ Manual smoke test executed against the local backend on port 4000 with a fresh s
 |---|---|
 | Login + JWT | ✅ |
 | Sample workflow seeded as Document Review v1 (ACTIVE, isLatestVersion) | ✅ stageCount=3, transitionCount=2 |
-| `POST /api/tickets` → raise | ✅ uniqueId `DOC-NEX-001` allocated atomically |
+| `POST /api/tickets` → raise | ✅ uniqueId `DOC-FQS-001` allocated atomically |
 | `GET /api/tickets/:id` | ✅ shows `currentStages: ["Submit"]`, `flow_count: 1` |
 | `GET /api/tickets/:id/allowed-actions` | ✅ Submit stage shows Approve action with `canPerform: true` |
 | `POST /api/tickets/:id/transition` (Submit → Review) | ✅ exitedStages/enteredStages correct |
@@ -659,7 +659,7 @@ All mutations invalidate the appropriate query keys (transition invalidates deta
 |---|---|
 | Login, navigate to `/tickets` | ✅ 4 existing tickets render with status badges + current stage info |
 | Click "Raise Ticket" → modal opens with workflow picker | ✅ |
-| Submit modal → POST → redirect to `/tickets/:newId` | ✅ DOC-NEX-005 created |
+| Submit modal → POST → redirect to `/tickets/:newId` | ✅ DOC-FQS-005 created |
 | Detail page shows: header, description, **current stage card** (Single Stage pill), **stage actions card** (Approve / Forward + Hold), tabs | ✅ |
 | Click "Approve / Forward" → confirm modal opens with behavior + remarks textarea | ✅ |
 | Click Confirm → transition fires, status updates Open → Completed, action card shows "Completed — no further actions", timeline updates with both Entered + Exited events | ✅ |
@@ -1452,6 +1452,84 @@ End-to-end Playwright suite is pending — to come in a follow-up.
 
 ---
 
+# Phase 3.5+ — Architecture refactors (post-feedback)
+
+**Status:** ✅ Code complete (2026-05-16). Playwright suite pending.
+
+After the initial Phase 3.5 shipped, four UX/architecture issues surfaced through real use. This section captures the fixes; the underlying philosophy shifted from "policies live in their own tables, attached via API" to **"canvas JSON is the single source of truth; policies materialise on Publish"**.
+
+## P3.5+.1 — Workflow lifecycle: Save → draft + Publish split
+
+**Problem:** the Save button hit `PUT /workflows/:id` which wipes and rebuilds every stage. Saving twice silently cascade-deletes all attached approval/SLA/form policies.
+
+**Backend:**
+- `service.setStatus()` — new status-only update at `PATCH /api/workflows/:id/status`. Touches `Workflow.workflowStatus` ONLY; doesn't rebuild stages. Refuses to activate a workflow with zero stages.
+- `service.deleteDraft()` — new at `DELETE /api/workflows/:id/draft`. Drops the `TemporaryWorkflow` row so the next builder load sees the published state (not the stale draft).
+- The existing `POST /api/workflows/:id/draft` (non-destructive draft save) was always present but wasn't wired to anything — now it's the primary Save path.
+
+**Frontend:**
+- `WorkflowDetailPage.tsx` — Activate / Deactivate buttons surface based on current `workflowStatus`. Calls `useSetWorkflowStatus(id)`.
+- `WorkflowBuilderPage.tsx` — Save button rebound to `useSaveDraft` (draft only). New Publish button calls `useSaveWorkflow` with `workflow_settings.workflowStatus: 'ACTIVE'` + then `useDeleteDraft` to clear the draft. Confirms with a warning that attached policies will be re-built.
+- Builder load effect prefers draft over published. Reload after Save Draft shows what you saved; after Publish the draft is gone and the canvas hydrates from the published `flow_json`.
+
+## P3.5+.2 — Embed-in-JSON: policies live on the canvas, materialise on Publish
+
+**Problem (the deep one):** even with Save→draft fixed, every Publish still nuked policies because `buildWorkflowGraph()` wipes + rebuilds stages, cascading approval/SLA/form rows. The user proposed: stop storing policy intent in side tables during the build phase — put it INSIDE the canvas JSON, and have Publish materialise everything in one transaction.
+
+**Backend:**
+- `workflow.schema.ts` — `NodeSchema.data` accepts three new optional shapes:
+  - `formBindings: Array<{ formId, isRequired, position }>`
+  - `sla: { duration, calendarId, escalationWorkflowId, pauseOnHold, pauseOnExtensionPending, thresholds[] } | null`
+  - `approvalPolicies: Array<{ actionType, actionIndex, mode, requiredCount, ... approverRoleIds, approverUserIds, ... }>`
+  - Approval policies key by `(actionType, actionIndex)` since actions don't have stable canonicalIds. Builder resolves to the just-created action UUID via an `actionIdByRef` map.
+- `workflow.builder.ts buildWorkflowGraph()` — after the existing stage/action/transition inserts, three new write blocks:
+  - Bulk `stageFormBinding.createMany` from `formBindings`
+  - Per-stage `slaPolicy.create` + `slaThreshold.createMany` from `sla` (resolves `targetStageCanonicalId` → stage UUID via the just-built map; warns on unknown canonicalIds)
+  - Per-policy `approvalPolicy.create` from `approvalPolicies`, with `approverRoles`/`approverUsers` m2m connections. SUPER_ADMIN-style validation kept on the engine side.
+- `workflow.service.ts toFlowJson()` — selects `slaPolicy`, `formBindings`, and `approvalPolicies` (via `actions.approvalPolicies`) on workflow read, embeds them back into `node.data.sla` / `node.data.formBindings` / `node.data.approvalPolicies` so the canvas hydrates with everything.
+
+**Frontend:**
+- `builder.types.ts` — added `EmbeddedFormBinding`, `EmbeddedSla`, `EmbeddedApprovalPolicy` types and threaded them through `StageNodeData`. The serializer round-trips them verbatim.
+- `lib/api/workflow.ts` — `BuilderNode.data` types extended to match.
+- **StageInspector** rewritten: Approvals / SLA / Forms sections source from `data.approvalPolicies` / `data.sla` / `data.formBindings` (canvas state) and edit via `onChange`. The `persistedStageId` gate is gone — attachments work on a fresh canvas, no save required.
+- **All three editors** (`SlaPolicyEditor`, `ApprovalPolicyEditor`, `StageFormBindingEditor`) rewritten to accept `value` + `onSave(next | null)` props and write to canvas state. No POSTs to `/api/sla-policies` / `/api/approval-policies` / `/api/stage-form-bindings` from inside the build flow. (The standalone live-edit endpoints still exist; they're just not used during build.)
+- The Phase 3.5 standalone API surface (binding CRUD via dedicated endpoints) is now redundant during the build flow but kept for future surgical live edits.
+
+**Caveat:** Publish remains destructive — every Publish rebuilds stages with new UUIDs. That's intentional now: the canvas JSON is the source of truth, so re-publishing wipes and re-creates from it. The pre-existing "stage reconciliation refactor" idea is no longer needed because policies travel WITH the canvas, not as orphan rows.
+
+## P3.5+.3 — Ticket-id allocator: cross-workflow collisions
+
+**Problem:** the allocator in `engine/orchestrator.generateUniqueTicketId` scoped its "find last ticket" query per-workflow, but `Ticket.uniqueId` is globally unique. Multiple workflows sharing the same `WorkflowType.codePrefix` (or no prefix → default `WF`) would each start at `001` and collide with already-issued ids on a sibling workflow.
+
+**Fix:** dropped the per-workflow filter; the allocator now finds the highest existing ticket starting with the prefix across the whole table. Tickets with `parentTicketId != null` (SLA escalation children, named `{parent}-SLA`) are still excluded to keep the counter increment monotonic.
+
+## P3.5+.4 — Approval self-approval: SUPER_ADMIN + explicit user grants
+
+**Problem:** `recordDecision()` blocked any ticket creator from approving their own ticket unless `policy.allowSelfApproval` was on, even if:
+- The caller was a SUPER_ADMIN (god-mode role should bypass everything)
+- The caller was explicitly listed in `approverUserIds` — the policy author put them there on purpose
+
+**Fix:** self-approval check now passes if any of:
+1. `allowSelfApproval` is on
+2. caller is SUPER_ADMIN (resolved via `user.role.name`)
+3. caller is in `approverUserIds` directly (explicit per-user grant overrides the role-based block)
+
+Approver eligibility check also gets the SUPER_ADMIN bypass — admins can decide on any policy without being listed.
+
+## P3.5+.5 — Sample data: workflow-bound forms in the seed
+
+**Files:** `backend/prisma/seed.ts` — adds two sample forms (`Submission Confirmation`, `Document Review Checklist`) with section + field definitions, and two `StageFormBinding` rows binding them to the seeded `Document Review v1`'s `Submit` (optional) and `Review` (required, blocks the Approve forward) stages. Upsert-style binding logic un-deletes soft-deleted bindings on re-seed so stale test debris doesn't poison fresh runs.
+
+## P3.5+.6 — Verification (static)
+
+- `npx tsc --noEmit` clean on backend + client across the entire refactor.
+- Migration `20260516120000_add_stage_form_bindings` already applied from the initial Phase 3.5 ship (no new migrations needed in this refactor — schema changes are pure JSON-blob additions).
+- Manually verified via PowerShell probes: ticket raise → Submit transition → Review stage → transition blocked with `formsRequired` → POST submission to workflow-bound endpoint → transition succeeds.
+
+Playwright e2e is pending and will cover the new draft/Publish split, embed-in-JSON round-trip, and the activate flow.
+
+---
+
 # Phase 4 — Backend — Audit + E-Signatures
 
 **Status:** ⏳ Not started
@@ -1507,6 +1585,24 @@ Con: needs explicit API contract freeze at end of each backend phase so frontend
 **Option A — Sequential.** I'll finish backend Phase 2 first (per the open Phase 2 plan), then circle back to frontend Phase 1 + 2 together (since the React Flow builder UI is tightly coupled to the workflow definition API). This avoids API churn during builder development.
 
 If you want **Option B** instead — say so and I'll write a `WORKFLOW_PHASE_1_FRONTEND_PLAN.md` and start work on the builder UI in parallel with backend Phase 2.
+
+---
+
+## Misc — Ticket ID prefix rename (NEX → FQS)
+
+**Date:** 2026-05-21
+**File:** [`backend/src/modules/workflow/engine/orchestrator.ts`](backend/src/modules/workflow/engine/orchestrator.ts)
+
+Ticket IDs are now generated as `{TYPE_PREFIX}-FQS-{seq:003d}` (e.g. `DOC-FQS-001`) instead of `…-NEX-…`. Reflects the ForgeQuantum Solution brand.
+
+### Modified
+- `generateUniqueTicketId` in `orchestrator.ts` — swapped the literal `NEX` for `FQS` in the prefix lookup (`startsWith`) and candidate string. Doc comment updated.
+- Plan docs (`WORKFLOW_MASTER_PLAN.md`, `WORKFLOW_PHASE_2_PLAN.md`) and this changelog updated to match.
+
+### Behaviour notes
+- Existing `…-NEX-…` tickets in the DB are untouched and remain valid (uniqueId is still unique).
+- The sequence lookup matches `{prefix}-FQS-` only, so the per-workflow counter restarts at `001` for the first FQS ticket. It does **not** continue from existing NEX sequence numbers. No migration was run.
+- `QMS-Backend-Build-Guide.pdf` still references the old prefix — PDF not regenerated.
 
 ---
 
