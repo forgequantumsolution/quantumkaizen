@@ -229,10 +229,9 @@ export default function WorkflowBuilderPage() {
   const handlePublish = async () => {
     if (
       !confirm(
-        'Publish will rebuild the stage graph and activate this workflow.\n\n' +
-          'WARNING: any approval policies, SLA policies, and form bindings ' +
-          'currently attached to stages on this workflow will be re-created and ' +
-          'may need to be re-attached. Continue?',
+        'Publish will create a new version of this workflow and activate it.\n\n' +
+          'Existing tickets stay on the previous version they were raised against. ' +
+          'New tickets will use this new version. Continue?',
       )
     ) {
       return;
@@ -243,14 +242,21 @@ export default function WorkflowBuilderPage() {
       edges as WorkflowReactFlowEdge[],
     );
     try {
-      await publish.mutateAsync({
+      const res = await publish.mutateAsync({
         flow_json: payload,
         workflow_settings: { workflowStatus: 'ACTIVE' },
       });
       // Drop the now-stale draft so the next load shows the published graph.
       await deleteDraft.mutateAsync().catch(() => undefined);
       setDraftDiscarded(true);
-      toast.success('Workflow published');
+      // If the save bumped the version, the workflow's id changed — navigate
+      // to the new builder URL so subsequent edits target the latest version.
+      if (res.meta?.versionBumped && res.workflow.id !== id) {
+        toast.success(`Workflow published as new version`);
+        navigate(`/workflows/${res.workflow.id}/builder`, { replace: true });
+      } else {
+        toast.success('Workflow published');
+      }
     } catch (err) {
       if (isWorkflowValidationFailure(err)) {
         setValidationErrors(err.response.data.validation_errors);

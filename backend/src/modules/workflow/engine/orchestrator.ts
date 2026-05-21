@@ -15,6 +15,7 @@ import { emitAuditEvent } from './audit.emitter';
 import * as approvalLayer from './approval.layer';
 import { findUnsatisfiedRequiredForms } from './form.layer';
 import { onTicketHeld, onTicketResumed } from './sla.handler';
+import { resolveLatestVersion } from '../workflow.versioning';
 import type {
   ActorContext,
   PerformActionPayload,
@@ -99,12 +100,18 @@ export const raiseTicket = async (
   actor: ActorContext
 ): Promise<{ ticketId: string; flowId: string; uniqueId: string }> => {
   return prisma.$transaction(async (tx) => {
+    // Resolve the latest version in this workflow's lineage. If the caller
+    // happened to pass an older version's id (e.g. from a stale FE cache),
+    // we silently advance to the head — tickets always start on the most
+    // recent definition.
+    const latestId = await resolveLatestVersion(tx, input.workflowId);
+
     const workflow = await tx.workflow.findUnique({
-      where: { id: input.workflowId },
+      where: { id: latestId },
       select: {
         id: true,
         name: true,
-        version: true, // legacy column; always 1 now that versioning is disabled
+        version: true,
         isDeleted: true,
         workflowStatus: true,
         type: { select: { codePrefix: true } },

@@ -162,8 +162,12 @@ export interface SaveWorkflowBody {
 export interface SaveWorkflowResponse {
   status: true;
   msg: string;
-  workflow: { id: string };
-  meta: { warnings: string[] };
+  // `id` is always the **latest** version's id after a save. If a new version
+  // was created (i.e. the saved workflow already had stages), `previousVersionId`
+  // is the id the caller PUT against — the FE uses this to detect a version bump
+  // and navigate to the new builder URL. `meta.versionBumped` mirrors that.
+  workflow: { id: string; previousVersionId?: string };
+  meta: { warnings: string[]; versionBumped?: boolean };
 }
 
 export interface ValidationFailure {

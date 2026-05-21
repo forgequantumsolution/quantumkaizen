@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound } from '../../lib/httpError';
 import { validateWorkflowStructure } from './workflow.validator';
 import { applyWorkflowSettings, buildWorkflowGraph } from './workflow.builder';
+import { cloneIntoNewVersion } from './workflow.versioning';
 import type {
   CreateWorkflowShellInput,
   ListWorkflowsQuery,
@@ -284,6 +285,10 @@ const toFlowJson = (wf: WorkflowDetail) => {
 export const list = async (query: ListWorkflowsQuery) => {
   const where: Prisma.WorkflowWhereInput = {};
   if (query.includeDeleted !== 'true') where.isDeleted = false;
+  // Versioning: by default we only show the head of each lineage so the list
+  // doesn't grow by N every time someone re-saves. Pass `includeAllVersions`
+  // to see the full history.
+  if (query.includeAllVersions !== 'true') where.isLatestVersion = true;
   if (query.typeId) where.typeId = query.typeId;
   if (query.status) where.workflowStatus = query.status;
   if (query.search) {
@@ -405,44 +410,56 @@ export const save = async (
         select: {
           id: true,
           isDeleted: true,
+          isLatestVersion: true,
           _count: { select: { stages: true } },
         },
       });
       if (!existing) throw NotFound(`Workflow ${id} not found`);
       if (existing.isDeleted) throw BadRequest('Cannot save a deleted workflow');
+      if (!existing.isLatestVersion)
+        throw BadRequest(
+          'Cannot edit an older workflow version. Open the latest version of this workflow.',
+        );
 
-      // Versioning intentionally disabled — every save mutates the same row.
-      // If the workflow already has stages, we wipe them first so the builder
-      // can rebuild against an empty graph.
-      if (existing._count.stages > 0) {
-        await tx.workflowTransition.deleteMany({ where: { workflowId: id } });
-        await tx.workflowStage.deleteMany({ where: { workflowId: id } });
+      // Versioning policy: first save (the workflow is still an empty shell —
+      // no stages yet) updates this row in place. Any subsequent save (the
+      // workflow has stages) creates a new version row and pins the old one
+      // as `isLatestVersion = false`. Live tickets reference the old stages
+      // via FK, so we must NOT delete the old row's stage graph.
+      if (existing._count.stages === 0) {
+        await applyWorkflowSettings(tx, id, body.workflow_settings);
+        const { warnings: graphWarnings } = await buildWorkflowGraph(
+          tx,
+          id,
+          body.flow_json.nodes,
+          body.flow_json.edges,
+        );
+
+        const warnings = [...graphWarnings];
+        if ((body.workflow_roles ?? []).length > 0) {
+          warnings.push('Participant roles deferred to compliance phase');
+        }
+
+        return {
+          status: true,
+          msg: 'Workflow saved',
+          workflow: { id },
+          meta: { warnings, versionBumped: false },
+        };
       }
 
-      await applyWorkflowSettings(tx, id, body.workflow_settings);
-
-      const { warnings: graphWarnings } = await buildWorkflowGraph(
+      const { newWorkflowId, warnings } = await cloneIntoNewVersion(
         tx,
         id,
-        body.flow_json.nodes,
-        body.flow_json.edges
+        body,
+        userId,
       );
-
-      const warnings = [...graphWarnings];
-      if ((body.workflow_roles ?? []).length > 0) {
-        warnings.push('Participant roles deferred to compliance phase');
-      }
-
-      const updated = await tx.workflow.findUnique({
-        where: { id },
-        select: { id: true },
-      });
 
       return {
         status: true,
-        msg: 'Workflow saved',
-        workflow: updated,
-        meta: { warnings },
+        msg: 'Workflow saved as new version',
+        workflow: { id: newWorkflowId, previousVersionId: id },
+        meta: { warnings, versionBumped: true },
       };
     },
     { timeout: 30_000, maxWait: 5_000 }

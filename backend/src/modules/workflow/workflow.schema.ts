@@ -153,6 +153,10 @@ export const ListWorkflowsQuerySchema = z.object({
   typeId: z.string().uuid().optional(),
   status: WorkflowStatusSchema.optional(),
   includeDeleted: z.enum(['true', 'false']).optional().default('false'),
+  // When 'true', the list returns every Workflow row (all versions in every
+  // lineage). Default 'false' filters to `isLatestVersion = true` so each
+  // workflow only appears once.
+  includeAllVersions: z.enum(['true', 'false']).optional().default('false'),
 });
 
 export const IdParamSchema = z.object({ id: z.string().uuid() });

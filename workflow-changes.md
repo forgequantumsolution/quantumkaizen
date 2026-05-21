@@ -1750,6 +1750,83 @@ Trade-off: on a cold first visit there's a sub-second window where the raw UUID 
 
 ---
 
+## P1.10 — Workflow versioning restored (reverses P1.8)
+
+**Date:** 2026-05-22
+**Plan:** none — direct fix for a reported integrity bug.
+
+### Why
+
+P1.8 (2026-05-08) intentionally removed versioning. `save()` was reduced to "delete this workflow's stages + transitions, run `buildWorkflowGraph` over the same row." That worked for greenfield editing but breaks the moment a live ticket FK-references those stage rows: cascade-delete on `WorkflowStage` nukes `_TicketFlowCurrentStages`, `WorkflowStageAction`, `ApprovalPolicy`, `SlaPolicy`, `StageFormBinding`, `TicketStageTracking`, `SlaTimer`, `ChildWorkflowTrigger`, `ParallelBranchTracking`. The ticket ends up with empty `currentStages` and effectively wedges — no action bar, no transition possible, no path back except a manual DB poke.
+
+The schema columns from the original versioning design (`Workflow.version`, `isLatestVersion`, `previousVersionId`, `parentWorkflowId`, `draftOfId`) were kept in P1.8 precisely so this could be reintroduced without a migration. They're now back in use.
+
+### Backend changes
+
+| File | Change |
+|---|---|
+| `backend/src/modules/workflow/workflow.versioning.ts` | **New** (~330 LoC). Exports `cloneIntoNewVersion(tx, oldId, body, userId)` and `resolveLatestVersion(tx, workflowId)`. `cloneIntoNewVersion` creates a new `Workflow` row with `version = old + 1`, `isLatestVersion = true`, `previousVersionId = old.id`, `parentWorkflowId = old.parentWorkflowId ?? old.id`; reruns `buildWorkflowGraph` on the new id; then re-creates `ApprovalPolicy`, `SlaPolicy` + `SlaThreshold` (responsibleRoles/Users + notifyRoles/Users m2m carried over), `StageFormBinding`, and `ChildWorkflowTrigger` on the new stages via `canonicalId` → newStageId mapping. Actions are matched by `(stageCanonicalId, workflowActionId)` because `WorkflowStageAction` has no canonicalId of its own (it's keyed on `@@unique([workflowStageId, workflowActionId])`). Old row is `UPDATE … SET isLatestVersion = false`; its stages/policies are otherwise untouched so live tickets still resolve their FKs. Note in the imports: **must not** import from `workflow.service` — that forms a circular dep that under tsx-watch silently leaves `cloneIntoNewVersion` undefined at runtime (a save that should have version-bumped instead falls back to the previous in-place path). Bit me during implementation; the comment now explicitly flags it. |
+| `backend/src/modules/workflow/workflow.service.ts` | `save()` split into two paths. First save on an empty shell (`_count.stages === 0`) still mutates in place and returns `{ workflow: { id }, meta: { versionBumped: false } }`. Any save after stages exist calls `cloneIntoNewVersion` and returns `{ workflow: { id: newId, previousVersionId: oldId }, meta: { versionBumped: true } }`. Also added: `400 Bad Request` if `existing.isLatestVersion === false` — older versions are immutable. `list()` defaults to filtering `isLatestVersion = true`; opt out with `?includeAllVersions=true`. |
+| `backend/src/modules/workflow/workflow.schema.ts` | Added `includeAllVersions: 'true'|'false'` to `ListWorkflowsQuerySchema`. |
+| `backend/src/modules/workflow/engine/orchestrator.ts` | `raiseTicket` now calls `resolveLatestVersion(tx, input.workflowId)` before reading the workflow, so a ticket raised against a stale id silently routes to the lineage head. `TicketFlow.workflowVersion` is meaningful again (the snapshot of the version the ticket was actually raised against). |
+
+### Frontend changes
+
+| File | Change |
+|---|---|
+| `client/src/lib/api/workflow.ts` | `SaveWorkflowResponse.workflow` now typed `{ id: string; previousVersionId?: string }`; `meta.versionBumped?: boolean`. |
+| `client/src/features/workflows/builder/WorkflowBuilderPage.tsx` | `handlePublish` reads `res.meta.versionBumped` — when `true`, `navigate('/workflows/<newId>/builder', { replace: true })` so the next save targets the new latest version (otherwise the FE would PUT against the now-frozen old id and hit the 400 from above). Publish-confirm wording rewritten: removed the old "WARNING: policies will be re-created" text and replaced with "Existing tickets stay on the previous version they were raised against. New tickets will use this new version." (The first wording was true under P1.8 and misleading now.) |
+
+### Behavioural contract (new)
+
+| Operation | Before | After |
+|---|---|---|
+| `PUT /workflows/:id` on a shell with no stages | In-place rebuild | In-place rebuild (unchanged) |
+| `PUT /workflows/:id` on a workflow with stages | In-place wipe-and-rebuild, same id, breaks live tickets | Creates new `Workflow` row, returns its id; old row pinned `isLatestVersion=false` with stages intact |
+| `PUT /workflows/:id` when the row is `isLatestVersion=false` | (Never happened — versioning was off.) | 400 with `Cannot edit an older workflow version` |
+| `POST /tickets` with a stale workflowId | Engine errored or raised on the wrong (stale) graph | Engine resolves lineage head and raises against latest |
+| `GET /workflows` | Returns everything | Defaults to `isLatestVersion=true`; old versions hidden unless `?includeAllVersions=true` |
+| `GET /workflows/:id` | Returns the row | Unchanged (lets the engine inspect any specific historic version) |
+
+### Tests
+
+| File | Result |
+|---|---|
+| `tests/e2e/workflow-versioning.spec.ts` — **new** API-level spec. Walks shell → first save (in-place, no bump) → raise ticket → second save (bump) → assert old workflow still alive with original stage UUIDs → assert ticket's `currentStages` still references the **old** stage row → assert default list hides the old version → assert raising against the old id auto-routes to the latest. | ✅ 42s |
+| `tests/e2e/stage-form-refresh.spec.ts` — earlier regression test for the form-refresh cache fix | ✅ 42s (still green) |
+| `npx tsc --noEmit` (backend + client) | EXIT=0 |
+
+### P1.10.1 — Same-day follow-up: duplicate-clone bug on re-save
+
+User reported `Unique constraint violation` on `(stageId, formId)` the first time they tried to add a stage to a workflow with form bindings already attached (the `demo` workflow).
+
+**Root cause:** `buildWorkflowGraph` already materialises `StageFormBinding`, `ApprovalPolicy`, and `SlaPolicy` (with thresholds) rows from the embedded `formBindings` / `approvalPolicies` / `sla` blocks the FE serializes into `flow_json` per stage. My initial `cloneIntoNewVersion` was *also* cloning them from the old workflow, so the new workflow ended up with two binding rows pointing at the same `(stageId, formId)` and the @@unique constraint fired inside the transaction.
+
+**Fix:** trimmed `cloneIntoNewVersion` to only clone `ChildWorkflowTrigger` explicitly (the one association the builder doesn't yet re-materialise from `flow_json`). Form bindings, approval policies, and SLA policies/thresholds now flow through `buildWorkflowGraph` alone, the same way they do on a first save. File: [`workflow.versioning.ts`](backend/src/modules/workflow/workflow.versioning.ts) (~330 LoC → ~190 LoC). Added explanatory comments calling this out so the next maintainer doesn't add the redundant clones back.
+
+**New UI-level Playwright spec:** [`tests/e2e/workflow-versioning-ui.spec.ts`](tests/e2e/workflow-versioning-ui.spec.ts) — drives the actual browser builder: opens a pre-existing ticket on v1, opens the builder, renames a stage via the inspector, clicks Publish, accepts the confirm dialog, captures the PUT response (`versionBumped: true`, new `workflow.id`), waits for the URL to swap to `/workflows/<v2>/builder`, reopens the ticket and asserts the old stage name + same `currentStages[0].id` are still there, then raises a fresh ticket against the OLD workflow id and asserts the engine routes it to v2's renamed stage.
+
+**Verification:** new regression spec [`tests/e2e/workflow-versioning-formbindings.spec.ts`](tests/e2e/workflow-versioning-formbindings.spec.ts) — creates a workflow with a form binding on its only stage, saves it (in-place), then re-saves it (version bumps), and asserts:
+- save2 succeeds (no @@unique violation),
+- v2 has exactly one `StageFormBinding` row pointing at the same `formId`.
+
+Re-ran the full set together — all green:
+
+| Spec | Result |
+|---|---|
+| `workflow-versioning.spec.ts` (API) | ✅ 40s |
+| `workflow-versioning-ui.spec.ts` (browser builder → publish → ticket pinning) | ✅ 53s |
+| `workflow-versioning-formbindings.spec.ts` (this bug) | ✅ 22s |
+| `stage-form-refresh.spec.ts` (cache-invalidation regression from earlier) | ✅ 33s |
+
+### Known follow-ups (not addressed this turn)
+
+- The detail page (`WorkflowDetailPage`) doesn't yet show "this version was superseded — view latest" when viewing an `isLatestVersion=false` row; the builder will at least block the save with a 400 if the user lands on a stale URL via bookmark.
+- Per-stage SLA escalation `targetSlaStage` lookup currently re-resolves against the escalation workflow by canonicalId — if the escalation workflow itself has versioned in between, the new threshold's `targetSlaStageId` may be `null`. The original threshold survives on the old version; only the *cloned* one on the new version may lose the target. Worth verifying in a real escalation chain; left as a TODO.
+- Old version cleanup / GC isn't implemented; a workflow that's been heavily edited will accumulate rows. Acceptable for now (typed UUIDs, no perf impact on the hot path), but eventually we'll want a `prune` admin op that drops historic versions with no live tickets pointing at them.
+
+---
+
 ## Convention for future entries
 
 Each new phase section should include:
