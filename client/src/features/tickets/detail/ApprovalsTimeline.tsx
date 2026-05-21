@@ -8,10 +8,12 @@
 import { Check, X, ShieldCheck, Clock, AlertCircle } from 'lucide-react';
 import { Card, Spinner } from '@/components/ui';
 import {
+  useApprovalPoliciesForWorkflow,
   useTicketApprovals,
   type ApprovalInstance,
   type ApprovalInstanceStatus,
 } from '@/lib/api/approval';
+import { useTicket } from '@/lib/api/ticket';
 
 interface Props {
   ticketId: string;
@@ -142,6 +144,9 @@ const InstanceBlock = ({ instance }: { instance: ApprovalInstance }) => {
  */
 export default function ApprovalsTimeline({ ticketId }: Props) {
   const { data, isLoading, error } = useTicketApprovals(ticketId);
+  const { data: ticket } = useTicket(ticketId);
+  const workflowId = ticket?.flows[0]?.workflowId;
+  const { data: policies } = useApprovalPoliciesForWorkflow(workflowId);
 
   if (isLoading)
     return (
@@ -157,14 +162,31 @@ export default function ApprovalsTimeline({ ticketId }: Props) {
     );
 
   const instances = data ?? [];
-  if (instances.length === 0)
+  if (instances.length === 0) {
+    const activePolicyCount = (policies ?? []).filter(
+      (p) => p.isActive && !p.isDeleted,
+    ).length;
     return (
       <Card>
-        <p className="text-xs text-gray-500 text-center py-6">
-          No approvals on this ticket.
-        </p>
+        <div className="text-xs text-gray-500 px-2 py-5 space-y-2 text-center">
+          {activePolicyCount === 0 ? (
+            <>
+              <p className="font-medium text-gray-700">No approvals on this ticket.</p>
+              <p>
+                This workflow has no approval policies configured, so its actions
+                run through directly without an approval gate.
+              </p>
+            </>
+          ) : (
+            <p>
+              No approval decisions yet — approvals will appear here once a gated
+              action is performed.
+            </p>
+          )}
+        </div>
       </Card>
     );
+  }
 
   // Sort newest first by startedAt.
   const sorted = [...instances].sort(

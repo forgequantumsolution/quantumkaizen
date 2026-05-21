@@ -7,6 +7,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useNotificationStore, AppNotification } from '@/stores/notificationStore';
+import { useTicket } from '@/lib/api/ticket';
 import NotificationPanel from '@/components/shared/NotificationPanel';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { cn } from '@/lib/utils';
@@ -89,11 +90,27 @@ export default function Header() {
 
   // Build breadcrumbs
   const segments = location.pathname.split('/').filter(Boolean);
-  const breadcrumbs = segments.map((seg, i) => ({
-    label: breadcrumbMap[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1),
-    path: '/' + segments.slice(0, i + 1).join('/'),
-    isLast: i === segments.length - 1,
-  }));
+
+  // When the route is /tickets/<id>(/…), resolve the ticket so we can show its
+  // human ID (e.g. "DOC-FQS-001") instead of the raw UUID in the breadcrumb.
+  // useTicket gates itself on a truthy id, so passing undefined on other routes
+  // is a no-op.
+  const ticketIdSegment =
+    segments[0] === 'tickets' && segments[1] ? segments[1] : undefined;
+  const { data: ticket } = useTicket(ticketIdSegment);
+
+  const breadcrumbs = segments.map((seg, i) => {
+    const isTicketIdSegment =
+      i === 1 && segments[0] === 'tickets' && ticketIdSegment === seg;
+    const label = isTicketIdSegment
+      ? ticket?.uniqueId ?? seg
+      : breadcrumbMap[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1);
+    return {
+      label,
+      path: '/' + segments.slice(0, i + 1).join('/'),
+      isLast: i === segments.length - 1,
+    };
+  });
 
   const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'QK';
   const roleLabel = ROLE_LABELS[user?.role ?? ''] ?? user?.role?.replace(/_/g, ' ') ?? '';

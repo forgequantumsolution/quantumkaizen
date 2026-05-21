@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Send, Save, AlertCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { App } from 'antd';
 import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -32,12 +33,17 @@ export default function FormFillPage() {
   }, [params]);
 
   const nav = useNavigate();
+  const { modal } = App.useApp();
   const { data: detail, isLoading } = useFormDetail(id);
   const submitMutation = useSubmitForm();
   const workflowSubmit = useCreateWorkflowSubmission(
     workflowCtx?.ticketId ?? '',
     id ?? '',
   );
+  const [pendingStatus, setPendingStatus] = useState<
+    'IN_PROGRESS' | 'SUBMITTED' | null
+  >(null);
+  const isBusy = pendingStatus !== null;
 
   const sections = useMemo<FormSectionDef[]>(
     () => (detail?.draft_data as { sections?: FormSectionDef[] })?.sections ?? [],
@@ -69,30 +75,9 @@ export default function FormFillPage() {
     });
   };
 
-  const handleSubmit = async (status: 'IN_PROGRESS' | 'SUBMITTED') => {
+  const runSubmit = async (status: 'IN_PROGRESS' | 'SUBMITTED') => {
     if (!id) return;
-
-    if (status === 'SUBMITTED') {
-      const next: Errors = {};
-      for (const sec of sections) {
-        if (!evaluateVisibility(sec.dependency, lookup)) continue;
-        for (const f of sec.fields) {
-          if (!evaluateVisibility(f.dependency, lookup)) continue;
-          const err = validateField(f, lookup(sec.section_name, f.name));
-          if (err) {
-            next[sec.section_name] = { ...(next[sec.section_name] ?? {}), [f.name]: err };
-          }
-        }
-      }
-      if (Object.keys(next).length) {
-        setErrors(next);
-        const total = Object.values(next).reduce((n, s) => n + Object.keys(s).length, 0);
-        toast.error(`${total} field${total === 1 ? '' : 's'} need attention`);
-        return;
-      }
-      setErrors({});
-    }
-
+    setPendingStatus(status);
     try {
       if (workflowCtx) {
         await workflowSubmit.mutateAsync({
@@ -108,12 +93,51 @@ export default function FormFillPage() {
         nav(workflowCtx ? `/tickets/${workflowCtx.ticketId}` : '/forms');
       }
     } catch (e) {
-      const msg = (e as { response?: { data?: { error?: { message?: string }; message?: string } } })
-        .response?.data?.error?.message
-        ?? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-        ?? (e as Error).message;
+      const msg =
+        (e as { response?: { data?: { error?: { message?: string }; message?: string } } })
+          .response?.data?.error?.message ??
+        (e as { response?: { data?: { message?: string } } }).response?.data?.message ??
+        (e as Error).message;
       toast.error(msg);
+    } finally {
+      setPendingStatus(null);
     }
+  };
+
+  const handleSaveDraft = () => runSubmit('IN_PROGRESS');
+
+  const handleSubmitClick = () => {
+    if (!id) return;
+    // Validate visible fields before showing the confirmation modal — no point
+    // confirming a submission that the server would reject.
+    const next: Errors = {};
+    for (const sec of sections) {
+      if (!evaluateVisibility(sec.dependency, lookup)) continue;
+      for (const f of sec.fields) {
+        if (!evaluateVisibility(f.dependency, lookup)) continue;
+        const err = validateField(f, lookup(sec.section_name, f.name));
+        if (err) {
+          next[sec.section_name] = { ...(next[sec.section_name] ?? {}), [f.name]: err };
+        }
+      }
+    }
+    if (Object.keys(next).length) {
+      setErrors(next);
+      const total = Object.values(next).reduce((n, s) => n + Object.keys(s).length, 0);
+      toast.error(`${total} field${total === 1 ? '' : 's'} need attention`);
+      return;
+    }
+    setErrors({});
+
+    modal.confirm({
+      title: 'Submit form',
+      content:
+        'Are you sure you want to submit this form? Once submitted you will not be able to edit your responses.',
+      okText: 'Submit',
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: () => runSubmit('SUBMITTED'),
+    });
   };
 
   if (isLoading) return <div className="flex justify-center py-16"><Spinner /></div>;
@@ -137,14 +161,16 @@ export default function FormFillPage() {
           <div className="flex gap-2">
             <Button
               variant="secondary"
-              onClick={() => handleSubmit('IN_PROGRESS')}
-              disabled={submitMutation.isPending}
+              onClick={handleSaveDraft}
+              isLoading={pendingStatus === 'IN_PROGRESS'}
+              disabled={isBusy}
             >
               <Save className="h-4 w-4" /> Save progress
             </Button>
             <Button
-              onClick={() => handleSubmit('SUBMITTED')}
-              disabled={submitMutation.isPending}
+              onClick={handleSubmitClick}
+              isLoading={pendingStatus === 'SUBMITTED'}
+              disabled={isBusy}
             >
               <Send className="h-4 w-4" /> Submit
             </Button>

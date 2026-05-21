@@ -1606,6 +1606,150 @@ Ticket IDs are now generated as `{TYPE_PREFIX}-FQS-{seq:003d}` (e.g. `DOC-FQS-00
 
 ---
 
+## Misc — Ticket UX pass (delete + table + stage-form refresh bug)
+
+**Date:** 2026-05-21
+
+Five small, related changes to the ticket UI plus one regression test.
+
+### 1. Bug fix — next stage's form didn't appear without page refresh after a transition
+
+**File:** [`client/src/lib/api/ticket.ts`](client/src/lib/api/ticket.ts)
+
+`useTransition.onSuccess` was invalidating `ticket.detail`, `allowed-actions`, `track`, `timeline`, the `tickets.all` list, plus the Phase-3 `approval` and `sla` keys — but **not** `stageFormKeys.ticket(id)`. So after a transition the `RequiredFormsCard` (driven by `useTicketStageForms`) kept serving the previous stage's bindings from cache until a manual reload.
+
+- Added `import { stageFormKeys } from './stageForm';`
+- Added `qc.invalidateQueries({ queryKey: stageFormKeys.ticket(id) });` to `useTransition.onSuccess`
+- Hold/resume are untouched — they don't change `currentStages`, so the cached binding list is still valid.
+
+### 2. Delete-ticket UX (no soft-delete wording, centered antd modal)
+
+**Files:** [`client/src/features/tickets/TicketDetailPage.tsx`](client/src/features/tickets/TicketDetailPage.tsx), [`client/src/features/tickets/TicketsPage.tsx`](client/src/features/tickets/TicketsPage.tsx)
+
+`useDeleteTicket()` already existed; only the UI was missing. Added gated by the existing `ticket.delete` permission:
+
+- **Detail page** — red `<Trash2>` ghost button in the header next to "View stages". On success, `navigate('/tickets')`.
+- **List page** — a delete column in the table (see #3 below) with the same trash button. `e.stopPropagation()` so the row-click navigation doesn't fire.
+- Both call `App.useApp().modal.confirm({ title: 'Delete ticket', content: 'Are you sure you want to delete <uniqueId>?', okText: 'Delete', okButtonProps: { danger: true }, centered: true })`. Replaced the earlier `window.confirm(...)` alert; dropped the "soft-delete" wording per request.
+
+### 3. Tickets list switched to antd `<Table>`
+
+**File:** [`client/src/features/tickets/TicketsPage.tsx`](client/src/features/tickets/TicketsPage.tsx)
+
+The grid-of-cards + alternate list-view + grid/list toggle was replaced with a single antd `Table`.
+
+- Removed: `viewMode` state, `VIEW_STORAGE_KEY` localStorage entry, the grid/list segmented toggle, the inline `TicketListView`, and the `TicketCard` import.
+- Added: `buildColumns({ canDelete, onDelete })` returning `ColumnsType<TicketSummary>` — columns are **ID** (mono chip), **Title**, **Workflow · Stage** (with `Network` icon), **Priority**, **Status** (via existing `TicketStatusBadge`), **Updated**, and a conditional **delete** column.
+- Row click via `onRow(t)` → `navigate('/tickets/' + t.id)`; cursor styled `pointer`.
+- KPI strip, filter bar (search, status tabs, mine/all toggle, priority, workflow), "Load 50 more" pagination, and the `RaiseTicketDrawer` are all unchanged.
+- Removed unused icon imports (`LayoutGrid`, `Rows3`, `ChevronRight`, `Clock`).
+
+### 4. Deleted unused `TicketCard.tsx`
+
+**File removed:** `client/src/features/tickets/shared/TicketCard.tsx`
+
+After #3 nothing else imports it — verified via grep. Deleted rather than leaving a dead file behind. `npx tsc --noEmit` still clean.
+
+### 5. Playwright regression test
+
+**File:** [`tests/e2e/stage-form-refresh.spec.ts`](tests/e2e/stage-form-refresh.spec.ts)
+
+Guards the #1 fix end-to-end:
+
+1. Logs in via API, raises a fresh ticket on the existing "demo" workflow (`5c7eb9e7-…`) which has two stages each with a form binding (`CAPA Closure` → `CAPA Assessment`).
+2. Submits stage 1's required form via `POST /tickets/:id/forms/:formId/submissions` so the FORWARD action isn't gated.
+3. Drives the UI: opens the ticket detail page, clicks `Approve / Forward`, waits for the modal body (`Behavior: FORWARD`) to appear, clicks `Confirm`, and `page.waitForResponse('/transition' POST)` to gate on the actual mutation.
+4. Without reloading, asserts:
+   - `CAPA Assessment` (stage 2's form) is visible.
+   - The "Forms for this stage" card contains `CAPA Assessment`.
+   - At least one `GET /tickets/:id/stage-forms` request fired during the transition window (the invalidation refetch — direct evidence the cache fix is live).
+
+Race-condition note inlined in the test: clicking `Confirm` before the modal mounts hits a background button and silently no-ops, which masked the bug as "fix doesn't work" during initial investigation. The explicit `waitFor('Behavior: FORWARD')` is what made the test reliable.
+
+Run: `npx playwright test tests/e2e/stage-form-refresh.spec.ts` — passes in ~32s against Neon `us-east-1`.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | EXIT=0 |
+| `tests/e2e/stage-form-refresh.spec.ts` | ✅ 1 passed (33s) |
+| Manual: delete-ticket modal renders centered, "Are you sure you want to delete DOC-FQS-…?" wording, no mention of soft-delete | Pending user confirm |
+| Manual: tickets table — row click navigates, delete trash button stops propagation, filter bar still filters | Pending user confirm |
+
+---
+
+## Misc — Form submit UX + Approvals empty-state clarification
+
+**Date:** 2026-05-21
+
+Two unrelated UX tweaks on the ticket-detail flow.
+
+### 1. Form fill — confirmation modal + button loading state
+
+**File:** [`client/src/features/forms/FormFillPage.tsx`](client/src/features/forms/FormFillPage.tsx)
+
+The workflow-bound form submission (`useCreateWorkflowSubmission`) was perceived as unresponsive: the request can take several seconds on Neon, but the page had no in-flight indicator and the `disabled={submitMutation.isPending}` guard only watched the standalone-fill mutation — the workflow-bound mutation's `isPending` was never read, so the button stayed enabled with no spinner during the slow round-trip.
+
+Changes:
+
+- Added `App.useApp().modal` and a centered `modal.confirm({ title: 'Submit form', content: 'Are you sure you want to submit this form? Once submitted you will not be able to edit your responses.', okText: 'Submit', cancelText: 'Cancel', centered: true })` ahead of the SUBMITTED mutation. Save-progress is unchanged (still a direct one-click).
+- Refactored the submit path into `runSubmit(status)` (the network call) + `handleSubmitClick` (validate + open modal) + `handleSaveDraft` (call runSubmit directly).
+- New local state `pendingStatus: 'IN_PROGRESS' | 'SUBMITTED' | null`, set at the start of `runSubmit` and cleared in `finally`. Drives both `disabled={isBusy}` on both buttons and per-button `isLoading={pendingStatus === '…'}` so the right button shows its spinner.
+- Because `onOk: () => runSubmit('SUBMITTED')` returns the promise, antd also keeps the modal's OK button in its own loading state until the mutation settles — two visual cues during the slow POST.
+
+Net effect: clicking Submit pops a confirmation, OK shows loading until the server replies, and the underlying Submit button also spins until navigation to the ticket detail kicks in. The previous silent-button-while-network-in-flight gap is gone.
+
+### 2. Approvals tab — informative empty state
+
+**File:** [`client/src/features/tickets/detail/ApprovalsTimeline.tsx`](client/src/features/tickets/detail/ApprovalsTimeline.tsx)
+
+Reported confusion: the *Approvals* tab said "No approvals on this ticket." while the *Timeline* tab showed entries like "Exited New Stage via Approve / Forward", which read as approvals. Backend verification (`GET /tickets/.../approvals` and `GET /workflows/demo/approval-policies?includeInactive=true&includeDeleted=true` both `[]`) confirmed there genuinely were no `ApprovalInstance` rows — the `demo` workflow has zero `ApprovalPolicy` rows, so the engine's approval-intercept never fires. The "Approve / Forward" text in the Timeline is the seeded `WorkflowStageStatus.name` for FORWARD-behavior actions, an unrelated name collision with the approval concept.
+
+Changes:
+
+- Pulled in `useTicket(ticketId)` to derive `workflow.id`, then `useApprovalPoliciesForWorkflow(workflowId)` so the empty state can distinguish two cases.
+- When `activePolicyCount === 0` (no `isActive && !isDeleted` policies exist): "No approvals on this ticket. This workflow has no approval policies configured, so its actions run through directly without an approval gate."
+- When policies exist but no instances yet: "No approval decisions yet — approvals will appear here once a gated action is performed."
+
+Initial draft also included a third paragraph explaining the "Approve / Forward" naming collision — trimmed back on user feedback to keep the empty state short.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | EXIT=0 |
+| Backend probe — DOC-FQS-001 timeline shows 4 stage events via "Approve / Forward"; approvals API returns `[]`; demo workflow has 0 policies (all flags) | ✅ confirms the empty state is correct, not a wiring bug |
+| Manual — form Submit click triggers centered antd modal, OK shows loading until server reply, page Submit button shows spinner until navigation | Pending user confirm |
+| Manual — Approvals tab on a `demo`-workflow ticket now shows the "no policies configured" copy | Pending user confirm |
+
+---
+
+## Misc — Ticket breadcrumb shows uniqueId instead of UUID
+
+**Date:** 2026-05-21
+**File:** [`client/src/components/layout/Header.tsx`](client/src/components/layout/Header.tsx)
+
+Breadcrumb on `/tickets/<uuid>` was reading "Tickets ▸ 42595562-a603-4973-9586-010c373b07e7" because the segment-to-label map had no entry for the UUID and fell back to the raw string with a capitalised first letter.
+
+Changes:
+
+- Imported `useTicket` from `@/lib/api/ticket`.
+- Detect the ticket-route shape: when `segments[0] === 'tickets'` and `segments[1]` exists, treat `segments[1]` as a candidate ticket id and pass it to `useTicket`. The hook gates itself on a truthy id, so it's a no-op on every other route.
+- When building the breadcrumb labels, replace the matched UUID segment with `ticket.uniqueId` (e.g. `DOC-FQS-001`) when the query has resolved; fall back to the raw segment while loading.
+- Shares the same `ticketKeys.detail(id)` queryKey as `TicketDetailPage`, so TanStack dedupes — no extra network request.
+
+Trade-off: on a cold first visit there's a sub-second window where the raw UUID is shown before the ticket query resolves; on revisits the cache is already populated and the swap is instant. Accepted over blocking the breadcrumb render.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | EXIT=0 |
+| Manual — `/tickets/<uuid>` shows "Tickets ▸ DOC-FQS-…"; other routes unaffected | Pending user confirm |
+
+---
+
 ## Convention for future entries
 
 Each new phase section should include:
