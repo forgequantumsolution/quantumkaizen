@@ -44,3 +44,15 @@ export const createActionCriteria = async (req: Request, res: Response) => {
 export const listPriorities = async (_req: Request, res: Response) => {
   res.json(await service.listPriorities());
 };
+
+// Severity
+export const listSeverities = async (req: Request, res: Response) => {
+  res.json(await service.listSeverities(search(req)));
+};
+export const createSeverity = async (req: Request, res: Response) => {
+  res.status(201).json(await service.createSeverity(req.body));
+};
+export const deleteSeverity = async (req: Request, res: Response) => {
+  await service.deleteSeverity(req.params.id as string);
+  res.status(204).send();
+};

@@ -104,11 +104,17 @@ export default function TicketFlowCanvas({
   }
 
   if (error || !data || flowJson.nodes.length === 0) {
+    const reason = error
+      ? "Couldn't load this workflow."
+      : !data
+        ? 'Workflow not found.'
+        : 'This workflow has no stages published yet — open the builder to design and save its graph.';
     return (
       <Card noPadding style={{ height }} className="overflow-hidden">
-        <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2">
-          <WorkflowIcon size={22} />
-          <span className="text-xs">No workflow graph available.</span>
+        <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-2 px-6 text-center">
+          <WorkflowIcon size={28} className="text-gray-300" />
+          <span className="text-sm font-medium text-gray-700">No workflow graph</span>
+          <span className="text-xs text-gray-500 max-w-xs">{reason}</span>
         </div>
       </Card>
     );

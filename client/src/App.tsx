@@ -12,6 +12,8 @@ import BusinessCalendarsPage from '@/features/admin/business-calendars/BusinessC
 // Tickets
 import TicketsPage from '@/features/tickets/TicketsPage';
 import TicketDetailPage from '@/features/tickets/TicketDetailPage';
+// Modules (dynamic, per workflow type)
+import ModulePage from '@/features/modules/ModulePage';
 // Dynamic Forms
 import FormListPage from '@/features/forms/FormListPage';
 import FormCreatePage from '@/features/forms/FormCreatePage';
@@ -43,6 +45,7 @@ export default function App() {
           <Route path="/admin/business-calendars" element={<BusinessCalendarsPage />} />
           <Route path="/tickets" element={<TicketsPage />} />
           <Route path="/tickets/:id" element={<TicketDetailPage />} />
+          <Route path="/modules/:typeId" element={<ModulePage />} />
 
           {/* Dynamic Forms */}
           <Route path="/forms" element={<FormListPage />} />

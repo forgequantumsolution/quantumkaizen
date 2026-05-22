@@ -13,7 +13,7 @@ import ReactFlow, {
 import 'reactflow/dist/style.css';
 import { Card, Button, Spinner, EmptyState } from '@/components/ui';
 import PageHeader from '@/components/layout/PageHeader';
-import { formatDate } from '@/lib/utils';
+import { formatDate, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import {
   useSetWorkflowStatus,
@@ -64,7 +64,7 @@ export default function WorkflowDetailPage() {
 
   const handleDelete = async () => {
     if (!data) return;
-    if (!confirm(`Delete "${data.workflow.name}"? This is a soft-delete.`)) return;
+    if (!confirm(`Delete "${displayWorkflowName(data.workflow)}"? This is a soft-delete.`)) return;
     try {
       await softDelete.mutateAsync(data.workflow.id);
       toast.success('Workflow deleted');
@@ -132,7 +132,7 @@ export default function WorkflowDetailPage() {
       </Button>
 
       <PageHeader
-        title={wf.name}
+        title={displayWorkflowName(wf)}
         description={
           <span className="flex items-center gap-2 mt-0.5">
             <WorkflowStatusBadge status={wf.workflowStatus} />

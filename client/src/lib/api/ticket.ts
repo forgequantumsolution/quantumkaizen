@@ -29,10 +29,14 @@ export interface TicketSummary {
   title: string;
   isOnHold: boolean;
   isDeleted: boolean;
+  dueDate: string | null;
+  classification: TicketClassification | null;
   createdAt: string;
   updatedAt: string;
   priority: NamedRef | null;
+  severity: SeverityRef | null;
   department: { id: string; name: string; code: string } | null;
+  site: { id: string; name: string; code: string } | null;
   createdBy: UserRef | null;
   flows: TicketFlowSummary[];
 }
@@ -44,7 +48,6 @@ export interface TicketDetail extends TicketSummary {
   holdReason: string | null;
   heldAt: string | null;
   heldBy: { id: string; name: string } | null;
-  site: { id: string; name: string; code: string } | null;
   parentTicket: { id: string; uniqueId: string; title: string } | null;
   parentTicketStage: { id: string; name: string; canonicalId: string } | null;
   flows: (TicketFlowSummary & {
@@ -71,6 +74,22 @@ export interface StageActionsView {
   actions: AllowedAction[];
 }
 
+export type TicketClassification =
+  | 'PRODUCT'
+  | 'PROCESS'
+  | 'SYSTEM'
+  | 'EQUIPMENT'
+  | 'DOCUMENTATION'
+  | 'TRAINING'
+  | 'OTHER';
+
+export interface SeverityRef {
+  id: string;
+  name: string;
+  level: number;
+  color: string | null;
+}
+
 export interface RaiseTicketInput {
   workflowId: string;
   title: string;
@@ -79,6 +98,9 @@ export interface RaiseTicketInput {
   priorityId?: string | null;
   departmentId?: string | null;
   siteId?: string | null;
+  severityId?: string | null;
+  dueDate?: string | null;
+  classification?: TicketClassification | null;
 }
 
 export interface UpdateTicketInput {
@@ -88,6 +110,9 @@ export interface UpdateTicketInput {
   priorityId?: string | null;
   departmentId?: string | null;
   siteId?: string | null;
+  severityId?: string | null;
+  dueDate?: string | null;
+  classification?: TicketClassification | null;
 }
 
 export interface TransitionInput {
@@ -112,6 +137,7 @@ export interface ListTicketsQuery {
   pageSize?: number;
   search?: string;
   workflowId?: string;
+  workflowTypeId?: string;
   status?: 'open' | 'completed' | 'all';
   mine?: 'true' | 'false';
   includeDeleted?: 'true' | 'false';

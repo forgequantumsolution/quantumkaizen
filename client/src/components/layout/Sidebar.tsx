@@ -1,38 +1,71 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Settings, ChevronLeft,
-  ChevronRight, ClipboardList, Clock,
-  Network, ChevronDown,
+  ChevronRight, Clock, ChevronDown,
   Palette, Ticket,
+  AlertTriangle, FileWarning, ShieldAlert, Wrench,
+  GitBranch, Layers, FileText, Beaker, BookOpen,
+  Database, ClipboardList,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
 import { useRecentItemsStore } from '@/stores/recentItemsStore';
 import { useAuthStore } from '@/stores/authStore';
-import { useState } from 'react';
+import { useWorkflowTypes } from '@/lib/api/workflowLookups';
+import { useMemo, useState } from 'react';
 
-interface NavItem    { label: string; path: string; icon: React.ElementType }
+interface NavItem {
+  label: string;
+  /** Leaf items must have a path; parents-with-children can omit it. */
+  path?: string;
+  icon: React.ElementType;
+  children?: NavItem[];
+}
 interface NavSection { title: string; items: NavItem[]; collapsible?: boolean }
 
-const navigation: NavSection[] = [
-  {
-    title: 'Overview',
-    items: [
-      { label: 'Dashboard',  path: '/dashboard',  icon: LayoutDashboard },
-      { label: 'Workflows',  path: '/workflows',  icon: Network },
-      { label: 'Forms',      path: '/forms',      icon: ClipboardList },
-      { label: 'Tickets',    path: '/tickets',    icon: Ticket },
-    ],
-  },
-  {
-    title: 'System',
-    items: [
-      { label: 'Appearance', path: '/appearance', icon: Palette },
-      { label: 'Workflow Lookups', path: '/admin/workflow-lookups', icon: Settings },
-      { label: 'Settings',   path: '/settings',   icon: Settings },
-    ],
-  },
-];
+// Best-effort mapping from a workflow type's stored iconName (e.g. "file-text")
+// or its name (e.g. "CAPA") to a lucide icon. Anything unknown gets a sensible
+// fallback so the sidebar still renders cleanly.
+const ICON_BY_KEY: Record<string, React.ElementType> = {
+  // by iconName (lowercase, with dashes/underscores normalised)
+  alerttriangle: AlertTriangle,
+  filewarning: FileWarning,
+  shieldalert: ShieldAlert,
+  wrench: Wrench,
+  gitbranch: GitBranch,
+  layers: Layers,
+  filetext: FileText,
+  beaker: Beaker,
+  bookopen: BookOpen,
+  // by canonical name
+  capa: Wrench,
+  deviation: FileWarning,
+  change: GitBranch,
+  changecontrol: GitBranch,
+  risk: ShieldAlert,
+  audit: BookOpen,
+  document: FileText,
+};
+
+const normaliseKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const findFirstLeaf = (item: NavItem): NavItem | null => {
+  if (!item.children?.length) return item.path ? item : null;
+  for (const child of item.children) {
+    const leaf = findFirstLeaf(child);
+    if (leaf) return leaf;
+  }
+  return null;
+};
+
+const pickIcon = (name: string, iconName: string | null | undefined): React.ElementType => {
+  if (iconName) {
+    const k = normaliseKey(iconName);
+    if (ICON_BY_KEY[k]) return ICON_BY_KEY[k];
+  }
+  const k = normaliseKey(name);
+  return ICON_BY_KEY[k] ?? Layers;
+};
 
 // Design tokens — pulled from CSS custom properties (set by AppearanceProvider)
 // so the sidebar tracks the user's color preset. Section/inactive/hover stay
@@ -52,12 +85,228 @@ export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const recentItems = useRecentItemsStore();
   const user        = useAuthStore(s => s.user);
+  const { data: workflowTypes } = useWorkflowTypes();
+
+  const navigation = useMemo<NavSection[]>(() => {
+    const moduleItems: NavItem[] = (workflowTypes ?? [])
+      .filter((t) => !t.isDeleted)
+      .map((t) => ({
+        label: t.name,
+        path: `/modules/${t.id}`,
+        icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
+      }));
+
+    const sections: NavSection[] = [
+      {
+        title: 'Overview',
+        items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
+      },
+    ];
+
+    if (moduleItems.length > 0) {
+      sections.push({ title: 'Modules', items: moduleItems, collapsible: true });
+    }
+
+    sections.push({
+      title: 'Workspace',
+      items: [{ label: 'Tickets', path: '/tickets', icon: Ticket }],
+    });
+
+    sections.push({
+      title: '',
+      items: [
+        {
+          label: 'Configuration',
+          icon: Settings,
+          children: [
+            { label: 'Workflows',   path: '/settings?section=workflows', icon: GitBranch },
+            { label: 'Forms',       path: '/settings?section=forms',     icon: ClipboardList },
+            { label: 'Master Data', path: '/settings',                  icon: Database },
+            { label: 'Appearance',  path: '/appearance',                 icon: Palette },
+          ],
+        },
+      ],
+    });
+
+    return sections;
+  }, [workflowTypes]);
 
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({});
   const toggleSection = (title: string) =>
     setSectionsCollapsed(prev => ({ ...prev, [title]: !prev[title] }));
 
+  // Per-item expand state, keyed by label since parents may have no path.
+  // Configuration + Master Data default to expanded so users see the children
+  // immediately on /settings.
+  const [itemsExpanded, setItemsExpanded] = useState<Record<string, boolean>>({
+    Configuration: true,
+    'Master Data': true,
+  });
+  const toggleItem = (label: string) =>
+    setItemsExpanded(prev => ({ ...prev, [label]: !prev[label] }));
+
+  // Match by pathname AND query string so /settings?tab=users highlights the
+  // right child instead of every Configuration child at once.
+  const currentUrl = location.pathname + location.search;
+  const isItemActive = (item: NavItem): boolean => {
+    if (item.path) {
+      if (item.path === currentUrl) return true;
+      // Loose match for items without query params (e.g. /workflows/123).
+      if (
+        !item.path.includes('?') &&
+        item.path !== '/dashboard' &&
+        location.pathname.startsWith(item.path)
+      ) {
+        return true;
+      }
+    }
+    return !!item.children?.some(isItemActive);
+  };
+
   const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'QK';
+
+  // ─── Recursive item renderer (handles leaf links + expandable parents) ───
+  const renderNavItem = (item: NavItem, depth: number): React.ReactNode => {
+    const Icon = item.icon;
+    const isActive = isItemActive(item);
+    const hasChildren = !!item.children?.length;
+    const expanded = itemsExpanded[item.label] ?? false;
+    const indent = depth === 0 ? 0 : depth * 12;
+
+    // Parent with children → button that toggles expansion (collapsed sidebar
+    // still falls back to a leaf-style hover-only display for the top level).
+    if (hasChildren) {
+      // When the whole sidebar is collapsed, hide the nested tree entirely —
+      // there's no room for children. The first leaf descendant is used as the
+      // navigation target for the icon tile.
+      if (sidebarCollapsed && depth === 0) {
+        const firstLeaf = findFirstLeaf(item);
+        return (
+          <button
+            key={item.label}
+            title={item.label}
+            onClick={() => firstLeaf?.path && navigate(firstLeaf.path)}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: '36px', height: '36px', marginLeft: 'auto', marginRight: 'auto',
+              borderRadius: '6px',
+              backgroundColor: isActive ? ACTIVE_BG : 'transparent',
+              color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
+              border: 'none', cursor: 'pointer',
+              transition: 'background-color 100ms, color 100ms',
+            }}
+          >
+            <Icon size={17} strokeWidth={isActive ? 2 : 1.5}
+              style={{ color: isActive ? ACCENT : 'inherit' }} />
+          </button>
+        );
+      }
+
+      return (
+        <div key={item.label}>
+          <button
+            type="button"
+            onClick={() => toggleItem(item.label)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '9px 12px 9px 10px',
+              paddingLeft: `${10 + indent}px`,
+              width: '100%',
+              borderRadius: '6px',
+              borderLeft: isActive ? '3px solid ' + ACCENT : '3px solid transparent',
+              backgroundColor: isActive ? ACTIVE_BG : 'transparent',
+              color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
+              border: 'none', cursor: 'pointer', textAlign: 'left',
+              transition: 'background-color 100ms, color 100ms',
+            }}
+            onMouseEnter={e => {
+              if (!isActive) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG;
+                (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR;
+              }
+            }}
+            onMouseLeave={e => {
+              if (!isActive) {
+                (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR;
+              }
+            }}
+          >
+            <Icon size={depth === 0 ? 17 : 15} strokeWidth={isActive ? 2 : 1.5}
+              style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
+            <span style={{
+              flex: 1, fontSize: depth === 0 ? '15px' : '13px',
+              fontWeight: isActive ? 500 : 400, lineHeight: 1.15, whiteSpace: 'nowrap',
+            }}>{item.label}</span>
+            <ChevronDown
+              size={13}
+              style={{
+                color: SECTION_CLR, flexShrink: 0,
+                transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+                transition: 'transform 150ms',
+              }}
+            />
+          </button>
+          {expanded && (
+            <div className="mt-0.5 space-y-px">
+              {item.children!.map(child => renderNavItem(child, depth + 1))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Leaf item → NavLink
+    if (!item.path) return null;
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        title={sidebarCollapsed ? item.label : undefined}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: sidebarCollapsed ? 0 : '10px',
+          padding: sidebarCollapsed ? 0 : '9px 12px 9px 10px',
+          paddingLeft: sidebarCollapsed ? 0 : `${10 + indent}px`,
+          width: sidebarCollapsed ? '36px' : '100%',
+          height: sidebarCollapsed ? '36px' : undefined,
+          justifyContent: sidebarCollapsed ? 'center' : undefined,
+          marginLeft: sidebarCollapsed ? 'auto' : undefined,
+          marginRight: sidebarCollapsed ? 'auto' : undefined,
+          borderRadius: '6px',
+          borderLeft: !sidebarCollapsed
+            ? isActive ? '3px solid ' + ACCENT : '3px solid transparent'
+            : undefined,
+          backgroundColor: isActive ? ACTIVE_BG : 'transparent',
+          color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
+          textDecoration: 'none',
+          transition: 'background-color 100ms, color 100ms',
+        }}
+        onMouseEnter={e => {
+          if (!isActive) {
+            (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG;
+            (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR;
+          }
+        }}
+        onMouseLeave={e => {
+          if (!isActive) {
+            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+            (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR;
+          }
+        }}
+      >
+        <Icon size={depth === 0 ? 17 : 15} strokeWidth={isActive ? 2 : 1.5}
+          style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
+        {!sidebarCollapsed && (
+          <span style={{
+            fontSize: depth === 0 ? '15px' : '13px',
+            fontWeight: isActive ? 500 : 400, lineHeight: 1.15, whiteSpace: 'nowrap',
+          }}>{item.label}</span>
+        )}
+      </NavLink>
+    );
+  };
 
   return (
     <aside
@@ -90,14 +339,12 @@ export default function Sidebar() {
       <nav className="flex-1 overflow-y-auto py-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
         {navigation.map(section => {
           const isCollapsed = !!(section.collapsible && sectionsCollapsed[section.title]);
-          const hasActive   = section.items.some(i =>
-            location.pathname === i.path ||
-            (i.path !== '/dashboard' && location.pathname.startsWith(i.path))
-          );
+          const hasActive   = section.items.some(isItemActive);
 
+          const hasHeader = !!section.title;
           return (
-            <div key={section.title} className="mb-1">
-              {!sidebarCollapsed && (
+            <div key={section.title || `untitled-${navigation.indexOf(section)}`} className="mb-1">
+              {!sidebarCollapsed && hasHeader && (
                 <button
                   onClick={() => section.collapsible && toggleSection(section.title)}
                   className={cn('w-full flex items-center justify-between px-4 py-1 mb-0.5 rounded', section.collapsible && 'cursor-pointer')}
@@ -120,57 +367,7 @@ export default function Sidebar() {
 
               {!isCollapsed && (
                 <div className={cn('space-y-px', sidebarCollapsed ? 'px-1.5' : 'px-2')}>
-                  {section.items.map(item => {
-                    const isActive =
-                      location.pathname === item.path ||
-                      (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
-                    const Icon = item.icon;
-
-                    return (
-                      <NavLink
-                        key={item.path}
-                        to={item.path}
-                        title={sidebarCollapsed ? item.label : undefined}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: sidebarCollapsed ? 0 : '10px',
-                          padding: sidebarCollapsed ? 0 : '9px 12px 9px 10px',
-                          width: sidebarCollapsed ? '36px' : '100%',
-                          height: sidebarCollapsed ? '36px' : undefined,
-                          justifyContent: sidebarCollapsed ? 'center' : undefined,
-                          marginLeft: sidebarCollapsed ? 'auto' : undefined,
-                          marginRight: sidebarCollapsed ? 'auto' : undefined,
-                          borderRadius: '6px',
-                          borderLeft: !sidebarCollapsed ? (isActive ? '3px solid ' + ACCENT : '3px solid transparent') : undefined,
-                          backgroundColor: isActive ? ACTIVE_BG : 'transparent',
-                          color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
-                          textDecoration: 'none',
-                          transition: 'background-color 100ms, color 100ms',
-                        }}
-                        onMouseEnter={e => {
-                          if (!isActive) {
-                            (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG;
-                            (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR;
-                          }
-                        }}
-                        onMouseLeave={e => {
-                          if (!isActive) {
-                            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
-                            (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR;
-                          }
-                        }}
-                      >
-                        <Icon size={17} strokeWidth={isActive ? 2 : 1.5}
-                          style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
-                        {!sidebarCollapsed && (
-                          <span style={{ fontSize: '15px', fontWeight: isActive ? 500 : 400, lineHeight: 1.15, whiteSpace: 'nowrap' }}>
-                            {item.label}
-                          </span>
-                        )}
-                      </NavLink>
-                    );
-                  })}
+                  {section.items.map(item => renderNavItem(item, 0))}
                 </div>
               )}
             </div>

@@ -1,17 +1,12 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
-  Building2,
-  Users,
-  GitBranch,
-  Bell,
-  Shield,
-  Layers,
-  KeyRound,
-  Lock,
-  Save,
-  Check,
+  Save, Check,
+  Building2, Users as UsersIcon, Layers, KeyRound, Lock,
+  Workflow, Bell, Shield, MapPin, AlertOctagon,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
 import { cn } from "@/lib/utils";
 import GeneralTab from "@/features/admin/organization/GeneralTab";
@@ -19,22 +14,59 @@ import UsersTab from "@/features/admin/users/UsersTab";
 import DepartmentsTab from "@/features/admin/departments/DepartmentsTab";
 import RolesTab from "@/features/admin/roles/RolesTab";
 import AccessControlTab from "@/features/admin/access-control/AccessControlTab";
+import WorkflowTypesTab from "@/features/admin/workflow-types/WorkflowTypesTab";
+import SitesTab from "@/features/admin/sites/SitesTab";
+import SeveritiesTab from "@/features/admin/severities/SeveritiesTab";
+import WorkflowsPage from "@/features/workflows/WorkflowsPage";
+import FormListPage from "@/features/forms/FormListPage";
 
-const tabs = [
-  { key: "general", label: "General", icon: Building2 },
-  { key: "users", label: "Users", icon: Users },
-  { key: "departments", label: "Departments", icon: Layers },
-  { key: "roles", label: "Roles", icon: KeyRound },
-  { key: "access", label: "Access Control", icon: Lock },
-  { key: "workflows", label: "Workflows", icon: GitBranch },
-  { key: "notifications", label: "Notifications", icon: Bell },
-  { key: "security", label: "Security", icon: Shield },
+type Section = "master-data" | "workflows" | "forms";
+
+// Tabs that appear *inside* the Master Data section.
+const masterDataTabs = [
+  { key: "general",        label: "General",        icon: Building2 },
+  { key: "users",          label: "Users",          icon: UsersIcon },
+  { key: "departments",    label: "Departments",    icon: Layers },
+  { key: "sites",          label: "Sites",          icon: MapPin },
+  { key: "roles",          label: "Roles",          icon: KeyRound },
+  { key: "access",         label: "Access Control", icon: Lock },
+  { key: "workflow-types", label: "Workflow Types", icon: Workflow },
+  { key: "severities",     label: "Severities",     icon: AlertOctagon },
+  { key: "notifications",  label: "Notifications",  icon: Bell },
+  { key: "security",       label: "Security",       icon: Shield },
 ] as const;
 
-type Tab = (typeof tabs)[number]["key"];
+type MdTab = (typeof masterDataTabs)[number]["key"];
+const VALID_MD_TABS = new Set<MdTab>(
+  masterDataTabs.map((t) => t.key) as MdTab[],
+);
+
+const SECTION_TITLES: Record<Section, string> = {
+  "master-data": "Master Data",
+  workflows: "Workflows",
+  forms: "Forms",
+};
+
+// Master Data tabs whose content has its own toolbar — hide the global Save.
+const NO_SAVE_MD_TABS = new Set<MdTab>(["workflow-types"]);
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("general");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const tabParam = searchParams.get("tab");
+
+  const section: Section =
+    sectionParam === "workflows" || sectionParam === "forms"
+      ? sectionParam
+      : "master-data";
+  const activeTab: MdTab = VALID_MD_TABS.has(tabParam as MdTab)
+    ? (tabParam as MdTab)
+    : "general";
+
+  const setActiveTab = (key: MdTab) => {
+    setSearchParams({ tab: key });
+  };
+
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
@@ -68,149 +100,78 @@ export default function SettingsPage() {
   });
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageContainer>
       <PageHeader
-        title="Settings"
-        description="Manage your organization's configuration and preferences"
+        title={SECTION_TITLES[section]}
+        description={
+          section === "master-data"
+            ? "Master configuration data — organization, users, departments, roles, access, workflow types, and more."
+            : section === "workflows"
+              ? "Browse and configure workflow definitions."
+              : "Browse and configure dynamic forms."
+        }
         actions={
-          <Button variant="primary" onClick={handleSave}>
-            {saved ? <Check size={15} /> : <Save size={15} />}
-            {saved ? "Saved!" : "Save Changes"}
-          </Button>
+          section !== "master-data" || NO_SAVE_MD_TABS.has(activeTab)
+            ? undefined
+            : (
+              <Button variant="primary" onClick={handleSave}>
+                {saved ? <Check size={15} /> : <Save size={15} />}
+                {saved ? "Saved!" : "Save Changes"}
+              </Button>
+            )
         }
       />
 
-      {/* Top tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex gap-1 overflow-x-auto -mb-px" role="tablist">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                role="tab"
-                aria-selected={isActive}
-                onClick={() => setActiveTab(tab.key)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-175",
-                  isActive
-                    ? "border-slate-900 text-slate-900"
-                    : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300"
-                )}
-              >
-                <Icon
-                  size={16}
-                  className={isActive ? "text-slate-900" : "text-gray-400"}
-                />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
+      {/* ── WORKFLOWS section ───────────────────────────── */}
+      {section === "workflows" && <WorkflowsPage />}
 
-      {/* Content */}
-      <div className="min-w-0">
-        {/* ── GENERAL ─────────────────────────────────── */}
-        {activeTab === "general" && <GeneralTab />}
+      {/* ── FORMS section ───────────────────────────────── */}
+      {section === "forms" && <FormListPage />}
 
-        {/* ── USERS ───────────────────────────────────── */}
-        {activeTab === "users" && <UsersTab />}
-
-        {/* ── DEPARTMENTS ─────────────────────────────── */}
-        {activeTab === "departments" && <DepartmentsTab />}
-
-        {/* ── ROLES ───────────────────────────────────── */}
-        {activeTab === "roles" && <RolesTab />}
-
-        {/* ── ACCESS CONTROL ──────────────────────────── */}
-        {activeTab === "access" && <AccessControlTab />}
-
-        {/* ── WORKFLOWS ────────────────────────────────── */}
-        {activeTab === "workflows" && (
-          <div className="space-y-4">
-            {[
-              {
-                module: "Document Approval",
-                description: "Multi-stage approval for document publishing",
-                stages: ["Author → Reviewer → Approver"],
-                enabled: true,
-              },
-              {
-                module: "CAPA Approval",
-                description:
-                  "Corrective action plans require quality manager sign-off",
-                stages: ["Initiator → QA Manager → QMS Admin"],
-                enabled: true,
-              },
-              {
-                module: "Risk Assessment",
-                description: "High-risk items require additional review",
-                stages: ["Risk Owner → Risk Committee"],
-                enabled: false,
-              },
-              {
-                module: "Change Control",
-                description:
-                  "All change requests must be reviewed before implementation",
-                stages: ["Initiator → Change Board → Management"],
-                enabled: true,
-              },
-              {
-                module: "Supplier Approval",
-                description: "New suppliers require qualification review",
-                stages: ["Procurement → Quality → Management"],
-                enabled: true,
-              },
-            ].map((wf) => (
-              <div
-                key={wf.module}
-                className="bg-white rounded-xl border border-gray-200 p-4"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-sm font-semibold text-gray-900">
-                        {wf.module}
-                      </h3>
-                      <span
-                        className={cn(
-                          "text-xs px-2 py-0.5 rounded-full",
-                          wf.enabled
-                            ? "bg-green-100 text-green-700"
-                            : "bg-gray-100 text-gray-500"
-                        )}
-                      >
-                        {wf.enabled ? "Active" : "Disabled"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-500 mb-2">
-                      {wf.description}
-                    </p>
-                    <div className="flex items-center gap-1.5">
-                      {wf.stages[0].split(" → ").map((stage, i, arr) => (
-                        <span key={stage} className="flex items-center gap-1.5">
-                          <span className="text-xs bg-slate-900/8 text-slate-900 px-2 py-0.5 rounded font-medium">
-                            {stage}
-                          </span>
-                          {i < arr.length - 1 && (
-                            <span className="text-gray-300">→</span>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <button className="ml-4 text-xs text-slate-900 font-medium hover:underline shrink-0">
-                    Configure
+      {/* ── MASTER DATA section — internal tab strip ───── */}
+      {section === "master-data" && (
+        <>
+          <div className="border-b border-gray-200">
+            <nav role="tablist" className="flex gap-1 overflow-x-auto -mb-px">
+              {masterDataTabs.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.key;
+                return (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={cn(
+                      "flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-175",
+                      isActive
+                        ? "border-slate-900 text-slate-900"
+                        : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300",
+                    )}
+                  >
+                    <Icon
+                      size={16}
+                      className={isActive ? "text-slate-900" : "text-gray-400"}
+                    />
+                    {tab.label}
                   </button>
-                </div>
-              </div>
-            ))}
+                );
+              })}
+            </nav>
           </div>
-        )}
 
-        {/* ── NOTIFICATIONS ────────────────────────────── */}
+          <div className="min-w-0">
+            {activeTab === "general" && <GeneralTab />}
+            {activeTab === "users" && <UsersTab />}
+            {activeTab === "departments" && <DepartmentsTab />}
+            {activeTab === "sites" && <SitesTab />}
+            {activeTab === "roles" && <RolesTab />}
+            {activeTab === "access" && <AccessControlTab />}
+            {activeTab === "workflow-types" && <WorkflowTypesTab />}
+            {activeTab === "severities" && <SeveritiesTab />}
+
+            {/* ── NOTIFICATIONS ────────────────────────── */}
         {activeTab === "notifications" && (
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
@@ -495,7 +456,9 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
-      </div>
-    </div>
+          </div>
+        </>
+      )}
+    </PageContainer>
   );
 }

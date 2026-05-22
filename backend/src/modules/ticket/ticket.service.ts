@@ -27,10 +27,14 @@ const ticketSummarySelect = {
   title: true,
   isOnHold: true,
   isDeleted: true,
+  dueDate: true,
+  classification: true,
   createdAt: true,
   updatedAt: true,
   priority: { select: { id: true, name: true } },
+  severity: { select: { id: true, name: true, level: true, color: true } },
   department: { select: { id: true, name: true, code: true } },
+  site: { select: { id: true, name: true, code: true } },
   createdBy: { select: { id: true, name: true, email: true } },
   flows: {
     select: {
@@ -56,9 +60,12 @@ const ticketDetailSelect = {
   heldAt: true,
   isDeleted: true,
   deletedAt: true,
+  dueDate: true,
+  classification: true,
   createdAt: true,
   updatedAt: true,
   priority: { select: { id: true, name: true } },
+  severity: { select: { id: true, name: true, level: true, color: true } },
   department: { select: { id: true, name: true, code: true } },
   site: { select: { id: true, name: true, code: true } },
   parentTicket: { select: { id: true, uniqueId: true, title: true } },
@@ -91,9 +98,12 @@ const ticketDetailSelect = {
 export const list = async (query: ListTicketsQuery, userId: string) => {
   const where: Prisma.TicketWhereInput = {};
   if (query.includeDeleted !== 'true') where.isDeleted = false;
-  if (query.workflowId) where.flows = { some: { workflowId: query.workflowId } };
-  if (query.status === 'open') where.flows = { some: { isCompleted: false, ...(query.workflowId ? { workflowId: query.workflowId } : {}) } };
-  if (query.status === 'completed') where.flows = { some: { isCompleted: true, ...(query.workflowId ? { workflowId: query.workflowId } : {}) } };
+  const flowsSome: Prisma.TicketFlowWhereInput = {};
+  if (query.workflowId) flowsSome.workflowId = query.workflowId;
+  if (query.workflowTypeId) flowsSome.workflow = { typeId: query.workflowTypeId };
+  if (query.status === 'open') flowsSome.isCompleted = false;
+  if (query.status === 'completed') flowsSome.isCompleted = true;
+  if (Object.keys(flowsSome).length > 0) where.flows = { some: flowsSome };
   if (query.mine === 'true') where.createdById = userId;
   if (query.search) {
     where.OR = [
@@ -178,6 +188,17 @@ export const update = async (id: string, input: UpdateTicketInput) => {
     data.site = input.siteId
       ? { connect: { id: input.siteId } }
       : { disconnect: true };
+  }
+  if (input.severityId !== undefined) {
+    data.severity = input.severityId
+      ? { connect: { id: input.severityId } }
+      : { disconnect: true };
+  }
+  if (input.dueDate !== undefined) {
+    data.dueDate = input.dueDate ? new Date(input.dueDate) : null;
+  }
+  if (input.classification !== undefined) {
+    data.classification = input.classification ?? null;
   }
   if (input.customFields !== undefined) {
     data.customFields = (input.customFields as Prisma.InputJsonValue) ?? Prisma.JsonNull;

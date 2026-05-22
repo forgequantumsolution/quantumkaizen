@@ -282,6 +282,35 @@ model Priority {
   tickets Ticket[]
 }
 
+// Severity — industry-standard quality-management lookup, distinct from
+// Priority. Priority = urgency / scheduling; Severity = impact / classification
+// of the underlying problem. Common values: Critical / Major / Minor.
+model Severity {
+  id        String  @id @default(uuid())
+  name      String  @unique
+  level     Int     @default(0) // higher = more severe; lets us sort
+  color     String? // hex, used by UI badges
+  isDeleted Boolean @default(false)
+
+  tickets Ticket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Ticket classification — a small fixed enum so it can be filtered/grouped
+// without an extra lookup table. Open to extension via migration if business
+// adds new categories.
+enum TicketClassification {
+  PRODUCT
+  PROCESS
+  SYSTEM
+  EQUIPMENT
+  DOCUMENTATION
+  TRAINING
+  OTHER
+}
+
 model Workflow {
   id   String @id @default(uuid())
   name String
@@ -505,6 +534,17 @@ model Ticket {
 
   siteId String?
   site   Site?   @relation("TicketSite", fields: [siteId], references: [id], onDelete: SetNull)
+
+  // Severity — industry-standard quality field, separate from Priority.
+  severityId String?
+  severity   Severity? @relation(fields: [severityId], references: [id], onDelete: SetNull)
+
+  // Target completion / due date for the ticket. Independent of SLA timers —
+  // this is the date the user committed to closing the ticket by.
+  dueDate DateTime?
+
+  // Optional category to slice analytics (product / process / system / etc.).
+  classification TicketClassification?
 
   customFields Json?
 

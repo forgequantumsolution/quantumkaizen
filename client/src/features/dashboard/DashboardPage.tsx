@@ -16,6 +16,7 @@ import {
 } from 'recharts';
 import { Card, CardHeader, CardTitle, StatsCard, Button, DataTable } from '@/components/ui';
 import type { Column } from '@/components/ui';
+import PageContainer from '@/components/layout/PageContainer';
 import type { AuditLogEntry } from '@/types';
 import { formatDateTime, cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -125,7 +126,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    <PageContainer>
 
       {/* ── Executive Dashboard Header ── */}
       <div className="flex items-start justify-between gap-4">
@@ -666,6 +667,6 @@ export default function DashboardPage() {
           Log Complaint
         </Button>
       </div>
-    </div>
+    </PageContainer>
   );
 }

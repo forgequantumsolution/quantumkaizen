@@ -7,6 +7,7 @@ import { errorHandler, notFoundHandler } from './middleware/error';
 import authRoutes from './modules/auth/auth.routes';
 import userRoutes from './modules/user/user.routes';
 import departmentRoutes from './modules/department/department.routes';
+import siteRoutes from './modules/site/site.routes';
 import roleRoutes from './modules/role/role.routes';
 import permissionRoutes from './modules/permission/permission.routes';
 import organizationRoutes from './modules/organization/organization.routes';
@@ -61,6 +62,7 @@ export const buildApp = () => {
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/departments', departmentRoutes);
+  app.use('/api/sites', siteRoutes);
   app.use('/api/roles', roleRoutes);
   app.use('/api/permissions', permissionRoutes);
   app.use('/api/organization', organizationRoutes);

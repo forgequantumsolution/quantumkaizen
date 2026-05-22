@@ -38,6 +38,16 @@ export interface Priority {
   name: string;
 }
 
+export interface Severity {
+  id: string;
+  name: string;
+  level: number;
+  color: string | null;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // ─── Query keys ───────────────────────────────────────────────────────────────
 
 export const lookupKeys = {
@@ -46,15 +56,60 @@ export const lookupKeys = {
   actionTypes: ['workflow-lookups', 'action-types'] as const,
   actionCriteria: ['workflow-lookups', 'action-criteria'] as const,
   priorities: ['workflow-lookups', 'priorities'] as const,
+  severities: ['workflow-lookups', 'severities'] as const,
 };
 
 // ─── Workflow Types ───────────────────────────────────────────────────────────
 
-export const useWorkflowTypes = () =>
-  useQuery<WorkflowType[]>({
+// The sidebar's Modules group is driven by this query. On a fresh page load
+// the network round-trip would leave the group empty for a few hundred ms,
+// which is jarring. Persist the last successful response to localStorage and
+// seed React Query with it as initialData so the sidebar renders immediately
+// on refresh; the query still refetches in the background to pick up changes.
+const WF_TYPES_CACHE_KEY = 'qk_cache_workflow_types_v1';
+
+const readCachedWorkflowTypes = (): { data: WorkflowType[]; updatedAt: number } | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(WF_TYPES_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { data: WorkflowType[]; updatedAt: number };
+    if (!Array.isArray(parsed?.data)) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeCachedWorkflowTypes = (data: WorkflowType[]) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      WF_TYPES_CACHE_KEY,
+      JSON.stringify({ data, updatedAt: Date.now() }),
+    );
+  } catch {
+    /* quota or private mode — ignore */
+  }
+};
+
+export const useWorkflowTypes = () => {
+  const cached = readCachedWorkflowTypes();
+  return useQuery<WorkflowType[]>({
     queryKey: lookupKeys.types,
-    queryFn: () => api.get('/workflow-lookups/types').then((r) => r.data),
+    queryFn: async () => {
+      const data = (await api.get('/workflow-lookups/types')).data as WorkflowType[];
+      writeCachedWorkflowTypes(data);
+      return data;
+    },
+    initialData: cached?.data,
+    initialDataUpdatedAt: cached?.updatedAt,
+    // Treat the cached snapshot as fresh for 30 s after load so we don't
+    // refetch on every component mount during a single session, but still
+    // revalidate periodically.
+    staleTime: 30_000,
   });
+};
 
 export const useCreateWorkflowType = () => {
   const qc = useQueryClient();
@@ -134,3 +189,29 @@ export const usePriorities = () =>
     queryKey: lookupKeys.priorities,
     queryFn: () => api.get('/workflow-lookups/priorities').then((r) => r.data),
   });
+
+// ─── Severities ───────────────────────────────────────────────────────────────
+
+export const useSeverities = () =>
+  useQuery<Severity[]>({
+    queryKey: lookupKeys.severities,
+    queryFn: () => api.get('/workflow-lookups/severities').then((r) => r.data),
+  });
+
+export const useCreateSeverity = () => {
+  const qc = useQueryClient();
+  return useMutation<Severity, unknown, { name: string; level?: number; color?: string | null }>({
+    mutationFn: (input) =>
+      api.post('/workflow-lookups/severities', input).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: lookupKeys.severities }),
+  });
+};
+
+export const useDeleteSeverity = () => {
+  const qc = useQueryClient();
+  return useMutation<void, unknown, string>({
+    mutationFn: (id) =>
+      api.delete(`/workflow-lookups/severities/${id}`).then(() => undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: lookupKeys.severities }),
+  });
+};

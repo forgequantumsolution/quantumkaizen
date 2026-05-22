@@ -3,6 +3,7 @@ import {
   Palette, Type as TypeIcon, SwatchBook, Save, Check, RotateCcw,
   Download, Upload, Sun, Moon, Monitor, ChevronDown,
 } from 'lucide-react';
+import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
@@ -160,7 +161,7 @@ export default function AppearancePage() {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-6 animate-fade-in">
+    <PageContainer>
       <PageHeader
         title="Appearance"
         description="Customize colors, fonts, and density for the entire site."
@@ -240,7 +241,7 @@ export default function AppearancePage() {
           </div>
         </aside>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Button, Card, Spinner, Tabs } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
-import { formatDate, formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useDeleteTicket, useTicket } from '@/lib/api/ticket';
 import TicketStatusBadge from './shared/TicketStatusBadge';
@@ -134,7 +134,7 @@ export default function TicketDetailPage() {
             {flow && (
               <span className="text-xs text-gray-500 inline-flex items-center gap-1">
                 <WorkflowIcon size={11} className="text-gray-400" />
-                {flow.workflow.name} <span className="text-gray-300">·</span> v
+                {displayWorkflowName(flow.workflow)} <span className="text-gray-300">·</span> v
                 {flow.workflow.version}
               </span>
             )}
@@ -185,7 +185,7 @@ export default function TicketDetailPage() {
                 Workflow progress
               </h3>
               <span className="text-[11px] text-gray-400">
-                {flow.workflow.name} · v{flow.workflow.version}
+                {displayWorkflowName(flow.workflow)} · v{flow.workflow.version}
               </span>
             </div>
             <div className="flex items-center gap-2">

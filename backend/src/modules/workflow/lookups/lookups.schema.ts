@@ -28,6 +28,20 @@ export const CreateNamedSchema = z.object({
   name: z.string().min(1).max(250),
 });
 
+const HEX_COLOR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+export const CreateSeveritySchema = z.object({
+  name: z.string().min(1).max(80),
+  level: z.coerce.number().int().min(0).max(1000).default(0),
+  color: z
+    .string()
+    .regex(HEX_COLOR_RE, 'Color must be a hex value (e.g. #DC2626)')
+    .optional()
+    .nullable(),
+});
+
+export type CreateSeverityInput = z.infer<typeof CreateSeveritySchema>;
+
 export const SearchQuerySchema = z.object({
   search: z.string().optional(),
 });

@@ -90,6 +90,17 @@ export interface RaiseTicketInput {
   priorityId?: string | null;
   departmentId?: string | null;
   siteId?: string | null;
+  severityId?: string | null;
+  dueDate?: string | Date | null;
+  classification?:
+    | 'PRODUCT'
+    | 'PROCESS'
+    | 'SYSTEM'
+    | 'EQUIPMENT'
+    | 'DOCUMENTATION'
+    | 'TRAINING'
+    | 'OTHER'
+    | null;
   parentTicketId?: string | null;
   parentTicketStageId?: string | null;
   customFields?: Record<string, unknown>;
@@ -141,6 +152,9 @@ export const raiseTicket = async (
         priorityId: input.priorityId ?? null,
         departmentId: input.departmentId ?? null,
         siteId: input.siteId ?? null,
+        severityId: input.severityId ?? null,
+        dueDate: input.dueDate ? new Date(input.dueDate) : null,
+        classification: input.classification ?? null,
         parentTicketId: input.parentTicketId ?? null,
         parentTicketStageId: input.parentTicketStageId ?? null,
         customFields: input.customFields

@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../../lib/httpError';
 import type {
   CreateNamedInput,
+  CreateSeverityInput,
   CreateStageStatusInput,
   CreateWorkflowTypeInput,
 } from './lookups.schema';
@@ -141,3 +142,50 @@ export const createActionCriteria = async (input: CreateNamedInput) => {
 
 export const listPriorities = async () =>
   prisma.priority.findMany({ orderBy: { name: 'asc' } });
+
+// ─── Severity ────────────────────────────────────────────────────────────────
+
+export const listSeverities = async (search?: string) => {
+  const where: Prisma.SeverityWhereInput = { isDeleted: false };
+  if (search) where.name = { contains: search, mode: 'insensitive' };
+  return prisma.severity.findMany({
+    where,
+    orderBy: [{ level: 'desc' }, { name: 'asc' }],
+  });
+};
+
+export const createSeverity = async (input: CreateSeverityInput) => {
+  const exists = await prisma.severity.findUnique({
+    where: { name: input.name },
+    select: { id: true, isDeleted: true },
+  });
+  if (exists && !exists.isDeleted) throw Conflict('Severity already exists');
+  if (exists?.isDeleted) {
+    return prisma.severity.update({
+      where: { id: exists.id },
+      data: {
+        isDeleted: false,
+        level: input.level,
+        color: input.color ?? null,
+      },
+    });
+  }
+  return prisma.severity.create({
+    data: {
+      name: input.name,
+      level: input.level,
+      color: input.color ?? null,
+    },
+  });
+};
+
+export const deleteSeverity = async (id: string) => {
+  const sev = await prisma.severity.findUnique({
+    where: { id },
+    select: { id: true, isDeleted: true, _count: { select: { tickets: true } } },
+  });
+  if (!sev) throw NotFound('Severity not found');
+  if (sev.isDeleted) throw BadRequest('Severity already deleted');
+  // Soft-delete so existing ticket references stay intact.
+  await prisma.severity.update({ where: { id }, data: { isDeleted: true } });
+};

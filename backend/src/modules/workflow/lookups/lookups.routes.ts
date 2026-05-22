@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as ctrl from './lookups.controller';
 import {
   CreateNamedSchema,
+  CreateSeveritySchema,
   CreateStageStatusSchema,
   CreateWorkflowTypeSchema,
   IdParamSchema,
@@ -74,6 +75,27 @@ router.get(
   '/priorities',
   requirePermission('workflow.lookups.read'),
   asyncHandler(ctrl.listPriorities)
+);
+
+// Severity — industry-standard impact classification (Critical/Major/Minor).
+// Lives under workflow lookups because it's a small named lookup like the
+// others, and reuses the same `workflow.lookups.*` permissions.
+router.get(
+  '/severities',
+  requirePermission('workflow.lookups.read'),
+  asyncHandler(ctrl.listSeverities)
+);
+router.post(
+  '/severities',
+  requirePermission('workflow.lookups.manage'),
+  validate(CreateSeveritySchema),
+  asyncHandler(ctrl.createSeverity)
+);
+router.delete(
+  '/severities/:id',
+  requirePermission('workflow.lookups.manage'),
+  validate(IdParamSchema, 'params'),
+  asyncHandler(ctrl.deleteSeverity)
 );
 
 export default router;

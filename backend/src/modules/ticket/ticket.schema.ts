@@ -1,5 +1,15 @@
 import { z } from 'zod';
 
+export const TicketClassificationSchema = z.enum([
+  'PRODUCT',
+  'PROCESS',
+  'SYSTEM',
+  'EQUIPMENT',
+  'DOCUMENTATION',
+  'TRAINING',
+  'OTHER',
+]);
+
 export const RaiseTicketSchema = z.object({
   workflowId: z.string().uuid(),
   title: z.string().min(1).max(250),
@@ -8,6 +18,9 @@ export const RaiseTicketSchema = z.object({
   priorityId: z.string().uuid().optional().nullable(),
   departmentId: z.string().uuid().optional().nullable(),
   siteId: z.string().uuid().optional().nullable(),
+  severityId: z.string().uuid().optional().nullable(),
+  dueDate: z.coerce.date().optional().nullable(),
+  classification: TicketClassificationSchema.optional().nullable(),
   parentTicketId: z.string().uuid().optional().nullable(),
   parentTicketStageId: z.string().uuid().optional().nullable(),
   customFields: z.record(z.unknown()).optional(),
@@ -20,6 +33,9 @@ export const UpdateTicketSchema = z.object({
   priorityId: z.string().uuid().optional().nullable(),
   departmentId: z.string().uuid().optional().nullable(),
   siteId: z.string().uuid().optional().nullable(),
+  severityId: z.string().uuid().optional().nullable(),
+  dueDate: z.coerce.date().optional().nullable(),
+  classification: TicketClassificationSchema.optional().nullable(),
   customFields: z.record(z.unknown()).optional(),
 });
 
@@ -28,6 +44,7 @@ export const ListTicketsQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(200).default(20),
   search: z.string().optional(),
   workflowId: z.string().uuid().optional(),
+  workflowTypeId: z.string().uuid().optional(),
   status: z.enum(['open', 'completed', 'all']).optional().default('all'),
   mine: z.enum(['true', 'false']).optional().default('false'),
   includeDeleted: z.enum(['true', 'false']).optional().default('false'),

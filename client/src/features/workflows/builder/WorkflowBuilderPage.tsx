@@ -17,6 +17,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Button, Card, Spinner } from '@/components/ui';
+import { displayWorkflowName } from '@/lib/utils';
 import {
   isWorkflowValidationFailure,
   useDeleteDraft,
@@ -322,7 +323,7 @@ export default function WorkflowBuilderPage() {
           </Button>
           <div className="min-w-0">
             <h1 className="text-base font-semibold text-gray-900 truncate">
-              {data.workflow.name}
+              {displayWorkflowName(data.workflow)}
             </h1>
             <p className="text-xs text-gray-500 truncate">Workflow builder</p>
           </div>

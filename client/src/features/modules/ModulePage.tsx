@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { App, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -7,24 +7,13 @@ import {
   Plus,
   Search,
   Ticket as TicketIcon,
-  AlertTriangle,
-  TimerReset,
-  Circle,
-  CheckCircle2,
   Filter as FilterIcon,
   X,
   Network,
   Trash2,
+  Workflow as WorkflowIcon,
 } from 'lucide-react';
-import {
-  Card,
-  Button,
-  EmptyState,
-  Spinner,
-  Input,
-  Select,
-  KpiCard,
-} from '@/components/ui';
+import { Card, Button, EmptyState, Spinner, Input, Select } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn, formatDate, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -35,10 +24,12 @@ import {
   type TicketSummary,
 } from '@/lib/api/ticket';
 import { useWorkflows } from '@/lib/api/workflow';
-import { usePriorities } from '@/lib/api/workflowLookups';
-import { useSlaTimers, type SlaTimer } from '@/lib/api/sla';
-import RaiseTicketDrawer from './shared/RaiseTicketDrawer';
-import TicketStatusBadge from './shared/TicketStatusBadge';
+import {
+  usePriorities,
+  useWorkflowTypes,
+} from '@/lib/api/workflowLookups';
+import RaiseTicketDrawer from '@/features/tickets/shared/RaiseTicketDrawer';
+import TicketStatusBadge from '@/features/tickets/shared/TicketStatusBadge';
 
 type StatusFilter = NonNullable<ListTicketsQuery['status']>;
 
@@ -47,24 +38,6 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
   { value: 'completed', label: 'Completed' },
 ];
-
-const computeElapsedSec = (timer: SlaTimer, now = Date.now()) => {
-  if (timer.status === 'PAUSED' || !timer.lastResumedAt) {
-    return timer.elapsedBeforePauseSec;
-  }
-  const running = Math.max(
-    0,
-    Math.floor((now - new Date(timer.lastResumedAt).getTime()) / 1000),
-  );
-  return timer.elapsedBeforePauseSec + running;
-};
-
-const isAtRisk = (timer: SlaTimer) => {
-  if (timer.status !== 'RUNNING' && timer.status !== 'EXTENDED') return false;
-  const total = timer.policy.duration;
-  if (total <= 0) return false;
-  return computeElapsedSec(timer) / total >= 0.8;
-};
 
 function useDebounced<T>(value: T, ms = 250) {
   const [v, setV] = useState(value);
@@ -75,13 +48,77 @@ function useDebounced<T>(value: T, ms = 250) {
   return v;
 }
 
-export default function TicketsPage() {
+export default function ModulePage() {
+  const { typeId = '' } = useParams<{ typeId: string }>();
   const navigate = useNavigate();
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canCreate = hasPermission('ticket.create');
   const canDelete = hasPermission('ticket.delete');
   const deleteTicket = useDeleteTicket();
   const { modal } = App.useApp();
+
+  const { data: types = [], isLoading: loadingTypes } = useWorkflowTypes();
+  const workflowType = useMemo(
+    () => types.find((t) => t.id === typeId),
+    [types, typeId],
+  );
+
+  // Reset filters when navigating between modules.
+  const [searchInput, setSearchInput] = useState('');
+  const search = useDebounced(searchInput, 250);
+  const [status, setStatus] = useState<StatusFilter>('all');
+  const [mine, setMine] = useState<'true' | 'false'>('false');
+  const [priorityId, setPriorityId] = useState<string>('');
+  const [workflowFilterId, setWorkflowFilterId] = useState<string>('');
+  const [pageSize, setPageSize] = useState(50);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  useEffect(() => {
+    setSearchInput('');
+    setStatus('all');
+    setMine('false');
+    setPriorityId('');
+    setWorkflowFilterId('');
+  }, [typeId]);
+
+  const filters: ListTicketsQuery = useMemo(
+    () => ({
+      search: search || undefined,
+      status,
+      mine,
+      workflowTypeId: typeId || undefined,
+      workflowId: workflowFilterId || undefined,
+      pageSize,
+    }),
+    [search, status, mine, typeId, workflowFilterId, pageSize],
+  );
+
+  const { data, isLoading, error } = useTickets(filters);
+  const { data: priorities = [] } = usePriorities();
+  const { data: workflowsData } = useWorkflows({
+    status: 'ACTIVE',
+    typeId: typeId || undefined,
+    pageSize: 100,
+  });
+  const typeWorkflows = workflowsData?.items ?? [];
+
+  const items: TicketSummary[] = useMemo(() => {
+    const list = data?.items ?? [];
+    if (!priorityId) return list;
+    return list.filter((t) => t.priority?.id === priorityId);
+  }, [data?.items, priorityId]);
+  const totalAll = data?.total ?? 0;
+
+  const hasActiveFilters =
+    !!search || status !== 'all' || mine === 'true' || !!priorityId || !!workflowFilterId;
+
+  const clearFilters = () => {
+    setSearchInput('');
+    setStatus('all');
+    setMine('false');
+    setPriorityId('');
+    setWorkflowFilterId('');
+  };
 
   const handleDelete = (t: TicketSummary) => {
     modal.confirm({
@@ -105,65 +142,24 @@ export default function TicketsPage() {
     });
   };
 
-  const [searchInput, setSearchInput] = useState('');
-  const search = useDebounced(searchInput, 250);
-  const [status, setStatus] = useState<StatusFilter>('all');
-  const [mine, setMine] = useState<'true' | 'false'>('false');
-  const [priorityId, setPriorityId] = useState<string>('');
-  const [workflowFilterId, setWorkflowFilterId] = useState<string>('');
-  const [pageSize, setPageSize] = useState(50);
-  const [createOpen, setCreateOpen] = useState(false);
+  if (!loadingTypes && !workflowType) {
+    return (
+      <PageContainer>
+        <Card className="border-dashed">
+          <EmptyState
+            icon={WorkflowIcon}
+            title="Module not found"
+            description="This workflow type doesn't exist or has been removed."
+            actionLabel="Back to Tickets"
+            onAction={() => navigate('/tickets')}
+          />
+        </Card>
+      </PageContainer>
+    );
+  }
 
-  const filters: ListTicketsQuery = useMemo(
-    () => ({
-      search: search || undefined,
-      status,
-      mine,
-      workflowId: workflowFilterId || undefined,
-      pageSize,
-    }),
-    [search, status, mine, workflowFilterId, pageSize],
-  );
-
-  const { data, isLoading, error } = useTickets(filters);
-  const { data: priorities = [] } = usePriorities();
-  const { data: activeWorkflowsData } = useWorkflows({ status: 'ACTIVE', pageSize: 100 });
-  const breached = useSlaTimers({ status: 'BREACHED', pageSize: 1 });
-  const running = useSlaTimers({ status: 'RUNNING', pageSize: 100 });
-
-  // Client-side priority filter — the API doesn't support it directly today.
-  const items: TicketSummary[] = useMemo(() => {
-    const list = data?.items ?? [];
-    if (!priorityId) return list;
-    return list.filter((t) => t.priority?.id === priorityId);
-  }, [data?.items, priorityId]);
-  const totalAll = data?.total ?? 0;
-
-  const breachedCount = breached.data?.total ?? 0;
-  const atRiskCount = useMemo(
-    () => (running.data?.items ?? []).filter(isAtRisk).length,
-    [running.data],
-  );
-
-  const openCount = useMemo(
-    () => (data?.items ?? []).filter((t) => !t.flows[0]?.isCompleted && !t.isOnHold).length,
-    [data?.items],
-  );
-  const completedCount = useMemo(
-    () => (data?.items ?? []).filter((t) => t.flows[0]?.isCompleted).length,
-    [data?.items],
-  );
-
-  const hasActiveFilters =
-    !!search || status !== 'all' || mine === 'true' || !!priorityId || !!workflowFilterId;
-
-  const clearFilters = () => {
-    setSearchInput('');
-    setStatus('all');
-    setMine('false');
-    setPriorityId('');
-    setWorkflowFilterId('');
-  };
+  const moduleName = workflowType?.name ?? 'Module';
+  const codePrefix = workflowType?.codePrefix;
 
   return (
     <PageContainer>
@@ -171,56 +167,42 @@ export default function TicketsPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="min-w-0">
           <div className="flex items-center gap-2.5">
-            <h1 className="text-h1 text-gray-900">Tickets</h1>
+            <h1 className="text-h1 text-gray-900">{moduleName}</h1>
+            {codePrefix && (
+              <span className="text-[11px] font-mono font-semibold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
+                {codePrefix}
+              </span>
+            )}
             <span className="text-xs font-medium text-[#8A6C18] bg-[#C9A84C]/15 px-2 py-0.5 rounded-full">
               {totalAll} in scope
             </span>
           </div>
           <p className="text-sm text-gray-500 mt-0.5">
-            Raise and track tickets against active workflows.
+            Tickets raised against the <span className="font-medium">{moduleName}</span>{' '}
+            workflow type.
           </p>
         </div>
         {canCreate && (
-          <Button variant="primary" onClick={() => setCreateOpen(true)}>
+          <Button
+            variant="primary"
+            onClick={() => setCreateOpen(true)}
+            disabled={typeWorkflows.length === 0}
+            title={
+              typeWorkflows.length === 0
+                ? `No active ${moduleName} workflows yet — create one first.`
+                : undefined
+            }
+          >
             <Plus size={16} />
-            <span className="ml-1.5">Raise Ticket</span>
+            <span className="ml-1.5">Raise {moduleName}</span>
           </Button>
         )}
-      </div>
-
-      {/* ── KPI strip ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard
-          label="Total tickets"
-          value={totalAll}
-          icon={TicketIcon}
-          accent="slate"
-        />
-        <KpiCard
-          label="Open"
-          value={openCount}
-          icon={Circle}
-          accent="sky"
-        />
-        <KpiCard
-          label="Completed"
-          value={completedCount}
-          icon={CheckCircle2}
-          accent="emerald"
-        />
-        <KpiCard
-          label={breachedCount > 0 ? 'Breached SLA' : 'At risk'}
-          value={breachedCount > 0 ? breachedCount : atRiskCount}
-          icon={breachedCount > 0 ? AlertTriangle : TimerReset}
-          accent={breachedCount > 0 ? 'rose' : 'amber'}
-        />
       </div>
 
       {/* ── Filter bar ────────────────────────────────────────────────────── */}
       <Card className="!p-4">
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Status segmented tabs */}
             <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
               {STATUS_TABS.map((t) => (
                 <button
@@ -239,7 +221,6 @@ export default function TicketsPage() {
               ))}
             </div>
 
-            {/* Scope */}
             <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
               {(
                 [
@@ -262,7 +243,6 @@ export default function TicketsPage() {
                 </button>
               ))}
             </div>
-
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
@@ -294,10 +274,7 @@ export default function TicketsPage() {
               placeholder="Any workflow"
               options={[
                 { value: '', label: 'Any workflow' },
-                ...(activeWorkflowsData?.items ?? []).map((w) => ({
-                  value: w.id,
-                  label: displayWorkflowName(w),
-                })),
+                ...typeWorkflows.map((w) => ({ value: w.id, label: displayWorkflowName(w) })),
               ]}
               className="md:col-span-3"
             />
@@ -333,23 +310,33 @@ export default function TicketsPage() {
           <Card className="border-dashed">
             <EmptyState
               icon={TicketIcon}
-              title="No tickets match"
+              title={`No ${moduleName} tickets yet`}
               description={
                 hasActiveFilters
                   ? 'Try clearing filters or broadening your search.'
-                  : canCreate
-                    ? 'Raise your first ticket to get started.'
-                    : "You don't have any tickets yet."
+                  : typeWorkflows.length === 0
+                    ? `No active workflows exist for ${moduleName}. Create one in Workflows first.`
+                    : canCreate
+                      ? `Raise the first ${moduleName} ticket to get started.`
+                      : "You don't have any tickets yet."
               }
               actionLabel={
-                hasActiveFilters ? 'Clear filters' : canCreate ? 'Raise Ticket' : undefined
+                hasActiveFilters
+                  ? 'Clear filters'
+                  : typeWorkflows.length === 0
+                    ? 'Go to Workflows'
+                    : canCreate
+                      ? `Raise ${moduleName}`
+                      : undefined
               }
               onAction={
                 hasActiveFilters
                   ? clearFilters
-                  : canCreate
-                    ? () => setCreateOpen(true)
-                    : undefined
+                  : typeWorkflows.length === 0
+                    ? () => navigate('/workflows')
+                    : canCreate
+                      ? () => setCreateOpen(true)
+                      : undefined
               }
             />
           </Card>
@@ -358,10 +345,7 @@ export default function TicketsPage() {
             <Table<TicketSummary>
               rowKey="id"
               dataSource={items}
-              columns={buildColumns({
-                canDelete,
-                onDelete: handleDelete,
-              })}
+              columns={buildColumns({ canDelete, onDelete: handleDelete })}
               pagination={false}
               size="middle"
               onRow={(t) => ({
@@ -384,12 +368,15 @@ export default function TicketsPage() {
         )}
       </div>
 
-      <RaiseTicketDrawer isOpen={createOpen} onClose={() => setCreateOpen(false)} />
+      <RaiseTicketDrawer
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        workflowTypeId={typeId}
+      />
     </PageContainer>
   );
 }
 
-// ─── Table columns ──────────────────────────────────────────────────────────
 function buildColumns({
   canDelete,
   onDelete,
@@ -439,9 +426,7 @@ function buildColumns({
             {flow.currentStages[0] && (
               <>
                 <span className="text-gray-300">·</span>
-                <span className="text-blue-700 truncate">
-                  {flow.currentStages[0].name}
-                </span>
+                <span className="text-blue-700 truncate">{flow.currentStages[0].name}</span>
               </>
             )}
           </span>
