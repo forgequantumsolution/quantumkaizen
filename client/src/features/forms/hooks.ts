@@ -64,6 +64,13 @@ export function useCreateForm() {
   });
 }
 
+export type SaveFormFieldsResult = {
+  form_id: string;
+  version: number;
+  version_id: string;
+  version_bumped: boolean;
+};
+
 export function useSaveFormFields() {
   const qc = useQueryClient();
   return useMutation({
@@ -73,7 +80,7 @@ export function useSaveFormFields() {
       title?: string;
       description?: string | null;
       form_type?: string | null;
-    }) => {
+    }): Promise<SaveFormFieldsResult> => {
       const r = await api.post(`/forms/form/fields/create/${input.id}/`, {
         sections: input.sections,
         form_details: {
@@ -82,11 +89,16 @@ export function useSaveFormFields() {
           form_type: input.form_type,
         },
       });
-      return r.data;
+      return r.data?.data as SaveFormFieldsResult;
     },
-    onSuccess: (_d, vars) => {
+    onSuccess: (result, vars) => {
       qc.invalidateQueries({ queryKey: ['forms'] });
       qc.invalidateQueries({ queryKey: ['form', vars.id] });
+      // When the publish cloned into a new version row, the old form id no
+      // longer reflects the latest schema — invalidate that cache key too.
+      if (result.version_bumped) {
+        qc.invalidateQueries({ queryKey: ['form', result.form_id] });
+      }
     },
   });
 }

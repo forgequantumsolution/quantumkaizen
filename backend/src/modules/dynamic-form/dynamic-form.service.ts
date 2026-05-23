@@ -199,10 +199,39 @@ export const listForms = async (q: ListFormsQuery) => {
   if (q.form_type_id) where.formTypeId = q.form_type_id;
   if (q.kind) where.kind = q.kind as FormKind;
 
+  // Default: one row per templateKey (the latest version). Opt out with
+  // ?include_all_versions=true so the form-picker / list page never show
+  // "Test Form" three times after a few publishes. Old versions are still
+  // reachable via each row's `all_versions` dropdown.
+  const includeAllVersions = q.include_all_versions === 'true';
+
+  let latestIds: string[] | null = null;
+  if (!includeAllVersions) {
+    const grouped = await prisma.form.groupBy({
+      by: ['templateKey'],
+      where,
+      _max: { version: true },
+    });
+    const winners = await prisma.form.findMany({
+      where: {
+        OR: grouped.map((g) => ({
+          templateKey: g.templateKey,
+          version: g._max.version ?? 1,
+        })),
+      },
+      select: { id: true },
+    });
+    latestIds = winners.map((w) => w.id);
+  }
+
+  const pagedWhere: Prisma.FormWhereInput = latestIds
+    ? { ...where, id: { in: latestIds } }
+    : where;
+
   const skip = (q.page_number - 1) * q.page_size;
   const [items, total] = await Promise.all([
     prisma.form.findMany({
-      where,
+      where: pagedWhere,
       include: {
         formType: { select: { id: true, name: true, versionId: true } },
         createdBy: { select: { id: true, name: true } },
@@ -211,7 +240,7 @@ export const listForms = async (q: ListFormsQuery) => {
       skip,
       take: q.page_size,
     }),
-    prisma.form.count({ where }),
+    prisma.form.count({ where: pagedWhere }),
   ]);
 
   // group all versions by templateKey for `all_versions`
@@ -323,9 +352,50 @@ export const createForm = async (input: CreateFormInput, userId?: string) => {
   return { form_id: form.id, id: form.id, version_id: form.versionId, kind: form.kind };
 };
 
-export const saveFormFields = async (id: string, input: SaveFormFieldsInput) => {
+/**
+ * True when this form is "in use" and a publish must clone into a new
+ * version row rather than rebuilding in place. Per product spec: bump iff
+ * the form is bound to a workflow stage AND that workflow has at least one
+ * non-deleted ticket. Standalone forms (no bindings) or bound forms whose
+ * workflows have no tickets yet keep updating in place. Mirrors the
+ * workflow versioning model — old StageFormBinding rows keep pointing at
+ * the old Form row so in-flight tickets continue to see the schema they
+ * were filled against.
+ */
+const shouldBumpVersion = async (formId: string): Promise<boolean> => {
+  // Workflows don't have a direct tickets relation — they go through
+  // TicketFlow. A non-deleted TicketFlow whose ticket isn't soft-deleted
+  // means a real, in-flight ticket exists on the workflow.
+  const usedBinding = await prisma.stageFormBinding.findFirst({
+    where: {
+      formId,
+      isDeleted: false,
+      workflow: { flows: { some: { ticket: { isDeleted: false } } } },
+    },
+    select: { id: true },
+  });
+  return !!usedBinding;
+};
+
+type SaveFormFieldsResult = {
+  form_id: string;
+  version: number;
+  version_id: string;
+  version_bumped: boolean;
+};
+
+export const saveFormFields = async (
+  id: string,
+  input: SaveFormFieldsInput
+): Promise<SaveFormFieldsResult> => {
   const form = await prisma.form.findUnique({ where: { id } });
   if (!form) throw NotFound('Form not found');
+
+  const bump = await shouldBumpVersion(id);
+
+  // The target row that sections/fields will be written against — either the
+  // existing form (in-place rebuild) or a freshly cloned next-version row.
+  const targetFormId = bump ? randomUUID() : id;
 
   // Pre-compute uuids in JS so we can build flat createMany payloads — every
   // section row already knows the field rows that reference it, and every
@@ -372,7 +442,7 @@ export const saveFormFields = async (id: string, input: SaveFormFieldsInput) => 
     const sectionDbId = randomUUID();
     sectionRows.push({
       id: sectionDbId,
-      formId: id,
+      formId: targetFormId,
       sectionId: section.section_id ?? `section_${randomUUID()}`,
       name: section.section_name,
       position: section.position ?? sIdx,
@@ -383,24 +453,72 @@ export const saveFormFields = async (id: string, input: SaveFormFieldsInput) => 
     );
   });
 
-  // Sequential transaction array — single round-trip per statement, no
-  // interactive back-and-forth. Five statements total regardless of field
-  // count.
-  const ops: Prisma.PrismaPromise<unknown>[] = [
-    prisma.formSection.deleteMany({ where: { formId: id } }),
+  const title = input.form_details?.title ?? form.title;
+  const description = input.form_details?.description ?? form.description;
+  const formTypeId = input.form_details?.form_type ?? form.formTypeId;
+  // Compute MAX(version) across the templateKey rather than form.version+1
+  // — guards against a direct URL navigation to an older version row, which
+  // would otherwise produce a duplicate version number on bump.
+  const latest = await prisma.form.aggregate({
+    where: { templateKey: form.templateKey },
+    _max: { version: true },
+  });
+  const nextVersion = (latest._max.version ?? form.version) + 1;
+  const nextVersionId = randomUUID();
+
+  const ops: Prisma.PrismaPromise<unknown>[] = [];
+
+  if (bump) {
+    // Clone the Form row at version+1. Old row + its sections, fields,
+    // bindings and submissions stay untouched. New row gets a fresh draft
+    // wipe just like the in-place case.
+    ops.push(
+      prisma.form.create({
+        data: {
+          id: targetFormId,
+          templateKey: form.templateKey,
+          title,
+          description,
+          version: nextVersion,
+          versionId: nextVersionId,
+          status: FormStatus.PUBLISHED,
+          kind: form.kind,
+          isCompleted: true,
+          formTypeId,
+          location: form.location,
+          mainProcess: form.mainProcess,
+          criteria: form.criteria,
+          pdcaApproved: form.pdcaApproved,
+          workflowName: form.workflowName,
+          workflowType: form.workflowType,
+          createdById: form.createdById,
+        },
+      })
+    );
+  }
+
+  // For an in-place save we drop the existing sections (cascades to fields);
+  // for a bump there's nothing to drop on the new row. The draft sits on the
+  // *old* row in either case — clearing it represents "this draft was
+  // published" so the old shell shows the published schema on next open.
+  if (!bump) {
+    ops.push(prisma.formSection.deleteMany({ where: { formId: id } }));
+  }
+
+  ops.push(
     prisma.formSection.createMany({ data: sectionRows }),
     prisma.formField.createMany({ data: fieldRows }),
-    prisma.formDraft.deleteMany({ where: { formId: id } }),
-  ];
+    prisma.formDraft.deleteMany({ where: { formId: id } })
+  );
 
-  if (input.form_details) {
+  if (!bump && input.form_details) {
     ops.push(
       prisma.form.update({
         where: { id },
         data: {
-          title: input.form_details.title ?? form.title,
-          description: input.form_details.description ?? form.description,
-          formTypeId: input.form_details.form_type ?? form.formTypeId,
+          title,
+          description,
+          formTypeId,
           isCompleted: true,
           status: FormStatus.PUBLISHED,
         },
@@ -409,6 +527,20 @@ export const saveFormFields = async (id: string, input: SaveFormFieldsInput) => 
   }
 
   await prisma.$transaction(ops);
+
+  return bump
+    ? {
+        form_id: targetFormId,
+        version: nextVersion,
+        version_id: nextVersionId,
+        version_bumped: true,
+      }
+    : {
+        form_id: id,
+        version: form.version,
+        version_id: form.versionId,
+        version_bumped: false,
+      };
 };
 
 export const saveDraft = async (

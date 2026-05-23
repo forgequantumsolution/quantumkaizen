@@ -86,6 +86,10 @@ export const ListFormsQuerySchema = z.object({
   workflow_type_id: z.string().optional(),
   workflow_name_id: z.string().optional(),
   kind: FormKindSchema.optional(),
+  // When omitted/'false', list deduplicates to one row per templateKey
+  // (the latest version). Set 'true' for admin / debug views that need
+  // every historical version row.
+  include_all_versions: z.enum(['true', 'false']).optional(),
   _t: z.string().optional(),
 });
 

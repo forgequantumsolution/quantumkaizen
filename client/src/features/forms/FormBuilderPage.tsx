@@ -270,8 +270,15 @@ export default function FormBuilderPage() {
   const onPublish = async () => {
     if (!id) return;
     try {
-      await saveFields.mutateAsync({ id, sections, title, description });
-      toast.success(`${Noun} published`);
+      const result = await saveFields.mutateAsync({ id, sections, title, description });
+      // When the form is bound to a workflow that already has tickets the
+      // server clones into a new version row instead of mutating the live
+      // schema — tell the user which version they now have.
+      toast.success(
+        result.version_bumped
+          ? `${Noun} saved as v${result.version} (older version stays attached to in-flight tickets)`
+          : `${Noun} published`,
+      );
       nav(backRoute);
     } catch (e) {
       toast.error((e as Error).message);

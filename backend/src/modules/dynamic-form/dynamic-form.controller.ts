@@ -32,11 +32,14 @@ export const createForm = async (req: Request, res: Response) => {
 };
 
 export const saveFormFields = async (req: Request, res: Response) => {
-  await service.saveFormFields(
+  const result = await service.saveFormFields(
     req.params.id as string,
     req.body as SaveFormFieldsInput
   );
-  success(res, 'Form saved');
+  const msg = result.version_bumped
+    ? `Form saved as v${result.version}`
+    : 'Form saved';
+  success(res, msg, result);
 };
 
 export const saveDraft = async (req: Request, res: Response) => {
