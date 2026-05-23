@@ -16,6 +16,14 @@ import { layoutGraph } from '@/features/workflows/builder/layout';
 import { nodeTypes } from '@/features/workflows/builder/nodes';
 import type { StageNodeData } from '@/features/workflows/builder/builder.types';
 
+export interface SelectedStageInfo {
+  canonicalId: string;
+  persistedId?: string;
+  name: string;
+  isCurrent: boolean;
+  isInitial: boolean;
+}
+
 interface Props {
   workflowId: string;
   /** Stage canonical IDs the ticket is currently parked on. */
@@ -26,6 +34,10 @@ interface Props {
   interactive?: boolean;
   /** Layout direction: 'LR' horizontal (default), 'TB' top-to-bottom. */
   direction?: 'LR' | 'TB';
+  /** Fired when the user clicks a stage node. Non-stage nodes are ignored. */
+  onStageNodeClick?: (info: SelectedStageInfo) => void;
+  /** Fired when the user clicks empty canvas — useful for clearing selection. */
+  onPaneClick?: () => void;
 }
 
 export default function TicketFlowCanvas({
@@ -35,6 +47,8 @@ export default function TicketFlowCanvas({
   height = 420,
   interactive = true,
   direction = 'LR',
+  onStageNodeClick,
+  onPaneClick,
 }: Props) {
   const { data, isLoading, error } = useWorkflow(workflowId);
 
@@ -130,6 +144,18 @@ export default function TicketFlowCanvas({
         onInit={(inst) => {
           rfRef.current = inst;
         }}
+        onNodeClick={(_e, node) => {
+          if (!onStageNodeClick || node.type !== 'stage') return;
+          const d = node.data as StageNodeData;
+          onStageNodeClick({
+            canonicalId: node.id,
+            persistedId: d.persistedStageId,
+            name: d.label || 'Untitled stage',
+            isCurrent: d.isCurrent === true,
+            isInitial: d.is_initial_stage === true,
+          });
+        }}
+        onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         fitView
         nodesDraggable={false}

@@ -2,7 +2,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Settings, ChevronLeft,
   ChevronRight, Clock, ChevronDown,
-  Palette, Ticket,
+  Palette,
   AlertTriangle, FileWarning, ShieldAlert, Wrench,
   GitBranch, Layers, FileText, Beaker, BookOpen,
   Database, ClipboardList,
@@ -106,11 +106,6 @@ export default function Sidebar() {
     if (moduleItems.length > 0) {
       sections.push({ title: 'Modules', items: moduleItems, collapsible: true });
     }
-
-    sections.push({
-      title: 'Workspace',
-      items: [{ label: 'Tickets', path: '/tickets', icon: Ticket }],
-    });
 
     sections.push({
       title: '',

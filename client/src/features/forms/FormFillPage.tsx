@@ -5,23 +5,18 @@
 // query params, submission is routed through the workflow-bound endpoint
 // (POST /tickets/:id/forms/:formId/submissions) so the resulting row carries
 // the right FKs and counts toward `form.layer.findUnsatisfiedRequiredForms`.
-import { useEffect, useMemo, useState } from 'react';
+//
+// The actual form-rendering / save / submit lives in FormFillEmbed so the same
+// component can be reused inline (e.g. inside the ticket detail page).
+import { useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Send, Save, AlertCircle } from 'lucide-react';
-import toast from 'react-hot-toast';
-import { App } from 'antd';
+import { ArrowLeft } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
-import FieldRenderer from './FieldRenderer';
-import { useFormDetail, useSubmitForm } from './hooks';
-import { useCreateWorkflowSubmission } from '@/lib/api/stageForm';
-import { evaluateVisibility } from './lib/dependency';
-import { validateField } from './lib/validation';
-import type { FormSectionDef } from './types';
-
-type Errors = Record<string, Record<string, string>>; // sectionName -> fieldName -> message
+import FormFillEmbed from './FormFillEmbed';
+import { useFormDetail } from './hooks';
 
 export default function FormFillPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,117 +26,13 @@ export default function FormFillPage() {
     const bindingId = params.get('bindingId');
     return ticketId && bindingId ? { ticketId, bindingId } : null;
   }, [params]);
+  const submissionId = params.get('submissionId');
 
   const nav = useNavigate();
-  const { modal } = App.useApp();
   const { data: detail, isLoading } = useFormDetail(id);
-  const submitMutation = useSubmitForm();
-  const workflowSubmit = useCreateWorkflowSubmission(
-    workflowCtx?.ticketId ?? '',
-    id ?? '',
-  );
-  const [pendingStatus, setPendingStatus] = useState<
-    'IN_PROGRESS' | 'SUBMITTED' | null
-  >(null);
-  const isBusy = pendingStatus !== null;
-
-  const sections = useMemo<FormSectionDef[]>(
-    () => (detail?.draft_data as { sections?: FormSectionDef[] })?.sections ?? [],
-    [detail]
-  );
-
-  const [responses, setResponses] = useState<Record<string, Record<string, unknown>>>({});
-  const [errors, setErrors] = useState<Errors>({});
-
-  useEffect(() => {
-    setResponses({});
-    setErrors({});
-  }, [id]);
-
-  const lookup = (sectionName: string, fieldName: string) =>
-    responses[sectionName]?.[fieldName];
-
-  const setFieldValue = (sectionName: string, fieldName: string, v: unknown) => {
-    setResponses((prev) => ({
-      ...prev,
-      [sectionName]: { ...(prev[sectionName] ?? {}), [fieldName]: v },
-    }));
-    // clear the error as soon as the user touches the field
-    setErrors((e) => {
-      if (!e[sectionName]?.[fieldName]) return e;
-      const sec = { ...e[sectionName] };
-      delete sec[fieldName];
-      return { ...e, [sectionName]: sec };
-    });
-  };
-
-  const runSubmit = async (status: 'IN_PROGRESS' | 'SUBMITTED') => {
-    if (!id) return;
-    setPendingStatus(status);
-    try {
-      if (workflowCtx) {
-        await workflowSubmit.mutateAsync({
-          bindingId: workflowCtx.bindingId,
-          status,
-          responses: responses as Record<string, unknown>,
-        });
-      } else {
-        await submitMutation.mutateAsync({ formId: id, responses, status });
-      }
-      toast.success(status === 'SUBMITTED' ? 'Form submitted' : 'Saved as draft');
-      if (status === 'SUBMITTED') {
-        nav(workflowCtx ? `/tickets/${workflowCtx.ticketId}` : '/forms');
-      }
-    } catch (e) {
-      const msg =
-        (e as { response?: { data?: { error?: { message?: string }; message?: string } } })
-          .response?.data?.error?.message ??
-        (e as { response?: { data?: { message?: string } } }).response?.data?.message ??
-        (e as Error).message;
-      toast.error(msg);
-    } finally {
-      setPendingStatus(null);
-    }
-  };
-
-  const handleSaveDraft = () => runSubmit('IN_PROGRESS');
-
-  const handleSubmitClick = () => {
-    if (!id) return;
-    // Validate visible fields before showing the confirmation modal — no point
-    // confirming a submission that the server would reject.
-    const next: Errors = {};
-    for (const sec of sections) {
-      if (!evaluateVisibility(sec.dependency, lookup)) continue;
-      for (const f of sec.fields) {
-        if (!evaluateVisibility(f.dependency, lookup)) continue;
-        const err = validateField(f, lookup(sec.section_name, f.name));
-        if (err) {
-          next[sec.section_name] = { ...(next[sec.section_name] ?? {}), [f.name]: err };
-        }
-      }
-    }
-    if (Object.keys(next).length) {
-      setErrors(next);
-      const total = Object.values(next).reduce((n, s) => n + Object.keys(s).length, 0);
-      toast.error(`${total} field${total === 1 ? '' : 's'} need attention`);
-      return;
-    }
-    setErrors({});
-
-    modal.confirm({
-      title: 'Submit form',
-      content:
-        'Are you sure you want to submit this form? Once submitted you will not be able to edit your responses.',
-      okText: 'Submit',
-      cancelText: 'Cancel',
-      centered: true,
-      onOk: () => runSubmit('SUBMITTED'),
-    });
-  };
 
   if (isLoading) return <div className="flex justify-center py-16"><Spinner /></div>;
-  if (!detail) return <div className="p-8 text-slate-500">Form not found.</div>;
+  if (!detail || !id) return <div className="p-8 text-slate-500">Form not found.</div>;
 
   return (
     <PageContainer>
@@ -157,86 +48,19 @@ export default function FormFillPage() {
       <PageHeader
         title={detail.form_details.title}
         description={detail.form_details.description ?? undefined}
-        actions={
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={handleSaveDraft}
-              isLoading={pendingStatus === 'IN_PROGRESS'}
-              disabled={isBusy}
-            >
-              <Save className="h-4 w-4" /> Save progress
-            </Button>
-            <Button
-              onClick={handleSubmitClick}
-              isLoading={pendingStatus === 'SUBMITTED'}
-              disabled={isBusy}
-            >
-              <Send className="h-4 w-4" /> Submit
-            </Button>
-          </div>
-        }
       />
 
-      <div className="space-y-5">
-        {sections.map((sec) => {
-          if (!evaluateVisibility(sec.dependency, lookup)) return null;
-          const description = (sec as { description?: string }).description;
-          return (
-            <section
-              key={sec.section_id ?? sec.section_name}
-              className="rounded-xl border border-slate-200 bg-white p-6"
-            >
-              <header className="mb-4 pb-2 border-b border-slate-100">
-                <h2 className="text-lg font-semibold text-slate-800">{sec.section_name}</h2>
-                {description && (
-                  <p className="text-sm text-slate-500 mt-1">{description}</p>
-                )}
-              </header>
-              <div className="grid grid-cols-12 gap-4">
-                {sec.fields.map((f) => {
-                  if (!evaluateVisibility(f.dependency, lookup)) return null;
-                  const span = widthToCols(f.width);
-                  const err = errors[sec.section_name]?.[f.name];
-                  const helpText = (f as { helpText?: string }).helpText;
-                  return (
-                    <div key={f.field_id ?? f.name} className={`col-span-12 ${span}`}>
-                      <label className="block text-sm font-medium text-slate-700 mb-1.5">
-                        {f.label}
-                        {f.required && <span className="text-rose-500 ml-0.5">*</span>}
-                      </label>
-                      <FieldRenderer
-                        field={f}
-                        value={responses[sec.section_name]?.[f.name]}
-                        onChange={(v) => setFieldValue(sec.section_name, f.name, v)}
-                      />
-                      {helpText && !err && (
-                        <p className="mt-1 text-xs text-slate-500">{helpText}</p>
-                      )}
-                      {err && (
-                        <p className="mt-1 text-xs text-rose-600 flex items-center gap-1">
-                          <AlertCircle className="h-3 w-3" /> {err}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
-      </div>
+      <FormFillEmbed
+        formId={id}
+        workflowCtx={workflowCtx}
+        submissionId={submissionId}
+        variant="card"
+        onSubmitted={(status) => {
+          if (status === 'SUBMITTED') {
+            nav(workflowCtx ? `/tickets/${workflowCtx.ticketId}` : '/forms');
+          }
+        }}
+      />
     </PageContainer>
   );
 }
-
-const widthToCols = (w?: string) => {
-  switch (w) {
-    case '25': return 'md:col-span-3';
-    case '33': return 'md:col-span-4';
-    case '50': return 'md:col-span-6';
-    case '66': return 'md:col-span-8';
-    case '75': return 'md:col-span-9';
-    default:   return 'md:col-span-12';
-  }
-};

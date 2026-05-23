@@ -1,26 +1,45 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { App, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { App } from 'antd';
 import {
   Plus,
   Search,
-  Ticket as TicketIcon,
   Filter as FilterIcon,
-  X,
-  Network,
+  Download,
+  Settings2,
+  LayoutDashboard,
+  Briefcase,
+  Bookmark,
+  BookmarkCheck,
+  Eye,
   Trash2,
+  Clock,
+  Users,
+  User as UserIcon,
+  List as ListIcon,
+  FileText,
   Workflow as WorkflowIcon,
+  AlertTriangle,
+  CheckCircle2,
+  History,
+  X,
 } from 'lucide-react';
-import { Card, Button, EmptyState, Spinner, Input, Select } from '@/components/ui';
+import {
+  Card,
+  Button,
+  EmptyState,
+  Spinner,
+  Input,
+  Select,
+} from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn, formatDate, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
+import { useBookmarkStore } from '@/stores/bookmarkStore';
 import {
   useDeleteTicket,
   useTickets,
-  type ListTicketsQuery,
   type TicketSummary,
 } from '@/lib/api/ticket';
 import { useWorkflows } from '@/lib/api/workflow';
@@ -29,14 +48,44 @@ import {
   useWorkflowTypes,
 } from '@/lib/api/workflowLookups';
 import RaiseTicketDrawer from '@/features/tickets/shared/RaiseTicketDrawer';
-import TicketStatusBadge from '@/features/tickets/shared/TicketStatusBadge';
+import ModuleDashboard from './ModuleDashboard';
 
-type StatusFilter = NonNullable<ListTicketsQuery['status']>;
+type KpiId = 'mine' | 'department' | 'createdByMe' | 'all' | 'pending' | 'saved';
+type Tab = 'dashboard' | 'workspace';
 
-const STATUS_TABS: { value: StatusFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'open', label: 'Open' },
-  { value: 'completed', label: 'Completed' },
+interface ColumnConfig {
+  id: string;
+  label: string;
+  required?: boolean;
+}
+
+const COLUMN_CONFIG: ColumnConfig[] = [
+  { id: 'bookmark', label: 'Bookmark', required: true },
+  { id: 'uniqueId', label: 'ID', required: true },
+  { id: 'createdAt', label: 'Created Date' },
+  { id: 'process', label: 'Process Name' },
+  { id: 'title', label: 'Title', required: true },
+  { id: 'stage', label: 'Current Stage' },
+  { id: 'department', label: 'Department' },
+  { id: 'actions', label: 'Action', required: true },
+];
+
+const DEFAULT_VISIBLE = new Set(COLUMN_CONFIG.map((c) => c.id));
+
+const KPI_DEFS: Array<{
+  id: KpiId;
+  label: string;
+  icon: React.ElementType;
+  color: string;
+  bg: string;
+  ring: string;
+}> = [
+  { id: 'mine',        label: 'My PR',            icon: FileText,       color: 'text-blue-600',    bg: 'bg-blue-50',    ring: 'ring-blue-300' },
+  { id: 'department',  label: 'My Department PR', icon: Users,          color: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-300' },
+  { id: 'createdByMe', label: 'Created By Me',    icon: UserIcon,       color: 'text-slate-600',   bg: 'bg-slate-100',  ring: 'ring-slate-300' },
+  { id: 'all',         label: 'All PR',           icon: ListIcon,       color: 'text-amber-600',   bg: 'bg-amber-50',   ring: 'ring-amber-300' },
+  { id: 'pending',     label: 'Pending',          icon: Clock,          color: 'text-orange-500',  bg: 'bg-orange-50',  ring: 'ring-orange-300' },
+  { id: 'saved',       label: 'Saved PR',         icon: Bookmark,       color: 'text-rose-500',    bg: 'bg-rose-50',    ring: 'ring-rose-300' },
 ];
 
 function useDebounced<T>(value: T, ms = 250) {
@@ -48,14 +97,23 @@ function useDebounced<T>(value: T, ms = 250) {
   return v;
 }
 
+const relativeDays = (iso: string): string => {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return '1 day';
+  return `${days} days`;
+};
+
 export default function ModulePage() {
   const { typeId = '' } = useParams<{ typeId: string }>();
   const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canCreate = hasPermission('ticket.create');
   const canDelete = hasPermission('ticket.delete');
   const deleteTicket = useDeleteTicket();
   const { modal } = App.useApp();
+  const bookmarks = useBookmarkStore();
 
   const { data: types = [], isLoading: loadingTypes } = useWorkflowTypes();
   const workflowType = useMemo(
@@ -63,37 +121,35 @@ export default function ModulePage() {
     [types, typeId],
   );
 
-  // Reset filters when navigating between modules.
+  const [tab, setTab] = useState<Tab>('dashboard');
+  const [activeKpi, setActiveKpi] = useState<KpiId | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounced(searchInput, 250);
-  const [status, setStatus] = useState<StatusFilter>('all');
-  const [mine, setMine] = useState<'true' | 'false'>('false');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(DEFAULT_VISIBLE);
   const [priorityId, setPriorityId] = useState<string>('');
   const [workflowFilterId, setWorkflowFilterId] = useState<string>('');
-  const [pageSize, setPageSize] = useState(50);
   const [createOpen, setCreateOpen] = useState(false);
 
+  // Reset state when switching modules
   useEffect(() => {
+    setTab('dashboard');
+    setActiveKpi(null);
     setSearchInput('');
-    setStatus('all');
-    setMine('false');
     setPriorityId('');
     setWorkflowFilterId('');
   }, [typeId]);
 
-  const filters: ListTicketsQuery = useMemo(
-    () => ({
-      search: search || undefined,
-      status,
-      mine,
-      workflowTypeId: typeId || undefined,
-      workflowId: workflowFilterId || undefined,
-      pageSize,
-    }),
-    [search, status, mine, typeId, workflowFilterId, pageSize],
-  );
+  // Single fetch for the module — KPIs and table are derived from this.
+  // Backend caps pageSize at 200; KPI counts beyond that will under-report.
+  const { data, isLoading, error } = useTickets({
+    workflowTypeId: typeId || undefined,
+    status: 'all',
+    pageSize: 200,
+  });
+  const allTickets = useMemo(() => data?.items ?? [], [data]);
 
-  const { data, isLoading, error } = useTickets(filters);
   const { data: priorities = [] } = usePriorities();
   const { data: workflowsData } = useWorkflows({
     status: 'ACTIVE',
@@ -102,23 +158,80 @@ export default function ModulePage() {
   });
   const typeWorkflows = workflowsData?.items ?? [];
 
-  const items: TicketSummary[] = useMemo(() => {
-    const list = data?.items ?? [];
-    if (!priorityId) return list;
-    return list.filter((t) => t.priority?.id === priorityId);
-  }, [data?.items, priorityId]);
-  const totalAll = data?.total ?? 0;
+  // KPI counts
+  const kpiCounts = useMemo(() => {
+    const myId = user?.id;
+    const myDept = user?.department;
+    return {
+      mine:        allTickets.filter((t) => t.createdBy?.id === myId).length,
+      department:  myDept ? allTickets.filter((t) => t.department?.name === myDept).length : 0,
+      createdByMe: allTickets.filter((t) => t.createdBy?.id === myId).length,
+      all:         allTickets.length,
+      pending:     allTickets.filter((t) => !t.flows[0]?.isCompleted).length,
+      saved:       allTickets.filter((t) => bookmarks.isBookmarked(t.id)).length,
+    };
+  }, [allTickets, user, bookmarks]);
 
-  const hasActiveFilters =
-    !!search || status !== 'all' || mine === 'true' || !!priorityId || !!workflowFilterId;
+  // "My Workspace" = tickets the user can act on. We treat that as: I created it,
+  // OR it's in my department, OR I have a broad transition permission (so admins
+  // who don't author tickets still see something useful instead of an empty list).
+  const isWorkspaceWideViewer = hasPermission('ticket.transition');
 
-  const clearFilters = () => {
-    setSearchInput('');
-    setStatus('all');
-    setMine('false');
-    setPriorityId('');
-    setWorkflowFilterId('');
-  };
+  // Filtering pipeline: tab → kpi → search → priority → workflow
+  const filtered = useMemo(() => {
+    let list = allTickets;
+
+    if (tab === 'workspace' && !isWorkspaceWideViewer) {
+      const myId = user?.id;
+      const myDept = user?.department;
+      list = list.filter(
+        (t) =>
+          (myId && t.createdBy?.id === myId) ||
+          (myDept && t.department?.name === myDept),
+      );
+    }
+
+    if (activeKpi) {
+      const myId = user?.id;
+      const myDept = user?.department;
+      switch (activeKpi) {
+        case 'mine':
+        case 'createdByMe':
+          list = list.filter((t) => t.createdBy?.id === myId);
+          break;
+        case 'department':
+          list = myDept ? list.filter((t) => t.department?.name === myDept) : [];
+          break;
+        case 'all':
+          break;
+        case 'pending':
+          list = list.filter((t) => !t.flows[0]?.isCompleted);
+          break;
+        case 'saved':
+          list = list.filter((t) => bookmarks.isBookmarked(t.id));
+          break;
+      }
+    }
+
+    if (search) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (t) =>
+          t.uniqueId.toLowerCase().includes(q) ||
+          t.title.toLowerCase().includes(q),
+      );
+    }
+
+    if (priorityId) {
+      list = list.filter((t) => t.priority?.id === priorityId);
+    }
+
+    if (workflowFilterId) {
+      list = list.filter((t) => t.flows.some((f) => f.workflowId === workflowFilterId));
+    }
+
+    return list;
+  }, [allTickets, tab, activeKpi, search, priorityId, workflowFilterId, user, bookmarks, isWorkspaceWideViewer]);
 
   const handleDelete = (t: TicketSummary) => {
     modal.confirm({
@@ -142,6 +255,34 @@ export default function ModulePage() {
     });
   };
 
+  const handleDownload = () => {
+    const cols = COLUMN_CONFIG.filter((c) => visibleCols.has(c.id) && c.id !== 'bookmark' && c.id !== 'actions');
+    const header = cols.map((c) => c.label).join(',');
+    const rows = filtered.map((t) =>
+      cols
+        .map((c) => {
+          switch (c.id) {
+            case 'uniqueId':   return t.uniqueId;
+            case 'createdAt':  return formatDate(t.createdAt);
+            case 'process':    return moduleName;
+            case 'title':      return JSON.stringify(t.title);
+            case 'stage':      return t.flows[0]?.currentStages[0]?.name ?? (t.flows[0]?.isCompleted ? 'Completed' : '—');
+            case 'department': return t.department?.name ?? '';
+            default:           return '';
+          }
+        })
+        .join(','),
+    );
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(workflowType?.name ?? 'tickets').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (!loadingTypes && !workflowType) {
     return (
       <PageContainer>
@@ -150,8 +291,8 @@ export default function ModulePage() {
             icon={WorkflowIcon}
             title="Module not found"
             description="This workflow type doesn't exist or has been removed."
-            actionLabel="Back to Tickets"
-            onAction={() => navigate('/tickets')}
+            actionLabel="Back to Dashboard"
+            onAction={() => navigate('/dashboard')}
           />
         </Card>
       </PageContainer>
@@ -160,144 +301,223 @@ export default function ModulePage() {
 
   const moduleName = workflowType?.name ?? 'Module';
   const codePrefix = workflowType?.codePrefix;
+  const hasFilter = !!priorityId || !!workflowFilterId;
 
   return (
     <PageContainer>
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-h1 text-gray-900">{moduleName}</h1>
-            {codePrefix && (
-              <span className="text-[11px] font-mono font-semibold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">
-                {codePrefix}
+      {/* ── Top header (title + search + filter + buttons) ──────────────── */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+          {moduleName}
+        </h1>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative w-64">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
+            />
+            <Input
+              placeholder="Search requests…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Button
+            variant={hasFilter ? 'primary' : 'outline'}
+            size="sm"
+            onClick={() => setFilterOpen((v) => !v)}
+          >
+            <FilterIcon size={14} />
+            <span className="ml-1.5">Filter</span>
+            {hasFilter && (
+              <span className="ml-1.5 bg-white/30 text-white text-[10px] font-semibold rounded-full w-4 h-4 inline-flex items-center justify-center">
+                {(priorityId ? 1 : 0) + (workflowFilterId ? 1 : 0)}
               </span>
             )}
-            <span className="text-xs font-medium text-[#8A6C18] bg-[#C9A84C]/15 px-2 py-0.5 rounded-full">
-              {totalAll} in scope
-            </span>
-          </div>
-          <p className="text-sm text-gray-500 mt-0.5">
-            Tickets raised against the <span className="font-medium">{moduleName}</span>{' '}
-            workflow type.
-          </p>
-        </div>
-        {canCreate && (
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate('/dashboard')}
+          >
+            <LayoutDashboard size={14} />
+            <span className="ml-1.5">View Dashboard</span>
+          </Button>
           <Button
             variant="primary"
-            onClick={() => setCreateOpen(true)}
-            disabled={typeWorkflows.length === 0}
-            title={
-              typeWorkflows.length === 0
-                ? `No active ${moduleName} workflows yet — create one first.`
-                : undefined
-            }
+            size="sm"
+            onClick={() => {
+              setTab('dashboard');
+              setActiveKpi(null);
+              setSearchInput('');
+            }}
           >
-            <Plus size={16} />
-            <span className="ml-1.5">Raise {moduleName}</span>
+            <History size={14} />
+            <span className="ml-1.5">Recent {moduleName} Details</span>
           </Button>
+          {canCreate && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+              disabled={typeWorkflows.length === 0}
+              title={
+                typeWorkflows.length === 0
+                  ? `No active ${moduleName} workflows yet — create one first.`
+                  : undefined
+              }
+            >
+              <Plus size={14} />
+              <span className="ml-1.5">Initiate {moduleName}</span>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Sub-tabs ────────────────────────────────────────────────────── */}
+      <div className="mt-3 border-b border-gray-200 flex items-center gap-1">
+        <TabButton
+          active={tab === 'dashboard'}
+          onClick={() => setTab('dashboard')}
+          icon={<LayoutDashboard size={14} />}
+          label="Dashboard"
+        />
+        <TabButton
+          active={tab === 'workspace'}
+          onClick={() => setTab('workspace')}
+          icon={<Briefcase size={14} />}
+          label="My Workspace"
+        />
+        {codePrefix && (
+          <span className="ml-auto text-[11px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mb-1.5">
+            {codePrefix}
+          </span>
         )}
       </div>
 
-      {/* ── Filter bar ────────────────────────────────────────────────────── */}
-      <Card className="!p-4">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-              {STATUS_TABS.map((t) => (
-                <button
-                  key={t.value}
-                  type="button"
-                  onClick={() => setStatus(t.value)}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
-                    status === t.value
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900',
-                  )}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-              {(
-                [
-                  { v: 'false' as const, label: 'All' },
-                  { v: 'true' as const, label: 'Mine' },
-                ]
-              ).map((opt) => (
-                <button
-                  key={opt.v}
-                  type="button"
-                  onClick={() => setMine(opt.v)}
-                  className={cn(
-                    'px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
-                    mine === opt.v
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900',
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+      {tab === 'dashboard' && (
+        <>
+          {/* ── KPI cards ───────────────────────────────────────────────── */}
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {KPI_DEFS.map((k) => (
+              <KpiCard
+                key={k.id}
+                kpi={k}
+                count={kpiCounts[k.id]}
+                active={activeKpi === k.id}
+                onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
+              />
+            ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
-            <div className="relative md:col-span-6">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
-              />
-              <Input
-                placeholder="Search by ID or title…"
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                className="pl-9"
-              />
-            </div>
-            <Select
-              value={priorityId}
-              onChange={(e) => setPriorityId(e.target.value)}
-              placeholder="Any priority"
-              options={[
-                { value: '', label: 'Any priority' },
-                ...priorities.map((p) => ({ value: p.id, label: p.name })),
-              ]}
-              className="md:col-span-3"
-            />
-            <Select
-              value={workflowFilterId}
-              onChange={(e) => setWorkflowFilterId(e.target.value)}
-              placeholder="Any workflow"
-              options={[
-                { value: '', label: 'Any workflow' },
-                ...typeWorkflows.map((w) => ({ value: w.id, label: displayWorkflowName(w) })),
-              ]}
-              className="md:col-span-3"
-            />
-          </div>
-
-          {hasActiveFilters && (
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <FilterIcon size={12} />
-              <span>Filters active</span>
-              <button
-                type="button"
-                onClick={clearFilters}
-                className="ml-auto inline-flex items-center gap-1 text-gray-600 hover:text-gray-900"
-              >
-                <X size={12} /> Clear all
-              </button>
+          {/* ── Module dashboard (charts) ──────────────────────────────── */}
+          {!activeKpi && (
+            <div className="mt-4">
+              <ModuleDashboard tickets={allTickets} moduleName={moduleName} />
             </div>
           )}
-        </div>
-      </Card>
+        </>
+      )}
 
-      {/* ── Results ───────────────────────────────────────────────────────── */}
-      <div>
+      {/* ── Toolbar (Download + Customize Columns only) ─────────────────── */}
+      {(tab === 'workspace' || activeKpi) && (
+        <div className="mt-4 flex items-center justify-end gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={handleDownload}>
+            <Download size={14} />
+            <span className="ml-1.5">Download</span>
+          </Button>
+          <div className="relative">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setColumnsOpen((v) => !v)}
+            >
+              <Settings2 size={14} />
+              <span className="ml-1.5">Customize Columns</span>
+            </Button>
+            {columnsOpen && (
+              <ColumnsPopover
+                visible={visibleCols}
+                onToggle={(id) => {
+                  setVisibleCols((s) => {
+                    const next = new Set(s);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  });
+                }}
+                onClose={() => setColumnsOpen(false)}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {filterOpen && (
+        <Card className="!p-3 mt-2">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+            <div className="md:col-span-4">
+              <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                Priority
+              </label>
+              <Select
+                value={priorityId}
+                onChange={(e) => setPriorityId(e.target.value)}
+                placeholder="Any priority"
+                options={[
+                  { value: '', label: 'Any priority' },
+                  ...priorities.map((p) => ({ value: p.id, label: p.name })),
+                ]}
+              />
+            </div>
+            <div className="md:col-span-5">
+              <label className="block text-[11px] font-medium text-gray-600 mb-1">
+                Workflow
+              </label>
+              <Select
+                value={workflowFilterId}
+                onChange={(e) => setWorkflowFilterId(e.target.value)}
+                placeholder="Any workflow"
+                options={[
+                  { value: '', label: 'Any workflow' },
+                  ...typeWorkflows.map((w) => ({
+                    value: w.id,
+                    label: displayWorkflowName(w),
+                  })),
+                ]}
+              />
+            </div>
+            <div className="md:col-span-3 flex gap-2">
+              {hasFilter && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPriorityId('');
+                    setWorkflowFilterId('');
+                  }}
+                >
+                  <X size={12} />
+                  <span className="ml-1">Clear</span>
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setFilterOpen(false)}
+                className="ml-auto"
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* ── Table (workspace tab, or when a KPI is filtered) ────────────── */}
+      {(tab === 'workspace' || activeKpi) && (
+      <div className="mt-3">
         {isLoading ? (
           <div className="flex justify-center py-16">
             <Spinner />
@@ -306,67 +526,49 @@ export default function ModulePage() {
           <Card>
             <p className="text-sm text-red-600">Failed to load tickets.</p>
           </Card>
-        ) : items.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <Card className="border-dashed">
             <EmptyState
-              icon={TicketIcon}
-              title={`No ${moduleName} tickets yet`}
+              icon={FileText}
+              title={`No ${moduleName} tickets`}
               description={
-                hasActiveFilters
-                  ? 'Try clearing filters or broadening your search.'
-                  : typeWorkflows.length === 0
-                    ? `No active workflows exist for ${moduleName}. Create one in Workflows first.`
-                    : canCreate
-                      ? `Raise the first ${moduleName} ticket to get started.`
-                      : "You don't have any tickets yet."
+                allTickets.length === 0
+                  ? canCreate
+                    ? `Initiate the first ${moduleName} to get started.`
+                    : `No ${moduleName} tickets yet.`
+                  : 'Try clearing filters or switching tabs.'
               }
               actionLabel={
-                hasActiveFilters
-                  ? 'Clear filters'
-                  : typeWorkflows.length === 0
-                    ? 'Go to Workflows'
-                    : canCreate
-                      ? `Raise ${moduleName}`
-                      : undefined
+                allTickets.length === 0 && canCreate
+                  ? `Initiate ${moduleName}`
+                  : 'Clear filters'
               }
-              onAction={
-                hasActiveFilters
-                  ? clearFilters
-                  : typeWorkflows.length === 0
-                    ? () => navigate('/workflows')
-                    : canCreate
-                      ? () => setCreateOpen(true)
-                      : undefined
-              }
+              onAction={() => {
+                if (allTickets.length === 0 && canCreate) {
+                  setCreateOpen(true);
+                } else {
+                  setActiveKpi(null);
+                  setPriorityId('');
+                  setWorkflowFilterId('');
+                  setSearchInput('');
+                  setTab('dashboard');
+                }
+              }}
             />
           </Card>
         ) : (
-          <Card noPadding className="overflow-hidden">
-            <Table<TicketSummary>
-              rowKey="id"
-              dataSource={items}
-              columns={buildColumns({ canDelete, onDelete: handleDelete })}
-              pagination={false}
-              size="middle"
-              onRow={(t) => ({
-                onClick: () => navigate(`/tickets/${t.id}`),
-                style: { cursor: 'pointer' },
-              })}
-            />
-          </Card>
-        )}
-
-        {!isLoading && totalAll > items.length && !priorityId && (
-          <div className="mt-4 flex items-center justify-between text-xs text-gray-500">
-            <span>
-              Showing {items.length} of {totalAll}
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => setPageSize((s) => s + 50)}>
-              Load 50 more
-            </Button>
-          </div>
+          <TicketTable
+            tickets={filtered}
+            moduleName={moduleName}
+            visibleCols={visibleCols}
+            isBookmarked={(id) => bookmarks.isBookmarked(id)}
+            onToggleBookmark={(id) => bookmarks.toggle(id)}
+            onView={(t) => navigate(`/tickets/${t.id}`)}
+            onDelete={canDelete ? handleDelete : undefined}
+          />
         )}
       </div>
+      )}
 
       <RaiseTicketDrawer
         isOpen={createOpen}
@@ -377,108 +579,326 @@ export default function ModulePage() {
   );
 }
 
-function buildColumns({
-  canDelete,
+/* ── Helper components ───────────────────────────────────────────────── */
+
+interface TabButtonProps {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}
+
+function TabButton({ active, onClick, icon, label }: TabButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+        active
+          ? 'text-blue-600 border-blue-500'
+          : 'text-gray-500 border-transparent hover:text-gray-800',
+      )}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+interface KpiCardProps {
+  kpi: (typeof KPI_DEFS)[number];
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}
+
+function KpiCard({ kpi, count, active, onClick }: KpiCardProps) {
+  const Icon = kpi.icon;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'group flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-white text-left shadow-sm transition-all',
+        active
+          ? `ring-2 ${kpi.ring} border-transparent`
+          : 'border-gray-200 hover:border-gray-300 hover:shadow',
+      )}
+    >
+      <div className="min-w-0">
+        <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide truncate">
+          {kpi.label}
+        </div>
+        <div className={cn('text-2xl font-bold mt-0.5', kpi.color)}>
+          {count}
+        </div>
+      </div>
+      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0', kpi.bg, kpi.color)}>
+        <Icon size={18} />
+      </div>
+    </button>
+  );
+}
+
+interface ColumnsPopoverProps {
+  visible: Set<string>;
+  onToggle: (id: string) => void;
+  onClose: () => void;
+}
+
+function ColumnsPopover({ visible, onToggle, onClose }: ColumnsPopoverProps) {
+  return (
+    <>
+      <div className="fixed inset-0 z-10" onClick={onClose} />
+      <div className="absolute right-0 top-full mt-1 z-20 w-56 bg-white rounded-lg shadow-lg border border-gray-200 p-2">
+        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-2 py-1">
+          Columns
+        </div>
+        {COLUMN_CONFIG.map((c) => {
+          const isVisible = visible.has(c.id);
+          return (
+            <label
+              key={c.id}
+              className={cn(
+                'flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer',
+                c.required ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50',
+              )}
+            >
+              <input
+                type="checkbox"
+                checked={isVisible}
+                disabled={c.required}
+                onChange={() => onToggle(c.id)}
+                className="rounded"
+              />
+              <span className="text-gray-700">{c.label}</span>
+            </label>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+interface TicketTableProps {
+  tickets: TicketSummary[];
+  moduleName: string;
+  visibleCols: Set<string>;
+  isBookmarked: (id: string) => boolean;
+  onToggleBookmark: (id: string) => void;
+  onView: (t: TicketSummary) => void;
+  onDelete?: (t: TicketSummary) => void;
+}
+
+function TicketTable({
+  tickets,
+  moduleName,
+  visibleCols,
+  isBookmarked,
+  onToggleBookmark,
+  onView,
   onDelete,
+}: TicketTableProps) {
+  return (
+    <Card noPadding className="overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              {visibleCols.has('bookmark') && <Th className="w-10" />}
+              {visibleCols.has('uniqueId') && <Th>ID</Th>}
+              {visibleCols.has('createdAt') && <Th>Created Date</Th>}
+              {visibleCols.has('process') && <Th>Process Name</Th>}
+              {visibleCols.has('title') && <Th>Title</Th>}
+              {visibleCols.has('stage') && <Th>Current Stage</Th>}
+              {visibleCols.has('department') && <Th>Department</Th>}
+              {visibleCols.has('actions') && <Th className="w-32 text-center">Action</Th>}
+            </tr>
+          </thead>
+          <tbody>
+            {tickets.map((t) => {
+              const flow = t.flows[0];
+              const completed = !!flow?.isCompleted;
+              const stageName = flow?.currentStages[0]?.name;
+              const bookmarked = isBookmarked(t.id);
+              return (
+                <tr
+                  key={t.id}
+                  onClick={() => onView(t)}
+                  className={cn(
+                    'border-b border-gray-100 cursor-pointer transition-colors',
+                    completed
+                      ? 'bg-emerald-50/40 hover:bg-emerald-50/70'
+                      : 'hover:bg-gray-50',
+                  )}
+                >
+                  {visibleCols.has('bookmark') && (
+                    <Td>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleBookmark(t.id);
+                        }}
+                        className="p-1 rounded hover:bg-gray-100"
+                        title={bookmarked ? 'Remove bookmark' : 'Bookmark'}
+                      >
+                        {bookmarked ? (
+                          <BookmarkCheck size={14} className="text-amber-500 fill-amber-400" />
+                        ) : (
+                          <Bookmark size={14} className="text-gray-400" />
+                        )}
+                      </button>
+                    </Td>
+                  )}
+                  {visibleCols.has('uniqueId') && (
+                    <Td>
+                      <span className="text-[12px] font-mono text-gray-700">
+                        {t.uniqueId}
+                      </span>
+                    </Td>
+                  )}
+                  {visibleCols.has('createdAt') && (
+                    <Td>
+                      <div className="text-sm text-gray-700">{formatDate(t.createdAt)}</div>
+                      <div className="text-[11px] text-gray-400">{relativeDays(t.createdAt)}</div>
+                    </Td>
+                  )}
+                  {visibleCols.has('process') && (
+                    <Td>
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md">
+                        <AlertTriangle size={11} />
+                        {moduleName}
+                      </span>
+                    </Td>
+                  )}
+                  {visibleCols.has('title') && (
+                    <Td className="max-w-md">
+                      <div className="text-sm text-gray-900 line-clamp-2">{t.title}</div>
+                    </Td>
+                  )}
+                  {visibleCols.has('stage') && (
+                    <Td>
+                      {completed ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                          <CheckCircle2 size={11} />
+                          Completed
+                        </span>
+                      ) : stageName ? (
+                        <span className="inline-flex items-center text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                          {stageName}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </Td>
+                  )}
+                  {visibleCols.has('department') && (
+                    <Td>
+                      <span className="text-xs text-gray-700 truncate">
+                        {t.department?.name ?? '—'}
+                      </span>
+                    </Td>
+                  )}
+                  {visibleCols.has('actions') && (
+                    <Td className="text-center" onClick={(e) => e.stopPropagation()}>
+                      <div className="inline-flex items-center gap-1">
+                        <IconAction
+                          icon={<Eye size={14} />}
+                          title="View"
+                          onClick={() => onView(t)}
+                        />
+                        <IconAction
+                          icon={<Download size={14} />}
+                          title="Download"
+                          onClick={() => {
+                            const blob = new Blob(
+                              [JSON.stringify(t, null, 2)],
+                              { type: 'application/json' },
+                            );
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${t.uniqueId}.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                          }}
+                          subtle
+                        />
+                        {onDelete && (
+                          <IconAction
+                            icon={<Trash2 size={14} />}
+                            title="Delete"
+                            onClick={() => onDelete(t)}
+                            danger
+                          />
+                        )}
+                      </div>
+                    </Td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}
+
+function Th({ children, className }: { children?: React.ReactNode; className?: string }) {
+  return (
+    <th
+      className={cn(
+        'text-left text-[11px] font-semibold text-gray-600 uppercase tracking-wide px-4 py-2.5',
+        className,
+      )}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  className,
+  onClick,
 }: {
-  canDelete: boolean;
-  onDelete: (t: TicketSummary) => void;
-}): ColumnsType<TicketSummary> {
-  const cols: ColumnsType<TicketSummary> = [
-    {
-      title: 'ID',
-      dataIndex: 'uniqueId',
-      key: 'uniqueId',
-      width: 130,
-      render: (uniqueId: string) => (
-        <span className="text-[11px] font-mono text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">
-          {uniqueId}
-        </span>
-      ),
-    },
-    {
-      title: 'Title',
-      dataIndex: 'title',
-      key: 'title',
-      ellipsis: true,
-      render: (title: string) => (
-        <span className="text-sm font-semibold text-gray-900">{title}</span>
-      ),
-    },
-    {
-      title: 'Workflow · Stage',
-      key: 'workflow',
-      width: 220,
-      ellipsis: true,
-      render: (_, t) => {
-        const flow = t.flows[0];
-        if (!flow) return <span className="text-gray-400">—</span>;
-        return (
-          <span className="inline-flex items-center gap-1 text-xs text-gray-600">
-            <Network size={11} className="text-gray-400 shrink-0" />
-            <span className="truncate">
-              {displayWorkflowName({
-                id: flow.workflowId,
-                name: flow.workflowName,
-                version: flow.workflowVersion,
-              })}
-            </span>
-            {flow.currentStages[0] && (
-              <>
-                <span className="text-gray-300">·</span>
-                <span className="text-blue-700 truncate">{flow.currentStages[0].name}</span>
-              </>
-            )}
-          </span>
-        );
-      },
-    },
-    {
-      title: 'Priority',
-      key: 'priority',
-      width: 110,
-      render: (_, t) => (
-        <span className="text-xs text-gray-700">{t.priority?.name ?? '—'}</span>
-      ),
-    },
-    {
-      title: 'Status',
-      key: 'status',
-      width: 130,
-      render: (_, t) => <TicketStatusBadge ticket={t} />,
-    },
-    {
-      title: 'Updated',
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
-      width: 120,
-      render: (updatedAt: string) => (
-        <span className="text-xs text-gray-500">{formatDate(updatedAt)}</span>
-      ),
-    },
-  ];
+  children?: React.ReactNode;
+  className?: string;
+  onClick?: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <td className={cn('px-4 py-3 align-middle', className)} onClick={onClick}>
+      {children}
+    </td>
+  );
+}
 
-  if (canDelete) {
-    cols.push({
-      title: '',
-      key: 'actions',
-      width: 50,
-      align: 'center',
-      render: (_, t) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(t);
-          }}
-          className="text-gray-400 hover:text-red-600 transition-colors p-1 rounded"
-          title="Delete ticket"
-        >
-          <Trash2 size={14} />
-        </button>
-      ),
-    });
-  }
+interface IconActionProps {
+  icon: React.ReactNode;
+  title: string;
+  onClick: () => void;
+  danger?: boolean;
+  subtle?: boolean;
+}
 
-  return cols;
+function IconAction({ icon, title, onClick, danger, subtle }: IconActionProps) {
+  const cls = danger
+    ? 'text-red-500 hover:bg-red-50'
+    : subtle
+      ? 'text-gray-300 hover:text-gray-600 hover:bg-gray-100'
+      : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={cn('p-1.5 rounded transition-colors', cls)}
+    >
+      {icon}
+    </button>
+  );
 }
