@@ -1940,19 +1940,38 @@ The version suffix matters because P1.11 made forms versioned — a stage can be
 
 ---
 
-## Misc — Form builder layout: use shared PageContainer
+## Misc — Settings → Forms / Workflows: kill doubled PageHeader + nested PageContainer
 
-**File:** `client/src/features/forms/FormBuilderPage.tsx`
+**Files:**
+- `client/src/pages/SettingsPage.tsx`
+- `client/src/features/forms/FormListPage.tsx`
+- `client/src/features/workflows/WorkflowsPage.tsx`
+- `client/src/App.tsx`
+- `client/src/features/forms/FormBuilderPage.tsx`
 
-User reported the form builder looked cramped/broken when the sidebar was open. Root cause: the page was the only one in the app that didn't wrap its body in `PageContainer` — it used `<div className="min-h-screen bg-slate-50">` with `w-full` inner divs and zero horizontal padding, so with the sidebar expanded (256px) the top bar and grid jammed flush against both edges and the 3/9 col split lost ~200px of working width with no breathing room.
+User screenshot showed `/settings?section=forms` rendering two stacked page headers: "Forms / Browse and configure dynamic forms." (from `SettingsPage`) and right below it "Form Builder / Build and version dynamic forms for any process" (from the embedded `FormListPage`). Same shape existed on `/settings?section=workflows`. Root cause: `SettingsPage` already wraps its body in `<PageContainer><PageHeader/>`, then embeds `<FormListPage />` / `<WorkflowsPage />` directly — and those pages ALSO wrapped themselves in `<PageContainer><PageHeader/>`. Two headers + nested padding.
+
+Sidebar links go to `/settings?section=...` ([Sidebar.tsx:122-123](client/src/components/layout/Sidebar.tsx)) so the embedded path is the primary route; the standalone `/forms` and `/workflows` routes still exist in `App.tsx` but aren't linked from anywhere in the nav.
+
+### Approach (after one iteration)
+
+First pass introduced a `PageActionsContext` with `PageActionsProvider` + `useHoistPageActions` hook so embedded pages could register action buttons that would render in the outer SettingsPage's PageHeader. Over-engineered for two embedded sections: caused a render flash (effect-based registration), spread the "what's in this header" logic across three files, and required per-page inline fallback rendering. Ripped it out and replaced with explicit hardcoded actions in SettingsPage.
 
 ### Changed
 
-- Outer wrapper: `<div className="min-h-screen bg-slate-50">` → `<PageContainer noSpacing>` (inherits the standard `px-4 sm:px-6 pt-5 pb-10` used by every other page; `noSpacing` keeps the builder's own vertical rhythm).
-- Sticky top bar: added `-mx-4 sm:-mx-6 px-4 sm:px-6` so it still bleeds edge-to-edge inside the padded container while its contents stay aligned with the rest of the page.
-- Canvas div: `py-6` → `pt-6` (PageContainer already provides `pb-10`).
+- **`FormListPage`** — dropped its own `<PageContainer>` and `<PageHeader>`. Returns tabs / KPIs / toolbar / grid as a fragment. No action buttons rendered here at all; SettingsPage's PageHeader provides "Field types" + "New form".
+- **`WorkflowsPage`** — same treatment: dropped `<PageContainer>` and `<PageHeader>`. Now accepts an optional `onCreateWorkflow?: () => void` prop. When provided (embedded case), the page skips its own header button + `CreateWorkflowModal`, and the EmptyState's "Create" action delegates to the parent. When omitted (standalone /workflows), the page keeps its self-managed inline button + modal so create still works.
+- **`SettingsPage`** — single PageHeader, single PageContainer. `headerActions` is computed per-section:
+  - `forms` → "Field types" + "New form/checklist" buttons (the kind label is derived from the `?tab=checklists` query param SettingsPage already reads).
+  - `workflows` → "Create Workflow" button (gated on the `workflow.create` permission, read via `useAuthStore`); SettingsPage owns the `createWorkflowOpen` state and renders `CreateWorkflowModal` itself, passing `onCreateWorkflow` down to `WorkflowsPage`.
+  - `master-data` → unchanged Save Changes button.
+- **`App.tsx`** — standalone `/forms` and `/workflows` routes wrapped in `<PageContainer>` at the route level so direct URL access still gets the standard padding.
 
-Page background changes from `slate-50` to the global `surface-bg` from AppLayout — matches every other page now. `FormCreatePage` has a similar outer wrapper but already applies `px-6` on its inner divs, so it doesn't have the squeeze problem and was left alone.
+Standalone `/forms` has no header buttons (the route isn't linked from the sidebar; URL-only access). Standalone `/workflows` keeps the inline self-managed Create flow that was there before this refactor.
+
+### Earlier in this session (unrelated to the duplicate)
+
+`FormBuilderPage` also moved from `<div className="min-h-screen bg-slate-50">` + `w-full py-6` to `<PageContainer noSpacing>` (with `-mx-4 sm:-mx-6 px-4 sm:px-6` on its sticky top bar so it still bleeds edge-to-edge). Different problem — the builder canvas was flush against both edges with no horizontal padding when the app sidebar was open. Fix kept; doesn't interact with the doubled-header issue. `FormCreatePage` has a similar `min-h-screen` outer wrapper but already applies `px-6` on its inner divs, so it doesn't have the squeeze problem and was left alone.
 
 ---
 

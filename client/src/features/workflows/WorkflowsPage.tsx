@@ -13,8 +13,6 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Card, Button, EmptyState, Spinner, Input, Select } from '@/components/ui';
-import PageContainer from '@/components/layout/PageContainer';
-import PageHeader from '@/components/layout/PageHeader';
 import { cn, formatDate, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import {
@@ -35,7 +33,14 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'INACTIVE', label: 'Inactive' },
 ];
 
-export default function WorkflowsPage() {
+interface Props {
+  // Provided by an outer wrapper (SettingsPage) that owns the create flow.
+  // When set, this page skips its own header button + modal and delegates
+  // create triggers (e.g. from EmptyState) to the parent.
+  onCreateWorkflow?: () => void;
+}
+
+export default function WorkflowsPage({ onCreateWorkflow }: Props = {}) {
   const navigate = useNavigate();
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canCreate = hasPermission('workflow.create');
@@ -76,29 +81,25 @@ export default function WorkflowsPage() {
   };
 
   const items = data?.items ?? [];
-  const total = data?.total ?? 0;
+
+  // When embedded (SettingsPage passes onCreateWorkflow), the parent owns the
+  // create flow — we don't render our own header button or modal here.
+  const isEmbedded = onCreateWorkflow !== undefined;
+  const triggerCreate = onCreateWorkflow ?? (() => setCreateOpen(true));
 
   return (
-    <PageContainer>
-      <PageHeader
-        title="Workflows"
-        description={
-          total > 0
-            ? `${total} workflow${total === 1 ? '' : 's'} configured`
-            : 'Design and manage workflow definitions'
-        }
-        actions={
-          canCreate ? (
-            <Button variant="primary" onClick={() => setCreateOpen(true)}>
-              <Plus size={16} />
-              <span className="ml-1.5">Create Workflow</span>
-            </Button>
-          ) : null
-        }
-      />
+    <>
+      {!isEmbedded && canCreate && (
+        <div className="mb-4 flex justify-end">
+          <Button variant="primary" onClick={triggerCreate}>
+            <Plus size={16} />
+            <span className="ml-1.5">Create Workflow</span>
+          </Button>
+        </div>
+      )}
 
       {/* Filters */}
-      <Card className="mt-6 !p-4">
+      <Card className="!p-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="relative">
             <Search
@@ -151,7 +152,7 @@ export default function WorkflowsPage() {
                     : "You don't have any workflows yet."
               }
               actionLabel={canCreate ? 'Create Workflow' : undefined}
-              onAction={canCreate ? () => setCreateOpen(true) : undefined}
+              onAction={canCreate ? triggerCreate : undefined}
             />
           </Card>
         ) : (
@@ -171,8 +172,10 @@ export default function WorkflowsPage() {
         )}
       </div>
 
-      <CreateWorkflowModal isOpen={createOpen} onClose={() => setCreateOpen(false)} />
-    </PageContainer>
+      {!isEmbedded && (
+        <CreateWorkflowModal isOpen={createOpen} onClose={() => setCreateOpen(false)} />
+      )}
+    </>
   );
 }
 

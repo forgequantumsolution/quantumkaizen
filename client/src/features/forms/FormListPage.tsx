@@ -2,13 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, FileText, Eye, Pencil, Trash2,
-  ListChecks, Layers, ClipboardList, LayoutGrid, List, GitBranch, Check,
+  ListChecks, ClipboardList, LayoutGrid, List, GitBranch, Check,
   CheckSquare,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import PageContainer from '@/components/layout/PageContainer';
-import PageHeader from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import { KpiCard } from '@/components/ui/KpiCard';
 import EmptyState from '@/components/ui/EmptyState';
@@ -90,25 +87,12 @@ export default function FormListPage() {
     deleteForm.mutate(f.id, { onSuccess: () => toast.success(copy.deleteToast) });
   };
 
-  return (
-    <PageContainer>
-      <PageHeader
-        title={copy.pageTitle}
-        description={copy.pageDescription}
-        actions={
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => nav('/forms/field-types')}>
-              <Layers className="h-4 w-4" />
-              Field types
-            </Button>
-            <Button onClick={() => nav(copy.newRoute)}>
-              <Plus className="h-4 w-4" />
-              {copy.newButton}
-            </Button>
-          </div>
-        }
-      />
+  // Action buttons ("Field types", "New form/checklist") are rendered by the
+  // embedding SettingsPage in its PageHeader. The /forms standalone route
+  // isn't linked from the sidebar so we accept no header buttons there.
 
+  return (
+    <>
       <KindTabs active={activeKind} onChange={handleTabChange} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
@@ -166,7 +150,7 @@ export default function FormListPage() {
         />
       )}
 
-    </PageContainer>
+    </>
   );
 }
 
