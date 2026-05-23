@@ -380,6 +380,7 @@ export default function FormBuilderPage() {
                     onRemoveField={(fid) => removeField(activeSection, fid)}
                     onAddField={(at, t) => insertField(activeSection, at, t)}
                     hiddenFieldIds={hiddenFieldIds}
+                    inlineTypePicker
                   />
                 </>
               )}
