@@ -1838,6 +1838,69 @@ The Publish button in the builder used a native `window.confirm()` alert — inc
 - Per-stage SLA escalation `targetSlaStage` lookup currently re-resolves against the escalation workflow by canonicalId — if the escalation workflow itself has versioned in between, the new threshold's `targetSlaStageId` may be `null`. The original threshold survives on the old version; only the *cloned* one on the new version may lose the target. Worth verifying in a real escalation chain; left as a TODO.
 - Old version cleanup / GC isn't implemented; a workflow that's been heavily edited will accumulate rows. Acceptable for now (typed UUIDs, no perf impact on the hot path), but eventually we'll want a `prune` admin op that drops historic versions with no live tickets pointing at them.
 
+## P1.11 — Form versioning (mirrors workflow versioning from P1.10)
+
+**Date:** 2026-05-23
+**Files:**
+- [`backend/src/modules/dynamic-form/dynamic-form.service.ts`](backend/src/modules/dynamic-form/dynamic-form.service.ts)
+- [`backend/src/modules/dynamic-form/dynamic-form.controller.ts`](backend/src/modules/dynamic-form/dynamic-form.controller.ts)
+- [`backend/src/modules/dynamic-form/dynamic-form.schema.ts`](backend/src/modules/dynamic-form/dynamic-form.schema.ts)
+- [`client/src/features/forms/hooks.ts`](client/src/features/forms/hooks.ts)
+- [`client/src/features/forms/FormBuilderPage.tsx`](client/src/features/forms/FormBuilderPage.tsx)
+
+### Why
+
+User report: "the form versioning is not working — we don't save forms as different versions currently. I want the same behaviour as workflow versions: if the form is not attached to any workflow and has no ticket, update in place; if it's attached to a workflow that has a ticket, the workflow keeps using the old version until the new version is explicitly attached; new workflows always use the latest." The `Form` schema already had `templateKey` / `version` / `versionId` columns and `StageFormBinding.formId` / `FormSubmission.formId` already pinned to specific version rows — the save path just never bumped, so every publish was an in-place destructive rebuild against the single row. Same lesson workflows learned in P1.10, applied to forms.
+
+### Behavioural contract (new)
+
+| Operation | Before | After |
+|---|---|---|
+| `POST /forms/form/fields/create/:id` on a form with **no** bindings | In-place rebuild | In-place rebuild (unchanged) |
+| `POST /forms/form/fields/create/:id` on a form bound to a workflow that has **no ticket yet** | In-place rebuild | In-place rebuild (unchanged) |
+| `POST /forms/form/fields/create/:id` on a form bound to a workflow that **has a ticket** | In-place rebuild — silently mutated the schema in-flight tickets were filling | Clones a new `Form` row (same `templateKey`, `version = MAX+1`, fresh `versionId`); writes sections+fields against the new row; old row + old `StageFormBinding` + old `FormSubmission`s untouched |
+| `POST /forms/form_draft/save/:id` (Save Draft) | Upserts `FormDraft` only | Unchanged — drafts never bump |
+| `GET /forms/form/get/` | Returns every `Form` row (e.g. "Test Form" three times after two bumps) | Defaults to one row per `templateKey` (highest version); each row's `all_versions` list lets the UI dropdown reach old versions. Opt out with `?include_all_versions=true` |
+| Stage form-binding picker (`StageFormBindingEditor`) | Same `useForms` hook → showed duplicates after bumps | Inherits the latest-only dedupe automatically; new bindings pick the latest version |
+| Response shape from publish | `{ status, message }` | `{ status, message, data: { form_id, version, version_id, version_bumped } }` so the client can show "saved as v2" |
+
+### Changes
+
+- **`dynamic-form.service.ts`**:
+  - New `shouldBumpVersion(formId)` — single Prisma query: a `StageFormBinding` where `formId` matches AND `workflow.flows.some({ ticket: { isDeleted: false } })`. Workflow has no direct `tickets` relation; the path is `Workflow → TicketFlow → Ticket` (initially tripped a TS error here, fixed).
+  - `saveFormFields(id, input)`: decides bump-or-rebuild up front; computes `nextVersion` as `MAX(version per templateKey) + 1` (not `loaded.version + 1`) so a direct URL nav to an older row can't produce a duplicate version number. Either:
+    - **In-place**: drop sections on `id` → recreate sections → recreate fields → drop draft → patch form details on `id` (the existing path, unchanged).
+    - **Bump**: create new `Form` row with all carried-over metadata (formType, location/mainProcess/criteria/pdcaApproved, workflowName/workflowType, createdById) → recreate sections on the **new** row → recreate fields → drop draft on the **old** row (the draft represented "WIP that just got published"). Old sections/fields/bindings/submissions untouched.
+  - Single `prisma.$transaction([...])` for the whole save.
+  - Return type now `{ form_id, version, version_id, version_bumped }`.
+  - `listForms`: when `include_all_versions !== 'true'` (default), `groupBy({ by: ['templateKey'], _max: { version } })` then `findMany({ id: { in: latestIds } })` → paginated against the deduped set so `obj_count` reflects "logical forms", not "rows". The existing per-row `all_versions` list still populates correctly because it groups all versions of the appearing templateKeys.
+- **`dynamic-form.schema.ts`**: added `include_all_versions: z.enum(['true', 'false']).optional()` to `ListFormsQuerySchema`.
+- **`dynamic-form.controller.ts`**: `saveFormFields` forwards the version result; toast text becomes `Form saved as v{n}` when bumped, plain `Form saved` otherwise.
+- **`client/src/features/forms/hooks.ts`**: exported `SaveFormFieldsResult` type; `useSaveFormFields` returns the unwrapped `r.data?.data` instead of the whole envelope, and invalidates *both* the old `['form', vars.id]` cache and the new `['form', result.form_id]` cache on bump (the old id no longer reflects current schema).
+- **`client/src/features/forms/FormBuilderPage.tsx`**: `onPublish` reads `result.version_bumped` and shows the long-form toast when true: `"{Noun} saved as v{n} (older version stays attached to in-flight tickets)"`. `FormCreatePage` is left as-is — a brand-new form can never have a binding yet, so `version_bumped` is always false there.
+
+### Why these specific decisions (recorded from the question/answer round with the user before coding)
+
+- **Bump trigger** = "bound to workflow AND that workflow has a ticket". The user explicitly chose this over the broader "any binding OR any submission" trigger to keep version churn down for standalone fills. If a standalone form gets filled in a few times, in-place is fine — there's no in-flight workflow whose schema we're going to invalidate.
+- **Drafts never bump.** Save Draft only touches `FormDraft`, which is per-form scratch state, not the published schema. Bumping on every keystroke would create dozens of garbage version rows.
+- **Picker shows only latest per `templateKey`.** Matches "all new workflows will use the latest form version". Old versions are still reachable via the existing `all_versions` dropdown on each list row; nothing is hidden, just deduped.
+- **Old bindings are NOT auto-rolled forward.** The user said the workflow keeps using the old version "until the new form version is attached to it" — that means an explicit re-attach step in the workflow builder. By design.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (backend) | EXIT=0 |
+| `npx tsc --noEmit` (client) | EXIT=0 |
+| [`tests/e2e/form-versioning.spec.ts`](tests/e2e/form-versioning.spec.ts) — full lifecycle: create form → pub (in-place) → bind to workflow → pub (in-place, no ticket yet) → raise ticket → pub (BUMP) → v1 schema frozen → binding still pinned to v1 → v2 has both fields → list dedupes default; `include_all_versions=true` returns both | ✅ 47s |
+| Manual (user) — attach form to a workflow stage, raise a ticket on that workflow, then edit the form and publish; verify "saved as v2" toast + workflow stage still showing v1 | Pending user confirm |
+
+### Known follow-ups
+
+- No "you are editing an older version" guard on the builder yet — if someone hits `/forms/<oldVersionId>/builder` via a stale URL, the publish will create v(n+1) off of MAX (correct numerically) but the user might be confused about which row they were editing. The forms list always serves the latest id so direct-URL is the only way to hit it.
+- `FormCreatePage` discards the save result — fine today (new form, no bindings ever), but if we ever let users clone-from-existing in the create flow, this assumption needs re-examining.
+- Old-version GC: same situation as workflows. A form bumped twenty times leaves twenty rows + their section/field trees. No perf concern at typical scale; eventually wants a `prune` admin op that drops rows with no live ticket pointing at them.
+
 ---
 
 ## Convention for future entries
