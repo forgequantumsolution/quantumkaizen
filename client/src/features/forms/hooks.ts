@@ -24,6 +24,10 @@ export function useForms(params?: {
   is_completed?: 'true' | 'false';
   form_type_id?: string;
   kind?: FormKind;
+  // Opt into all historical version rows. Default list returns one row
+  // per templateKey (latest version); the workflow builder needs to look
+  // up old versions still pinned to existing bindings.
+  include_all_versions?: 'true' | 'false';
 }) {
   return useQuery({
     queryKey: ['forms', params],

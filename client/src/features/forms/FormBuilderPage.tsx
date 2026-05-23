@@ -9,6 +9,7 @@ import { ArrowLeft, Check, Eye, Pencil, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button as AntButton, Input as AntInput } from 'antd';
 import Spinner from '@/components/ui/Spinner';
+import PageContainer from '@/components/layout/PageContainer';
 import {
   useFieldTypes, useFormDetail, useSaveDraft, useSaveFormFields,
 } from './hooks';
@@ -294,9 +295,9 @@ export default function FormBuilderPage() {
   const hiddenFieldIds = new Set<string>();
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <PageContainer noSpacing>
       {/* TOP BAR ─────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+      <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="w-full h-14 flex items-center gap-3">
           <AntButton type="text" size="small" icon={<ArrowLeft className="h-4 w-4" />} onClick={() => nav(backRoute)}>
             {backLabel}
@@ -333,7 +334,7 @@ export default function FormBuilderPage() {
       </div>
 
       {/* CANVAS ─────────────────────────────────────────────── */}
-      <div className="w-full py-6">
+      <div className="w-full pt-6">
         {/* Form heading */}
         <div className="mb-6">
           <AntInput
@@ -397,7 +398,7 @@ export default function FormBuilderPage() {
           <FormPreview title={title} description={description} sections={sections} />
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }
 

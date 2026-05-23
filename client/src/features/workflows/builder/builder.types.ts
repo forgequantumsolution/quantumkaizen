@@ -27,6 +27,12 @@ export interface EmbeddedFormBinding {
   formId: string;
   isRequired: boolean;
   position: number;
+  // Denormalised so the inspector can render "{title} (v{n})" without a
+  // separate lookup. Populated by the backend (toFlowJson) on load, and by
+  // the picker (StageFormBindingEditor) on attach. Optional only for
+  // backwards-compat with canvas state saved before this field existed.
+  formTitle?: string;
+  formVersion?: number;
 }
 
 export interface EmbeddedSlaThreshold {

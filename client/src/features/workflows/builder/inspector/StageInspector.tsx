@@ -386,9 +386,9 @@ export default function StageInspector({
                 />
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-gray-900 truncate">
-                    {/* Form title isn't in canvas state — show the formId placeholder.
-                        The editor surfaces titles via the live form list. */}
-                    Form {b.formId.substring(0, 8)}…
+                    {b.formTitle
+                      ? `${b.formTitle}${b.formVersion ? ` (v${b.formVersion})` : ''}`
+                      : `Form ${b.formId.substring(0, 8)}…`}
                   </div>
                   <div className="text-[11px] text-gray-500">
                     {b.isRequired ? 'Required to transition' : 'Optional'}
