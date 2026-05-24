@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Copy root manifests + workspace manifests for cached install
 COPY package.json package-lock.json ./
-COPY server/package.json ./server/
+COPY backend/package.json ./backend/
 COPY client/package.json ./client/
 
 # Install all workspace deps (retry-resilient for flaky networks)
@@ -17,7 +17,11 @@ RUN npm config set fetch-retries 5 \
   && npm config set fetch-retry-maxtimeout 120000 \
   && npm ci --no-audit --prefer-offline
 
-# Copy client sources and build the production bundle
+# Copy client sources and build the production bundle.
+# VITE_API_BASE_URL stays relative so the bundle has no host baked in —
+# the frontend container's nginx proxies /api/* to the qk-api service.
+ARG VITE_API_BASE_URL=/api
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 COPY client ./client
 WORKDIR /app/client
 RUN npm run build
