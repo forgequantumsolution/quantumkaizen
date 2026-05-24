@@ -91,24 +91,26 @@ export default function Header() {
   // Build breadcrumbs
   const segments = location.pathname.split('/').filter(Boolean);
 
-  // When the route is /tickets/<id>(/…), resolve the ticket so we can show its
-  // human ID (e.g. "DOC-FQS-001") instead of the raw UUID in the breadcrumb.
-  // useTicket gates itself on a truthy id, so passing undefined on other routes
-  // is a no-op.
+  // On /tickets/<uuid>, swap the UUID segment for the human ID (e.g. DOC-FQS-001).
+  // Hide it entirely until the ticket loads so the raw UUID never flashes.
   const ticketIdSegment =
     segments[0] === 'tickets' && segments[1] ? segments[1] : undefined;
   const { data: ticket } = useTicket(ticketIdSegment);
 
-  const breadcrumbs = segments.map((seg, i) => {
-    const isTicketIdSegment =
-      i === 1 && segments[0] === 'tickets' && ticketIdSegment === seg;
-    const label = isTicketIdSegment
-      ? ticket?.uniqueId ?? seg
-      : breadcrumbMap[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1);
+  const visibleSegments =
+    ticketIdSegment && !ticket?.uniqueId
+      ? segments.filter((_, i) => i !== 1)
+      : segments;
+
+  const breadcrumbs = visibleSegments.map((seg, i) => {
+    const label =
+      seg === ticketIdSegment && ticket?.uniqueId
+        ? ticket.uniqueId
+        : breadcrumbMap[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1);
     return {
       label,
-      path: '/' + segments.slice(0, i + 1).join('/'),
-      isLast: i === segments.length - 1,
+      path: '/' + visibleSegments.slice(0, i + 1).join('/'),
+      isLast: i === visibleSegments.length - 1,
     };
   });
 
