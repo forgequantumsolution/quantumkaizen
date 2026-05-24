@@ -1895,11 +1895,83 @@ User report: "the form versioning is not working — we don't save forms as diff
 | [`tests/e2e/form-versioning.spec.ts`](tests/e2e/form-versioning.spec.ts) — full lifecycle: create form → pub (in-place) → bind to workflow → pub (in-place, no ticket yet) → raise ticket → pub (BUMP) → v1 schema frozen → binding still pinned to v1 → v2 has both fields → list dedupes default; `include_all_versions=true` returns both | ✅ 47s |
 | Manual (user) — attach form to a workflow stage, raise a ticket on that workflow, then edit the form and publish; verify "saved as v2" toast + workflow stage still showing v1 | Pending user confirm |
 
+### P1.11.1 — Stage inspector shows form name + version instead of UUID stub
+
+**Date:** 2026-05-23
+**Files:**
+- [`backend/src/modules/workflow/workflow.service.ts`](backend/src/modules/workflow/workflow.service.ts)
+- [`client/src/features/workflows/builder/builder.types.ts`](client/src/features/workflows/builder/builder.types.ts)
+- [`client/src/features/workflows/builder/inspector/StageFormBindingEditor.tsx`](client/src/features/workflows/builder/inspector/StageFormBindingEditor.tsx)
+- [`client/src/features/workflows/builder/inspector/StageInspector.tsx`](client/src/features/workflows/builder/inspector/StageInspector.tsx)
+- [`client/src/features/forms/hooks.ts`](client/src/features/forms/hooks.ts) (param widening — kept from earlier draft)
+
+User report: "the forms attached in the workflow which show while editing show the uuid instead of the form name, it should show the form name." The stage inspector's form-bindings list was rendering `Form abc12345…` because the canvas-state binding (`EmbeddedFormBinding`) only carried `{formId, isRequired, position}` — no title, no version.
+
+**First attempt — discarded:** I added a `useForms({ include_all_versions: 'true', page_size: 200 })` lookup inside `StageInspector`, built a `Map<formId, {title, version}>`, and fell back to the UUID stub when the lookup missed. The user immediately pushed back: *"why does it fallback to the uuid why cant we just render the form name, is it not coming the api."* Correct call — the workflow API already had the Form FK right there in the `formBindings` Prisma select and just wasn't including the title field. Client-side fetch-then-map was the wrong abstraction.
+
+**Actual fix — denormalise title + version into the canvas state at source:**
+
+- **Backend (`workflow.service.ts`)** — `workflowDetailSelect.stages.formBindings` now also selects `form: { select: { title: true, version: true } }`; `toFlowJson` maps the joined title/version into each `formBindings[]` entry. Single Prisma join, no N+1 — the existing `select` was already loading `stage.formBindings`.
+- **Canvas type (`builder.types.ts`)** — `EmbeddedFormBinding` gained optional `formTitle?: string` and `formVersion?: number`. Optional so legacy canvas state (saved before this field) still type-checks; new attaches + every backend reload populate them.
+- **Picker (`StageFormBindingEditor.tsx`)** — `handleAdd` now stashes the picked form's title + version into the binding it hands to `onAdd`. The picker already had the form row in hand from its `useForms` call — zero extra cost. Newly-attached bindings render their name *immediately*, no round-trip needed.
+- **Inspector (`StageInspector.tsx`)** — back to direct render: `b.formTitle ? `{b.formTitle} (v{b.formVersion})` : `Form {…}…``. Dropped the `useForms` lookup, the `useMemo` map, and the loading window. The UUID stub remains only as a literal-edge-case fallback for canvas state that predates this field on a form-deleted edge case.
+
+The version suffix matters because P1.11 made forms versioned — a stage can be pinned to v1 while v3 is the latest, and the user needs to see which version is attached to decide whether to re-attach.
+
+**Side change kept from the first attempt:** widened the `useForms` hook's params type to include `include_all_versions?: 'true' | 'false'` — the backend already accepted it but the client type didn't expose it. Other callers may still want it.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (backend) | EXIT=0 |
+| `npx tsc --noEmit` (client) | EXIT=0 |
+| Manual (user) — open workflow builder, click a stage with attached forms; rows should show "{form title} (v{n})" instead of "Form abc12345…". Attach a new form via the picker; the row should show the name immediately on add, before any save | Pending user confirm |
+
 ### Known follow-ups
 
+- **Bump trigger may be too permissive — flagged 2026-05-23 for revisit.** Current rule (binding-exists AND workflow-has-ticket) allows in-place edits during the window between "form attached to workflow" and "first ticket raised on that workflow". User observed this in practice: attached form → edited → no bump → raised ticket → next edit bumped. Two alternatives if we tighten:
+  - **(a) Bump as soon as any active binding exists** (simplest mental model; standalone forms still update freely).
+  - **(b) Check tickets across the entire workflow lineage** (root + versions), not just the binding's specific workflow row — fixes the specific edge case where a workflow has tickets on v1 but the new binding is on v2.
+  User chose to leave it as-is for now; revisit if the in-place-then-bump surprise causes a real incident.
 - No "you are editing an older version" guard on the builder yet — if someone hits `/forms/<oldVersionId>/builder` via a stale URL, the publish will create v(n+1) off of MAX (correct numerically) but the user might be confused about which row they were editing. The forms list always serves the latest id so direct-URL is the only way to hit it.
 - `FormCreatePage` discards the save result — fine today (new form, no bindings ever), but if we ever let users clone-from-existing in the create flow, this assumption needs re-examining.
 - Old-version GC: same situation as workflows. A form bumped twenty times leaves twenty rows + their section/field trees. No perf concern at typical scale; eventually wants a `prune` admin op that drops rows with no live ticket pointing at them.
+
+---
+
+## Misc — Settings → Forms / Workflows: kill doubled PageHeader + nested PageContainer
+
+**Files:**
+- `client/src/pages/SettingsPage.tsx`
+- `client/src/features/forms/FormListPage.tsx`
+- `client/src/features/workflows/WorkflowsPage.tsx`
+- `client/src/App.tsx`
+- `client/src/features/forms/FormBuilderPage.tsx`
+
+User screenshot showed `/settings?section=forms` rendering two stacked page headers: "Forms / Browse and configure dynamic forms." (from `SettingsPage`) and right below it "Form Builder / Build and version dynamic forms for any process" (from the embedded `FormListPage`). Same shape existed on `/settings?section=workflows`. Root cause: `SettingsPage` already wraps its body in `<PageContainer><PageHeader/>`, then embeds `<FormListPage />` / `<WorkflowsPage />` directly — and those pages ALSO wrapped themselves in `<PageContainer><PageHeader/>`. Two headers + nested padding.
+
+Sidebar links go to `/settings?section=...` ([Sidebar.tsx:122-123](client/src/components/layout/Sidebar.tsx)) so the embedded path is the primary route; the standalone `/forms` and `/workflows` routes still exist in `App.tsx` but aren't linked from anywhere in the nav.
+
+### Approach (after one iteration)
+
+First pass introduced a `PageActionsContext` with `PageActionsProvider` + `useHoistPageActions` hook so embedded pages could register action buttons that would render in the outer SettingsPage's PageHeader. Over-engineered for two embedded sections: caused a render flash (effect-based registration), spread the "what's in this header" logic across three files, and required per-page inline fallback rendering. Ripped it out and replaced with explicit hardcoded actions in SettingsPage.
+
+### Changed
+
+- **`FormListPage`** — dropped its own `<PageContainer>` and `<PageHeader>`. Returns tabs / KPIs / toolbar / grid as a fragment. No action buttons rendered here at all; SettingsPage's PageHeader provides "Field types" + "New form".
+- **`WorkflowsPage`** — same treatment: dropped `<PageContainer>` and `<PageHeader>`. Now accepts an optional `onCreateWorkflow?: () => void` prop. When provided (embedded case), the page skips its own header button + `CreateWorkflowModal`, and the EmptyState's "Create" action delegates to the parent. When omitted (standalone /workflows), the page keeps its self-managed inline button + modal so create still works.
+- **`SettingsPage`** — single PageHeader, single PageContainer. `headerActions` is computed per-section:
+  - `forms` → "Field types" + "New form/checklist" buttons (the kind label is derived from the `?tab=checklists` query param SettingsPage already reads).
+  - `workflows` → "Create Workflow" button (gated on the `workflow.create` permission, read via `useAuthStore`); SettingsPage owns the `createWorkflowOpen` state and renders `CreateWorkflowModal` itself, passing `onCreateWorkflow` down to `WorkflowsPage`.
+  - `master-data` → unchanged Save Changes button.
+- **`App.tsx`** — standalone `/forms` and `/workflows` routes wrapped in `<PageContainer>` at the route level so direct URL access still gets the standard padding.
+
+Standalone `/forms` has no header buttons (the route isn't linked from the sidebar; URL-only access). Standalone `/workflows` keeps the inline self-managed Create flow that was there before this refactor.
+
+### Earlier in this session (unrelated to the duplicate)
+
+`FormBuilderPage` also moved from `<div className="min-h-screen bg-slate-50">` + `w-full py-6` to `<PageContainer noSpacing>` (with `-mx-4 sm:-mx-6 px-4 sm:px-6` on its sticky top bar so it still bleeds edge-to-edge). Different problem — the builder canvas was flush against both edges with no horizontal padding when the app sidebar was open. Fix kept; doesn't interact with the doubled-header issue. `FormCreatePage` has a similar `min-h-screen` outer wrapper but already applies `px-6` on its inner divs, so it doesn't have the squeeze problem and was left alone.
 
 ---
 

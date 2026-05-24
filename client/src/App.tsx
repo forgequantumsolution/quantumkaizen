@@ -25,6 +25,7 @@ import SettingsPage from '@/pages/SettingsPage';
 import AppearancePage from '@/pages/AppearancePage';
 // Theme bridge — applies appearance store to the live document
 import AppearanceProvider from '@/components/theme/AppearanceProvider';
+import PageContainer from '@/components/layout/PageContainer';
 
 export default function App() {
   return (
@@ -38,7 +39,7 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/workflows" element={<WorkflowsPage />} />
+          <Route path="/workflows" element={<PageContainer><WorkflowsPage /></PageContainer>} />
           <Route path="/workflows/:id" element={<WorkflowDetailPage />} />
           <Route path="/workflows/:id/builder" element={<WorkflowBuilderPage />} />
           <Route path="/admin/workflow-lookups" element={<WorkflowLookupsPage />} />
@@ -48,7 +49,7 @@ export default function App() {
           <Route path="/modules/:typeId" element={<ModulePage />} />
 
           {/* Dynamic Forms */}
-          <Route path="/forms" element={<FormListPage />} />
+          <Route path="/forms" element={<PageContainer><FormListPage /></PageContainer>} />
           <Route path="/forms/new" element={<FormCreatePage />} />
           <Route path="/forms/field-types" element={<FieldTypesPage />} />
           <Route path="/forms/:id/builder" element={<FormBuilderPage />} />

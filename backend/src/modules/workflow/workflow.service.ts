@@ -118,6 +118,10 @@ const workflowDetailSelect = {
           formId: true,
           isRequired: true,
           position: true,
+          // Hydrate the form's display name + version so the builder
+          // inspector can render "{title} (v{n})" without a separate
+          // round-trip. Form is a Restrict FK so this row always exists.
+          form: { select: { title: true, version: true } },
         },
       },
     },
@@ -234,6 +238,8 @@ const toFlowJson = (wf: WorkflowDetail) => {
         formId: fb.formId,
         isRequired: fb.isRequired,
         position: fb.position,
+        formTitle: fb.form.title,
+        formVersion: fb.form.version,
       })),
       sla: stage.slaPolicy
         ? {

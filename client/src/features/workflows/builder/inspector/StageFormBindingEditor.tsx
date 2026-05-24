@@ -69,7 +69,17 @@ export default function StageFormBindingEditor({
       toast.error('Position must be a non-negative integer');
       return;
     }
-    onAdd({ formId, isRequired, position: positionNum });
+    // Stash the picked form's title + version alongside the id so the
+    // inspector can render the name without a separate lookup. The picker
+    // already had the row in hand from useForms — no extra query needed.
+    const picked = allForms.find((f) => f.id === formId);
+    onAdd({
+      formId,
+      isRequired,
+      position: positionNum,
+      formTitle: picked?.title,
+      formVersion: picked?.version,
+    });
     toast.success('Form attached');
     onClose();
   };

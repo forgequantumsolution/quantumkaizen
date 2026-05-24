@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
-  Save, Check,
+  Save, Check, Plus,
   Building2, Users as UsersIcon, Layers, KeyRound, Lock,
   Workflow, Bell, Shield, MapPin, AlertOctagon,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
+import { useAuthStore } from "@/stores/authStore";
+import CreateWorkflowModal from "@/features/workflows/shared/CreateWorkflowModal";
 import { cn } from "@/lib/utils";
 import GeneralTab from "@/features/admin/organization/GeneralTab";
 import UsersTab from "@/features/admin/users/UsersTab";
@@ -51,6 +53,10 @@ const SECTION_TITLES: Record<Section, string> = {
 const NO_SAVE_MD_TABS = new Set<MdTab>(["workflow-types"]);
 
 export default function SettingsPage() {
+  const nav = useNavigate();
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const canCreateWorkflow = hasPermission("workflow.create");
+
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
   const tabParam = searchParams.get("tab");
@@ -62,6 +68,18 @@ export default function SettingsPage() {
   const activeTab: MdTab = VALID_MD_TABS.has(tabParam as MdTab)
     ? (tabParam as MdTab)
     : "general";
+
+  // Workflow create flow lives here when the workflows section is embedded —
+  // WorkflowsPage's header button + modal are skipped, and its EmptyState
+  // triggers this open via the onCreateWorkflow prop.
+  const [createWorkflowOpen, setCreateWorkflowOpen] = useState(false);
+
+  // For the Forms section, the "New form" / "New checklist" button depends on
+  // which kind tab the user is viewing; tab=checklists when looking at
+  // checklists, otherwise default to forms.
+  const isChecklistTab = searchParams.get("tab") === "checklists";
+  const formNewRoute = isChecklistTab ? "/forms/new?kind=CHECKLIST" : "/forms/new";
+  const formNewLabel = isChecklistTab ? "New checklist" : "New form";
 
   const setActiveTab = (key: MdTab) => {
     setSearchParams({ tab: key });
@@ -99,6 +117,35 @@ export default function SettingsPage() {
     ssoProvider: "SAML",
   });
 
+  // Section-specific header actions. Forms / Workflows used to live in the
+  // embedded page's own PageHeader, which produced a doubled header. They now
+  // render here in SettingsPage's single PageHeader.
+  const headerActions =
+    section === "forms" ? (
+      <div className="flex gap-2">
+        <Button variant="secondary" onClick={() => nav("/forms/field-types")}>
+          <Layers className="h-4 w-4" />
+          Field types
+        </Button>
+        <Button onClick={() => nav(formNewRoute)}>
+          <Plus className="h-4 w-4" />
+          {formNewLabel}
+        </Button>
+      </div>
+    ) : section === "workflows" ? (
+      canCreateWorkflow ? (
+        <Button variant="primary" onClick={() => setCreateWorkflowOpen(true)}>
+          <Plus size={16} />
+          <span className="ml-1.5">Create Workflow</span>
+        </Button>
+      ) : undefined
+    ) : !NO_SAVE_MD_TABS.has(activeTab) ? (
+      <Button variant="primary" onClick={handleSave}>
+        {saved ? <Check size={15} /> : <Save size={15} />}
+        {saved ? "Saved!" : "Save Changes"}
+      </Button>
+    ) : undefined;
+
   return (
     <PageContainer>
       <PageHeader
@@ -110,20 +157,19 @@ export default function SettingsPage() {
               ? "Browse and configure workflow definitions."
               : "Browse and configure dynamic forms."
         }
-        actions={
-          section !== "master-data" || NO_SAVE_MD_TABS.has(activeTab)
-            ? undefined
-            : (
-              <Button variant="primary" onClick={handleSave}>
-                {saved ? <Check size={15} /> : <Save size={15} />}
-                {saved ? "Saved!" : "Save Changes"}
-              </Button>
-            )
-        }
+        actions={headerActions}
       />
 
       {/* ── WORKFLOWS section ───────────────────────────── */}
-      {section === "workflows" && <WorkflowsPage />}
+      {section === "workflows" && (
+        <>
+          <WorkflowsPage onCreateWorkflow={() => setCreateWorkflowOpen(true)} />
+          <CreateWorkflowModal
+            isOpen={createWorkflowOpen}
+            onClose={() => setCreateWorkflowOpen(false)}
+          />
+        </>
+      )}
 
       {/* ── FORMS section ───────────────────────────────── */}
       {section === "forms" && <FormListPage />}
