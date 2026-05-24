@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import {
   Save, Check, Plus,
   Building2, Users as UsersIcon, Layers, KeyRound, Lock,
   Workflow, Bell, Shield, MapPin, AlertOctagon,
 } from "lucide-react";
+// Note: when section === "forms", FormListPage renders its own ListPageHeader
+// (title + search + view toggle + create button), so we skip PageHeader here.
 import { Button } from "@/components/ui/Button";
 import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
@@ -53,7 +55,6 @@ const SECTION_TITLES: Record<Section, string> = {
 const NO_SAVE_MD_TABS = new Set<MdTab>(["workflow-types"]);
 
 export default function SettingsPage() {
-  const nav = useNavigate();
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const canCreateWorkflow = hasPermission("workflow.create");
 
@@ -73,13 +74,6 @@ export default function SettingsPage() {
   // WorkflowsPage's header button + modal are skipped, and its EmptyState
   // triggers this open via the onCreateWorkflow prop.
   const [createWorkflowOpen, setCreateWorkflowOpen] = useState(false);
-
-  // For the Forms section, the "New form" / "New checklist" button depends on
-  // which kind tab the user is viewing; tab=checklists when looking at
-  // checklists, otherwise default to forms.
-  const isChecklistTab = searchParams.get("tab") === "checklists";
-  const formNewRoute = isChecklistTab ? "/forms/new?kind=CHECKLIST" : "/forms/new";
-  const formNewLabel = isChecklistTab ? "New checklist" : "New form";
 
   const setActiveTab = (key: MdTab) => {
     setSearchParams({ tab: key });
@@ -117,29 +111,17 @@ export default function SettingsPage() {
     ssoProvider: "SAML",
   });
 
-  // Section-specific header actions. Forms / Workflows used to live in the
-  // embedded page's own PageHeader, which produced a doubled header. They now
-  // render here in SettingsPage's single PageHeader.
+  // Section-specific header actions. Workflows' Create button still lives here;
+  // Forms renders its own ListPageHeader (skip PageHeader entirely below).
   const headerActions =
-    section === "forms" ? (
-      <div className="flex gap-2">
-        <Button variant="secondary" onClick={() => nav("/forms/field-types")}>
-          <Layers className="h-4 w-4" />
-          Field types
-        </Button>
-        <Button onClick={() => nav(formNewRoute)}>
-          <Plus className="h-4 w-4" />
-          {formNewLabel}
-        </Button>
-      </div>
-    ) : section === "workflows" ? (
+    section === "workflows" ? (
       canCreateWorkflow ? (
         <Button variant="primary" onClick={() => setCreateWorkflowOpen(true)}>
           <Plus size={16} />
           <span className="ml-1.5">Create Workflow</span>
         </Button>
       ) : undefined
-    ) : !NO_SAVE_MD_TABS.has(activeTab) ? (
+    ) : section === "master-data" && !NO_SAVE_MD_TABS.has(activeTab) ? (
       <Button variant="primary" onClick={handleSave}>
         {saved ? <Check size={15} /> : <Save size={15} />}
         {saved ? "Saved!" : "Save Changes"}
@@ -148,17 +130,17 @@ export default function SettingsPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title={SECTION_TITLES[section]}
-        description={
-          section === "master-data"
-            ? "Master configuration data — organization, users, departments, roles, access, workflow types, and more."
-            : section === "workflows"
-              ? "Browse and configure workflow definitions."
-              : "Browse and configure dynamic forms."
-        }
-        actions={headerActions}
-      />
+      {section !== "forms" && (
+        <PageHeader
+          title={SECTION_TITLES[section]}
+          description={
+            section === "master-data"
+              ? "Master configuration data — organization, users, departments, roles, access, workflow types, and more."
+              : "Browse and configure workflow definitions."
+          }
+          actions={headerActions}
+        />
+      )}
 
       {/* ── WORKFLOWS section ───────────────────────────── */}
       {section === "workflows" && (

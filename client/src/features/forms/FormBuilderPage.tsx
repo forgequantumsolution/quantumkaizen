@@ -3,21 +3,21 @@
 //   • Main pane – form title/description, then a SectionPanel + FieldTable
 //                 for the active section. Each field is one row of the table;
 //                 click the gear to expand validation/options/logic inline.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Check, Eye, Pencil, Save } from 'lucide-react';
+import { ArrowLeft, Check, Eye, Monitor, Pencil, Save, Smartphone } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { Button as AntButton, Input as AntInput } from 'antd';
+import { Button as AntButton, Input as AntInput, Segmented } from 'antd';
 import Spinner from '@/components/ui/Spinner';
 import PageContainer from '@/components/layout/PageContainer';
 import {
   useFieldTypes, useFormDetail, useSaveDraft, useSaveFormFields,
 } from './hooks';
 import { fieldUsesOptions } from './fieldCatalog';
-import SectionRail from './components/SectionRail';
+import SectionTabsBar from './components/SectionTabsBar';
 import SectionPanel from './components/SectionPanel';
 import FieldTable from './components/FieldTable';
-import FormPreview from './components/FormPreview';
+import FormPreview, { type PreviewDevice } from './components/FormPreview';
 import type { ParentField } from './components/DependencyEditor';
 import type { DependencyRule } from './lib/dependency';
 import type { FieldType, FormFieldDef, FormKind, FormSectionDef } from './types';
@@ -62,6 +62,7 @@ export default function FormBuilderPage() {
   const saveDraft = useSaveDraft();
 
   const [mode, setMode] = useState<Mode>('build');
+  const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [sections, setSections] = useState<FormSectionDef[]>([]);
@@ -72,7 +73,9 @@ export default function FormBuilderPage() {
   const noun = isChecklist ? 'checklist' : 'form';
   const Noun = isChecklist ? 'Checklist' : 'Form';
   const backLabel = isChecklist ? 'Checklists' : 'Forms';
-  const backRoute = isChecklist ? '/forms?tab=checklists' : '/forms';
+  const backRoute = isChecklist
+    ? '/settings?section=forms&tab=checklists'
+    : '/settings?section=forms';
 
   // Hydrate from server payload
   useEffect(() => {
@@ -88,30 +91,21 @@ export default function FormBuilderPage() {
     setActiveSection(0);
   }, [detail]);
 
-  const totalFields = useMemo(
-    () => sections.reduce((n, s) => n + s.fields.length, 0),
-    [sections]
-  );
-
   // ── Section mutators ─────────────────────────────────────────
+  // updateSection is rename-aware: when section_name changes, any dependency
+  // rules referencing the old name are rewritten so they keep matching.
   const updateSection = (idx: number, patch: Partial<FormSectionDef>) =>
-    setSections((s) => s.map((sec, i) => (i === idx ? { ...sec, ...patch } : sec)));
-
-  const renameSection = (idx: number, name: string) => {
-    const oldName = sections[idx]?.section_name;
-    if (oldName === undefined || oldName === name) {
-      updateSection(idx, { section_name: name });
-      return;
-    }
     setSections((s) => {
-      const renamed = s.map((sec, i) =>
-        i === idx ? { ...sec, section_name: name } : sec,
-      );
-      return remapDependencies(renamed, (cond) =>
-        cond.sectionName === oldName ? { sectionName: name } : null,
+      const oldName = s[idx]?.section_name;
+      const newName = patch.section_name;
+      const nameChanged =
+        newName !== undefined && oldName !== undefined && newName !== oldName;
+      const updated = s.map((sec, i) => (i === idx ? { ...sec, ...patch } : sec));
+      if (!nameChanged) return updated;
+      return remapDependencies(updated, (cond) =>
+        cond.sectionName === oldName ? { sectionName: newName } : null,
       );
     });
-  };
 
   const addSection = () => {
     const next: FormSectionDef = {
@@ -274,12 +268,17 @@ export default function FormBuilderPage() {
       const result = await saveFields.mutateAsync({ id, sections, title, description });
       // When the form is bound to a workflow that already has tickets the
       // server clones into a new version row instead of mutating the live
-      // schema — tell the user which version they now have.
-      toast.success(
-        result.version_bumped
-          ? `${Noun} saved as v${result.version} (older version stays attached to in-flight tickets)`
-          : `${Noun} published`,
-      );
+      // schema — tell the user which version they now have AND that older
+      // stage bindings still point to the previous version (so any new
+      // visibility/validation rules won't apply until they re-bind).
+      if (result.version_bumped) {
+        toast.success(
+          `${Noun} saved as v${result.version}. Heads up: in-flight tickets keep the old version — re-attach this form on your workflow stages to use the new rules.`,
+          { duration: 8000 },
+        );
+      } else {
+        toast.success(`${Noun} published`);
+      }
       nav(backRoute);
     } catch (e) {
       toast.error((e as Error).message);
@@ -299,19 +298,48 @@ export default function FormBuilderPage() {
       {/* TOP BAR ─────────────────────────────────────────────── */}
       <div className="sticky top-0 z-30 -mx-4 sm:-mx-6 px-4 sm:px-6 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="w-full h-14 flex items-center gap-3">
-          <AntButton type="text" size="small" icon={<ArrowLeft className="h-4 w-4" />} onClick={() => nav(backRoute)}>
-            {backLabel}
-          </AntButton>
-          <p className="hidden md:block text-xs text-slate-500 truncate flex-1">
-            {sections.length} section{sections.length === 1 ? '' : 's'} · {totalFields} field
-            {totalFields === 1 ? '' : 's'}
-          </p>
-          <div className="flex-1 md:hidden" />
+          <div className="min-w-0 flex-1">
+            <AntInput
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder={`Untitled ${noun}`}
+              variant="borderless"
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: '#0f172a',
+                padding: '2px 6px',
+                margin: '0 -6px',
+                lineHeight: 1.25,
+                width: 'auto',
+                flex: '0 1 auto',
+                minWidth: 120,
+                maxWidth: 360,
+              }}
+            />
+          </div>
+
+          {mode === 'preview' && (
+            <>
+              <Segmented
+                size="small"
+                value={previewDevice}
+                onChange={(v) => setPreviewDevice(v as PreviewDevice)}
+                options={[
+                  { label: <span className="inline-flex items-center gap-1"><Monitor className="h-3.5 w-3.5" /> Desktop</span>, value: 'desktop' },
+                  { label: <span className="inline-flex items-center gap-1"><Smartphone className="h-3.5 w-3.5" /> Mobile</span>, value: 'mobile' },
+                ]}
+              />
+              <span className="h-5 w-px bg-slate-200" />
+            </>
+          )}
 
           <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
             <ModeTab active={mode === 'build'}   onClick={() => setMode('build')}   icon={Pencil} label="Build"   />
             <ModeTab active={mode === 'preview'} onClick={() => setMode('preview')} icon={Eye}    label="Preview" />
           </div>
+
+          <span className="h-5 w-px bg-slate-200" />
 
           <AntButton
             size="small"
@@ -330,72 +358,86 @@ export default function FormBuilderPage() {
           >
             Publish
           </AntButton>
+
+          <span className="h-5 w-px bg-slate-200" />
+
+          <button
+            type="button"
+            onClick={() => nav(backRoute)}
+            title={`Back to ${backLabel}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 hover:border-slate-400 text-slate-700 hover:text-slate-900 px-3 py-1.5 text-sm font-medium shadow-sm transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back</span>
+          </button>
         </div>
+        {description && (
+          <div className="pb-2 -mt-1">
+            <AntInput
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Add a description"
+              variant="borderless"
+              style={{
+                fontSize: 12.5,
+                color: '#64748b',
+                padding: '0 6px',
+                margin: '0 -6px',
+              }}
+            />
+          </div>
+        )}
       </div>
 
       {/* CANVAS ─────────────────────────────────────────────── */}
-      <div className="w-full pt-6">
-        {/* Form heading */}
-        <div className="mb-6">
-          <AntInput
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder={`Untitled ${noun}`}
-            variant="borderless"
-            style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', padding: '4px 4px', margin: '0 -4px' }}
-          />
-          <AntInput
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Add a description"
-            variant="borderless"
-            style={{ fontSize: 14, color: '#64748b', padding: '4px 4px', margin: '0 -4px' }}
-          />
-        </div>
-
+      <div className="w-full pt-4 pb-2">
         {mode === 'build' ? (
-          <div className="grid grid-cols-12 gap-4">
-            {/* LEFT RAIL */}
-            <div className="col-span-12 md:col-span-3 lg:col-span-3 xl:col-span-2">
-              <SectionRail
-                sections={sections}
-                activeIndex={activeSection}
-                onSelect={setActiveSection}
-                onAdd={addSection}
-                onMove={moveSection}
-                onRename={renameSection}
-                onDelete={removeSection}
-              />
-            </div>
-
-            {/* MAIN PANE */}
-            <div className="col-span-12 md:col-span-9 lg:col-span-9 xl:col-span-10 space-y-4">
+          <div className="space-y-3">
+            {/* Combined sections card: tabs row + active-section header */}
+            <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
+              <div className="px-3 py-2 border-b border-slate-100">
+                <SectionTabsBar
+                  sections={sections}
+                  activeIndex={activeSection}
+                  onSelect={setActiveSection}
+                  onAdd={addSection}
+                />
+              </div>
               {currentSection && (
-                <>
-                  <SectionPanel
-                    section={currentSection}
-                    index={activeSection}
-                    parents={parentsBefore(activeSection - 1)}
-                    onChange={(p) => updateSection(activeSection, p)}
-                  />
-                  <FieldTable
-                    fields={currentSection.fields}
-                    fieldTypes={fieldTypes}
-                    parentsFor={(fid) => parentsBefore(activeSection, fid)}
-                    onChangeField={(fid, p) => updateField(activeSection, fid, p)}
-                    onMoveField={(fid, d) => moveField(activeSection, fid, d)}
-                    onDuplicateField={(fid) => duplicateField(activeSection, fid)}
-                    onRemoveField={(fid) => removeField(activeSection, fid)}
-                    onAddField={(at, t) => insertField(activeSection, at, t)}
-                    hiddenFieldIds={hiddenFieldIds}
-                    inlineTypePicker
-                  />
-                </>
+                <SectionPanel
+                  section={currentSection}
+                  index={activeSection}
+                  total={sections.length}
+                  parents={parentsBefore(activeSection - 1)}
+                  onChange={(p) => updateSection(activeSection, p)}
+                  onMove={(d) => moveSection(activeSection, d)}
+                  onDelete={() => removeSection(activeSection)}
+                />
               )}
             </div>
+
+            {currentSection && (
+              <FieldTable
+                fields={currentSection.fields}
+                fieldTypes={fieldTypes}
+                parentsFor={(fid) => parentsBefore(activeSection, fid)}
+                onChangeField={(fid, p) => updateField(activeSection, fid, p)}
+                onMoveField={(fid, d) => moveField(activeSection, fid, d)}
+                onDuplicateField={(fid) => duplicateField(activeSection, fid)}
+                onRemoveField={(fid) => removeField(activeSection, fid)}
+                onAddField={(at, t) => insertField(activeSection, at, t)}
+                hiddenFieldIds={hiddenFieldIds}
+                inlineTypePicker
+              />
+            )}
           </div>
         ) : (
-          <FormPreview title={title} description={description} sections={sections} />
+          <FormPreview
+            title={title}
+            description={description}
+            sections={sections}
+            device={previewDevice}
+          />
         )}
       </div>
     </PageContainer>

@@ -25,13 +25,14 @@ export default function TicketDetailPage() {
   const deleteTicket = useDeleteTicket();
   const { modal } = App.useApp();
 
-  const [workflowOpen, setWorkflowOpen] = useState(true);
+  const [workflowOpen, setWorkflowOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedStage, setSelectedStage] = useState<SelectedStageInfo | null>(null);
 
   useEffect(() => {
     setSelectedStage(null);
+    setWorkflowOpen(false);
     setActivityOpen(false);
     setDetailsOpen(false);
   }, [id]);
@@ -131,10 +132,6 @@ export default function TicketDetailPage() {
           </Card>
         )}
 
-        <StageFormSection ticketId={ticket.id} />
-
-        <ApprovalAwaitingCard ticketId={ticket.id} />
-
         {!isCompleted && (
           <ActionBar
             ticketId={ticket.id}
@@ -143,6 +140,10 @@ export default function TicketDetailPage() {
             canTransition={canTransition}
           />
         )}
+
+        <StageFormSection ticketId={ticket.id} />
+
+        <ApprovalAwaitingCard ticketId={ticket.id} />
       </div>
 
       <TicketActivityModal

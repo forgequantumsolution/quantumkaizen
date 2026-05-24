@@ -15,7 +15,6 @@ import TicketDetailPage from '@/features/tickets/TicketDetailPage';
 // Modules (dynamic, per workflow type)
 import ModulePage from '@/features/modules/ModulePage';
 // Dynamic Forms
-import FormListPage from '@/features/forms/FormListPage';
 import FormCreatePage from '@/features/forms/FormCreatePage';
 import FormBuilderPage from '@/features/forms/FormBuilderPage';
 import FormFillPage from '@/features/forms/FormFillPage';
@@ -49,7 +48,7 @@ export default function App() {
           <Route path="/modules/:typeId" element={<ModulePage />} />
 
           {/* Dynamic Forms */}
-          <Route path="/forms" element={<PageContainer><FormListPage /></PageContainer>} />
+          <Route path="/forms" element={<Navigate to="/settings?section=forms" replace />} />
           <Route path="/forms/new" element={<FormCreatePage />} />
           <Route path="/forms/field-types" element={<FieldTypesPage />} />
           <Route path="/forms/:id/builder" element={<FormBuilderPage />} />

@@ -30,10 +30,11 @@ export default function FieldTable({
 }: Props) {
   const defaultType = fieldTypes[0];
 
-  const inlineAddBtn = (label: string) => (
+  const inlineAddBtn = (label: string, size: 'small' | 'middle' = 'middle') => (
     <AntButton
       type="primary"
-      icon={<Plus className="h-4 w-4" />}
+      size={size}
+      icon={<Plus className="h-3.5 w-3.5" />}
       onClick={() => defaultType && onAddField(fields.length, defaultType)}
       disabled={!defaultType}
     >
@@ -75,7 +76,6 @@ export default function FieldTable({
               <th className="px-3 py-2 font-semibold w-10">#</th>
               <th className="px-3 py-2 font-semibold w-44">Type</th>
               <th className="px-3 py-2 font-semibold">Label</th>
-              <th className="px-3 py-2 font-semibold hidden md:table-cell w-44">Field key</th>
               <th className="px-3 py-2 font-semibold w-16 text-center">Req</th>
               <th className="px-3 py-2 font-semibold hidden lg:table-cell w-28">Width</th>
               <th className="px-3 py-2 font-semibold hidden lg:table-cell w-32">Rules</th>
@@ -104,12 +104,13 @@ export default function FieldTable({
         </table>
       </div>
 
-      <div className="border-t border-slate-100 bg-slate-50/50 px-3 py-2 flex items-center justify-between">
+      <div className="border-t border-slate-100 bg-slate-50/50 px-4 py-2.5 flex items-center justify-between">
         <p className="text-xs text-slate-500">
-          {fields.length} field{fields.length === 1 ? '' : 's'}
+          <span className="font-medium text-slate-700 tabular-nums">{fields.length}</span>{' '}
+          field{fields.length === 1 ? '' : 's'}
         </p>
         {inlineTypePicker ? (
-          inlineAddBtn('Add field')
+          inlineAddBtn('Add field', 'small')
         ) : (
           <AddFieldPopover
             fieldTypes={fieldTypes}

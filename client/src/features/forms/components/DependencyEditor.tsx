@@ -50,11 +50,19 @@ export default function DependencyEditor({ scopeLabel = 'field', rule, onChange,
   const addCondition = () => {
     const first = parents[0];
     if (!first) return;
+    // Default to `is_not_empty` (no value needed) so a freshly added rule
+    // actually behaves predictably until the user picks an operator/value.
+    // `equals ""` — the previous default — was confusing because it hid the
+    // dependent field whenever the trigger had any value.
     set({
       enabled: true,
       conditions: [
         ...rule.conditions,
-        { sectionName: first.sectionName, fieldName: first.fieldName, operator: 'equals', value: '' },
+        {
+          sectionName: first.sectionName,
+          fieldName: first.fieldName,
+          operator: 'is_not_empty',
+        },
       ],
     });
   };
@@ -75,12 +83,28 @@ export default function DependencyEditor({ scopeLabel = 'field', rule, onChange,
 
   return (
     <div className="space-y-4">
-      <Checkbox
-        checked={enabled}
-        onChange={(e) => set({ enabled: e.target.checked })}
+      <div
+        className={
+          'rounded-md border px-3 py-2 ' +
+          (enabled
+            ? 'border-violet-200 bg-violet-50'
+            : 'border-slate-200 bg-slate-50')
+        }
       >
-        Conditional visibility for this {scopeLabel}
-      </Checkbox>
+        <Checkbox
+          checked={enabled}
+          onChange={(e) => set({ enabled: e.target.checked })}
+        >
+          <span className="font-medium">
+            Conditional visibility for this {scopeLabel}
+          </span>
+        </Checkbox>
+        <p className="text-[11px] text-slate-500 mt-1 ml-6">
+          {enabled
+            ? `This rule is ACTIVE — the ${scopeLabel} will ${rule.mode === 'show' ? 'appear only when' : 'be hidden when'} its conditions match.`
+            : 'Toggle this on to make the rule below take effect at fill time.'}
+        </p>
+      </div>
 
       {enabled && (
         <>

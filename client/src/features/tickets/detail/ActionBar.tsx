@@ -4,7 +4,6 @@ import { ArrowRight, XCircle, Pause, Play, Undo2, UserCog } from 'lucide-react';
 import { Button, Card, Modal, Textarea } from '@/components/ui';
 import {
   useAllowedActions,
-  useHoldTicket,
   useResumeTicket,
   useTransition,
   type AllowedAction,
@@ -42,7 +41,6 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
   const { data: stageActions = [], isLoading } = useAllowedActions(ticketId);
   const { data: stageFormsData } = useTicketStageForms(ticketId);
   const transition = useTransition(ticketId);
-  const hold = useHoldTicket(ticketId);
   const resume = useResumeTicket(ticketId);
 
   // Phase 3.5 — block transitions when any required form on the current
@@ -62,8 +60,6 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
     : undefined;
   const [pending, setPending] = useState<{ action: AllowedAction; stage: StageActionsView } | null>(null);
   const [remarks, setRemarks] = useState('');
-  const [holdOpen, setHoldOpen] = useState(false);
-  const [holdReason, setHoldReason] = useState('');
 
   const errorMsg = (err: unknown) =>
     (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
@@ -85,18 +81,6 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
       toast.success(msg);
       setPending(null);
       setRemarks('');
-    } catch (err) {
-      toast.error(errorMsg(err));
-    }
-  };
-
-  const handleHold = async () => {
-    if (!holdReason.trim()) return toast.error('Reason is required');
-    try {
-      await hold.mutateAsync({ reason: holdReason.trim() });
-      toast.success('Ticket on hold');
-      setHoldOpen(false);
-      setHoldReason('');
     } catch (err) {
       toast.error(errorMsg(err));
     }
@@ -173,8 +157,8 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
               </div>
             )}
           </div>
-          <div className="flex gap-2">
-            {isOnHold ? (
+          {isOnHold && (
+            <div className="flex gap-2">
               <Button
                 variant="secondary"
                 size="sm"
@@ -185,18 +169,8 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
                 <Play size={12} />
                 <span className="ml-1">Resume</span>
               </Button>
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setHoldOpen(true)}
-                disabled={!canTransition}
-              >
-                <Pause size={12} />
-                <span className="ml-1">Hold</span>
-              </Button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -241,47 +215,6 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
           value={remarks}
           onChange={(e) => setRemarks(e.target.value)}
           placeholder="Why this action?"
-          rows={3}
-          maxLength={2000}
-        />
-      </Modal>
-
-      <Modal
-        isOpen={holdOpen}
-        onClose={() => {
-          setHoldOpen(false);
-          setHoldReason('');
-        }}
-        title="Hold ticket"
-        size="md"
-        footer={
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setHoldOpen(false);
-                setHoldReason('');
-              }}
-              disabled={hold.isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="primary"
-              onClick={handleHold}
-              isLoading={hold.isPending}
-              disabled={hold.isPending || !holdReason.trim()}
-            >
-              Hold
-            </Button>
-          </div>
-        }
-      >
-        <label className="text-xs font-medium text-gray-700 mb-1 block">Reason</label>
-        <Textarea
-          value={holdReason}
-          onChange={(e) => setHoldReason(e.target.value)}
-          placeholder="Why are you holding this ticket?"
           rows={3}
           maxLength={2000}
         />

@@ -123,16 +123,6 @@ export default function FieldTableRow({
           />
         </td>
 
-        {/* Field key */}
-        <td className="px-3 py-2.5 hidden md:table-cell w-44">
-          <AntInput
-            value={field.name}
-            onChange={(e) => onChange({ name: e.target.value.replace(/[^a-zA-Z0-9_]/g, '_') })}
-            size="small"
-            style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 11, color: '#64748b' }}
-          />
-        </td>
-
         {/* Required */}
         <td className="px-3 py-2.5 w-16 text-center">
           <Switch

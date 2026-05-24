@@ -42,7 +42,7 @@ export default function FieldTypesPage() {
 
   return (
     <PageContainer>
-      <Button variant="ghost" size="sm" onClick={() => nav('/forms')} className="mb-2">
+      <Button variant="ghost" size="sm" onClick={() => nav('/settings?section=forms')} className="mb-2">
         <ArrowLeft className="h-4 w-4" /> Back to forms
       </Button>
       <PageHeader

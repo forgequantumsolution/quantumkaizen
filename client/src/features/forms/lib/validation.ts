@@ -115,5 +115,24 @@ export const validateField = (field: FormFieldDef, value: unknown): string | nul
     }
   }
 
+  if (FILE_TYPES.has(type) && typeof value === 'object' && value !== null) {
+    const meta = value as { name?: string; size?: number };
+    const allowed = (rules.allowedExtensions ?? '')
+      .split(/[,\s]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean)
+      .map((s) => (s.startsWith('.') ? s : `.${s}`));
+    if (allowed.length && meta.name) {
+      const lower = meta.name.toLowerCase();
+      const ok = allowed.some((ext) => lower.endsWith(ext));
+      if (!ok) {
+        return rules.errorMessage ?? `${field.label} must be one of: ${allowed.join(', ')}`;
+      }
+    }
+    if (rules.maxFileSizeMb && meta.size && meta.size > rules.maxFileSizeMb * 1024 * 1024) {
+      return rules.errorMessage ?? `${field.label} exceeds ${rules.maxFileSizeMb} MB`;
+    }
+  }
+
   return null;
 };

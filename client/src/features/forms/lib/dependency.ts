@@ -32,9 +32,23 @@ export const emptyRule = (): DependencyRule => ({
   conditions: [],
 });
 
+/**
+ * Defensive parse — tolerates the dependency arriving as a JSON string from
+ * older backend versions or hand-edited fixtures.
+ */
+const parseRule = (raw: unknown): unknown => {
+  if (typeof raw !== 'string') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+};
+
 export const isRuleConfigured = (rule?: unknown): rule is DependencyRule => {
-  if (!rule || typeof rule !== 'object') return false;
-  const r = rule as Partial<DependencyRule>;
+  const parsed = parseRule(rule);
+  if (!parsed || typeof parsed !== 'object') return false;
+  const r = parsed as Partial<DependencyRule>;
   return !!(r.enabled && Array.isArray(r.conditions) && r.conditions.length > 0);
 };
 
@@ -83,7 +97,7 @@ export const evaluateVisibility = (
   lookup: FieldValueLookup
 ): boolean => {
   if (!isRuleConfigured(raw)) return true;
-  const rule = raw as DependencyRule;
+  const rule = parseRule(raw) as DependencyRule;
   if (!rule.conditions.length) return true;
 
   const results = rule.conditions.map((c) => matchCondition(c, lookup));
@@ -91,7 +105,22 @@ export const evaluateVisibility = (
     ? results.some(Boolean)
     : results.every(Boolean);
 
-  return rule.mode === 'show' ? matched : !matched;
+  const visible = rule.mode === 'show' ? matched : !matched;
+
+  // Enable inline debugging from the browser console:
+  //   localStorage.setItem('qk_debug_visibility', '1'); location.reload();
+  // Each visibility evaluation is logged so you can see which condition fails.
+  if (typeof window !== 'undefined' && window.localStorage?.getItem('qk_debug_visibility') === '1') {
+    const details = rule.conditions.map((c, i) => ({
+      cond: `${c.sectionName}.${c.fieldName} ${c.operator} ${JSON.stringify(c.value)}`,
+      actual: lookup(c.sectionName, c.fieldName),
+      result: results[i],
+    }));
+    // eslint-disable-next-line no-console
+    console.debug('[visibility]', { mode: rule.mode, combinator: rule.combinator, visible, details });
+  }
+
+  return visible;
 };
 
 export const summariseRule = (raw: unknown): string => {

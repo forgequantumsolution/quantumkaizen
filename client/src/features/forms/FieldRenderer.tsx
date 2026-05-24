@@ -5,14 +5,15 @@
 import { useId } from 'react';
 import {
   Input, InputNumber, Select, DatePicker, TimePicker, Checkbox, Radio, Switch,
-  Slider, ColorPicker, Upload, Button, Table as AntTable,
+  Slider, ColorPicker, Button, Table as AntTable,
 } from 'antd';
 import {
-  Plus, Trash2, Upload as UploadIcon, Image as ImageIcon, PenLine,
+  Plus, Trash2, PenLine,
 } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
 import { fieldIsTable } from './fieldCatalog';
 import type { FormFieldDef, FieldOption } from './types';
+import FileUploadField, { type UploadedFileMeta } from './components/FileUploadField';
 
 const { TextArea, Password } = Input;
 const { RangePicker: DateRangePicker } = DatePicker;
@@ -120,6 +121,7 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
   const placeholder = (field as { placeholder?: string }).placeholder;
   const validation = (field.validation ?? {}) as {
     min?: number; max?: number; isInteger?: boolean;
+    allowedExtensions?: string; maxFileSizeMb?: number;
   };
 
   // ── Table ──────────────────────────────────────────────────
@@ -235,20 +237,22 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
       const sMin = validation.min ?? 0;
       const sMax = validation.max ?? 100;
       const step = validation.isInteger ? 1 : undefined;
+      const cur = typeof value === 'number' ? value : sMin;
       return (
-        <div>
+        <div className="pt-0.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+            <span>{sMin}</span>
+            <span className="font-semibold text-slate-700">{cur}</span>
+            <span>{sMax}</span>
+          </div>
           <Slider
-            value={typeof value === 'number' ? value : sMin}
+            value={cur}
             onChange={(v) => onChange(v)}
             disabled={disabled}
             min={sMin}
             max={sMax}
             step={step}
           />
-          <div className="flex justify-between text-[10px] text-slate-400 -mt-1 px-0.5">
-            <span>{sMin}</span>
-            <span>{sMax}</span>
-          </div>
         </div>
       );
     }
@@ -258,11 +262,20 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
       const rMin = validation.min ?? 0;
       const rMax = validation.max ?? 100;
       const step = validation.isInteger ? 1 : undefined;
+      const lo = v.start ?? rMin;
+      const hi = v.end ?? rMax;
       return (
-        <div>
+        <div className="pt-0.5">
+          <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+            <span>{rMin}</span>
+            <span className="font-semibold text-slate-700">
+              {lo} – {hi}
+            </span>
+            <span>{rMax}</span>
+          </div>
           <Slider
             range
-            value={[v.start ?? rMin, v.end ?? rMax]}
+            value={[lo, hi]}
             onChange={(arr) => {
               const [start, end] = arr as [number, number];
               onChange({ start, end });
@@ -272,10 +285,6 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
             max={rMax}
             step={step}
           />
-          <div className="flex justify-between text-[10px] text-slate-400 -mt-1 px-0.5">
-            <span>{rMin}</span>
-            <span>{rMax}</span>
-          </div>
         </div>
       );
     }
@@ -381,6 +390,7 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
           value={value as string | number | undefined}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
+          className="!flex !flex-wrap !gap-x-5 !gap-y-2"
           options={(field.options ?? []).map((o) => ({
             value: o.value,
             label: o.label,
@@ -394,6 +404,7 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
           value={Array.isArray(value) ? (value as (string | number)[]) : []}
           onChange={(arr) => onChange(arr)}
           disabled={disabled}
+          className="!flex !flex-wrap !gap-x-5 !gap-y-2"
           options={(field.options ?? []).map((o) => ({
             value: o.value as string | number,
             label: o.label,
@@ -423,40 +434,22 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
     case 'file':
     case 'image':
       return (
-        <Upload
-          beforeUpload={() => false} // never upload — just collect file metadata
-          maxCount={1}
+        <FileUploadField
+          kind={type === 'image' ? 'image' : 'file'}
+          value={value as UploadedFileMeta | null | undefined}
+          onChange={(v) => onChange(v)}
           disabled={disabled}
-          listType={type === 'image' ? 'picture' : 'text'}
-          onChange={(info) => {
-            const f = info.fileList[0];
-            if (!f) return onChange(null);
-            onChange({
-              name: f.name,
-              size: f.size,
-              type: f.type,
-              uid: f.uid,
-            });
-          }}
-        >
-          <Button
-            disabled={disabled}
-            icon={
-              type === 'image'
-                ? <ImageIcon className="h-3.5 w-3.5" />
-                : <UploadIcon className="h-3.5 w-3.5" />
-            }
-          >
-            {type === 'image' ? 'Choose image' : 'Choose file'}
-          </Button>
-        </Upload>
+          allowedExtensions={validation.allowedExtensions}
+          maxSizeMb={validation.maxFileSizeMb}
+          placeholder={placeholder}
+        />
       );
 
     case 'signature':
       return (
-        <div className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 bg-slate-50/40">
-          <PenLine className="h-5 w-5 mx-auto mb-1 text-slate-400" />
-          Signature pad placeholder — wire ESignatureModal in production.
+        <div className="flex items-center gap-3 rounded-lg border border-dashed border-slate-300 bg-slate-50/40 px-4 py-3 text-sm text-slate-500">
+          <PenLine className="h-4 w-4 text-slate-400 shrink-0" />
+          <span className="flex-1">Signature capture not yet enabled for this stage.</span>
         </div>
       );
 
@@ -464,6 +457,11 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
       const arr = Array.isArray(value) ? (value as string[]) : [];
       return (
         <div className="space-y-2">
+          {arr.length === 0 && (
+            <div className="rounded-md border border-dashed border-slate-300 bg-slate-50/40 px-3 py-2 text-xs text-slate-500">
+              No values added yet.
+            </div>
+          )}
           {arr.map((v, i) => (
             <div key={i} className="flex gap-2">
               <Input
@@ -474,6 +472,7 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
                   onChange(next);
                 }}
                 disabled={disabled}
+                placeholder={placeholder ?? `Value ${i + 1}`}
               />
               <Button
                 danger
@@ -486,7 +485,6 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
           ))}
           <Button
             type="dashed"
-            block
             size="small"
             disabled={disabled}
             icon={<Plus className="h-3.5 w-3.5" />}

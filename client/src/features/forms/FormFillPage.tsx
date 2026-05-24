@@ -12,8 +12,6 @@ import { useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
-import PageHeader from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
 import Spinner from '@/components/ui/Spinner';
 import FormFillEmbed from './FormFillEmbed';
 import { useFormDetail } from './hooks';
@@ -36,19 +34,19 @@ export default function FormFillPage() {
 
   return (
     <PageContainer>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => nav(workflowCtx ? `/tickets/${workflowCtx.ticketId}` : '/forms')}
-        className="mb-2"
-      >
-        <ArrowLeft className="h-4 w-4" />{' '}
-        {workflowCtx ? 'Back to ticket' : 'Back to forms'}
-      </Button>
-      <PageHeader
-        title={detail.form_details.title}
-        description={detail.form_details.description ?? undefined}
-      />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-h1 text-gray-900">{detail.form_details.title}</h1>
+        </div>
+        <button
+          type="button"
+          onClick={() => nav(workflowCtx ? `/tickets/${workflowCtx.ticketId}` : '/forms')}
+          className="shrink-0 mt-1 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 hover:border-slate-400 text-slate-700 hover:text-slate-900 px-3 py-1.5 text-sm font-medium shadow-sm transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back</span>
+        </button>
+      </div>
 
       <FormFillEmbed
         formId={id}

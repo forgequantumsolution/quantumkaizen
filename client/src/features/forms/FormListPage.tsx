@@ -1,19 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Plus, Search, FileText, Eye, Pencil, Trash2,
-  ListChecks, ClipboardList, LayoutGrid, List, GitBranch, Check,
+  FileText, Eye, Pencil, Trash2,
+  ClipboardList, GitBranch, Check,
   CheckSquare,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import Input from '@/components/ui/Input';
-import { KpiCard } from '@/components/ui/KpiCard';
 import EmptyState from '@/components/ui/EmptyState';
 import Spinner from '@/components/ui/Spinner';
+import ListPageHeader, { type ListViewMode } from '@/components/layout/ListPageHeader';
 import { useDeleteForm, useForms } from './hooks';
 import type { FormKind, FormListItem } from './types';
-
-type ViewMode = 'card' | 'table';
 
 const COPY: Record<FormKind, {
   pageTitle: string;
@@ -23,31 +20,28 @@ const COPY: Record<FormKind, {
   searchPlaceholder: string;
   emptyTitle: string;
   emptyDescription: string;
-  totalLabel: string;
   deleteConfirm: (title: string) => string;
   deleteToast: string;
 }> = {
   FORM: {
-    pageTitle: 'Form Builder',
-    pageDescription: 'Build and version dynamic forms for any process',
+    pageTitle: 'Forms',
+    pageDescription: 'Browse and configure dynamic forms.',
     newButton: 'New form',
     newRoute: '/forms/new',
     searchPlaceholder: 'Search forms by title…',
     emptyTitle: 'No forms yet',
     emptyDescription: 'Create your first dynamic form to get started.',
-    totalLabel: 'Total forms',
     deleteConfirm: (t) => `Delete form "${t}"?`,
     deleteToast: 'Form deleted',
   },
   CHECKLIST: {
-    pageTitle: 'Checklist Builder',
-    pageDescription: 'Build and version reusable checklists for any process',
+    pageTitle: 'Checklists',
+    pageDescription: 'Browse and configure reusable checklists.',
     newButton: 'New checklist',
     newRoute: '/forms/new?kind=CHECKLIST',
     searchPlaceholder: 'Search checklists by title…',
     emptyTitle: 'No checklists yet',
     emptyDescription: 'Create your first checklist to get started.',
-    totalLabel: 'Total checklists',
     deleteConfirm: (t) => `Delete checklist "${t}"?`,
     deleteToast: 'Checklist deleted',
   },
@@ -60,7 +54,7 @@ export default function FormListPage() {
   const activeKind: FormKind = tabParam === 'checklists' ? 'CHECKLIST' : 'FORM';
 
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<ViewMode>('card');
+  const [view, setView] = useState<ListViewMode>('card');
 
   const { data, isLoading } = useForms({
     search: search || undefined,
@@ -70,9 +64,6 @@ export default function FormListPage() {
   const deleteForm = useDeleteForm();
   const forms = data?.forms ?? [];
   const copy = COPY[activeKind];
-
-  const draftCount = forms.filter((f) => f.status === 'DRAFT').length;
-  const publishedCount = forms.filter((f) => f.status === 'PUBLISHED').length;
 
   const handleTabChange = (kind: FormKind) => {
     const next = new URLSearchParams(searchParams);
@@ -87,33 +78,24 @@ export default function FormListPage() {
     deleteForm.mutate(f.id, { onSuccess: () => toast.success(copy.deleteToast) });
   };
 
-  // Action buttons ("Field types", "New form/checklist") are rendered by the
-  // embedding SettingsPage in its PageHeader. The /forms standalone route
-  // isn't linked from the sidebar so we accept no header buttons there.
-
   return (
     <>
+      <ListPageHeader
+        title={copy.pageTitle}
+        description={copy.pageDescription}
+        search={{
+          value: search,
+          onChange: setSearch,
+          placeholder: copy.searchPlaceholder,
+        }}
+        view={{ value: view, onChange: setView }}
+        action={{
+          label: copy.newButton,
+          onClick: () => nav(copy.newRoute),
+        }}
+      />
+
       <KindTabs active={activeKind} onChange={handleTabChange} />
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
-        <KpiCard label={copy.totalLabel} value={forms.length} icon={FileText} accent="slate" selected />
-        <KpiCard label="Drafts"      value={draftCount}   icon={Pencil}   accent="amber" />
-        <KpiCard label="Published"   value={publishedCount} icon={ListChecks} accent="emerald" />
-      </div>
-
-      {/* Toolbar: search + view toggle */}
-      <div className="mb-4 flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[260px] max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={copy.searchPlaceholder}
-            className="pl-9"
-          />
-        </div>
-        <ViewToggle view={view} onChange={setView} />
-      </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16">
@@ -128,7 +110,7 @@ export default function FormListPage() {
           onAction={() => nav(copy.newRoute)}
         />
       ) : view === 'card' ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
           {forms.map((f) => (
             <FormCard
               key={f.id}
@@ -185,34 +167,6 @@ function KindTabs({
           );
         })}
       </nav>
-    </div>
-  );
-}
-
-// ─── View toggle ───────────────────────────────────────────────
-function ViewToggle({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
-  return (
-    <div className="inline-flex bg-slate-100 rounded-lg p-0.5">
-      <button
-        onClick={() => onChange('card')}
-        className={
-          'h-8 px-2.5 inline-flex items-center gap-1.5 text-xs rounded-md transition ' +
-          (view === 'card' ? 'bg-white text-slate-900 shadow-sm font-medium' : 'text-slate-500 hover:text-slate-700')
-        }
-        title="Card view"
-      >
-        <LayoutGrid className="h-3.5 w-3.5" /> Cards
-      </button>
-      <button
-        onClick={() => onChange('table')}
-        className={
-          'h-8 px-2.5 inline-flex items-center gap-1.5 text-xs rounded-md transition ' +
-          (view === 'table' ? 'bg-white text-slate-900 shadow-sm font-medium' : 'text-slate-500 hover:text-slate-700')
-        }
-        title="Table view"
-      >
-        <List className="h-3.5 w-3.5" /> Table
-      </button>
     </div>
   );
 }

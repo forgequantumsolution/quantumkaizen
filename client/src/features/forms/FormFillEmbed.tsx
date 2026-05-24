@@ -184,46 +184,66 @@ export default function FormFillEmbed({
 
   const sectionWrapCls =
     variant === 'inline'
-      ? 'rounded-lg border border-gray-200 bg-white p-4'
-      : 'rounded-xl border border-slate-200 bg-white p-6';
+      ? 'rounded-lg border border-slate-200 bg-white px-5 py-5'
+      : 'rounded-xl border border-slate-200 bg-white px-6 py-6';
+
+  const errorCount = Object.values(errors).reduce(
+    (n, s) => n + Object.keys(s).length,
+    0,
+  );
+
+  let visibleSectionIndex = 0;
 
   return (
-    <div className={variant === 'inline' ? 'space-y-3' : 'space-y-5'}>
+    <div className={variant === 'inline' ? 'space-y-4' : 'space-y-5'}>
       {sections.map((sec) => {
         if (!evaluateVisibility(sec.dependency, lookup)) return null;
+        visibleSectionIndex += 1;
         const description = (sec as { description?: string }).description;
+        const sectionErrorCount = Object.keys(errors[sec.section_name] ?? {}).length;
         return (
           <section
             key={sec.section_id ?? sec.section_name}
             className={sectionWrapCls}
           >
-            <header className="mb-4 pb-2 border-b border-slate-100">
-              <h2
-                className={
-                  variant === 'inline'
-                    ? 'text-sm font-semibold text-slate-800'
-                    : 'text-lg font-semibold text-slate-800'
-                }
-              >
-                {sec.section_name}
-              </h2>
+            <header className="mb-5 pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold ring-1 ring-indigo-100">
+                  {visibleSectionIndex}
+                </span>
+                <h2
+                  className={
+                    variant === 'inline'
+                      ? 'text-sm font-semibold text-slate-800'
+                      : 'text-base font-semibold text-slate-800'
+                  }
+                >
+                  {sec.section_name}
+                </h2>
+                {sectionErrorCount > 0 && (
+                  <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-rose-100">
+                    <AlertCircle className="h-3 w-3" />
+                    {sectionErrorCount} issue{sectionErrorCount === 1 ? '' : 's'}
+                  </span>
+                )}
+              </div>
               {description && (
-                <p className="text-sm text-slate-500 mt-1">{description}</p>
+                <p className="text-sm text-slate-500 mt-1.5">{description}</p>
               )}
             </header>
-            <div className="grid grid-cols-12 gap-4">
+            <div className="grid grid-cols-12 gap-x-5 gap-y-4">
               {sec.fields.map((f) => {
                 if (!evaluateVisibility(f.dependency, lookup)) return null;
                 const span = widthToCols(f.width);
                 const err = errors[sec.section_name]?.[f.name];
                 const helpText = (f as { helpText?: string }).helpText;
                 return (
-                  <div key={f.field_id ?? f.name} className={`col-span-12 ${span}`}>
-                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                  <div key={f.field_id ?? f.name} className={`col-span-12 ${span} min-w-0`}>
+                    <label className="block text-[13px] font-medium text-slate-700 mb-1.5 leading-tight">
                       {f.label}
                       {f.required && <span className="text-rose-500 ml-0.5">*</span>}
                     </label>
-                    <div className={readOnly ? 'pointer-events-none' : ''}>
+                    <div className={readOnly ? 'pointer-events-none opacity-90' : ''}>
                       <FieldRenderer
                         field={f}
                         value={responses[sec.section_name]?.[f.name]}
@@ -232,11 +252,11 @@ export default function FormFillEmbed({
                       />
                     </div>
                     {helpText && !err && (
-                      <p className="mt-1 text-xs text-slate-500">{helpText}</p>
+                      <p className="mt-1 text-[11px] text-slate-500 leading-snug">{helpText}</p>
                     )}
                     {err && (
-                      <p className="mt-1 text-xs text-rose-600 flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" /> {err}
+                      <p className="mt-1 text-[11px] text-rose-600 flex items-center gap-1 leading-snug">
+                        <AlertCircle className="h-3 w-3 shrink-0" /> {err}
                       </p>
                     )}
                   </div>
@@ -248,7 +268,13 @@ export default function FormFillEmbed({
       })}
 
       {!hideActions && !readOnly && (
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="flex items-center justify-end gap-2 pt-1">
+          {errorCount > 0 && (
+            <span className="mr-auto inline-flex items-center gap-1.5 text-xs text-rose-600">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {errorCount} field{errorCount === 1 ? '' : 's'} need attention
+            </span>
+          )}
           <Button
             variant="outline"
             onClick={() => runSubmit('IN_PROGRESS')}

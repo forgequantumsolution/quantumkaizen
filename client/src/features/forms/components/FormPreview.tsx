@@ -2,26 +2,27 @@
 // Reuses the same renderer/dependency/validation as the real fill page —
 // "Submit" runs validation and reports findings without persisting.
 import { useState } from 'react';
-import { AlertCircle, CheckCircle2, Send, Smartphone, Monitor } from 'lucide-react';
-import { Button as AntButton, Segmented } from 'antd';
+import { AlertCircle, CheckCircle2, Send } from 'lucide-react';
+import { Button as AntButton } from 'antd';
 import FieldRenderer from '../FieldRenderer';
 import { evaluateVisibility } from '../lib/dependency';
 import { validateField } from '../lib/validation';
 import type { FormSectionDef } from '../types';
 
+export type PreviewDevice = 'desktop' | 'mobile';
+
 interface Props {
   title: string;
   description: string;
   sections: FormSectionDef[];
+  device?: PreviewDevice;
 }
 
 type Errors = Record<string, Record<string, string>>;
-type Device = 'desktop' | 'mobile';
 
-export default function FormPreview({ title, description, sections }: Props) {
+export default function FormPreview({ title, description, sections, device = 'desktop' }: Props) {
   const [responses, setResponses] = useState<Record<string, Record<string, unknown>>>({});
   const [errors, setErrors] = useState<Errors>({});
-  const [device, setDevice] = useState<Device>('desktop');
   const [submittedOk, setSubmittedOk] = useState(false);
 
   const lookup = (sectionName: string, fieldName: string) =>
@@ -60,91 +61,83 @@ export default function FormPreview({ title, description, sections }: Props) {
   };
 
   return (
-    <div className="space-y-3">
-      {/* Device toggle + helper */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-slate-600">
-            <span className="font-medium">Live preview</span>
-            <span className="ml-2 text-slate-400">— this is exactly what users will see</span>
-          </p>
-        </div>
-        <Segmented
-          size="small"
-          value={device}
-          onChange={(v) => setDevice(v as Device)}
-          options={[
-            { label: <span className="inline-flex items-center gap-1"><Monitor className="h-3.5 w-3.5" /> Desktop</span>, value: 'desktop' },
-            { label: <span className="inline-flex items-center gap-1"><Smartphone className="h-3.5 w-3.5" /> Mobile</span>, value: 'mobile' },
-          ]}
-        />
-      </div>
-
+    <div>
       {/* Frame */}
-      <div className="bg-slate-100 rounded-2xl p-4 sm:p-8">
+      <div className="bg-slate-100 rounded-2xl p-4 sm:p-6">
         <div
           className={
             'mx-auto bg-white rounded-2xl shadow-sm overflow-hidden transition-all ' +
-            (device === 'mobile' ? 'max-w-[420px]' : 'max-w-3xl')
+            (device === 'mobile' ? 'max-w-[420px]' : 'w-full')
           }
         >
           <div className="px-6 py-5 border-b border-slate-100">
-            <h1 className="text-xl font-semibold text-slate-900">
+            <h1 className="text-xl font-semibold text-slate-900 leading-tight">
               {title || 'Untitled form'}
             </h1>
-            {description && <p className="mt-1 text-sm text-slate-500">{description}</p>}
+            {description && (
+              <p className="mt-1.5 text-sm text-slate-500">{description}</p>
+            )}
           </div>
 
-          <div className="px-6 py-5 space-y-6">
+          <div className="px-6 py-6 space-y-7">
             {sections.length === 0 || sections.every((s) => s.fields.length === 0) ? (
               <p className="text-sm text-slate-400 py-12 text-center">
                 Add a section and some fields to see the preview here.
               </p>
             ) : (
-              sections.map((sec) => {
-                if (!evaluateVisibility(sec.dependency, lookup)) return null;
-                return (
-                  <section key={sec.section_id ?? sec.section_name}>
-                    <header className="mb-3">
-                      <h2 className="text-base font-semibold text-slate-800">
-                        {sec.section_name}
-                      </h2>
-                      {sec.description && (
-                        <p className="text-xs text-slate-500 mt-0.5">{sec.description}</p>
-                      )}
-                    </header>
-                    <div className="grid grid-cols-12 gap-3">
-                      {sec.fields.map((f) => {
-                        if (!evaluateVisibility(f.dependency, lookup)) return null;
-                        const span = device === 'mobile' ? 'col-span-12' : widthToCols(f.width);
-                        const err = errors[sec.section_name]?.[f.name];
-                        const helpText = (f as { helpText?: string }).helpText;
-                        return (
-                          <div key={f.field_id ?? f.name} className={'col-span-12 ' + span}>
-                            <label className="block text-xs font-medium text-slate-700 mb-1">
-                              {f.label}
-                              {f.required && <span className="text-rose-500 ml-0.5">*</span>}
-                            </label>
-                            <FieldRenderer
-                              field={f}
-                              value={responses[sec.section_name]?.[f.name]}
-                              onChange={(v) => setFieldValue(sec.section_name, f.name, v)}
-                            />
-                            {helpText && !err && (
-                              <p className="mt-1 text-[11px] text-slate-500">{helpText}</p>
-                            )}
-                            {err && (
-                              <p className="mt-1 text-[11px] text-rose-600 flex items-center gap-1">
-                                <AlertCircle className="h-3 w-3" /> {err}
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })
+              (() => {
+                let visibleIdx = 0;
+                return sections.map((sec) => {
+                  if (!evaluateVisibility(sec.dependency, lookup)) return null;
+                  visibleIdx += 1;
+                  return (
+                    <section key={sec.section_id ?? sec.section_name}>
+                      <header className="mb-4">
+                        <div className="flex items-center gap-2.5">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold ring-1 ring-indigo-100">
+                            {visibleIdx}
+                          </span>
+                          <h2 className="text-base font-semibold text-slate-800 leading-tight">
+                            {sec.section_name}
+                          </h2>
+                        </div>
+                        {sec.description && (
+                          <p className="text-xs text-slate-500 mt-1.5 ml-9">{sec.description}</p>
+                        )}
+                      </header>
+                      <div className="grid grid-cols-12 gap-x-4 gap-y-4">
+                        {sec.fields.map((f) => {
+                          if (!evaluateVisibility(f.dependency, lookup)) return null;
+                          const span = device === 'mobile' ? 'col-span-12' : widthToCols(f.width);
+                          const err = errors[sec.section_name]?.[f.name];
+                          const helpText = (f as { helpText?: string }).helpText;
+                          return (
+                            <div key={f.field_id ?? f.name} className={'col-span-12 min-w-0 ' + span}>
+                              <label className="block text-[13px] font-medium text-slate-700 mb-1.5 leading-tight">
+                                {f.label}
+                                {f.required && <span className="text-rose-500 ml-0.5">*</span>}
+                              </label>
+                              <FieldRenderer
+                                field={f}
+                                value={responses[sec.section_name]?.[f.name]}
+                                onChange={(v) => setFieldValue(sec.section_name, f.name, v)}
+                              />
+                              {helpText && !err && (
+                                <p className="mt-1 text-[11px] text-slate-500 leading-snug">{helpText}</p>
+                              )}
+                              {err && (
+                                <p className="mt-1 text-[11px] text-rose-600 flex items-center gap-1 leading-snug">
+                                  <AlertCircle className="h-3 w-3 shrink-0" /> {err}
+                                </p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                });
+              })()
             )}
           </div>
 
