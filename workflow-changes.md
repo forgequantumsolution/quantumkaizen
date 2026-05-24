@@ -1975,6 +1975,28 @@ Standalone `/forms` has no header buttons (the route isn't linked from the sideb
 
 ---
 
+## Misc — Ticket breadcrumb: stop flashing the raw UUID on cold visits
+
+**Date:** 2026-05-23
+**File:** [`client/src/components/layout/Header.tsx`](client/src/components/layout/Header.tsx)
+
+Follow-up to the 2026-05-21 entry ("Ticket breadcrumb shows uniqueId instead of UUID"). That fix swapped the UUID for `ticket.uniqueId` once the query resolved, but fell back to the raw UUID while loading — so on a cold first visit you'd see `Tickets ▸ 4259…` for a moment before it became `Tickets ▸ DOC-FQS-001`. User reported this as confusing ("shows the uuid and then it shows the ticket id").
+
+### Changed
+
+- Compute `visibleSegments` by dropping the ticket-id segment entirely while `ticket?.uniqueId` is undefined. Breadcrumb reads `Tickets` during the loading window, then becomes `Tickets ▸ DOC-FQS-001` once the query resolves. UUID is never user-visible.
+- `breadcrumbs.map` now iterates `visibleSegments` (so `isLast` and crumb paths stay correct when the segment is dropped).
+
+`useTicket` call in Header is unchanged — still piggybacks on the same `ticketKeys.detail(id)` cache as `TicketDetailPage`, so no extra request.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| Manual — cold load of `/tickets/<uuid>`: breadcrumb shows `Tickets` briefly, then `Tickets ▸ DOC-FQS-…`; no UUID flash | Pending user confirm |
+
+---
+
 ## Convention for future entries
 
 Each new phase section should include:
