@@ -2027,6 +2027,63 @@ Users could only pick an existing Workflow Type while creating a workflow — to
 
 ---
 
+## Misc — Workflow Types tab: add Create + Delete UI
+
+**Date:** 2026-05-25
+**File:** [`client/src/features/admin/workflow-types/WorkflowTypesTab.tsx`](client/src/features/admin/workflow-types/WorkflowTypesTab.tsx)
+
+The Workflow Types tab under Settings → Master Data was previously read-only — types could only be created via seed scripts. The backend already exposed `POST /workflow-lookups/types` and `DELETE /workflow-lookups/types/:id` (gated on `workflow.lookups.manage`), plus the corresponding `useCreateWorkflowType` / `useDeleteWorkflowType` React Query hooks. Only the UI was missing.
+
+### Changed
+
+- Added an **Add Workflow Type** button (top-right, antd primary + lucide `Plus`), only rendered when the user has `workflow.lookups.manage`.
+- Added an actions column with a `Trash2` icon button per row. Same permission gate; hidden on already-deleted rows (which the list query filters out anyway).
+- Create modal mirrors `SeveritiesTab` (centered antd `Modal`, custom footer, `loading={create.isPending}` on OK). Fields: `name` (required, autofocus, max 250), `codePrefix` (optional, uppercased on input, max 20, `font-mono uppercase`), `iconName` (optional, max 100). Below the icon field are 9 chip suggestions of lucide names the sidebar already maps (`file-text`, `wrench`, `git-branch`, etc.) so users don't have to guess.
+- Delete confirmation: short title + "Delete <Name>?" + one-line note that the type is removed from the sidebar and new-workflow picker while existing workflows/tickets remain intact. Avoids the "soft-delete" jargon per the tight-copy rule.
+- API errors surface inline at the top of each modal via the shared `extractApiError` helper. The backend already returns a friendly `Conflict` message for hard-delete attempts when workflows reference the type — soft-delete (the default this UI uses) never hits that path.
+- Replaced the existing `<Alert>` load-error block with the same inline-error pattern the rest of the admin tabs use, for visual consistency.
+
+### Behavior notes
+
+- Delete is soft — the backend route defaults to `?hard=false`, marking `isDeleted: true`. `listWorkflowTypes` already filters `isDeleted: false`, so the deleted row disappears from this table, from the sidebar Modules group, and from the Create Workflow type picker after the React Query cache invalidates. Existing workflows snapshot the type so they continue to render normally.
+- Creating a type with the same name as a previously soft-deleted one revives it (existing backend behavior in `createWorkflowType` — un-sets `isDeleted` and updates `codePrefix`). This is how the UI's "restore" story works: just re-add by name; no separate Restore button needed.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | pending |
+| Playwright e2e (create → assert appears in sidebar Modules + table; delete → assert disappears from both) | pending — not added this turn |
+
+---
+
+## Misc — Workflows list: show version on each card
+
+**Date:** 2026-05-25
+**Files:**
+- [`backend/src/modules/workflow/workflow.service.ts`](backend/src/modules/workflow/workflow.service.ts)
+- [`backend/src/modules/workflow/workflow.openapi.ts`](backend/src/modules/workflow/workflow.openapi.ts)
+- [`client/src/lib/api/workflow.ts`](client/src/lib/api/workflow.ts)
+- [`client/src/features/workflows/WorkflowsPage.tsx`](client/src/features/workflows/WorkflowsPage.tsx)
+
+The `Workflow.version` column has existed since P1.10 (versioning restore), but the list endpoint never surfaced it, so the Settings → Workflows cards couldn't show which version of a lineage each row represented. With `includeAllVersions=false` (the default), the list shows only the head of each chain, but two cards with the same name might still have very different version numbers when older live tickets force a bump on save — operators need that signal at a glance.
+
+### Changed
+
+- **Backend** — added `version: true` to `workflowSummarySelect` and `version: w.version` to the list mapping in `workflow.service.ts`. Added `version: z.number().int()` to `WorkflowSummarySchema` in `workflow.openapi.ts` so the OpenAPI contract reflects the new field.
+- **Frontend (API)** — added `version: number` to the `WorkflowSummary` interface in `client/src/lib/api/workflow.ts`.
+- **Frontend (UI)** — in `WorkflowsPage.tsx` `WorkflowCard`, rendered a small `v{n}` chip immediately to the left of the existing `WorkflowStatusBadge` (gray background, same row, `title` tooltip "Workflow version N"). Kept the rest of the card unchanged so the existing layout (name, type, stage/transition count, updated date, creator, actions) is undisturbed.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (backend) | pass |
+| `npx tsc --noEmit` (client) | pass |
+| Playwright e2e (assert version chip renders on each card) | pending — not added this turn |
+
+---
+
 ## Convention for future entries
 
 Each new phase section should include:

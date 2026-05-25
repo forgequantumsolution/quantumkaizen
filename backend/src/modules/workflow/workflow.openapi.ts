@@ -28,6 +28,7 @@ const WorkflowSummarySchema = z
     name: z.string(),
     status: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
     workflowStatus: z.enum(['ACTIVE', 'INACTIVE', 'DRAFT', 'DRAFT_UPDATE']),
+    version: z.number().int(),
     type: TagRef,
     stageCount: z.number().int(),
     transitionCount: z.number().int(),
