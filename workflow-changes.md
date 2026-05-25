@@ -1997,6 +1997,36 @@ Follow-up to the 2026-05-21 entry ("Ticket breadcrumb shows uniqueId instead of 
 
 ---
 
+## Misc — Create Workflow modal: inline "+ New type" create
+
+**Date:** 2026-05-25
+**Files:**
+- [`client/src/features/workflows/shared/CreateWorkflowModal.tsx`](client/src/features/workflows/shared/CreateWorkflowModal.tsx)
+- [`tests/e2e/workflow-create-inline-type.spec.ts`](tests/e2e/workflow-create-inline-type.spec.ts) (new)
+
+Users could only pick an existing Workflow Type while creating a workflow — to add a new one they had to leave the flow and go to Settings → Workflow Types. The Create Workflow modal now exposes a small "+ New type" button beside the Type Select that opens a nested modal (name + code prefix + optional icon). On save it calls the existing `POST /workflow-lookups/types` (via `useCreateWorkflowType`), auto-selects the new type in the parent Select, and closes the nested modal.
+
+### Changed
+
+- Wrapped the existing modal body in a fragment and rendered a second `Modal` (`NewWorkflowTypeModal`) controlled by local `newTypeOpen` state.
+- Added a `<button type="button">` "+ New type" on the same row as the "Type (optional)" label, right-aligned. Lucide `Plus` icon, `text-blue-600` to match other inline CTAs.
+- `NewWorkflowTypeModal` is co-located in the same file (only call-site, and matches the "prefer concrete over abstraction" rule from feedback memory). Fields:
+  - `name` (required, autofocus, max 250)
+  - `codePrefix` (optional, uppercased on input, max 20, `font-mono uppercase` styling)
+  - `iconName` (optional, max 100)
+- On success it calls `onCreated({id, name})` which sets `typeId` in the parent, closes the nested modal, and resets local field state. Toast: "Type created".
+- Uses the existing `useCreateWorkflowType` hook — its `onSuccess` already invalidates `lookupKeys.types`, so the parent Select repopulates with the new entry; React Query then renders it as the selected option (we set `typeId` to the freshly returned `t.id`).
+- Parent modal now resets its state (`name`, `typeId`, `newTypeOpen`) on every close path — backdrop click, Escape, X button, Cancel button, and the post-create success path. Previously only the success path cleared state, so cancelling and reopening showed the stale form. The nested `NewWorkflowTypeModal` already cleared its own state on close.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | ✅ Clean |
+| `tests/e2e/workflow-create-inline-type.spec.ts` — open modal, click "+ New type", fill name + prefix, create, assert nested closes + parent Select auto-selects the new type, fill workflow name, submit, assert navigation to `/workflows/<id>/builder`. Cleans up via Prisma. | ✅ Passed (17.9s) |
+
+---
+
 ## Convention for future entries
 
 Each new phase section should include:
