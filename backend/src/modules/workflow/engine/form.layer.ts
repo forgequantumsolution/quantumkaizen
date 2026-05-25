@@ -8,8 +8,11 @@
  * docs/WORKFLOW_PHASE_3_5_PLAN.md §5).
  *
  * "Satisfied" = there exists a `FormSubmission` row with status SUBMITTED
- * matching (ticketId, stageId, binding.formId). The submission's `versionId`
- * is allowed to be any version of the logical form (Q3 sign-off).
+ * matching (ticketId, stageId, binding.formId) AND `submittedAt >=` the
+ * current visit's `enteredAt`. Each entry into a stage (including via RETURN)
+ * is an independent fill opportunity — submissions from a prior visit don't
+ * unlock the gate the next time around. The submission's `versionId` is
+ * allowed to be any version of the logical form (Q3 sign-off).
  */
 import type { Prisma } from '@prisma/client';
 
@@ -41,14 +44,23 @@ export const findUnsatisfiedRequiredForms = async (
   });
   if (bindings.length === 0) return [];
 
-  // Pull every SUBMITTED submission for this ticket+stage in one query;
-  // intersect locally with the binding formIds to find unsatisfied bindings.
+  // Each stage entry is a fresh fill opportunity. After a RETURN the ticket
+  // re-opens a tracking row with a new `enteredAt`; older submissions belonged
+  // to the previous visit and must not satisfy the current one.
+  const activeTracking = await tx.ticketStageTracking.findFirst({
+    where: { ticketId, stageId, isActive: true },
+    orderBy: { enteredAt: 'desc' },
+    select: { enteredAt: true },
+  });
+  const since = activeTracking?.enteredAt ?? new Date(0);
+
   const submittedFormIds = await tx.formSubmission
     .findMany({
       where: {
         ticketId,
         stageId,
         status: 'SUBMITTED',
+        submittedAt: { gte: since },
         formId: { in: bindings.map((b) => b.formId) },
       },
       select: { formId: true },

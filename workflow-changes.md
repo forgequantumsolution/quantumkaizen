@@ -2084,6 +2084,61 @@ The `Workflow.version` column has existed since P1.10 (versioning restore), but 
 
 ---
 
+## Misc — Fix: RETURN action never works from the ticket detail page
+
+**Date:** 2026-05-25
+**File:** [`client/src/features/tickets/detail/ActionBar.tsx`](client/src/features/tickets/detail/ActionBar.tsx)
+
+The orchestrator's `RETURN` behavior requires a `returnToStageId` in the transition payload (`engine/orchestrator.ts:443` — `throw BadRequest('returnToStageId is required for RETURN')`). The ticket detail `ActionBar` modal only collected `actionId` + `remarks`, so clicking any RETURN-behavior action button always errored out with "returnToStageId is required for RETURN." Users reported "return to previous stage is not working" — root cause was the missing picker, not anything engine-side.
+
+### Changed
+
+- Added `useTicketTrack(ticketId)` to fetch the ticket's stage tracking history.
+- Computed `returnTargets` from tracking rows: distinct visited `stageId`s minus the current stage. This mirrors the backend's "must have visited" check in `returnAction` (`engine/orchestrator.ts:702`), so the dropdown can't offer an invalid target.
+- Added a `Select` inside the action modal that only renders when `pending.action.behavior === 'RETURN'`. Required field (red asterisk). Empty-state copy when the ticket has no prior stages.
+- New `returnToStageId` state; cleared every time the modal opens for a new action.
+- `handlePerform` now passes `returnToStageId` for RETURN and short-circuits with a toast if none is selected. The Confirm button is also disabled until a target is picked (or when there are no targets at all).
+- Imports: added `useEffect`, `Select`, `useTicketTrack`.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | pass |
+| Playwright e2e (ticket with prior stage → click RETURN → confirm picker appears → submit → ticket lands on chosen stage) | pending — recommend adding to `tests/e2e/tickets/` |
+
+---
+
+## Misc — Required forms re-fillable on RETURN
+
+**Date:** 2026-05-25
+**Files:**
+- [`backend/src/modules/workflow/engine/form.layer.ts`](backend/src/modules/workflow/engine/form.layer.ts)
+- [`backend/src/modules/stage-form/stage-form.service.ts`](backend/src/modules/stage-form/stage-form.service.ts)
+
+Stage form bindings were "satisfied for life" — any past SUBMITTED `FormSubmission` matching `(ticketId, stageId, formId)` permanently unlocked the gate. So after a RETURN to a stage that had a required form, the engine would let the next FORWARD through without a fresh submission, and the ticket detail UI showed the old "Submitted" pill with no way to re-fill. That defeated the purpose of returning the ticket for re-review.
+
+### Changed
+
+- **Engine gate** (`findUnsatisfiedRequiredForms`): look up the active `TicketStageTracking` row for `(ticketId, stageId)` and only count `FormSubmission` rows with `submittedAt >= enteredAt`. Every stage entry (including via RETURN) opens a fresh tracking row in `orchestrator.openStageTracking`, so this naturally scopes "satisfied" to the current visit. Falls back to `new Date(0)` if no active tracking exists, which shouldn't happen on the transition path but keeps the function defensive.
+- **`listForTicket`** (stage-form service): for each current stage, find the active tracking row's `enteredAt`; when computing `latestSubmission` per binding, skip any submission whose `createdAt` is older than the visit start. Used `createdAt` (not `submittedAt`) here so IN_PROGRESS drafts saved during the current visit still surface as "Draft saved". `createdAt` was added to the internal select and stripped before assembling the response so the wire contract stays the same.
+- The frontend (`RequiredFormsCard`, `ActionBar` form-block check) already drives off `latestSubmission?.status`, so with the backend filter in place a returned-to stage shows "Not started" + "Fill" again and the transition gate blocks until the new submission lands. No client change required.
+
+### Behavior notes
+
+- Prior submissions are preserved (audit-safe). `createWorkflowSubmission` always inserts a new row, so each visit produces its own submission with the correct `submittedAt`.
+- Parallel-fork stages: each fork branch has its own `TicketStageTracking` row keyed by `stageId`, so the per-stage `enteredByStage` map handles them correctly.
+- Stand-alone fills (no `ticketId`) are unaffected — the filter only kicks in when there's a current visit to scope against.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (backend) | pass |
+| Playwright e2e (submit form → FORWARD → RETURN → assert "Not started" pill + Fill button + transition gate re-blocks until re-submit) | pending — recommend `tests/e2e/tickets/return-refill.spec.ts` |
+
+---
+
 ## Convention for future entries
 
 Each new phase section should include:
