@@ -12,6 +12,7 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Card, Button, Spinner, EmptyState } from '@/components/ui';
+import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
 import { formatDate, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -97,20 +98,24 @@ export default function WorkflowDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center py-16">
-        <Spinner />
-      </div>
+      <PageContainer>
+        <div className="flex justify-center py-16">
+          <Spinner />
+        </div>
+      </PageContainer>
     );
   }
   if (error || !data) {
     return (
-      <Card>
-        <p className="text-sm text-red-600">Workflow not found.</p>
-        <Button variant="ghost" size="sm" onClick={() => navigate('/workflows')} className="mt-3">
-          <ArrowLeft size={14} />
-          <span className="ml-1">Back to workflows</span>
-        </Button>
-      </Card>
+      <PageContainer>
+        <Card>
+          <p className="text-sm text-red-600">Workflow not found.</p>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/workflows')} className="mt-3">
+            <ArrowLeft size={14} />
+            <span className="ml-1">Back to workflows</span>
+          </Button>
+        </Card>
+      </PageContainer>
     );
   }
 
@@ -125,8 +130,8 @@ export default function WorkflowDetailPage() {
     }));
 
   return (
-    <>
-      <Button variant="ghost" size="sm" onClick={() => navigate('/workflows')} className="mb-3">
+    <PageContainer>
+      <Button variant="ghost" size="sm" onClick={() => navigate('/workflows')}>
         <ArrowLeft size={14} />
         <span className="ml-1">Workflows</span>
       </Button>
@@ -193,7 +198,7 @@ export default function WorkflowDetailPage() {
       />
 
       {nodes.length === 0 ? (
-        <Card className="mt-6">
+        <Card>
           <EmptyState
             icon={WorkflowIcon}
             title="Workflow has no stages yet"
@@ -203,7 +208,7 @@ export default function WorkflowDetailPage() {
           />
         </Card>
       ) : (
-        <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
           <Card noPadding className="overflow-hidden" style={{ height: 600 }}>
             <ReactFlow
               nodes={nodes}
@@ -275,6 +280,6 @@ export default function WorkflowDetailPage() {
           </div>
         </div>
       )}
-    </>
+    </PageContainer>
   );
 }
