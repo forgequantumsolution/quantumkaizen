@@ -316,7 +316,7 @@ export default function WorkflowBuilderPage() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => navigate(`/workflows/${id}`)}
+            onClick={() => navigate('/workflows')}
           >
             <ArrowLeft size={14} />
             <span className="ml-1">Back</span>

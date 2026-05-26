@@ -26,6 +26,7 @@ export interface WorkflowSummary {
   name: string;
   status: WorkflowStatus;
   workflowStatus: WorkflowLifecycleStatus;
+  version: number;
   type: NamedRef | null;
   stageCount: number;
   transitionCount: number;

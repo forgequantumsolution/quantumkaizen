@@ -1975,6 +1975,209 @@ Standalone `/forms` has no header buttons (the route isn't linked from the sideb
 
 ---
 
+## Misc — Ticket breadcrumb: stop flashing the raw UUID on cold visits
+
+**Date:** 2026-05-23
+**File:** [`client/src/components/layout/Header.tsx`](client/src/components/layout/Header.tsx)
+
+Follow-up to the 2026-05-21 entry ("Ticket breadcrumb shows uniqueId instead of UUID"). That fix swapped the UUID for `ticket.uniqueId` once the query resolved, but fell back to the raw UUID while loading — so on a cold first visit you'd see `Tickets ▸ 4259…` for a moment before it became `Tickets ▸ DOC-FQS-001`. User reported this as confusing ("shows the uuid and then it shows the ticket id").
+
+### Changed
+
+- Compute `visibleSegments` by dropping the ticket-id segment entirely while `ticket?.uniqueId` is undefined. Breadcrumb reads `Tickets` during the loading window, then becomes `Tickets ▸ DOC-FQS-001` once the query resolves. UUID is never user-visible.
+- `breadcrumbs.map` now iterates `visibleSegments` (so `isLast` and crumb paths stay correct when the segment is dropped).
+
+`useTicket` call in Header is unchanged — still piggybacks on the same `ticketKeys.detail(id)` cache as `TicketDetailPage`, so no extra request.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| Manual — cold load of `/tickets/<uuid>`: breadcrumb shows `Tickets` briefly, then `Tickets ▸ DOC-FQS-…`; no UUID flash | Pending user confirm |
+
+---
+
+## Misc — Create Workflow modal: inline "+ New type" create
+
+**Date:** 2026-05-25
+**Files:**
+- [`client/src/features/workflows/shared/CreateWorkflowModal.tsx`](client/src/features/workflows/shared/CreateWorkflowModal.tsx)
+- [`tests/e2e/workflow-create-inline-type.spec.ts`](tests/e2e/workflow-create-inline-type.spec.ts) (new)
+
+Users could only pick an existing Workflow Type while creating a workflow — to add a new one they had to leave the flow and go to Settings → Workflow Types. The Create Workflow modal now exposes a small "+ New type" button beside the Type Select that opens a nested modal (name + code prefix + optional icon). On save it calls the existing `POST /workflow-lookups/types` (via `useCreateWorkflowType`), auto-selects the new type in the parent Select, and closes the nested modal.
+
+### Changed
+
+- Wrapped the existing modal body in a fragment and rendered a second `Modal` (`NewWorkflowTypeModal`) controlled by local `newTypeOpen` state.
+- Added a `<button type="button">` "+ New type" on the same row as the "Type (optional)" label, right-aligned. Lucide `Plus` icon, `text-blue-600` to match other inline CTAs.
+- `NewWorkflowTypeModal` is co-located in the same file (only call-site, and matches the "prefer concrete over abstraction" rule from feedback memory). Fields:
+  - `name` (required, autofocus, max 250)
+  - `codePrefix` (optional, uppercased on input, max 20, `font-mono uppercase` styling)
+  - `iconName` (optional, max 100)
+- On success it calls `onCreated({id, name})` which sets `typeId` in the parent, closes the nested modal, and resets local field state. Toast: "Type created".
+- Uses the existing `useCreateWorkflowType` hook — its `onSuccess` already invalidates `lookupKeys.types`, so the parent Select repopulates with the new entry; React Query then renders it as the selected option (we set `typeId` to the freshly returned `t.id`).
+- Parent modal now resets its state (`name`, `typeId`, `newTypeOpen`) on every close path — backdrop click, Escape, X button, Cancel button, and the post-create success path. Previously only the success path cleared state, so cancelling and reopening showed the stale form. The nested `NewWorkflowTypeModal` already cleared its own state on close.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | ✅ Clean |
+| `tests/e2e/workflow-create-inline-type.spec.ts` — open modal, click "+ New type", fill name + prefix, create, assert nested closes + parent Select auto-selects the new type, fill workflow name, submit, assert navigation to `/workflows/<id>/builder`. Cleans up via Prisma. | ✅ Passed (17.9s) |
+
+---
+
+## Misc — Workflow Types tab: add Create + Delete UI
+
+**Date:** 2026-05-25
+**File:** [`client/src/features/admin/workflow-types/WorkflowTypesTab.tsx`](client/src/features/admin/workflow-types/WorkflowTypesTab.tsx)
+
+The Workflow Types tab under Settings → Master Data was previously read-only — types could only be created via seed scripts. The backend already exposed `POST /workflow-lookups/types` and `DELETE /workflow-lookups/types/:id` (gated on `workflow.lookups.manage`), plus the corresponding `useCreateWorkflowType` / `useDeleteWorkflowType` React Query hooks. Only the UI was missing.
+
+### Changed
+
+- Added an **Add Workflow Type** button (top-right, antd primary + lucide `Plus`), only rendered when the user has `workflow.lookups.manage`.
+- Added an actions column with a `Trash2` icon button per row. Same permission gate; hidden on already-deleted rows (which the list query filters out anyway).
+- Create modal mirrors `SeveritiesTab` (centered antd `Modal`, custom footer, `loading={create.isPending}` on OK). Fields: `name` (required, autofocus, max 250), `codePrefix` (optional, uppercased on input, max 20, `font-mono uppercase`), `iconName` (optional, max 100). Below the icon field are 9 chip suggestions of lucide names the sidebar already maps (`file-text`, `wrench`, `git-branch`, etc.) so users don't have to guess.
+- Delete confirmation: short title + "Delete <Name>?" + one-line note that the type is removed from the sidebar and new-workflow picker while existing workflows/tickets remain intact. Avoids the "soft-delete" jargon per the tight-copy rule.
+- API errors surface inline at the top of each modal via the shared `extractApiError` helper. The backend already returns a friendly `Conflict` message for hard-delete attempts when workflows reference the type — soft-delete (the default this UI uses) never hits that path.
+- Replaced the existing `<Alert>` load-error block with the same inline-error pattern the rest of the admin tabs use, for visual consistency.
+
+### Behavior notes
+
+- Delete is soft — the backend route defaults to `?hard=false`, marking `isDeleted: true`. `listWorkflowTypes` already filters `isDeleted: false`, so the deleted row disappears from this table, from the sidebar Modules group, and from the Create Workflow type picker after the React Query cache invalidates. Existing workflows snapshot the type so they continue to render normally.
+- Creating a type with the same name as a previously soft-deleted one revives it (existing backend behavior in `createWorkflowType` — un-sets `isDeleted` and updates `codePrefix`). This is how the UI's "restore" story works: just re-add by name; no separate Restore button needed.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | pending |
+| Playwright e2e (create → assert appears in sidebar Modules + table; delete → assert disappears from both) | pending — not added this turn |
+
+---
+
+## Misc — Workflows list: show version on each card
+
+**Date:** 2026-05-25
+**Files:**
+- [`backend/src/modules/workflow/workflow.service.ts`](backend/src/modules/workflow/workflow.service.ts)
+- [`backend/src/modules/workflow/workflow.openapi.ts`](backend/src/modules/workflow/workflow.openapi.ts)
+- [`client/src/lib/api/workflow.ts`](client/src/lib/api/workflow.ts)
+- [`client/src/features/workflows/WorkflowsPage.tsx`](client/src/features/workflows/WorkflowsPage.tsx)
+
+The `Workflow.version` column has existed since P1.10 (versioning restore), but the list endpoint never surfaced it, so the Settings → Workflows cards couldn't show which version of a lineage each row represented. With `includeAllVersions=false` (the default), the list shows only the head of each chain, but two cards with the same name might still have very different version numbers when older live tickets force a bump on save — operators need that signal at a glance.
+
+### Changed
+
+- **Backend** — added `version: true` to `workflowSummarySelect` and `version: w.version` to the list mapping in `workflow.service.ts`. Added `version: z.number().int()` to `WorkflowSummarySchema` in `workflow.openapi.ts` so the OpenAPI contract reflects the new field.
+- **Frontend (API)** — added `version: number` to the `WorkflowSummary` interface in `client/src/lib/api/workflow.ts`.
+- **Frontend (UI)** — in `WorkflowsPage.tsx` `WorkflowCard`, rendered a small `v{n}` chip immediately to the left of the existing `WorkflowStatusBadge` (gray background, same row, `title` tooltip "Workflow version N"). Kept the rest of the card unchanged so the existing layout (name, type, stage/transition count, updated date, creator, actions) is undisturbed.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (backend) | pass |
+| `npx tsc --noEmit` (client) | pass |
+| Playwright e2e (assert version chip renders on each card) | pending — not added this turn |
+
+---
+
+## Misc — Fix: RETURN action never works from the ticket detail page
+
+**Date:** 2026-05-25
+**File:** [`client/src/features/tickets/detail/ActionBar.tsx`](client/src/features/tickets/detail/ActionBar.tsx)
+
+The orchestrator's `RETURN` behavior requires a `returnToStageId` in the transition payload (`engine/orchestrator.ts:443` — `throw BadRequest('returnToStageId is required for RETURN')`). The ticket detail `ActionBar` modal only collected `actionId` + `remarks`, so clicking any RETURN-behavior action button always errored out with "returnToStageId is required for RETURN." Users reported "return to previous stage is not working" — root cause was the missing picker, not anything engine-side.
+
+### Changed
+
+- Added `useTicketTrack(ticketId)` to fetch the ticket's stage tracking history.
+- Computed `returnTargets` from tracking rows: distinct visited `stageId`s minus the current stage. This mirrors the backend's "must have visited" check in `returnAction` (`engine/orchestrator.ts:702`), so the dropdown can't offer an invalid target.
+- Added a `Select` inside the action modal that only renders when `pending.action.behavior === 'RETURN'`. Required field (red asterisk). Empty-state copy when the ticket has no prior stages.
+- New `returnToStageId` state; cleared every time the modal opens for a new action.
+- `handlePerform` now passes `returnToStageId` for RETURN and short-circuits with a toast if none is selected. The Confirm button is also disabled until a target is picked (or when there are no targets at all).
+- Imports: added `useEffect`, `Select`, `useTicketTrack`.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | pass |
+| Playwright e2e (ticket with prior stage → click RETURN → confirm picker appears → submit → ticket lands on chosen stage) | pending — recommend adding to `tests/e2e/tickets/` |
+
+---
+
+## Misc — Required forms re-fillable on RETURN
+
+**Date:** 2026-05-25
+**Files:**
+- [`backend/src/modules/workflow/engine/form.layer.ts`](backend/src/modules/workflow/engine/form.layer.ts)
+- [`backend/src/modules/stage-form/stage-form.service.ts`](backend/src/modules/stage-form/stage-form.service.ts)
+
+Stage form bindings were "satisfied for life" — any past SUBMITTED `FormSubmission` matching `(ticketId, stageId, formId)` permanently unlocked the gate. So after a RETURN to a stage that had a required form, the engine would let the next FORWARD through without a fresh submission, and the ticket detail UI showed the old "Submitted" pill with no way to re-fill. That defeated the purpose of returning the ticket for re-review.
+
+### Changed
+
+- **Engine gate** (`findUnsatisfiedRequiredForms`): look up the active `TicketStageTracking` row for `(ticketId, stageId)` and only count `FormSubmission` rows with `submittedAt >= enteredAt`. Every stage entry (including via RETURN) opens a fresh tracking row in `orchestrator.openStageTracking`, so this naturally scopes "satisfied" to the current visit. Falls back to `new Date(0)` if no active tracking exists, which shouldn't happen on the transition path but keeps the function defensive.
+- **`listForTicket`** (stage-form service): for each current stage, find the active tracking row's `enteredAt`; when computing `latestSubmission` per binding, skip any submission whose `createdAt` is older than the visit start. Used `createdAt` (not `submittedAt`) here so IN_PROGRESS drafts saved during the current visit still surface as "Draft saved". `createdAt` was added to the internal select and stripped before assembling the response so the wire contract stays the same.
+- The frontend (`RequiredFormsCard`, `ActionBar` form-block check) already drives off `latestSubmission?.status`, so with the backend filter in place a returned-to stage shows "Not started" + "Fill" again and the transition gate blocks until the new submission lands. No client change required.
+
+### Behavior notes
+
+- Prior submissions are preserved (audit-safe). `createWorkflowSubmission` always inserts a new row, so each visit produces its own submission with the correct `submittedAt`.
+- Parallel-fork stages: each fork branch has its own `TicketStageTracking` row keyed by `stageId`, so the per-stage `enteredByStage` map handles them correctly.
+- Stand-alone fills (no `ticketId`) are unaffected — the filter only kicks in when there's a current visit to scope against.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (backend) | pass |
+| Playwright e2e (submit form → FORWARD → RETURN → assert "Not started" pill + Fill button + transition gate re-blocks until re-submit) | pending — recommend `tests/e2e/tickets/return-refill.spec.ts` |
+
+---
+
+## Misc — Fix: conditional field visibility broke after a section/field rename
+
+**Date:** 2026-05-25
+**Files:**
+- [`client/src/features/forms/FormFillEmbed.tsx`](client/src/features/forms/FormFillEmbed.tsx)
+- [`client/src/features/forms/components/FormPreview.tsx`](client/src/features/forms/components/FormPreview.tsx)
+- [`client/src/features/forms/lib/dependency.ts`](client/src/features/forms/lib/dependency.ts)
+- [`client/src/features/forms/FormBuilderPage.tsx`](client/src/features/forms/FormBuilderPage.tsx)
+- [`client/src/features/forms/FormCreatePage.tsx`](client/src/features/forms/FormCreatePage.tsx)
+- [`backend/src/modules/dynamic-form/submission.validate.ts`](backend/src/modules/dynamic-form/submission.validate.ts)
+- [`tests/e2e/verify-dep-rule.spec.ts`](tests/e2e/verify-dep-rule.spec.ts)
+
+A user reported "select Yes on the dropdown and the dependent field never appears." The form (`c318dadd-7375-4606-9c99-d3cb2cd719a3`) had a `select` field gating a `table` (5whys) via a standard `equals 'yes'` dependency rule — round-trip through the API was intact, the evaluator logic was correct in isolation, but the field stayed hidden at fill time.
+
+Root cause: the dependency rule recorded `sectionName: "Section 1"`, but the section had since been renamed to `"Root Cause Analysis Stage"`. The fill-page `lookup(sectionName, fieldName)` returned `undefined` for the stale section name, the `equals 'yes'` check became `String(undefined) === 'yes'` (false), so the rule's `mode: 'show'` kept the table hidden forever. `FormBuilderPage` already had a `remapDependencies` pass that rewrites stale references on rename, but `FormCreatePage` (the parallel creation flow) did not — so any form created with that page acquired an orphaned rule the moment the user renamed a section or field.
+
+### Changed
+
+- **Client `FormFillEmbed.lookup`** and **`FormPreview.lookup`**: when `responses[sectionName]` is missing entirely (i.e. the section was renamed since the rule was set), fall back to a flat scan across all sections for a field by `fieldName`. Field names are random-suffixed (`dropdown_4y`, `table_grid_ez`) so cross-section collisions are negligible — first match wins. If `responses[sectionName]` exists but the field is undefined inside it, no fallback fires (that's a legitimate "user hasn't touched it" case).
+- **Backend `validateSubmission` (`get`)**: same fallback — the server-side dependency check must agree with the client, otherwise required-field validation would fire on hidden fields.
+- **`lib/dependency.ts`**: lifted `remapDependencies` from `FormBuilderPage` into the shared lib so both edit pages can use it. Generic over `S extends { section_name, dependency?, fields }` so both `FormBuilderPage` and `FormCreatePage` types compile cleanly.
+- **`FormCreatePage.renameSection`**: now patches dependency rules referencing the old section name. Mirrors `FormBuilderPage.updateSection`.
+- **`FormCreatePage.updateField`**: now patches dependency rules referencing the old field name when `patch.name` changes. Mirrors `FormBuilderPage.updateField`.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | pass |
+| `npx tsc --noEmit` (backend) | pass |
+| Playwright e2e ([`tests/e2e/verify-dep-rule.spec.ts`](tests/e2e/verify-dep-rule.spec.ts)) — login → open form fill → assert "5 why" hidden → select Yes → assert "5 why" visible | pass (11.1s) |
+
+### Notes for future hardening
+
+- Field-name renames in `FormBuilderPage.updateField` only remap conditions that match `(currentSectionName, oldFieldName)`. If a future feature moves a field across sections via name change, the remap won't fire — fine for now.
+- A more durable fix would be to key dependencies by stable `section_id`/`field_id` rather than names, but that changes the wire format and requires migrating every existing form. Out of scope here; the fallback lookup + remap together cover the failure modes seen in practice.
+
+---
+
 ## Convention for future entries
 
 Each new phase section should include:

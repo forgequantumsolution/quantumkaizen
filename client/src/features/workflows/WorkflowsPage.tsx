@@ -226,7 +226,15 @@ function WorkflowCard({
             <p className="text-xs text-gray-500 mt-0.5 truncate">{workflow.type.name}</p>
           )}
         </div>
-        <WorkflowStatusBadge status={workflow.workflowStatus} />
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span
+            className="text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
+            title={`Workflow version ${workflow.version}`}
+          >
+            v{workflow.version}
+          </span>
+          <WorkflowStatusBadge status={workflow.workflowStatus} />
+        </div>
       </div>
 
       <div className="flex items-center gap-4 text-xs text-gray-500">

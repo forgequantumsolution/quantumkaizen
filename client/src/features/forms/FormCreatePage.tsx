@@ -23,6 +23,7 @@ import { fieldUsesOptions } from './fieldCatalog';
 import FieldTable from './components/FieldTable';
 import FormPreview from './components/FormPreview';
 import type { ParentField } from './components/DependencyEditor';
+import { remapDependencies } from './lib/dependency';
 import type { FieldType, FormFieldDef, FormKind, FormSectionDef } from './types';
 
 export default function FormCreatePage() {
@@ -142,8 +143,17 @@ export default function FormCreatePage() {
     setSections((s) => s.filter((_, i) => i !== idx));
   };
 
+  // Rewrites dependency rules that reference the old section name so they
+  // keep matching after rename. Mirrors FormBuilderPage.updateSection.
   const renameSection = (idx: number, name: string) =>
-    setSections((s) => s.map((sec, i) => (i === idx ? { ...sec, section_name: name } : sec)));
+    setSections((s) => {
+      const oldName = s[idx]?.section_name;
+      const updated = s.map((sec, i) => (i === idx ? { ...sec, section_name: name } : sec));
+      if (!oldName || oldName === name) return updated;
+      return remapDependencies(updated, (cond) =>
+        cond.sectionName === oldName ? { sectionName: name } : null,
+      );
+    });
 
   // ── Field mutators (per section) ──────────────────────
   const addField = (sIdx: number, atIndex: number, type: FieldType) => {
@@ -173,9 +183,17 @@ export default function FormCreatePage() {
     );
   };
 
+  // Rewrites dependency rules that reference a renamed field so they keep
+  // matching. Mirrors FormBuilderPage.updateField.
   const updateField = (sIdx: number, fid: string, patch: Partial<FormFieldDef>) =>
-    setSections((s) =>
-      s.map((sec, i) =>
+    setSections((s) => {
+      const sectionName = s[sIdx]?.section_name;
+      const oldField = s[sIdx]?.fields.find((f) => f.field_id === fid);
+      const renamedTo =
+        oldField && patch.name !== undefined && patch.name !== oldField.name
+          ? patch.name
+          : null;
+      const next = s.map((sec, i) =>
         i === sIdx
           ? {
               ...sec,
@@ -184,8 +202,14 @@ export default function FormCreatePage() {
               ),
             }
           : sec
-      )
-    );
+      );
+      if (!renamedTo || !sectionName || !oldField) return next;
+      return remapDependencies(next, (cond) =>
+        cond.sectionName === sectionName && cond.fieldName === oldField.name
+          ? { fieldName: renamedTo }
+          : null,
+      );
+    });
 
   const moveField = (sIdx: number, fid: string, dir: -1 | 1) =>
     setSections((s) =>

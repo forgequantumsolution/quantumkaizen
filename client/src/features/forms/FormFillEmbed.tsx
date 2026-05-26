@@ -93,8 +93,19 @@ export default function FormFillEmbed({
     setHydratedFor(`${formId}::${submissionId}`);
   }, [existing, submissionId, formId, hydratedFor]);
 
-  const lookup = (sectionName: string, fieldName: string) =>
-    responses[sectionName]?.[fieldName];
+  // Tolerate stale dependency rules whose `sectionName` points at a section
+  // that was later renamed in the builder. Field names are random-suffixed so
+  // a cross-section collision is vanishingly rare; first match wins.
+  const lookup = (sectionName: string, fieldName: string) => {
+    const direct = responses[sectionName]?.[fieldName];
+    if (direct !== undefined) return direct;
+    if (!(sectionName in responses)) {
+      for (const sec of Object.values(responses)) {
+        if (sec && fieldName in sec) return sec[fieldName];
+      }
+    }
+    return undefined;
+  };
 
   const setFieldValue = (sectionName: string, fieldName: string, v: unknown) => {
     if (readOnly) return;

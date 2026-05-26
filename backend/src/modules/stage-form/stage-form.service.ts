@@ -187,6 +187,22 @@ export const listForTicket = async (ticketId: string) => {
     select: bindingSelect,
   });
 
+  // Scope submissions to the CURRENT visit of each stage. After a RETURN the
+  // ticket re-enters with a fresh tracking row; submissions from a prior visit
+  // must not surface as "latest" or the UI would show the form as already
+  // submitted and the user couldn't re-fill it. Mirrors the engine gate in
+  // workflow/engine/form.layer.ts → findUnsatisfiedRequiredForms.
+  const trackings = await prisma.ticketStageTracking.findMany({
+    where: { ticketId, stageId: { in: currentStageIds }, isActive: true },
+    orderBy: { enteredAt: 'desc' },
+    select: { stageId: true, enteredAt: true },
+  });
+  const enteredByStage = new Map<string, Date>();
+  for (const t of trackings) {
+    if (!t.stageId) continue;
+    if (!enteredByStage.has(t.stageId)) enteredByStage.set(t.stageId, t.enteredAt);
+  }
+
   // Fetch the most recent submission per binding. Avoid N+1 with a single
   // grouped query — we want each binding's latest matching submission by
   // (ticketId, stageId, formId).
@@ -204,16 +220,27 @@ export const listForTicket = async (ticketId: string) => {
       bindingId: true,
       status: true,
       submittedAt: true,
+      createdAt: true,
       submittedBy: { select: { id: true, name: true, email: true } },
     },
   });
 
-  // For each binding, find the latest submission keyed by (stageId, formId).
-  // The query above is desc by createdAt so the first match wins.
-  const submissionByKey = new Map<string, (typeof submissions)[number]>();
+  // For each binding, find the latest submission keyed by (stageId, formId)
+  // that was created during the current visit. Drop older rows so a returned-
+  // to stage looks fresh. `createdAt` is only used here for the visit filter
+  // and is stripped from the returned shape so the API contract is unchanged.
+  type SubmissionRow = (typeof submissions)[number];
+  type SubmissionOut = Omit<SubmissionRow, 'createdAt'>;
+  const submissionByKey = new Map<string, SubmissionOut>();
   for (const s of submissions) {
+    if (!s.stageId) continue;
+    const since = enteredByStage.get(s.stageId);
+    if (since && s.createdAt < since) continue;
     const key = `${s.stageId}:${s.formId}`;
-    if (!submissionByKey.has(key)) submissionByKey.set(key, s);
+    if (!submissionByKey.has(key)) {
+      const { createdAt: _omit, ...rest } = s;
+      submissionByKey.set(key, rest);
+    }
   }
 
   return {
