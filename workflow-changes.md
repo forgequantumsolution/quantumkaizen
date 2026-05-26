@@ -2139,6 +2139,45 @@ Stage form bindings were "satisfied for life" — any past SUBMITTED `FormSubmis
 
 ---
 
+## Misc — Fix: conditional field visibility broke after a section/field rename
+
+**Date:** 2026-05-25
+**Files:**
+- [`client/src/features/forms/FormFillEmbed.tsx`](client/src/features/forms/FormFillEmbed.tsx)
+- [`client/src/features/forms/components/FormPreview.tsx`](client/src/features/forms/components/FormPreview.tsx)
+- [`client/src/features/forms/lib/dependency.ts`](client/src/features/forms/lib/dependency.ts)
+- [`client/src/features/forms/FormBuilderPage.tsx`](client/src/features/forms/FormBuilderPage.tsx)
+- [`client/src/features/forms/FormCreatePage.tsx`](client/src/features/forms/FormCreatePage.tsx)
+- [`backend/src/modules/dynamic-form/submission.validate.ts`](backend/src/modules/dynamic-form/submission.validate.ts)
+- [`tests/e2e/verify-dep-rule.spec.ts`](tests/e2e/verify-dep-rule.spec.ts)
+
+A user reported "select Yes on the dropdown and the dependent field never appears." The form (`c318dadd-7375-4606-9c99-d3cb2cd719a3`) had a `select` field gating a `table` (5whys) via a standard `equals 'yes'` dependency rule — round-trip through the API was intact, the evaluator logic was correct in isolation, but the field stayed hidden at fill time.
+
+Root cause: the dependency rule recorded `sectionName: "Section 1"`, but the section had since been renamed to `"Root Cause Analysis Stage"`. The fill-page `lookup(sectionName, fieldName)` returned `undefined` for the stale section name, the `equals 'yes'` check became `String(undefined) === 'yes'` (false), so the rule's `mode: 'show'` kept the table hidden forever. `FormBuilderPage` already had a `remapDependencies` pass that rewrites stale references on rename, but `FormCreatePage` (the parallel creation flow) did not — so any form created with that page acquired an orphaned rule the moment the user renamed a section or field.
+
+### Changed
+
+- **Client `FormFillEmbed.lookup`** and **`FormPreview.lookup`**: when `responses[sectionName]` is missing entirely (i.e. the section was renamed since the rule was set), fall back to a flat scan across all sections for a field by `fieldName`. Field names are random-suffixed (`dropdown_4y`, `table_grid_ez`) so cross-section collisions are negligible — first match wins. If `responses[sectionName]` exists but the field is undefined inside it, no fallback fires (that's a legitimate "user hasn't touched it" case).
+- **Backend `validateSubmission` (`get`)**: same fallback — the server-side dependency check must agree with the client, otherwise required-field validation would fire on hidden fields.
+- **`lib/dependency.ts`**: lifted `remapDependencies` from `FormBuilderPage` into the shared lib so both edit pages can use it. Generic over `S extends { section_name, dependency?, fields }` so both `FormBuilderPage` and `FormCreatePage` types compile cleanly.
+- **`FormCreatePage.renameSection`**: now patches dependency rules referencing the old section name. Mirrors `FormBuilderPage.updateSection`.
+- **`FormCreatePage.updateField`**: now patches dependency rules referencing the old field name when `patch.name` changes. Mirrors `FormBuilderPage.updateField`.
+
+### Verification
+
+| Test | Result |
+|---|---|
+| `npx tsc --noEmit` (client) | pass |
+| `npx tsc --noEmit` (backend) | pass |
+| Playwright e2e ([`tests/e2e/verify-dep-rule.spec.ts`](tests/e2e/verify-dep-rule.spec.ts)) — login → open form fill → assert "5 why" hidden → select Yes → assert "5 why" visible | pass (11.1s) |
+
+### Notes for future hardening
+
+- Field-name renames in `FormBuilderPage.updateField` only remap conditions that match `(currentSectionName, oldFieldName)`. If a future feature moves a field across sections via name change, the remap won't fire — fine for now.
+- A more durable fix would be to key dependencies by stable `section_id`/`field_id` rather than names, but that changes the wire format and requires migrating every existing form. Out of scope here; the fallback lookup + remap together cover the failure modes seen in practice.
+
+---
+
 ## Convention for future entries
 
 Each new phase section should include:

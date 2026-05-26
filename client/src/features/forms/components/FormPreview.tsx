@@ -25,8 +25,18 @@ export default function FormPreview({ title, description, sections, device = 'de
   const [errors, setErrors] = useState<Errors>({});
   const [submittedOk, setSubmittedOk] = useState(false);
 
-  const lookup = (sectionName: string, fieldName: string) =>
-    responses[sectionName]?.[fieldName];
+  // Tolerate stale dependency rules whose `sectionName` points at a section
+  // that was later renamed; mirrors FormFillEmbed.lookup.
+  const lookup = (sectionName: string, fieldName: string) => {
+    const direct = responses[sectionName]?.[fieldName];
+    if (direct !== undefined) return direct;
+    if (!(sectionName in responses)) {
+      for (const sec of Object.values(responses)) {
+        if (sec && fieldName in sec) return sec[fieldName];
+      }
+    }
+    return undefined;
+  };
 
   const setFieldValue = (sectionName: string, fieldName: string, v: unknown) => {
     setResponses((p) => ({

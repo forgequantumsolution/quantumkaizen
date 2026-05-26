@@ -19,37 +19,8 @@ import SectionPanel from './components/SectionPanel';
 import FieldTable from './components/FieldTable';
 import FormPreview, { type PreviewDevice } from './components/FormPreview';
 import type { ParentField } from './components/DependencyEditor';
-import type { DependencyRule } from './lib/dependency';
+import { remapDependencies } from './lib/dependency';
 import type { FieldType, FormFieldDef, FormKind, FormSectionDef } from './types';
-
-// Walk all sections and patch dependency rules whose references still point
-// at the old section/field name. Used when the user renames a section or a
-// field so previously-configured conditions don't silently break.
-const remapDependencies = (
-  sections: FormSectionDef[],
-  matcher: (cond: { sectionName: string; fieldName: string }) =>
-    | { sectionName?: string; fieldName?: string }
-    | null,
-): FormSectionDef[] => {
-  const fixRule = (raw: unknown): unknown => {
-    if (!raw || typeof raw !== 'object') return raw;
-    const rule = raw as DependencyRule;
-    if (!Array.isArray(rule.conditions) || rule.conditions.length === 0) return raw;
-    let changed = false;
-    const conditions = rule.conditions.map((c) => {
-      const patch = matcher({ sectionName: c.sectionName, fieldName: c.fieldName });
-      if (!patch) return c;
-      changed = true;
-      return { ...c, ...patch };
-    });
-    return changed ? { ...rule, conditions } : raw;
-  };
-  return sections.map((sec) => ({
-    ...sec,
-    dependency: fixRule(sec.dependency),
-    fields: sec.fields.map((f) => ({ ...f, dependency: fixRule(f.dependency) })),
-  }));
-};
 
 type Mode = 'build' | 'preview';
 

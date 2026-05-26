@@ -151,7 +151,19 @@ export const validateSubmission = (
   sections: SectionSchema[],
   responses: Record<string, Record<string, unknown>>
 ): ValidationFailure[] => {
-  const get: Lookup = (s, f) => responses[s]?.[f];
+  // Tolerate stale dependency rules whose `sectionName` references a renamed
+  // section. Mirrors the client-side fallback in FormFillEmbed.lookup —
+  // server must agree or required-field checks diverge from the UI.
+  const get: Lookup = (s, f) => {
+    const direct = responses[s]?.[f];
+    if (direct !== undefined) return direct;
+    if (!(s in responses)) {
+      for (const sec of Object.values(responses)) {
+        if (sec && f in sec) return sec[f];
+      }
+    }
+    return undefined;
+  };
   const errors: ValidationFailure[] = [];
   for (const sec of sections) {
     if (!visible(sec.dependency, get)) continue;

@@ -129,3 +129,40 @@ export const summariseRule = (raw: unknown): string => {
   const verb = r.mode === 'show' ? 'Show when' : 'Hide when';
   return `${verb} ${r.conditions.length} condition${r.conditions.length === 1 ? '' : 's'} (${r.combinator})`;
 };
+
+// Walk all sections and patch dependency rules whose references still point
+// at the old section/field name. Both edit surfaces (FormBuilderPage,
+// FormCreatePage) call this when the user renames a section or a field so
+// previously-configured conditions don't silently break — a class of bug
+// where the orphaned rule would just always evaluate to false.
+export const remapDependencies = <
+  S extends {
+    section_name: string;
+    dependency?: unknown;
+    fields: { name: string; dependency?: unknown }[];
+  },
+>(
+  sections: S[],
+  matcher: (cond: { sectionName: string; fieldName: string }) =>
+    | { sectionName?: string; fieldName?: string }
+    | null,
+): S[] => {
+  const fixRule = (raw: unknown): unknown => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const rule = raw as DependencyRule;
+    if (!Array.isArray(rule.conditions) || rule.conditions.length === 0) return raw;
+    let changed = false;
+    const conditions = rule.conditions.map((c) => {
+      const patch = matcher({ sectionName: c.sectionName, fieldName: c.fieldName });
+      if (!patch) return c;
+      changed = true;
+      return { ...c, ...patch };
+    });
+    return changed ? { ...rule, conditions } : raw;
+  };
+  return sections.map((sec) => ({
+    ...sec,
+    dependency: fixRule(sec.dependency),
+    fields: sec.fields.map((f) => ({ ...f, dependency: fixRule(f.dependency) })),
+  })) as S[];
+};
