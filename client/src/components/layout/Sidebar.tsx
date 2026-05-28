@@ -6,6 +6,7 @@ import {
   AlertTriangle, FileWarning, ShieldAlert, Wrench,
   GitBranch, Layers, FileText, Beaker, BookOpen,
   Database, ClipboardList,
+  ClipboardCheck, PlayCircle, AlertOctagon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
@@ -20,6 +21,10 @@ interface NavItem {
   path?: string;
   icon: React.ElementType;
   children?: NavItem[];
+  /** Extra pathname prefixes that should also mark this item active — useful
+   * for entries that land on one route but share a layout with siblings (e.g.
+   * "Audit" points to /audit/register but should stay active on /audit/program). */
+  activeForPrefixes?: string[];
 }
 interface NavSection { title: string; items: NavItem[]; collapsible?: boolean }
 
@@ -88,13 +93,38 @@ export default function Sidebar() {
   const { data: workflowTypes } = useWorkflowTypes();
 
   const navigation = useMemo<NavSection[]>(() => {
+    // Audit child pages — attached under the dynamic "Audit" workflow type when
+    // present. Only two entries: "Audit" lands on the operations layout (Register
+    // / Program / Non-Conformance as tabs); "Audit Master" lands on the config
+    // layout (Master / ISO Standards as tabs).
+    const auditChildren: NavItem[] = [
+      {
+        label: 'Audit',
+        path: '/audit/register',
+        icon: ClipboardCheck,
+        activeForPrefixes: ['/audit/register', '/audit/program', '/audit/non-conformance'],
+      },
+      {
+        label: 'Audit Master',
+        path: '/audit/master',
+        icon: Database,
+        activeForPrefixes: ['/audit/master', '/audit/iso-standards'],
+      },
+    ];
+
     const moduleItems: NavItem[] = (workflowTypes ?? [])
       .filter((t) => !t.isDeleted)
-      .map((t) => ({
-        label: t.name,
-        path: `/modules/${t.id}`,
-        icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
-      }));
+      .map((t) => {
+        const isAudit = /^audit$/i.test(t.name);
+        return {
+          label: t.name,
+          // For Audit, omit the leaf path so the parent acts purely as an expandable
+          // group; first child becomes the navigation target in collapsed mode.
+          path: isAudit ? undefined : `/modules/${t.id}`,
+          icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
+          children: isAudit ? auditChildren : undefined,
+        };
+      });
 
     const sections: NavSection[] = [
       {
@@ -116,7 +146,7 @@ export default function Sidebar() {
           children: [
             { label: 'Workflows',   path: '/settings?section=workflows', icon: GitBranch },
             { label: 'Forms',       path: '/settings?section=forms',     icon: ClipboardList },
-            { label: 'Master Data', path: '/settings',                  icon: Database },
+            { label: 'Master Data', path: '/settings',                   icon: Database },
             { label: 'Appearance',  path: '/appearance',                 icon: Palette },
           ],
         },
@@ -144,6 +174,9 @@ export default function Sidebar() {
   // right child instead of every Configuration child at once.
   const currentUrl = location.pathname + location.search;
   const isItemActive = (item: NavItem): boolean => {
+    if (item.activeForPrefixes?.some((p) => location.pathname.startsWith(p))) {
+      return true;
+    }
     if (item.path) {
       if (item.path === currentUrl) return true;
       // Loose match for items without query params (e.g. /workflows/123).

@@ -99,6 +99,29 @@ const PERMISSIONS = [
   { key: 'audit_schedule.create', module: 'AUDIT_SCHEDULE',  action: 'CREATE', description: 'Create audit schedules' },
   { key: 'audit_schedule.update', module: 'AUDIT_SCHEDULE',  action: 'UPDATE', description: 'Edit audit schedules' },
   { key: 'audit_schedule.delete', module: 'AUDIT_SCHEDULE',  action: 'DELETE', description: 'Delete audit schedules' },
+  // ── Audit Master (configuration) ─────────────────────
+  { key: 'audit_master.read',     module: 'AUDIT_MASTER',    action: 'READ',   description: 'View audit master configurations' },
+  { key: 'audit_master.create',   module: 'AUDIT_MASTER',    action: 'CREATE', description: 'Create audit master configurations' },
+  { key: 'audit_master.update',   module: 'AUDIT_MASTER',    action: 'UPDATE', description: 'Edit audit master configurations' },
+  { key: 'audit_master.delete',   module: 'AUDIT_MASTER',    action: 'DELETE', description: 'Delete audit master configurations' },
+  // ── Audit Register (planning + approval) ─────────────
+  { key: 'audit_register.read',    module: 'AUDIT_REGISTER', action: 'READ',    description: 'View audit registers' },
+  { key: 'audit_register.create',  module: 'AUDIT_REGISTER', action: 'CREATE',  description: 'Create audit registers' },
+  { key: 'audit_register.update',  module: 'AUDIT_REGISTER', action: 'UPDATE',  description: 'Edit / submit audit registers' },
+  { key: 'audit_register.approve', module: 'AUDIT_REGISTER', action: 'APPROVE', description: 'Approve or reject audit registers' },
+  { key: 'audit_register.delete',  module: 'AUDIT_REGISTER', action: 'DELETE',  description: 'Delete audit registers' },
+  // ── Audit Program (execution) ────────────────────────
+  { key: 'audit_program.read',    module: 'AUDIT_PROGRAM', action: 'READ',    description: 'View audit programs' },
+  { key: 'audit_program.execute', module: 'AUDIT_PROGRAM', action: 'EXECUTE', description: 'Start / complete an audit program' },
+  // ── Audit Findings ───────────────────────────────────
+  { key: 'audit_finding.read',   module: 'AUDIT_FINDING', action: 'READ',   description: 'View audit findings' },
+  { key: 'audit_finding.create', module: 'AUDIT_FINDING', action: 'CREATE', description: 'Record audit findings' },
+  { key: 'audit_finding.update', module: 'AUDIT_FINDING', action: 'UPDATE', description: 'Edit audit findings' },
+  { key: 'audit_finding.delete', module: 'AUDIT_FINDING', action: 'DELETE', description: 'Delete audit findings' },
+  // ── Non-Conformance / CAPA bridge ────────────────────
+  { key: 'non_conformance.read',   module: 'NON_CONFORMANCE', action: 'READ',   description: 'View non-conformances (CAPA tracking)' },
+  { key: 'non_conformance.create', module: 'NON_CONFORMANCE', action: 'CREATE', description: 'Promote a finding to a non-conformance' },
+  { key: 'non_conformance.update', module: 'NON_CONFORMANCE', action: 'UPDATE', description: 'Update NC status / link CAPA ticket' },
   // ── Phase 3 — Approvals ─────────────────────────────
   { key: 'approval.read',          module: 'APPROVAL', action: 'READ',    description: 'View approval instances on tickets' },
   { key: 'approval.decide',        module: 'APPROVAL', action: 'DECIDE',  description: 'Approve or reject a pending approval instance' },

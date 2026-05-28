@@ -43,7 +43,6 @@ const HIDDEN_MODULES = new Set<string>([
   'CALIBRATION',
   'FMEA',
   'INSPECTION',
-  'ISO_STANDARD',
   'RISK',
   'SLA',
   'SUPPLIER',

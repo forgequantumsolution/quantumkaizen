@@ -19,6 +19,16 @@ import FormCreatePage from '@/features/forms/FormCreatePage';
 import FormBuilderPage from '@/features/forms/FormBuilderPage';
 import FormFillPage from '@/features/forms/FormFillPage';
 import FieldTypesPage from '@/features/forms/FieldTypesPage';
+// Audit module
+import AuditModuleLayout from '@/features/audit/AuditModuleLayout';
+import AuditRegisterListPage from '@/features/audit/AuditRegisterListPage';
+import AuditRegisterDetailPage from '@/features/audit/AuditRegisterDetailPage';
+import AuditProgramListPage from '@/features/audit/AuditProgramListPage';
+import AuditProgramExecutionPage from '@/features/audit/AuditProgramExecutionPage';
+import NonConformanceTrackPage from '@/features/audit/NonConformanceTrackPage';
+import AuditConfigLayout from '@/features/audit/AuditConfigLayout';
+import AuditMasterPage from '@/features/audit/AuditMasterPage';
+import IsoStandardsPage from '@/features/audit/IsoStandardsPage';
 // System
 import SettingsPage from '@/pages/SettingsPage';
 import AppearancePage from '@/pages/AppearancePage';
@@ -53,6 +63,20 @@ export default function App() {
           <Route path="/forms/field-types" element={<FieldTypesPage />} />
           <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
           <Route path="/forms/:id/fill" element={<FormFillPage />} />
+
+          {/* Audit module — Register → Approval → Program → Non-Conformance */}
+          <Route path="/audit" element={<Navigate to="/audit/register" replace />} />
+          <Route element={<AuditModuleLayout />}>
+            <Route path="/audit/register" element={<AuditRegisterListPage />} />
+            <Route path="/audit/program" element={<AuditProgramListPage />} />
+            <Route path="/audit/non-conformance" element={<NonConformanceTrackPage />} />
+          </Route>
+          <Route path="/audit/register/:id" element={<AuditRegisterDetailPage />} />
+          <Route path="/audit/program/:id" element={<AuditProgramExecutionPage />} />
+          <Route element={<AuditConfigLayout />}>
+            <Route path="/audit/master" element={<AuditMasterPage />} />
+            <Route path="/audit/iso-standards" element={<IsoStandardsPage />} />
+          </Route>
 
           {/* System */}
           <Route path="/appearance" element={<AppearancePage />} />
