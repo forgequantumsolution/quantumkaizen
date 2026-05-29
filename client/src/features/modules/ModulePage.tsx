@@ -25,6 +25,7 @@ import {
   History,
   X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Card,
   Button,
@@ -32,7 +33,9 @@ import {
   Spinner,
   Input,
   Select,
+  KpiCard,
 } from '@/components/ui';
+import type { KpiAccent } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn, formatDate, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -75,17 +78,15 @@ const DEFAULT_VISIBLE = new Set(COLUMN_CONFIG.map((c) => c.id));
 const KPI_DEFS: Array<{
   id: KpiId;
   label: string;
-  icon: React.ElementType;
-  color: string;
-  bg: string;
-  ring: string;
+  icon: LucideIcon;
+  accent: KpiAccent;
 }> = [
-  { id: 'mine',        label: 'My PR',            icon: FileText,       color: 'text-blue-600',    bg: 'bg-blue-50',    ring: 'ring-blue-300' },
-  { id: 'department',  label: 'My Department PR', icon: Users,          color: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-300' },
-  { id: 'createdByMe', label: 'Created By Me',    icon: UserIcon,       color: 'text-slate-600',   bg: 'bg-slate-100',  ring: 'ring-slate-300' },
-  { id: 'all',         label: 'All PR',           icon: ListIcon,       color: 'text-amber-600',   bg: 'bg-amber-50',   ring: 'ring-amber-300' },
-  { id: 'pending',     label: 'Pending',          icon: Clock,          color: 'text-orange-500',  bg: 'bg-orange-50',  ring: 'ring-orange-300' },
-  { id: 'saved',       label: 'Saved PR',         icon: Bookmark,       color: 'text-rose-500',    bg: 'bg-rose-50',    ring: 'ring-rose-300' },
+  { id: 'mine',        label: 'My PR',            icon: FileText, accent: 'blue'    },
+  { id: 'department',  label: 'My Department PR', icon: Users,    accent: 'emerald' },
+  { id: 'createdByMe', label: 'Created By Me',    icon: UserIcon, accent: 'slate'   },
+  { id: 'all',         label: 'All PR',           icon: ListIcon, accent: 'amber'   },
+  { id: 'pending',     label: 'Pending',          icon: Clock,    accent: 'orange'  },
+  { id: 'saved',       label: 'Saved PR',         icon: Bookmark, accent: 'rose'    },
 ];
 
 function useDebounced<T>(value: T, ms = 250) {
@@ -403,9 +404,11 @@ export default function ModulePage() {
             {KPI_DEFS.map((k) => (
               <KpiCard
                 key={k.id}
-                kpi={k}
-                count={kpiCounts[k.id]}
-                active={activeKpi === k.id}
+                label={k.label}
+                value={kpiCounts[k.id]}
+                icon={k.icon}
+                accent={k.accent}
+                selected={activeKpi === k.id}
                 onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
               />
             ))}
@@ -602,41 +605,6 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
     >
       {icon}
       {label}
-    </button>
-  );
-}
-
-interface KpiCardProps {
-  kpi: (typeof KPI_DEFS)[number];
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}
-
-function KpiCard({ kpi, count, active, onClick }: KpiCardProps) {
-  const Icon = kpi.icon;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'group flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-white text-left shadow-sm transition-all',
-        active
-          ? `ring-2 ${kpi.ring} border-transparent`
-          : 'border-gray-200 hover:border-gray-300 hover:shadow',
-      )}
-    >
-      <div className="min-w-0">
-        <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide truncate">
-          {kpi.label}
-        </div>
-        <div className={cn('text-2xl font-bold mt-0.5', kpi.color)}>
-          {count}
-        </div>
-      </div>
-      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0', kpi.bg, kpi.color)}>
-        <Icon size={18} />
-      </div>
     </button>
   );
 }

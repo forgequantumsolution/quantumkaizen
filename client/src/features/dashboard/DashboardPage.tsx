@@ -14,7 +14,7 @@ import {
   ScatterChart, Scatter, ZAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine,
 } from 'recharts';
-import { Card, CardHeader, CardTitle, StatsCard, Button, DataTable } from '@/components/ui';
+import { Card, CardHeader, CardTitle, KpiCard, Button, DataTable } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import type { AuditLogEntry } from '@/types';
@@ -142,17 +142,17 @@ export default function DashboardPage() {
         </div>
 
         {/* Date range selector */}
-        <div className="flex items-center rounded-xl overflow-hidden shrink-0" style={{ border: '1px solid #E5E7EB', backgroundColor: '#F9FAFB' }}>
+        <div className="flex items-center rounded-xl overflow-hidden shrink-0 border border-gray-200 bg-gray-50">
           {(Object.entries(RANGE_LABELS) as [string, string][]).map(([key, label]) => (
             <button
               key={key}
               onClick={() => setDateRange(key)}
-              style={
+              className={cn(
+                'px-3.5 h-8 text-xs font-semibold transition-all border-r last:border-r-0 border-gray-200 rounded-none',
                 dateRange === key
-                  ? { backgroundColor: '#F59E0B', color: '#fff', fontWeight: 700 }
-                  : { backgroundColor: 'transparent', color: '#6B7280' }
-              }
-              className="px-3.5 h-8 text-xs font-semibold transition-all border-r last:border-r-0 border-gray-200 rounded-none"
+                  ? 'bg-caution-500 text-white font-bold'
+                  : 'bg-transparent text-gray-500',
+              )}
             >
               {label}
             </button>
@@ -162,16 +162,13 @@ export default function DashboardPage() {
 
       {/* ── Alert Banner (when overdue actions exist) ── */}
       {d.stats.overdueActions > 0 && (
-        <div
-          className="flex items-center gap-3 px-4 py-3 rounded-xl"
-          style={{ backgroundColor: '#FEF2F2', border: '1px solid #FECACA', borderLeft: '4px solid #EF4444' }}
-        >
-          <AlertCircle size={16} className="text-red-500 shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-critical-50 border border-critical-200 border-l-4 border-l-critical-500">
+          <AlertCircle size={16} className="text-critical-500 shrink-0" />
           <div>
-            <span className="text-sm font-semibold text-red-700">
+            <span className="text-sm font-semibold text-critical-700">
               {d.stats.overdueActions} actions overdue
             </span>
-            <span className="text-xs text-red-500 ml-2">
+            <span className="text-xs text-critical-500 ml-2">
               — Immediate attention required — overdue CAPAs and NCs may affect GMP compliance status.
             </span>
           </div>
@@ -180,74 +177,54 @@ export default function DashboardPage() {
 
       {/* ── Top KPI trio ── */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <div
-          className="bg-white rounded-xl p-5 flex items-center justify-between"
-          style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: '4px solid #F59E0B' }}
-        >
-          <div>
-            <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9CA3AF' }}>CAPA Closure Rate</p>
-            <p style={{ fontSize: '42px', fontWeight: 800, color: '#0D0E17', lineHeight: 1, letterSpacing: '-0.03em' }}>87</p>
-            <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px' }}>% closed this period</p>
-          </div>
-          <div style={{ backgroundColor: '#FFFBEB', borderRadius: '12px', padding: '12px' }}>
-            <BarChart2 size={28} style={{ color: '#F59E0B' }} />
-          </div>
-        </div>
-
-        <div
-          className="bg-white rounded-xl p-5 flex items-center justify-between"
-          style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: '4px solid #22C55E' }}
-        >
-          <div>
-            <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9CA3AF' }}>Training Compliance</p>
-            <p style={{ fontSize: '42px', fontWeight: 800, color: '#0D0E17', lineHeight: 1, letterSpacing: '-0.03em' }}>{d.stats.trainingCompliance}</p>
-            <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px' }}>% departments on target</p>
-          </div>
-          <div style={{ backgroundColor: '#F0FDF4', borderRadius: '12px', padding: '12px' }}>
-            <GraduationCap size={28} style={{ color: '#22C55E' }} />
-          </div>
-        </div>
-
-        <div
-          className="bg-white rounded-xl p-5 flex items-center justify-between"
-          style={{ boxShadow: '0 1px 4px rgba(0,0,0,0.07)', borderLeft: '4px solid #3B82F6' }}
-        >
-          <div>
-            <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9CA3AF' }}>Audit Compliance</p>
-            <p style={{ fontSize: '42px', fontWeight: 800, color: '#0D0E17', lineHeight: 1, letterSpacing: '-0.03em' }}>{d.stats.auditCompliance}</p>
-            <p style={{ fontSize: '11px', color: '#9CA3AF', marginTop: '4px' }}>% — {d.rangeLabel.split('—')[1]?.trim() ?? 'this period'}</p>
-          </div>
-          <div style={{ backgroundColor: '#EFF6FF', borderRadius: '12px', padding: '12px' }}>
-            <ShieldCheck size={28} style={{ color: '#3B82F6' }} />
-          </div>
-        </div>
+        <KpiCard
+          label="CAPA Closure Rate"
+          value="87%"
+          icon={BarChart2}
+          accent="gold"
+          subtitle="closed this period"
+        />
+        <KpiCard
+          label="Training Compliance"
+          value={`${d.stats.trainingCompliance}%`}
+          icon={GraduationCap}
+          accent="green"
+          subtitle="departments on target"
+        />
+        <KpiCard
+          label="Audit Compliance"
+          value={`${d.stats.auditCompliance}%`}
+          icon={ShieldCheck}
+          accent="blue"
+          subtitle={d.rangeLabel.split('—')[1]?.trim() ?? 'this period'}
+        />
       </div>
 
       {/* ── KPI tiles (2×4 grid) with sparklines ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
-        <StatsCard title="Open NCs"           value={d.stats.openNCs}               icon={AlertTriangle}   alert={d.stats.openNCs > 10}
+        <KpiCard label="Open NCs"          value={d.stats.openNCs}                  icon={AlertTriangle} alert={d.stats.openNCs > 10}
           trend={{ value: 8, label: 'vs prior' }} sparkline={SPARKLINES.openNCs} sparklineInvert
           onClick={() => navigate('/forms')} />
-        <StatsCard title="Open CAPAs"         value={d.stats.openCAPAs}             icon={ClipboardList}
-          accent="#F59E0B" trend={{ value: -12, label: 'vs prior' }} sparkline={SPARKLINES.openCAPAs} sparklineInvert
+        <KpiCard label="Open CAPAs"        value={d.stats.openCAPAs}                icon={ClipboardList} accent="amber"
+          trend={{ value: -12, label: 'vs prior' }} sparkline={SPARKLINES.openCAPAs} sparklineInvert
           onClick={() => navigate('/forms')} />
-        <StatsCard title="Pending Approvals"  value={d.stats.pendingApprovals}      icon={Clock}
-          accent="#8B5CF6" sparkline={SPARKLINES.pending}
+        <KpiCard label="Pending Approvals" value={d.stats.pendingApprovals}         icon={Clock}         accent="purple"
+          sparkline={SPARKLINES.pending}
           onClick={() => navigate('/forms')} />
-        <StatsCard title="Expiring Docs"      value={d.stats.expiringDocuments}     icon={FileText}
-          accent="#F97316" sparkline={SPARKLINES.expiring} sparklineInvert
+        <KpiCard label="Expiring Docs"     value={d.stats.expiringDocuments}        icon={FileText}      accent="orange"
+          sparkline={SPARKLINES.expiring} sparklineInvert
           onClick={() => navigate('/forms')} />
-        <StatsCard title="Overdue Actions"    value={d.stats.overdueActions}        icon={TrendingDown}    alert={d.stats.overdueActions > 5}
+        <KpiCard label="Overdue Actions"   value={d.stats.overdueActions}           icon={TrendingDown}  alert={d.stats.overdueActions > 5}
           sparkline={SPARKLINES.overdue} sparklineInvert
           onClick={() => navigate('/forms')} />
-        <StatsCard title="Training"           value={`${d.stats.trainingCompliance}%`} icon={GraduationCap}
-          accent="#22C55E" trend={{ value: 3, label: 'vs prior' }} sparkline={SPARKLINES.training}
+        <KpiCard label="Training"          value={`${d.stats.trainingCompliance}%`} icon={GraduationCap} accent="green"
+          trend={{ value: 3, label: 'vs prior' }} sparkline={SPARKLINES.training}
           onClick={() => navigate('/forms')} />
-        <StatsCard title="Supplier Score"     value={`${d.stats.supplierScore}%`}   icon={ShieldCheck}
-          accent="#06B6D4" subtitle="Avg quality rating" sparkline={SPARKLINES.supplier}
+        <KpiCard label="Supplier Score"    value={`${d.stats.supplierScore}%`}      icon={ShieldCheck}   accent="cyan"
+          subtitle="Avg quality rating" sparkline={SPARKLINES.supplier}
           onClick={() => navigate('/forms')} />
-        <StatsCard title="Audit Compliance"   value={`${d.stats.auditCompliance}%`} icon={BarChart2}
-          accent="#3B82F6" subtitle="This period" sparkline={SPARKLINES.audit}
+        <KpiCard label="Audit Compliance"  value={`${d.stats.auditCompliance}%`}    icon={BarChart2}     accent="blue"
+          subtitle="This period" sparkline={SPARKLINES.audit}
           onClick={() => navigate('/forms')} />
       </div>
 

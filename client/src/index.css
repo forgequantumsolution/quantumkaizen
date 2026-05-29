@@ -341,27 +341,39 @@ html.dark {
   }
 }
 
-/* ── Button hover/active states ────────────────────────────────────────────── */
-.btn-primary:hover   { background-color: #A88937 !important; border-color: #856E2C !important; }
-.btn-primary:active  { background-color: #856E2C !important; }
+/* ── Custom Button variants — the two AntD doesn't natively cover. ─────────── */
+/* `secondary` (navy) and `approve` (green) — overrides on AntD's primary. */
+.ant-btn.kaizen-btn-secondary {
+  background-color: var(--color-navy);
+  border-color: var(--color-navy-mid);
+  color: #fff;
+}
+.ant-btn.kaizen-btn-secondary:hover,
+.ant-btn.kaizen-btn-secondary:focus {
+  background-color: var(--color-navy-mid) !important;
+  border-color: var(--color-navy-mid) !important;
+  color: #fff !important;
+}
+.ant-btn.kaizen-btn-secondary:active {
+  background-color: var(--color-navy) !important;
+  border-color: var(--color-navy) !important;
+}
 
-.btn-secondary:hover  { background-color: #14142A !important; }
-.btn-secondary:active { background-color: #0E0E1F !important; }
-
-.btn-approve:hover   { background-color: #16A34A !important; }
-.btn-approve:active  { background-color: #15803D !important; }
-
-.btn-danger:hover    { background-color: #DC2626 !important; }
-.btn-danger:active   { background-color: #B91C1C !important; }
-
-.btn-reject:hover    { background-color: #FEF2F2 !important; }
-.btn-reject:active   { background-color: #FEE2E2 !important; }
-
-.btn-outline:hover   { background-color: #EEF1F6 !important; border-color: #C4CAD4 !important; }
-.btn-outline:active  { background-color: #E2E7EF !important; }
-
-.btn-ghost:hover     { background-color: #EEF1F6 !important; color: #1A1A2E !important; }
-.btn-ghost:active    { background-color: #E2E7EF !important; }
+.ant-btn.kaizen-btn-approve {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+  color: #fff;
+}
+.ant-btn.kaizen-btn-approve:hover,
+.ant-btn.kaizen-btn-approve:focus {
+  background-color: #16A34A !important;
+  border-color: #16A34A !important;
+  color: #fff !important;
+}
+.ant-btn.kaizen-btn-approve:active {
+  background-color: #15803D !important;
+  border-color: #15803D !important;
+}
 
 /* ── Ticket flow canvas: pulse highlight on the active stage ───────────────── */
 @keyframes ticket-stage-pulse {

@@ -1,15 +1,13 @@
-import { useMemo } from 'react';
-import { Formik, Form, type FormikHelpers } from 'formik';
-import * as Yup from 'yup';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Button as AntButton,
   Input as AntInput,
   Select as AntSelect,
-  Form as AntForm,
   Spin,
   Tag as AntTag,
 } from 'antd';
 import { Save, Check, Upload, Plus } from 'lucide-react';
+import { AppForm } from '@/components/ui';
 import {
   useOrganization,
   useIndustries,
@@ -43,21 +41,6 @@ const TIMEZONES = [
 ];
 const DATE_FORMATS = ['DD/MM/YYYY', 'MM/DD/YYYY', 'YYYY-MM-DD'];
 
-const validationSchema = Yup.object({
-  name: Yup.string().min(1).max(120).required('Organization name is required'),
-  tenantCode: Yup.string().min(1).max(40).required('Tenant code is required'),
-  industry: Yup.string().required(),
-  website: Yup.string()
-    .test('url-or-empty', 'Website must start with http:// or https://', (v) =>
-      !v || /^https?:\/\//.test(v),
-    )
-    .nullable(),
-  address: Yup.string().max(500).nullable(),
-  standards: Yup.array().of(Yup.string().required()).max(20),
-  timezone: Yup.string().required(),
-  dateFormat: Yup.string().required(),
-});
-
 const extractApiError = (err: unknown, fallback = 'Save failed'): string =>
   (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
     ?.message ?? fallback;
@@ -67,6 +50,15 @@ export default function GeneralTab() {
   const { data: industries = [] } = useIndustries();
   const update = useUpdateOrganization();
   const canEdit = useHasPermission('org.update');
+
+  const [form] = AppForm.useForm<FormValues>();
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Watched fields drive the suggested-standards block.
+  const industry = AppForm.useWatch('industry', form) ?? '';
+  const standards = (AppForm.useWatch('standards', form) ?? []) as string[];
 
   const initialValues = useMemo<FormValues | null>(() => {
     if (!org) return null;
@@ -82,6 +74,16 @@ export default function GeneralTab() {
     };
   }, [org]);
 
+  // Re-seed the form whenever the server payload changes (mirrors Formik's
+  // enableReinitialize). Reset dirty/feedback at the same time.
+  useEffect(() => {
+    if (!initialValues) return;
+    form.setFieldsValue(initialValues);
+    setDirty(false);
+    setSaved(false);
+    setError(null);
+  }, [initialValues, form]);
+
   if (isLoading || !initialValues) {
     return (
       <div className="flex items-center justify-center py-32">
@@ -90,10 +92,8 @@ export default function GeneralTab() {
     );
   }
 
-  const handleSubmit = async (
-    values: FormValues,
-    helpers: FormikHelpers<FormValues>,
-  ) => {
+  const handleFinish = async (values: FormValues) => {
+    setError(null);
     const payload: UpdateOrganizationInput = {
       name: values.name.trim(),
       tenantCode: values.tenantCode.trim(),
@@ -106,248 +106,185 @@ export default function GeneralTab() {
     };
     try {
       await update.mutateAsync(payload);
-      helpers.setStatus({ saved: true });
-      setTimeout(() => helpers.setStatus({}), 2500);
+      setDirty(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
     } catch (err) {
-      helpers.setStatus({ error: extractApiError(err) });
-    } finally {
-      helpers.setSubmitting(false);
+      setError(extractApiError(err));
     }
   };
 
+  const suggestions = (SUGGESTED_STANDARDS_BY_INDUSTRY[industry] ?? []).filter(
+    (s) => !standards.includes(s),
+  );
+
+  const addStandard = (raw: string) => {
+    const v = raw.trim();
+    if (!v || standards.includes(v)) return;
+    form.setFieldValue('standards', [...standards, v]);
+    setDirty(true);
+  };
+
   return (
-    <Formik<FormValues>
-      enableReinitialize
+    <AppForm<FormValues>
+      form={form}
       initialValues={initialValues}
-      validationSchema={validationSchema}
-      onSubmit={handleSubmit}
-    >
-      {({
-        values,
-        errors,
-        touched,
-        status,
-        dirty,
-        isSubmitting,
-        setFieldValue,
-        handleSubmit,
-      }) => {
-        const suggestions = (SUGGESTED_STANDARDS_BY_INDUSTRY[values.industry] ?? []).filter(
-          (s) => !values.standards.includes(s),
-        );
-        const addStandard = (raw: string) => {
-          const v = raw.trim();
-          if (!v || values.standards.includes(v)) return;
-          setFieldValue('standards', [...values.standards, v]);
-        };
-        const removeStandard = (s: string) => {
-          setFieldValue(
-            'standards',
-            values.standards.filter((x) => x !== s),
-          );
-        };
-
-        return (
-          <AntForm layout="vertical" component={false}>
-          <Form className="space-y-6">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-500 mb-0">
-                {canEdit
-                  ? 'Tenant-wide settings used across the QMS modules.'
-                  : 'Read-only view — you do not have permission to edit organization settings.'}
-              </p>
-              {canEdit && (
-                <AntButton
-                  type="primary"
-                  icon={
-                    isSubmitting ? null : status?.saved ? (
-                      <Check size={14} />
-                    ) : (
-                      <Save size={14} />
-                    )
-                  }
-                  loading={isSubmitting}
-                  disabled={!dirty}
-                  onClick={() => handleSubmit()}
-                >
-                  {status?.saved ? 'Saved!' : 'Save Changes'}
-                </AntButton>
-              )}
-            </div>
-
-            {status?.error && (
-              <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-                {status.error}
-              </div>
-            )}
-
-            {/* Identity */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-              <h2 className="text-h3 text-gray-900">Organization Identity</h2>
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-                  <span className="text-blue-600 font-bold text-xl">QK</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900 mb-0">Organization Logo</p>
-                  <p className="text-xs text-gray-500 mt-0.5 mb-0">
-                    PNG or SVG, max 2MB, recommended 200×200px
-                  </p>
-                  <AntButton
-                    size="small"
-                    type="link"
-                    icon={<Upload size={12} />}
-                    disabled
-                    className="!p-0 !mt-1"
-                  >
-                    Upload logo
-                  </AntButton>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-x-4">
-                <AntForm.Item
-                  label="Organization Name"
-                  required
-                  validateStatus={touched.name && errors.name ? 'error' : ''}
-                  help={touched.name && errors.name}
-                >
-                  <AntInput
-                    value={values.name}
-                    onChange={(e) => setFieldValue('name', e.target.value)}
-                    disabled={!canEdit}
-                  />
-                </AntForm.Item>
-                <AntForm.Item
-                  label="Tenant Code"
-                  required
-                  validateStatus={touched.tenantCode && errors.tenantCode ? 'error' : ''}
-                  help={touched.tenantCode && errors.tenantCode}
-                >
-                  <AntInput
-                    value={values.tenantCode}
-                    onChange={(e) => setFieldValue('tenantCode', e.target.value.toUpperCase())}
-                    disabled={!canEdit}
-                  />
-                </AntForm.Item>
-                <AntForm.Item label="Address" className="col-span-2">
-                  <AntInput.TextArea
-                    rows={2}
-                    value={values.address}
-                    onChange={(e) => setFieldValue('address', e.target.value)}
-                    placeholder="Street, city, state, country"
-                    disabled={!canEdit}
-                  />
-                </AntForm.Item>
-                <AntForm.Item
-                  label="Website"
-                  className="col-span-2"
-                  validateStatus={touched.website && errors.website ? 'error' : ''}
-                  help={touched.website && errors.website}
-                >
-                  <AntInput
-                    value={values.website}
-                    onChange={(e) => setFieldValue('website', e.target.value)}
-                    placeholder="https://example.com"
-                    disabled={!canEdit}
-                  />
-                </AntForm.Item>
-              </div>
-            </div>
-
-            {/* Industry & Standards */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-              <h2 className="text-h3 text-gray-900">Industry & Standards</h2>
-              <div className="grid grid-cols-2 gap-x-4">
-                <AntForm.Item label="Industry">
-                  <AntSelect
-                    value={values.industry}
-                    onChange={(v) => setFieldValue('industry', v)}
-                    disabled={!canEdit}
-                    options={industries.map((i) => ({ value: i, label: i }))}
-                  />
-                </AntForm.Item>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Compliance Standards
-                </label>
-                <AntSelect<string[]>
-                  mode="tags"
-                  value={values.standards}
-                  onChange={(arr) => setFieldValue('standards', arr)}
-                  disabled={!canEdit}
-                  placeholder="Type a standard and press Enter…"
-                  style={{ width: '100%' }}
-                  tokenSeparators={[',']}
-                />
-                <p className="text-xs text-gray-400 mt-1 mb-0">
-                  Press Enter or comma to add a custom standard.
-                </p>
-              </div>
-
-              {canEdit && suggestions.length > 0 && (
-                <div>
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                    Suggested for {values.industry}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {suggestions.map((s) => (
-                      <AntTag
-                        key={s}
-                        className="!cursor-pointer hover:!bg-blue-50"
-                        onClick={() => addStandard(s)}
-                      >
-                        <Plus size={10} className="inline -mt-0.5 mr-0.5" /> {s}
-                      </AntTag>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {!canEdit && values.standards.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {values.standards.map((s) => (
-                    <AntTag key={s} color="blue">
-                      {s}
-                    </AntTag>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Defaults */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
-              <h2 className="text-h3 text-gray-900">Defaults</h2>
-              <div className="grid grid-cols-2 gap-x-4">
-                <AntForm.Item label="Timezone">
-                  <AntSelect
-                    value={values.timezone}
-                    onChange={(v) => setFieldValue('timezone', v)}
-                    disabled={!canEdit}
-                    options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))}
-                  />
-                </AntForm.Item>
-                <AntForm.Item label="Date Format">
-                  <AntSelect
-                    value={values.dateFormat}
-                    onChange={(v) => setFieldValue('dateFormat', v)}
-                    disabled={!canEdit}
-                    options={DATE_FORMATS.map((f) => ({ value: f, label: f }))}
-                  />
-                </AntForm.Item>
-              </div>
-            </div>
-
-            {/* Standards click-to-remove rendering — handled by mode="tags" select */}
-            {/* (kept here as a no-op so removeStandard stays referenced if we reintroduce a custom chip UI) */}
-            <div className="hidden">
-              <AntButton onClick={() => values.standards.forEach(removeStandard)}>noop</AntButton>
-            </div>
-          </Form>
-          </AntForm>
-        );
+      onFinish={handleFinish}
+      disabled={!canEdit}
+      onValuesChange={() => {
+        setDirty(true);
+        setSaved(false);
       }}
-    </Formik>
+      className="space-y-6"
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500 mb-0">
+          {canEdit
+            ? 'Tenant-wide settings used across the QMS modules.'
+            : 'Read-only view — you do not have permission to edit organization settings.'}
+        </p>
+        {canEdit && (
+          <AntButton
+            type="primary"
+            icon={
+              update.isPending ? null : saved ? <Check size={14} /> : <Save size={14} />
+            }
+            loading={update.isPending}
+            disabled={!dirty}
+            onClick={() => form.submit()}
+          >
+            {saved ? 'Saved!' : 'Save Changes'}
+          </AntButton>
+        )}
+      </div>
+
+      {error && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {/* Identity */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h2 className="text-h3 text-gray-900">Organization Identity</h2>
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
+            <span className="text-blue-600 font-bold text-xl">QK</span>
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-900 mb-0">Organization Logo</p>
+            <p className="text-xs text-gray-500 mt-0.5 mb-0">
+              PNG or SVG, max 2MB, recommended 200×200px
+            </p>
+            <AntButton
+              size="small"
+              type="link"
+              icon={<Upload size={12} />}
+              disabled
+              className="!p-0 !mt-1"
+            >
+              Upload logo
+            </AntButton>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4">
+          <AppForm.Item
+            label="Organization Name"
+            name="name"
+            rules={[
+              { required: true, message: 'Organization name is required' },
+              { max: 120, message: 'Must be at most 120 characters' },
+            ]}
+          >
+            <AntInput />
+          </AppForm.Item>
+          <AppForm.Item
+            label="Tenant Code"
+            name="tenantCode"
+            normalize={(v: string) => (v ?? '').toUpperCase()}
+            rules={[
+              { required: true, message: 'Tenant code is required' },
+              { max: 40, message: 'Must be at most 40 characters' },
+            ]}
+          >
+            <AntInput />
+          </AppForm.Item>
+          <AppForm.Item label="Address" name="address" className="col-span-2">
+            <AntInput.TextArea rows={2} placeholder="Street, city, state, country" />
+          </AppForm.Item>
+          <AppForm.Item
+            label="Website"
+            name="website"
+            className="col-span-2"
+            rules={[
+              {
+                validator: (_, v: string) =>
+                  !v || /^https?:\/\//.test(v)
+                    ? Promise.resolve()
+                    : Promise.reject(new Error('Website must start with http:// or https://')),
+              },
+            ]}
+          >
+            <AntInput placeholder="https://example.com" />
+          </AppForm.Item>
+        </div>
+      </div>
+
+      {/* Industry & Standards */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h2 className="text-h3 text-gray-900">Industry & Standards</h2>
+        <div className="grid grid-cols-2 gap-x-4">
+          <AppForm.Item label="Industry" name="industry" rules={[{ required: true }]}>
+            <AntSelect options={industries.map((i) => ({ value: i, label: i }))} />
+          </AppForm.Item>
+        </div>
+
+        <AppForm.Item
+          label="Compliance Standards"
+          name="standards"
+          help="Press Enter or comma to add a custom standard."
+          rules={[{ type: 'array', max: 20, message: 'At most 20 standards' }]}
+        >
+          <AntSelect<string[]>
+            mode="tags"
+            placeholder="Type a standard and press Enter…"
+            style={{ width: '100%' }}
+            tokenSeparators={[',']}
+          />
+        </AppForm.Item>
+
+        {canEdit && suggestions.length > 0 && (
+          <div>
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              Suggested for {industry}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {suggestions.map((s) => (
+                <AntTag
+                  key={s}
+                  className="!cursor-pointer hover:!bg-blue-50"
+                  onClick={() => addStandard(s)}
+                >
+                  <Plus size={10} className="inline -mt-0.5 mr-0.5" /> {s}
+                </AntTag>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Defaults */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h2 className="text-h3 text-gray-900">Defaults</h2>
+        <div className="grid grid-cols-2 gap-x-4">
+          <AppForm.Item label="Timezone" name="timezone" rules={[{ required: true }]}>
+            <AntSelect options={TIMEZONES.map((tz) => ({ value: tz, label: tz }))} />
+          </AppForm.Item>
+          <AppForm.Item label="Date Format" name="dateFormat" rules={[{ required: true }]}>
+            <AntSelect options={DATE_FORMATS.map((f) => ({ value: f, label: f }))} />
+          </AppForm.Item>
+        </div>
+      </div>
+    </AppForm>
   );
 }

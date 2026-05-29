@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Formik, Form, type FormikHelpers } from 'formik';
-import * as Yup from 'yup';
 import {
   Button as AntButton,
   Modal as AntModal,
@@ -10,13 +8,13 @@ import {
   Table as AntTable,
   Tag as AntTag,
   DatePicker as AntDatePicker,
-  Form as AntForm,
   Empty,
   Avatar as AntAvatar,
   type TableColumnsType,
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Plus, Pencil, KeyRound, Power, RotateCcw } from 'lucide-react';
+import { AppForm } from '@/components/ui';
 import {
   useAdminUsers,
   useCreateUser,
@@ -60,39 +58,6 @@ const emptyValues: FormValues = {
   joinDate: null,
   isActive: true,
 };
-
-const buildSchema = (isEditing: boolean) =>
-  Yup.object({
-    email: Yup.string().email('Enter a valid email').required('Email is required'),
-    password: isEditing
-      ? Yup.string().notRequired()
-      : Yup.string().min(8, 'At least 8 characters').required('Password is required'),
-    employeeId: Yup.string()
-      .matches(/^[A-Z0-9_-]{2,32}$/, 'Employee ID: 2–32 chars A-Z 0-9 _ -')
-      .nullable()
-      .notRequired(),
-    firstName: Yup.string().max(60).nullable(),
-    lastName: Yup.string().max(60).nullable(),
-    phone: Yup.string().max(40).nullable(),
-    designation: Yup.string().max(120).nullable(),
-    departmentId: Yup.string().nullable(),
-    roleId: Yup.string().nullable(),
-    managerId: Yup.string().nullable(),
-    joinDate: Yup.mixed().nullable(),
-    isActive: Yup.boolean().required(),
-  }).test('name-required', 'Provide at least a first or last name', function (v) {
-    if (!v.firstName && !v.lastName) {
-      return this.createError({
-        path: 'firstName',
-        message: 'Provide at least a first or last name',
-      });
-    }
-    return true;
-  });
-
-const passwordSchema = Yup.object({
-  password: Yup.string().min(8, 'At least 8 characters').required('Password is required'),
-});
 
 const extractApiError = (err: unknown, fallback = 'Save failed'): string =>
   (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
@@ -146,8 +111,12 @@ export default function UsersTab() {
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetDone, setResetDone] = useState(false);
+
+  const [form] = AppForm.useForm<FormValues>();
+  const [resetForm] = AppForm.useForm<{ password: string }>();
 
   const initialValues = useMemo<FormValues>(() => {
     if (!editing) return emptyValues;
@@ -167,6 +136,18 @@ export default function UsersTab() {
     };
   }, [editing]);
 
+  useEffect(() => {
+    if (showForm) form.setFieldsValue(initialValues);
+  }, [showForm, initialValues, form]);
+
+  useEffect(() => {
+    if (resetTarget) {
+      resetForm.resetFields();
+      setResetError(null);
+      setResetDone(false);
+    }
+  }, [resetTarget, resetForm]);
+
   const openCreate = () => {
     setEditing(null);
     setFormError(null);
@@ -182,9 +163,10 @@ export default function UsersTab() {
   const closeForm = () => {
     setShowForm(false);
     setFormError(null);
+    form.resetFields();
   };
 
-  const handleSubmit = async (values: FormValues, helpers: FormikHelpers<FormValues>) => {
+  const handleFinish = async (values: FormValues) => {
     setFormError(null);
     const basePayload = {
       email: values.email.trim(),
@@ -205,8 +187,6 @@ export default function UsersTab() {
       closeForm();
     } catch (err) {
       setFormError(extractApiError(err));
-    } finally {
-      helpers.setSubmitting(false);
     }
   };
 
@@ -216,6 +196,24 @@ export default function UsersTab() {
       else await reactivate.mutateAsync(user.id);
     } catch {
       // noop — react-query state surfaces error
+    }
+  };
+
+  const closeReset = () => {
+    setResetTarget(null);
+    resetForm.resetFields();
+    setResetError(null);
+    setResetDone(false);
+  };
+
+  const handleResetFinish = async (values: { password: string }) => {
+    if (!resetTarget) return;
+    setResetError(null);
+    try {
+      await resetPw.mutateAsync({ id: resetTarget.id, password: values.password });
+      setResetDone(true);
+    } catch (err) {
+      setResetError(extractApiError(err, 'Reset failed'));
     }
   };
 
@@ -323,6 +321,8 @@ export default function UsersTab() {
     .filter((u) => !editing || u.id !== editing.id)
     .map((u) => ({ value: u.id, label: `${u.name} · ${u.email}` }));
 
+  const isSaving = create.isPending || update.isPending;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -394,277 +394,218 @@ export default function UsersTab() {
       </div>
 
       {/* Create/Edit Modal */}
-      <Formik<FormValues>
-        enableReinitialize
-        initialValues={initialValues}
-        validationSchema={buildSchema(!!editing)}
-        onSubmit={handleSubmit}
+      <AntModal
+        title={editing ? `Edit User · ${editing.name}` : 'Add User'}
+        open={showForm}
+        onCancel={closeForm}
+        width={760}
+        destroyOnClose
+        footer={[
+          <AntButton key="cancel" onClick={closeForm}>
+            Cancel
+          </AntButton>,
+          <AntButton key="ok" type="primary" loading={isSaving} onClick={() => form.submit()}>
+            {editing ? 'Save Changes' : 'Create User'}
+          </AntButton>,
+        ]}
       >
-        {({ values, errors, touched, setFieldValue, handleSubmit, isSubmitting, resetForm }) => (
-          <AntModal
-            title={editing ? `Edit User · ${editing.name}` : 'Add User'}
-            open={showForm}
-            onCancel={() => {
-              resetForm();
-              closeForm();
-            }}
-            width={760}
-            destroyOnClose
-            footer={[
-              <AntButton
-                key="cancel"
-                onClick={() => {
-                  resetForm();
-                  closeForm();
-                }}
-              >
-                Cancel
-              </AntButton>,
-              <AntButton key="ok" type="primary" loading={isSubmitting} onClick={() => handleSubmit()}>
-                {editing ? 'Save Changes' : 'Create User'}
-              </AntButton>,
-            ]}
-          >
-            <AntForm layout="vertical" component={false}>
-            <Form>
-              {formError && (
-                <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-                  {formError}
-                </div>
-              )}
+        <AppForm<FormValues>
+          form={form}
+          initialValues={initialValues}
+          onFinish={handleFinish}
+        >
+          {formError && (
+            <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+              {formError}
+            </div>
+          )}
 
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                Identity
-              </h3>
-              <div className="grid grid-cols-2 gap-x-4">
-                <AntForm.Item
-                  label="Employee ID"
-                  validateStatus={touched.employeeId && errors.employeeId ? 'error' : ''}
-                  help={touched.employeeId && errors.employeeId}
-                >
-                  <AntInput
-                    value={values.employeeId}
-                    onChange={(e) => setFieldValue('employeeId', e.target.value.toUpperCase())}
-                    placeholder="EMP-001"
-                    maxLength={32}
-                  />
-                </AntForm.Item>
-                <AntForm.Item
-                  label="Email"
-                  required
-                  validateStatus={touched.email && errors.email ? 'error' : ''}
-                  help={touched.email && errors.email}
-                >
-                  <AntInput
-                    type="email"
-                    value={values.email}
-                    onChange={(e) => setFieldValue('email', e.target.value)}
-                    placeholder="user@company.com"
-                    disabled={!!editing}
-                  />
-                </AntForm.Item>
-                <AntForm.Item
-                  label="First Name"
-                  validateStatus={touched.firstName && errors.firstName ? 'error' : ''}
-                  help={touched.firstName && errors.firstName}
-                >
-                  <AntInput
-                    value={values.firstName}
-                    onChange={(e) => setFieldValue('firstName', e.target.value)}
-                    placeholder="Priya"
-                  />
-                </AntForm.Item>
-                <AntForm.Item label="Last Name">
-                  <AntInput
-                    value={values.lastName}
-                    onChange={(e) => setFieldValue('lastName', e.target.value)}
-                    placeholder="Sharma"
-                  />
-                </AntForm.Item>
-                <AntForm.Item label="Phone">
-                  <AntInput
-                    value={values.phone}
-                    onChange={(e) => setFieldValue('phone', e.target.value)}
-                    placeholder="+91 98765 43210"
-                  />
-                </AntForm.Item>
-                <AntForm.Item label="Designation">
-                  <AntInput
-                    value={values.designation}
-                    onChange={(e) => setFieldValue('designation', e.target.value)}
-                    placeholder="Senior Quality Engineer"
-                  />
-                </AntForm.Item>
-              </div>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+            Identity
+          </h3>
+          <div className="grid grid-cols-2 gap-x-4">
+            <AppForm.Item
+              label="Employee ID"
+              name="employeeId"
+              normalize={(v: string) => (v ?? '').toUpperCase()}
+              rules={[
+                {
+                  validator: (_, v: string) =>
+                    !v || /^[A-Z0-9_-]{2,32}$/.test(v)
+                      ? Promise.resolve()
+                      : Promise.reject(new Error('Employee ID: 2–32 chars A-Z 0-9 _ -')),
+                },
+              ]}
+            >
+              <AntInput placeholder="EMP-001" maxLength={32} />
+            </AppForm.Item>
+            <AppForm.Item
+              label="Email"
+              name="email"
+              rules={[
+                { required: true, message: 'Email is required' },
+                { type: 'email', message: 'Enter a valid email' },
+              ]}
+            >
+              <AntInput type="email" placeholder="user@company.com" disabled={!!editing} />
+            </AppForm.Item>
+            <AppForm.Item
+              label="First Name"
+              name="firstName"
+              dependencies={['lastName']}
+              rules={[
+                { max: 60, message: 'At most 60 characters' },
+                ({ getFieldValue }) => ({
+                  validator(_, v: string) {
+                    if (v || getFieldValue('lastName')) return Promise.resolve();
+                    return Promise.reject(new Error('Provide at least a first or last name'));
+                  },
+                }),
+              ]}
+            >
+              <AntInput placeholder="Priya" />
+            </AppForm.Item>
+            <AppForm.Item
+              label="Last Name"
+              name="lastName"
+              rules={[{ max: 60, message: 'At most 60 characters' }]}
+            >
+              <AntInput placeholder="Sharma" />
+            </AppForm.Item>
+            <AppForm.Item label="Phone" name="phone" rules={[{ max: 40 }]}>
+              <AntInput placeholder="+91 98765 43210" />
+            </AppForm.Item>
+            <AppForm.Item label="Designation" name="designation" rules={[{ max: 120 }]}>
+              <AntInput placeholder="Senior Quality Engineer" />
+            </AppForm.Item>
+          </div>
 
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-2">
+            Organization
+          </h3>
+          <div className="grid grid-cols-2 gap-x-4">
+            <AppForm.Item label="Department" name="departmentId">
+              <AntSelect
+                placeholder="— None —"
+                allowClear
+                options={departments.map((d) => ({
+                  value: d.id,
+                  label: `${d.code} · ${d.name}`,
+                }))}
+              />
+            </AppForm.Item>
+            <AppForm.Item label="Role" name="roleId">
+              <AntSelect
+                placeholder="— None —"
+                allowClear
+                options={roles.map((r) => ({ value: r.id, label: r.name }))}
+              />
+            </AppForm.Item>
+            <AppForm.Item label="Manager" name="managerId">
+              <AntSelect
+                placeholder="— None —"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={managerOptions}
+              />
+            </AppForm.Item>
+            <AppForm.Item label="Join Date" name="joinDate">
+              <AntDatePicker style={{ width: '100%' }} />
+            </AppForm.Item>
+          </div>
+
+          {!editing && (
+            <>
               <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-2">
-                Organization
+                Initial Password
               </h3>
-              <div className="grid grid-cols-2 gap-x-4">
-                <AntForm.Item label="Department">
-                  <AntSelect
-                    value={values.departmentId || undefined}
-                    onChange={(v) => setFieldValue('departmentId', v ?? '')}
-                    placeholder="— None —"
-                    allowClear
-                    options={departments.map((d) => ({
-                      value: d.id,
-                      label: `${d.code} · ${d.name}`,
-                    }))}
-                  />
-                </AntForm.Item>
-                <AntForm.Item label="Role">
-                  <AntSelect
-                    value={values.roleId || undefined}
-                    onChange={(v) => setFieldValue('roleId', v ?? '')}
-                    placeholder="— None —"
-                    allowClear
-                    options={roles.map((r) => ({ value: r.id, label: r.name }))}
-                  />
-                </AntForm.Item>
-                <AntForm.Item label="Manager">
-                  <AntSelect
-                    value={values.managerId || undefined}
-                    onChange={(v) => setFieldValue('managerId', v ?? '')}
-                    placeholder="— None —"
-                    allowClear
-                    showSearch
-                    optionFilterProp="label"
-                    options={managerOptions}
-                  />
-                </AntForm.Item>
-                <AntForm.Item label="Join Date">
-                  <AntDatePicker
-                    value={values.joinDate}
-                    onChange={(d) => setFieldValue('joinDate', d)}
-                    style={{ width: '100%' }}
-                  />
-                </AntForm.Item>
-              </div>
+              <AppForm.Item
+                label="Password"
+                name="password"
+                help="The user can change this later from their profile."
+                rules={[
+                  { required: true, message: 'Password is required' },
+                  { min: 8, message: 'At least 8 characters' },
+                ]}
+              >
+                <AntInput.Password placeholder="At least 8 characters" autoComplete="new-password" />
+              </AppForm.Item>
+            </>
+          )}
 
-              {!editing && (
-                <>
-                  <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-2">
-                    Initial Password
-                  </h3>
-                  <AntForm.Item
-                    label="Password"
-                    required
-                    validateStatus={touched.password && errors.password ? 'error' : ''}
-                    help={
-                      (touched.password && errors.password) ||
-                      'The user can change this later from their profile.'
-                    }
-                  >
-                    <AntInput.Password
-                      value={values.password}
-                      onChange={(e) => setFieldValue('password', e.target.value)}
-                      placeholder="At least 8 characters"
-                      autoComplete="new-password"
-                    />
-                  </AntForm.Item>
-                </>
-              )}
-
-              <AntForm.Item label="Active" className="!mt-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500 mb-0">Inactive users cannot log in.</p>
-                  <AntSwitch
-                    checked={values.isActive}
-                    onChange={(v) => setFieldValue('isActive', v)}
-                  />
-                </div>
-              </AntForm.Item>
-            </Form>
-            </AntForm>
-          </AntModal>
-        )}
-      </Formik>
+          <div className="mt-2 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-0">Active</p>
+              <p className="text-xs text-gray-500 mb-0">Inactive users cannot log in.</p>
+            </div>
+            <AppForm.Item name="isActive" valuePropName="checked" className="!mb-0">
+              <AntSwitch />
+            </AppForm.Item>
+          </div>
+        </AppForm>
+      </AntModal>
 
       {/* Reset password modal */}
-      <Formik
-        initialValues={{ password: '' }}
-        validationSchema={passwordSchema}
-        enableReinitialize
-        onSubmit={async (values, helpers) => {
-          if (!resetTarget) return;
-          try {
-            await resetPw.mutateAsync({ id: resetTarget.id, password: values.password });
-            helpers.setStatus({ done: true });
-          } catch (err) {
-            helpers.setStatus({ error: extractApiError(err, 'Reset failed') });
-          } finally {
-            helpers.setSubmitting(false);
-          }
-        }}
+      <AntModal
+        title={`Reset password · ${resetTarget?.name ?? ''}`}
+        open={!!resetTarget}
+        onCancel={closeReset}
+        width={420}
+        footer={
+          resetDone
+            ? [
+                <AntButton key="ok" type="primary" onClick={closeReset}>
+                  Done
+                </AntButton>,
+              ]
+            : [
+                <AntButton key="cancel" onClick={closeReset}>
+                  Cancel
+                </AntButton>,
+                <AntButton
+                  key="submit"
+                  type="primary"
+                  loading={resetPw.isPending}
+                  onClick={() => resetForm.submit()}
+                >
+                  Reset Password
+                </AntButton>,
+              ]
+        }
       >
-        {({ values, errors, touched, status, setFieldValue, handleSubmit, isSubmitting, resetForm }) => {
-          const closeReset = () => {
-            resetForm();
-            setResetTarget(null);
-          };
-          const done = !!status?.done;
-          return (
-            <AntModal
-              title={`Reset password · ${resetTarget?.name ?? ''}`}
-              open={!!resetTarget}
-              onCancel={closeReset}
-              width={420}
-              footer={
-                done
-                  ? [
-                      <AntButton key="ok" type="primary" onClick={closeReset}>
-                        Done
-                      </AntButton>,
-                    ]
-                  : [
-                      <AntButton key="cancel" onClick={closeReset}>
-                        Cancel
-                      </AntButton>,
-                      <AntButton
-                        key="submit"
-                        type="primary"
-                        loading={isSubmitting}
-                        onClick={() => handleSubmit()}
-                      >
-                        Reset Password
-                      </AntButton>,
-                    ]
-              }
+        {resetError && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+            {resetError}
+          </div>
+        )}
+        {resetDone ? (
+          <div className="px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+            Password updated. Share it with {resetTarget?.email} securely — it will not be
+            shown again.
+          </div>
+        ) : (
+          <AppForm<{ password: string }>
+            form={resetForm}
+            onFinish={handleResetFinish}
+            initialValues={{ password: '' }}
+          >
+            <p className="text-sm text-gray-700 mb-3">
+              Set a new password for <span className="font-medium">{resetTarget?.email}</span>.
+            </p>
+            <AppForm.Item
+              label="New Password"
+              name="password"
+              rules={[
+                { required: true, message: 'Password is required' },
+                { min: 8, message: 'At least 8 characters' },
+              ]}
             >
-              {status?.error && (
-                <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-                  {status.error}
-                </div>
-              )}
-              {done ? (
-                <div className="px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
-                  Password updated. Share it with {resetTarget?.email} securely — it will not be
-                  shown again.
-                </div>
-              ) : (
-                <AntForm layout="vertical" component={false}>
-                  <p className="text-sm text-gray-700 mb-3">
-                    Set a new password for <span className="font-medium">{resetTarget?.email}</span>.
-                  </p>
-                  <AntForm.Item
-                    label="New Password"
-                    validateStatus={touched.password && errors.password ? 'error' : ''}
-                    help={touched.password && errors.password}
-                  >
-                    <AntInput.Password
-                      value={values.password}
-                      onChange={(e) => setFieldValue('password', e.target.value)}
-                      placeholder="At least 8 characters"
-                      autoComplete="new-password"
-                    />
-                  </AntForm.Item>
-                </AntForm>
-              )}
-            </AntModal>
-          );
-        }}
-      </Formik>
+              <AntInput.Password placeholder="At least 8 characters" autoComplete="new-password" />
+            </AppForm.Item>
+          </AppForm>
+        )}
+      </AntModal>
     </div>
   );
 }

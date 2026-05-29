@@ -1,18 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Formik, Form, type FormikHelpers } from 'formik';
-import * as Yup from 'yup';
 import {
   Button as AntButton,
   Modal as AntModal,
   Input as AntInput,
   Table as AntTable,
   Tag as AntTag,
-  Form as AntForm,
   Checkbox as AntCheckbox,
   Empty,
   type TableColumnsType,
 } from 'antd';
 import { Plus, Pencil, Trash2, Lock } from 'lucide-react';
+import { AppForm } from '@/components/ui';
 import {
   useRoles,
   usePermissionsGrouped,
@@ -31,17 +29,6 @@ interface FormValues {
 }
 
 const emptyValues: FormValues = { name: '', description: '', permissionIds: [] };
-
-const buildSchema = (isEditing: boolean) =>
-  Yup.object({
-    name: isEditing
-      ? Yup.string()
-      : Yup.string()
-          .matches(/^[A-Z0-9_]{2,40}$/, 'Name must be 2–40 chars: A-Z, 0-9, _')
-          .required('Name is required'),
-    description: Yup.string().max(500).nullable(),
-    permissionIds: Yup.array().of(Yup.string().required()).default([]),
-  });
 
 const extractApiError = (err: unknown, fallback = 'Save failed'): string =>
   (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
@@ -77,6 +64,11 @@ export default function RolesTab() {
   const [confirmDelete, setConfirmDelete] = useState<Role | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [form] = AppForm.useForm<FormValues>();
+  // Watch the permission set so the per-group toggles re-render correctly.
+  const selectedPermissionIds =
+    (AppForm.useWatch('permissionIds', form) ?? []) as string[];
+
   const allPermissions = useMemo(
     () => permGroups.flatMap((g) => g.permissions.map((p) => ({ ...p, module: g.module }))),
     [permGroups],
@@ -90,6 +82,10 @@ export default function RolesTab() {
       permissionIds: editing.permissions.map((p) => p.id),
     };
   }, [editing]);
+
+  useEffect(() => {
+    if (showForm) form.setFieldsValue(initialValues);
+  }, [showForm, initialValues, form]);
 
   const openCreate = () => {
     setEditing(null);
@@ -106,9 +102,10 @@ export default function RolesTab() {
   const closeForm = () => {
     setShowForm(false);
     setFormError(null);
+    form.resetFields();
   };
 
-  const handleSubmit = async (values: FormValues, helpers: FormikHelpers<FormValues>) => {
+  const handleFinish = async (values: FormValues) => {
     setFormError(null);
     try {
       if (editing) {
@@ -127,8 +124,6 @@ export default function RolesTab() {
       closeForm();
     } catch (err) {
       setFormError(extractApiError(err));
-    } finally {
-      helpers.setSubmitting(false);
     }
   };
 
@@ -141,6 +136,23 @@ export default function RolesTab() {
     } catch (err) {
       setDeleteError(extractApiError(err, 'Delete failed'));
     }
+  };
+
+  const togglePermission = (id: string) => {
+    const set = new Set(selectedPermissionIds);
+    if (set.has(id)) set.delete(id);
+    else set.add(id);
+    form.setFieldValue('permissionIds', [...set]);
+  };
+
+  const toggleModule = (moduleKey: string) => {
+    const group = permGroups.find((g) => g.module === moduleKey);
+    if (!group) return;
+    const set = new Set(selectedPermissionIds);
+    const allSelected = group.permissions.every((p) => set.has(p.id));
+    if (allSelected) group.permissions.forEach((p) => set.delete(p.id));
+    else group.permissions.forEach((p) => set.add(p.id));
+    form.setFieldValue('permissionIds', [...set]);
   };
 
   const columns: TableColumnsType<Role> = [
@@ -217,6 +229,8 @@ export default function RolesTab() {
     },
   ];
 
+  const isSaving = create.isPending || update.isPending;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -259,156 +273,120 @@ export default function RolesTab() {
       </div>
 
       {/* Create/Edit Modal */}
-      <Formik<FormValues>
-        enableReinitialize
-        initialValues={initialValues}
-        validationSchema={buildSchema(!!editing)}
-        onSubmit={handleSubmit}
+      <AntModal
+        title={editing ? `Edit Role · ${editing.name}` : 'Add Role'}
+        open={showForm}
+        onCancel={closeForm}
+        width={760}
+        destroyOnClose
+        footer={[
+          <AntButton key="cancel" onClick={closeForm}>
+            Cancel
+          </AntButton>,
+          <AntButton key="ok" type="primary" loading={isSaving} onClick={() => form.submit()}>
+            {editing ? 'Save Changes' : 'Create Role'}
+          </AntButton>,
+        ]}
       >
-        {({ values, errors, touched, setFieldValue, handleSubmit, isSubmitting, resetForm }) => {
-          const togglePermission = (id: string) => {
-            const set = new Set(values.permissionIds);
-            if (set.has(id)) set.delete(id);
-            else set.add(id);
-            setFieldValue('permissionIds', [...set]);
-          };
-
-          const toggleModule = (moduleKey: string) => {
-            const group = permGroups.find((g) => g.module === moduleKey);
-            if (!group) return;
-            const set = new Set(values.permissionIds);
-            const allSelected = group.permissions.every((p) => set.has(p.id));
-            if (allSelected) group.permissions.forEach((p) => set.delete(p.id));
-            else group.permissions.forEach((p) => set.add(p.id));
-            setFieldValue('permissionIds', [...set]);
-          };
-
-          return (
-            <AntModal
-              title={editing ? `Edit Role · ${editing.name}` : 'Add Role'}
-              open={showForm}
-              onCancel={() => {
-                resetForm();
-                closeForm();
-              }}
-              width={760}
-              destroyOnClose
-              footer={[
-                <AntButton
-                  key="cancel"
-                  onClick={() => {
-                    resetForm();
-                    closeForm();
-                  }}
-                >
-                  Cancel
-                </AntButton>,
-                <AntButton key="ok" type="primary" loading={isSubmitting} onClick={() => handleSubmit()}>
-                  {editing ? 'Save Changes' : 'Create Role'}
-                </AntButton>,
-              ]}
+        <AppForm<FormValues>
+          form={form}
+          initialValues={initialValues}
+          onFinish={handleFinish}
+        >
+          {formError && (
+            <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+              {formError}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-x-4">
+            <AppForm.Item
+              label="Name"
+              name="name"
+              normalize={(v: string) => (v ?? '').toUpperCase()}
+              help="2–40 chars: A-Z, 0-9, _ (immutable after creation)"
+              rules={
+                editing
+                  ? []
+                  : [
+                      { required: true, message: 'Name is required' },
+                      { pattern: /^[A-Z0-9_]{2,40}$/, message: 'Name must be 2–40 chars: A-Z, 0-9, _' },
+                    ]
+              }
             >
-              <AntForm layout="vertical" component={false}>
-              <Form>
-                {formError && (
-                  <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-                    {formError}
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-x-4">
-                  <AntForm.Item
-                    label="Name"
-                    required
-                    validateStatus={touched.name && errors.name ? 'error' : ''}
-                    help={
-                      (touched.name && errors.name) ||
-                      '2–40 chars: A-Z, 0-9, _ (immutable after creation)'
-                    }
-                  >
-                    <AntInput
-                      value={values.name}
-                      onChange={(e) => setFieldValue('name', e.target.value.toUpperCase())}
-                      placeholder="QUALITY_ENGINEER"
-                      disabled={!!editing}
-                      maxLength={40}
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item label="Description">
-                    <AntInput
-                      value={values.description}
-                      onChange={(e) => setFieldValue('description', e.target.value)}
-                      placeholder="What can this role do?"
-                    />
-                  </AntForm.Item>
-                </div>
+              <AntInput placeholder="QUALITY_ENGINEER" disabled={!!editing} maxLength={40} />
+            </AppForm.Item>
+            <AppForm.Item label="Description" name="description">
+              <AntInput placeholder="What can this role do?" />
+            </AppForm.Item>
+          </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium text-gray-700">Permissions</label>
-                    <span className="text-xs text-gray-500">
-                      {values.permissionIds.length} selected
-                    </span>
-                  </div>
-                  <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                    {permGroups.map((group) => {
-                      const groupSelected = group.permissions.filter((p) =>
-                        values.permissionIds.includes(p.id),
-                      ).length;
-                      const allSelected = groupSelected === group.permissions.length;
-                      return (
-                        <div
-                          key={group.module}
-                          className="border border-gray-200 rounded-lg overflow-hidden"
+          <AppForm.Item name="permissionIds" hidden>
+            <input type="hidden" />
+          </AppForm.Item>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-700">Permissions</label>
+              <span className="text-xs text-gray-500">
+                {selectedPermissionIds.length} selected
+              </span>
+            </div>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+              {permGroups.map((group) => {
+                const groupSelected = group.permissions.filter((p) =>
+                  selectedPermissionIds.includes(p.id),
+                ).length;
+                const allSelected = groupSelected === group.permissions.length;
+                return (
+                  <div
+                    key={group.module}
+                    className="border border-gray-200 rounded-lg overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between bg-gray-50 px-3 py-2 border-b border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs font-semibold text-slate-900">
+                          {group.module}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {groupSelected} / {group.permissions.length}
+                        </span>
+                      </div>
+                      <AntButton
+                        type="link"
+                        size="small"
+                        onClick={() => toggleModule(group.module)}
+                      >
+                        {allSelected ? 'Clear' : 'Select all'}
+                      </AntButton>
+                    </div>
+                    <div className="p-2 grid grid-cols-2 gap-1">
+                      {group.permissions.map((p) => (
+                        <label
+                          key={p.id}
+                          className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer"
                         >
-                          <div className="flex items-center justify-between bg-gray-50 px-3 py-2 border-b border-gray-200">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-xs font-semibold text-slate-900">
-                                {group.module}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {groupSelected} / {group.permissions.length}
-                              </span>
+                          <AntCheckbox
+                            checked={selectedPermissionIds.includes(p.id)}
+                            onChange={() => togglePermission(p.id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="font-mono text-xs font-medium text-slate-900">
+                              {p.action}
                             </div>
-                            <AntButton
-                              type="link"
-                              size="small"
-                              onClick={() => toggleModule(group.module)}
-                            >
-                              {allSelected ? 'Clear' : 'Select all'}
-                            </AntButton>
+                            <div className="text-xs text-gray-500 line-clamp-1">
+                              {p.description}
+                            </div>
                           </div>
-                          <div className="p-2 grid grid-cols-2 gap-1">
-                            {group.permissions.map((p) => (
-                              <label
-                                key={p.id}
-                                className="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer"
-                              >
-                                <AntCheckbox
-                                  checked={values.permissionIds.includes(p.id)}
-                                  onChange={() => togglePermission(p.id)}
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-mono text-xs font-medium text-slate-900">
-                                    {p.action}
-                                  </div>
-                                  <div className="text-xs text-gray-500 line-clamp-1">
-                                    {p.description}
-                                  </div>
-                                </div>
-                              </label>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
+                        </label>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </Form>
-              </AntForm>
-            </AntModal>
-          );
-        }}
-      </Formik>
+                );
+              })}
+            </div>
+          </div>
+        </AppForm>
+      </AntModal>
 
       {/* Delete confirmation */}
       <AntModal

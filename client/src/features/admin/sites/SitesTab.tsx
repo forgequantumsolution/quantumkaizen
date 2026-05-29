@@ -1,6 +1,4 @@
-import { useMemo, useState } from 'react';
-import { Formik, Form, type FormikHelpers } from 'formik';
-import * as Yup from 'yup';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Button as AntButton,
   Modal as AntModal,
@@ -9,11 +7,11 @@ import {
   Switch as AntSwitch,
   Table as AntTable,
   Tag as AntTag,
-  Form as AntForm,
   Empty,
   type TableColumnsType,
 } from 'antd';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { AppForm } from '@/components/ui';
 import {
   useSites,
   useCreateSite,
@@ -32,15 +30,6 @@ interface FormValues {
 }
 
 const emptyValues: FormValues = { code: '', name: '', address: '', isActive: true };
-
-const validationSchema = Yup.object({
-  code: Yup.string()
-    .matches(/^[A-Z0-9_-]{2,16}$/, 'Code must be 2–16 chars: A-Z, 0-9, _, -')
-    .required('Code is required'),
-  name: Yup.string().min(1).max(120).required('Name is required'),
-  address: Yup.string().max(500).nullable(),
-  isActive: Yup.boolean().required(),
-});
 
 const buildPayload = (v: FormValues): CreateSiteInput => ({
   code: v.code.trim().toUpperCase(),
@@ -87,6 +76,8 @@ export default function SitesTab() {
   const [confirmDelete, setConfirmDelete] = useState<Site | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [form] = AppForm.useForm<FormValues>();
+
   const initialValues = useMemo<FormValues>(() => {
     if (!editing) return emptyValues;
     return {
@@ -97,20 +88,25 @@ export default function SitesTab() {
     };
   }, [editing]);
 
-  const handleSubmit = async (
-    values: FormValues,
-    helpers: FormikHelpers<FormValues>,
-  ) => {
+  useEffect(() => {
+    if (showForm) form.setFieldsValue(initialValues);
+  }, [showForm, initialValues, form]);
+
+  const closeForm = () => {
+    setShowForm(false);
+    setFormError(null);
+    form.resetFields();
+  };
+
+  const handleFinish = async (values: FormValues) => {
     setFormError(null);
     const payload = buildPayload(values);
     try {
       if (editing) await update.mutateAsync({ id: editing.id, ...payload });
       else await create.mutateAsync(payload);
-      setShowForm(false);
+      closeForm();
     } catch (err) {
       setFormError(extractApiError(err));
-    } finally {
-      helpers.setSubmitting(false);
     }
   };
 
@@ -193,6 +189,8 @@ export default function SitesTab() {
     },
   ];
 
+  const isSaving = create.isPending || update.isPending;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -255,87 +253,69 @@ export default function SitesTab() {
         />
       </div>
 
-      <Formik<FormValues>
-        enableReinitialize
-        initialValues={initialValues}
-        validationSchema={validationSchema}
-        onSubmit={handleSubmit}
+      <AntModal
+        title={editing ? `Edit Site · ${editing.code}` : 'Add Site'}
+        open={showForm}
+        onCancel={closeForm}
+        width={560}
+        destroyOnClose
+        footer={[
+          <AntButton key="cancel" onClick={closeForm}>Cancel</AntButton>,
+          <AntButton key="ok" type="primary" loading={isSaving} onClick={() => form.submit()}>
+            {editing ? 'Save Changes' : 'Create Site'}
+          </AntButton>,
+        ]}
       >
-        {({ values, errors, touched, setFieldValue, handleSubmit: submit, isSubmitting, resetForm }) => (
-          <AntModal
-            title={editing ? `Edit Site · ${editing.code}` : 'Add Site'}
-            open={showForm}
-            onCancel={() => { resetForm(); setShowForm(false); setFormError(null); }}
-            width={560}
-            destroyOnClose
-            footer={[
-              <AntButton key="cancel" onClick={() => { resetForm(); setShowForm(false); }}>
-                Cancel
-              </AntButton>,
-              <AntButton key="ok" type="primary" loading={isSubmitting} onClick={() => submit()}>
-                {editing ? 'Save Changes' : 'Create Site'}
-              </AntButton>,
-            ]}
-          >
-            <AntForm layout="vertical" component={false}>
-              <Form>
-                {formError && (
-                  <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-                    {formError}
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-x-4">
-                  <AntForm.Item
-                    label="Code"
-                    required
-                    validateStatus={touched.code && errors.code ? 'error' : ''}
-                    help={touched.code && errors.code ? errors.code : '2–16 chars: A-Z, 0-9, _ or -'}
-                  >
-                    <AntInput
-                      value={values.code}
-                      onChange={(e) => setFieldValue('code', e.target.value.toUpperCase())}
-                      placeholder="PUNE, BOM, US-1…"
-                      disabled={!!editing}
-                      maxLength={16}
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item
-                    label="Name"
-                    required
-                    validateStatus={touched.name && errors.name ? 'error' : ''}
-                    help={touched.name && errors.name}
-                  >
-                    <AntInput
-                      value={values.name}
-                      onChange={(e) => setFieldValue('name', e.target.value)}
-                      placeholder="Pune Manufacturing"
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item label="Address" className="col-span-2">
-                    <AntInput.TextArea
-                      value={values.address}
-                      onChange={(e) => setFieldValue('address', e.target.value)}
-                      rows={2}
-                      placeholder="Postal address (optional)"
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item label="Active" className="col-span-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-500 mb-0">
-                        Inactive sites stay in the database but are hidden from default dropdowns.
-                      </p>
-                      <AntSwitch
-                        checked={values.isActive}
-                        onChange={(v) => setFieldValue('isActive', v)}
-                      />
-                    </div>
-                  </AntForm.Item>
-                </div>
-              </Form>
-            </AntForm>
-          </AntModal>
-        )}
-      </Formik>
+        <AppForm<FormValues>
+          form={form}
+          initialValues={initialValues}
+          onFinish={handleFinish}
+        >
+          {formError && (
+            <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+              {formError}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-x-4">
+            <AppForm.Item
+              label="Code"
+              name="code"
+              normalize={(v: string) => (v ?? '').toUpperCase()}
+              help="2–16 chars: A-Z, 0-9, _ or -"
+              rules={[
+                { required: true, message: 'Code is required' },
+                { pattern: /^[A-Z0-9_-]{2,16}$/, message: 'Code must be 2–16 chars: A-Z, 0-9, _, -' },
+              ]}
+            >
+              <AntInput placeholder="PUNE, BOM, US-1…" disabled={!!editing} maxLength={16} />
+            </AppForm.Item>
+            <AppForm.Item
+              label="Name"
+              name="name"
+              rules={[
+                { required: true, message: 'Name is required' },
+                { max: 120, message: 'At most 120 characters' },
+              ]}
+            >
+              <AntInput placeholder="Pune Manufacturing" />
+            </AppForm.Item>
+            <AppForm.Item label="Address" name="address" className="col-span-2">
+              <AntInput.TextArea rows={2} placeholder="Postal address (optional)" />
+            </AppForm.Item>
+            <div className="col-span-2 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-0">Active</p>
+                <p className="text-xs text-gray-500 mb-0">
+                  Inactive sites stay in the database but are hidden from default dropdowns.
+                </p>
+              </div>
+              <AppForm.Item name="isActive" valuePropName="checked" className="!mb-0">
+                <AntSwitch />
+              </AppForm.Item>
+            </div>
+          </div>
+        </AppForm>
+      </AntModal>
 
       <AntModal
         title="Delete Site"
