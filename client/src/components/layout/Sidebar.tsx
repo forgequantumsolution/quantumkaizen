@@ -79,8 +79,8 @@ const BG           = 'var(--color-navy)';
 const ACTIVE_BG    = 'var(--color-navy-mid)';
 const ACCENT       = 'var(--color-gold)';
 const ACTIVE_CLR   = 'var(--color-gold)';
-const SECTION_CLR  = '#4A4A6A';
-const INACTIVE_CLR = '#7A7A9A';
+const SECTION_CLR  = 'rgba(255,255,255,0.65)';
+const INACTIVE_CLR = '#FFFFFF';
 const DIVIDER      = 'rgba(255,255,255,0.06)';
 const HOVER_BG     = 'rgba(255,255,255,0.04)';
 
@@ -128,13 +128,13 @@ export default function Sidebar() {
 
     const sections: NavSection[] = [
       {
-        title: 'Overview',
+        title: '',
         items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
       },
     ];
 
     if (moduleItems.length > 0) {
-      sections.push({ title: 'Modules', items: moduleItems, collapsible: true });
+      sections.push({ title: '', items: moduleItems });
     }
 
     sections.push({
@@ -161,12 +161,8 @@ export default function Sidebar() {
     setSectionsCollapsed(prev => ({ ...prev, [title]: !prev[title] }));
 
   // Per-item expand state, keyed by label since parents may have no path.
-  // Configuration + Master Data default to expanded so users see the children
-  // immediately on /settings.
-  const [itemsExpanded, setItemsExpanded] = useState<Record<string, boolean>>({
-    Configuration: true,
-    'Master Data': true,
-  });
+  // All parents start collapsed; user opens what they need.
+  const [itemsExpanded, setItemsExpanded] = useState<Record<string, boolean>>({});
   const toggleItem = (label: string) =>
     setItemsExpanded(prev => ({ ...prev, [label]: !prev[label] }));
 
@@ -260,11 +256,11 @@ export default function Sidebar() {
               }
             }}
           >
-            <Icon size={depth === 0 ? 17 : 15} strokeWidth={isActive ? 2 : 1.5}
+            <Icon size={depth === 0 ? 19 : 16} strokeWidth={isActive ? 2 : 1.5}
               style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
             <span style={{
-              flex: 1, fontSize: depth === 0 ? '15px' : '13px',
-              fontWeight: isActive ? 500 : 400, lineHeight: 1.15, whiteSpace: 'nowrap',
+              flex: 1, fontSize: depth === 0 ? '17px' : '15px',
+              lineHeight: 1.2, whiteSpace: 'nowrap',
             }}>{item.label}</span>
             <ChevronDown
               size={13}
@@ -324,12 +320,12 @@ export default function Sidebar() {
           }
         }}
       >
-        <Icon size={depth === 0 ? 17 : 15} strokeWidth={isActive ? 2 : 1.5}
+        <Icon size={depth === 0 ? 19 : 16} strokeWidth={isActive ? 2 : 1.5}
           style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
         {!sidebarCollapsed && (
           <span style={{
-            fontSize: depth === 0 ? '15px' : '13px',
-            fontWeight: isActive ? 500 : 400, lineHeight: 1.15, whiteSpace: 'nowrap',
+            fontSize: depth === 0 ? '17px' : '15px',
+            lineHeight: 1.2, whiteSpace: 'nowrap',
           }}>{item.label}</span>
         )}
       </NavLink>
@@ -355,10 +351,9 @@ export default function Sidebar() {
         </div>
         {!sidebarCollapsed && (
           <div className="overflow-hidden">
-            <p className="text-white font-bold text-sm leading-none tracking-tight">
+            <p className="text-white text-base leading-none tracking-tight">
               Quantum <span style={{ color: ACCENT }}>Kaizen</span>
             </p>
-            <p style={{ color: SECTION_CLR }} className="text-[9px] tracking-[0.15em] mt-0.5 uppercase font-medium">QMS Platform</p>
           </div>
         )}
       </div>
@@ -379,7 +374,7 @@ export default function Sidebar() {
                   onMouseEnter={e => { if (section.collapsible) (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
-                  <span style={{ color: hasActive ? ACCENT : SECTION_CLR, fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  <span style={{ color: hasActive ? ACCENT : SECTION_CLR, fontSize: '12.5px', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
                     {section.title}
                   </span>
                   {section.collapsible && (
@@ -441,8 +436,8 @@ export default function Sidebar() {
             <span style={{ color: ACCENT }} className="text-[11px] font-bold">{initials}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p style={{ color: ACTIVE_CLR }} className="text-[14px] font-medium truncate leading-tight">{user?.name ?? '—'}</p>
-            <p style={{ color: SECTION_CLR }} className="text-[11px] truncate leading-tight mt-0.5">
+            <p style={{ color: ACTIVE_CLR }} className="text-[15px] truncate leading-tight">{user?.name ?? '—'}</p>
+            <p style={{ color: SECTION_CLR }} className="text-[12px] truncate leading-tight mt-1 tracking-wide">
               {user?.role?.replace(/_/g, ' ') ?? 'Unknown Role'}
             </p>
           </div>

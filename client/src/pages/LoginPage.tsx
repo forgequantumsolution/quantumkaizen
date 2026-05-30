@@ -46,7 +46,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-page" style={{ backgroundImage: 'url(/factory-bg.jpg)' }}>
+    <div className="login-page">
       <div className="login-overlay" />
 
       <div className="login-brand">
@@ -87,10 +87,6 @@ export default function LoginPage() {
           <div className="login-card-body">
             <div className="login-card-title-row">
               <h2 className="login-card-title">Sign In</h2>
-              <div className="login-status">
-                <span className="login-status-dot" />
-                System Online
-              </div>
             </div>
 
             <Formik<FormValues>
