@@ -1,10 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { Database, FileText } from 'lucide-react';
+import { Database, FileText, Target, ListChecks } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { to: '/audit/master', label: 'Audit Master', icon: Database },
+  { to: '/audit/focus-areas', label: 'Focus Area', icon: Target },
+  { to: '/audit/audit-types', label: 'Audit Type', icon: ListChecks },
   { to: '/audit/iso-standards', label: 'ISO Standards', icon: FileText },
 ];
 

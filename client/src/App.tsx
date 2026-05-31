@@ -23,11 +23,15 @@ import FieldTypesPage from '@/features/forms/FieldTypesPage';
 import AuditModuleLayout from '@/features/audit/AuditModuleLayout';
 import AuditRegisterListPage from '@/features/audit/AuditRegisterListPage';
 import AuditRegisterDetailPage from '@/features/audit/AuditRegisterDetailPage';
+import AuditRegisterFormPage from '@/features/audit/AuditRegisterFormPage';
 import AuditProgramListPage from '@/features/audit/AuditProgramListPage';
 import AuditProgramExecutionPage from '@/features/audit/AuditProgramExecutionPage';
 import NonConformanceTrackPage from '@/features/audit/NonConformanceTrackPage';
 import AuditConfigLayout from '@/features/audit/AuditConfigLayout';
 import AuditMasterPage from '@/features/audit/AuditMasterPage';
+import AuditMasterFormPage from '@/features/audit/AuditMasterFormPage';
+import FocusAreaPage from '@/features/audit/FocusAreaPage';
+import AuditTypePage from '@/features/audit/AuditTypePage';
 import IsoStandardsPage from '@/features/audit/IsoStandardsPage';
 // System
 import SettingsPage from '@/pages/SettingsPage';
@@ -71,10 +75,16 @@ export default function App() {
             <Route path="/audit/program" element={<AuditProgramListPage />} />
             <Route path="/audit/non-conformance" element={<NonConformanceTrackPage />} />
           </Route>
+          <Route path="/audit/register/new" element={<AuditRegisterFormPage />} />
+          <Route path="/audit/register/:id/edit" element={<AuditRegisterFormPage />} />
           <Route path="/audit/register/:id" element={<AuditRegisterDetailPage />} />
           <Route path="/audit/program/:id" element={<AuditProgramExecutionPage />} />
+          <Route path="/audit/master/new" element={<AuditMasterFormPage />} />
+          <Route path="/audit/master/:id/edit" element={<AuditMasterFormPage />} />
           <Route element={<AuditConfigLayout />}>
             <Route path="/audit/master" element={<AuditMasterPage />} />
+            <Route path="/audit/focus-areas" element={<FocusAreaPage />} />
+            <Route path="/audit/audit-types" element={<AuditTypePage />} />
             <Route path="/audit/iso-standards" element={<IsoStandardsPage />} />
           </Route>
 

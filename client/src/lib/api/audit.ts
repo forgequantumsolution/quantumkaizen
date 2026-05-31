@@ -55,15 +55,21 @@ interface IdName {
 }
 
 // ── Audit Master ──
+export interface ChecklistRef {
+  id: string;
+  title: string;
+}
+
 export interface AuditMaster {
   id: string;
-  code: string;
+  code: string | null;
   name: string;
   description: string | null;
   audit_type: AuditType;
   frequency: AuditFrequency;
   default_iso_standard: IdName | null;
   default_checklist_form: { id: string; title: string } | null;
+  checklist_forms: ChecklistRef[];
   scoring_rules: unknown;
   is_active: boolean;
   created_at: string;
@@ -71,25 +77,47 @@ export interface AuditMaster {
 }
 
 export interface AuditMasterUpsert {
-  code: string;
   name: string;
   description?: string | null;
   audit_type: AuditType;
   frequency: AuditFrequency;
   default_iso_standard_id?: string | null;
-  default_checklist_form_id?: string | null;
+  checklist_forms?: ChecklistRef[];
   scoring_rules?: unknown;
   is_active?: boolean;
 }
 
+// ── Focus Area / Audit Type (simple lookup masters) ──
+export interface LookupMaster {
+  id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LookupMasterUpsert {
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
+}
+
 // ── Audit Register ──
+export interface ChecklistAssignment {
+  checklist_form_id: string;
+  checklist_title: string;
+  members: NamedRef[];
+}
+
 export interface AuditRegister {
   id: string;
   register_number: string;
   title: string;
   status: AuditStatus;
   audit_master: { id: string; code: string; name: string } | null;
-  audit_type: AuditType;
+  /** Free-form, sourced from the configured Audit Type master. */
+  audit_type: string;
   plant: string | null;
   description: string | null;
   planned_date: string;
@@ -103,6 +131,8 @@ export interface AuditRegister {
   criteria: NamedRef[];
   departments: NamedRef[];
   focus_areas: NamedRef[];
+  team_members: NamedRef[];
+  checklist_assignments: ChecklistAssignment[];
   checklist_form: { id: string; title: string; kind?: string } | null;
   auditor: IdName | null;
   approver: IdName | null;
@@ -119,7 +149,7 @@ export interface AuditRegister {
 export interface AuditRegisterUpsert {
   title: string;
   audit_master_id?: string | null;
-  audit_type: AuditType;
+  audit_type: string;
   plant?: string | null;
   description?: string | null;
   planned_date: string;
@@ -133,6 +163,8 @@ export interface AuditRegisterUpsert {
   criteria?: NamedRef[];
   departments?: NamedRef[];
   focus_areas?: NamedRef[];
+  team_members?: NamedRef[];
+  checklist_assignments?: ChecklistAssignment[];
   checklist_form_id?: string | null;
   auditor_id?: string | null;
   approver_id?: string | null;
@@ -222,6 +254,8 @@ export interface NonConformance {
 // ── Query keys ──
 export const auditKeys = {
   masters: (q: ListMasterQuery = {}) => ['audit', 'masters', q] as const,
+  focusAreas: (q: ListLookupQuery = {}) => ['audit', 'focus-areas', q] as const,
+  auditTypes: (q: ListLookupQuery = {}) => ['audit', 'audit-types', q] as const,
   registers: (q: ListRegisterQuery = {}) => ['audit', 'registers', q] as const,
   register: (id: string) => ['audit', 'registers', id] as const,
   programs: (q: ListProgramQuery = {}) => ['audit', 'programs', q] as const,
@@ -238,11 +272,17 @@ export interface ListMasterQuery {
   is_active?: boolean;
   search?: string;
 }
+export interface ListLookupQuery {
+  page?: number;
+  page_size?: number;
+  is_active?: boolean;
+  search?: string;
+}
 export interface ListRegisterQuery {
   page?: number;
   page_size?: number;
   status?: AuditStatus;
-  audit_type?: AuditType;
+  audit_type?: string;
   financial_year?: string;
   search?: string;
 }
@@ -367,6 +407,74 @@ export const useDeleteAuditMaster = () => {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/audit/masters/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'masters'] }),
+  });
+};
+
+// ─────────────────────────────── Focus Area ─────────────────────────────────
+
+export const useFocusAreas = (q: ListLookupQuery = {}) =>
+  useQuery<PaginatedResp<LookupMaster>>({
+    queryKey: auditKeys.focusAreas(q),
+    queryFn: () => api.get('/audit/focus-areas', { params: q }).then((r) => r.data),
+  });
+
+export const useCreateFocusArea = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: LookupMasterUpsert) =>
+      api.post('/audit/focus-areas', body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'focus-areas'] }),
+  });
+};
+
+export const useUpdateFocusArea = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: LookupMasterUpsert) =>
+      api.put(`/audit/focus-areas/${id}`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'focus-areas'] }),
+  });
+};
+
+export const useDeleteFocusArea = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/audit/focus-areas/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'focus-areas'] }),
+  });
+};
+
+// ─────────────────────────────── Audit Type ─────────────────────────────────
+
+export const useAuditTypes = (q: ListLookupQuery = {}) =>
+  useQuery<PaginatedResp<LookupMaster>>({
+    queryKey: auditKeys.auditTypes(q),
+    queryFn: () => api.get('/audit/audit-types', { params: q }).then((r) => r.data),
+  });
+
+export const useCreateAuditType = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: LookupMasterUpsert) =>
+      api.post('/audit/audit-types', body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'audit-types'] }),
+  });
+};
+
+export const useUpdateAuditType = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: LookupMasterUpsert) =>
+      api.put(`/audit/audit-types/${id}`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'audit-types'] }),
+  });
+};
+
+export const useDeleteAuditType = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/audit/audit-types/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'audit-types'] }),
   });
 };
 

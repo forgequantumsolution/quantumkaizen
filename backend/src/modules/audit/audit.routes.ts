@@ -12,6 +12,10 @@ import {
   AuditMasterUpsertSchema,
   AuditRegisterUpsertSchema,
   RejectAuditRegisterSchema,
+  FocusAreaUpsertSchema,
+  ListFocusAreaQuerySchema,
+  AuditTypeMasterUpsertSchema,
+  ListAuditTypeMasterQuerySchema,
   ListAuditMasterQuerySchema,
   ListAuditRegisterQuerySchema,
   ListAuditProgramQuerySchema,
@@ -57,6 +61,18 @@ router.get('/audit/masters', requirePermission('audit_master.read'), validate(Li
 router.post('/audit/masters', requirePermission('audit_master.create'), validate(AuditMasterUpsertSchema), asyncHandler(registerCtrl.createMaster));
 router.put('/audit/masters/:id', requirePermission('audit_master.update'), validate(IdParamSchema, 'params'), validate(AuditMasterUpsertSchema), asyncHandler(registerCtrl.updateMaster));
 router.delete('/audit/masters/:id', requirePermission('audit_master.delete'), validate(IdParamSchema, 'params'), asyncHandler(registerCtrl.deleteMaster));
+
+// ── Focus Area (lookup master) ──
+router.get('/audit/focus-areas', requirePermission('focus_area.read'), validate(ListFocusAreaQuerySchema, 'query'), asyncHandler(registerCtrl.listFocusAreas));
+router.post('/audit/focus-areas', requirePermission('focus_area.create'), validate(FocusAreaUpsertSchema), asyncHandler(registerCtrl.createFocusArea));
+router.put('/audit/focus-areas/:id', requirePermission('focus_area.update'), validate(IdParamSchema, 'params'), validate(FocusAreaUpsertSchema), asyncHandler(registerCtrl.updateFocusArea));
+router.delete('/audit/focus-areas/:id', requirePermission('focus_area.delete'), validate(IdParamSchema, 'params'), asyncHandler(registerCtrl.deleteFocusArea));
+
+// ── Audit Type (lookup master) ──
+router.get('/audit/audit-types', requirePermission('audit_type.read'), validate(ListAuditTypeMasterQuerySchema, 'query'), asyncHandler(registerCtrl.listAuditTypes));
+router.post('/audit/audit-types', requirePermission('audit_type.create'), validate(AuditTypeMasterUpsertSchema), asyncHandler(registerCtrl.createAuditType));
+router.put('/audit/audit-types/:id', requirePermission('audit_type.update'), validate(IdParamSchema, 'params'), validate(AuditTypeMasterUpsertSchema), asyncHandler(registerCtrl.updateAuditType));
+router.delete('/audit/audit-types/:id', requirePermission('audit_type.delete'), validate(IdParamSchema, 'params'), asyncHandler(registerCtrl.deleteAuditType));
 
 // ── Audit Register ──
 router.get('/audit/registers', requirePermission('audit_register.read'), validate(ListAuditRegisterQuerySchema, 'query'), asyncHandler(registerCtrl.listRegisters));

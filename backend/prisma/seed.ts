@@ -104,6 +104,16 @@ const PERMISSIONS = [
   { key: 'audit_master.create',   module: 'AUDIT_MASTER',    action: 'CREATE', description: 'Create audit master configurations' },
   { key: 'audit_master.update',   module: 'AUDIT_MASTER',    action: 'UPDATE', description: 'Edit audit master configurations' },
   { key: 'audit_master.delete',   module: 'AUDIT_MASTER',    action: 'DELETE', description: 'Delete audit master configurations' },
+  // ── Focus Area (audit master lookup) ─────────────────
+  { key: 'focus_area.read',       module: 'FOCUS_AREA',      action: 'READ',   description: 'View audit focus areas' },
+  { key: 'focus_area.create',     module: 'FOCUS_AREA',      action: 'CREATE', description: 'Create audit focus areas' },
+  { key: 'focus_area.update',     module: 'FOCUS_AREA',      action: 'UPDATE', description: 'Edit audit focus areas' },
+  { key: 'focus_area.delete',     module: 'FOCUS_AREA',      action: 'DELETE', description: 'Delete audit focus areas' },
+  // ── Audit Type (audit master lookup) ─────────────────
+  { key: 'audit_type.read',       module: 'AUDIT_TYPE',      action: 'READ',   description: 'View audit types' },
+  { key: 'audit_type.create',     module: 'AUDIT_TYPE',      action: 'CREATE', description: 'Create audit types' },
+  { key: 'audit_type.update',     module: 'AUDIT_TYPE',      action: 'UPDATE', description: 'Edit audit types' },
+  { key: 'audit_type.delete',     module: 'AUDIT_TYPE',      action: 'DELETE', description: 'Delete audit types' },
   // ── Audit Register (planning + approval) ─────────────
   { key: 'audit_register.read',    module: 'AUDIT_REGISTER', action: 'READ',    description: 'View audit registers' },
   { key: 'audit_register.create',  module: 'AUDIT_REGISTER', action: 'CREATE',  description: 'Create audit registers' },

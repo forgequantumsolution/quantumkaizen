@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Button, Input, Select, Table } from 'antd';
+import { Button, Input, Table } from 'antd';
 import { Plus, Search } from 'lucide-react';
 import {
   useAuditRegisters,
@@ -8,7 +8,6 @@ import {
   type AuditRegister,
 } from '@/lib/api/audit';
 import { AuditStatusBadge } from './auditStatusBadge';
-import AuditRegisterFormDrawer from './AuditRegisterFormDrawer';
 
 const STATUS_TABS: { key: AuditStatus | 'ALL'; label: string }[] = [
   { key: 'ALL', label: 'All' },
@@ -24,7 +23,6 @@ export default function AuditRegisterListPage() {
   const nav = useNavigate();
   const [status, setStatus] = useState<AuditStatus | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
-  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data, isLoading } = useAuditRegisters({
     status: status === 'ALL' ? undefined : status,
@@ -45,7 +43,7 @@ export default function AuditRegisterListPage() {
         <Button
           type="primary"
           icon={<Plus size={14} />}
-          onClick={() => setDrawerOpen(true)}
+          onClick={() => nav('/audit/register/new')}
         >
           New Register
         </Button>
@@ -150,12 +148,6 @@ export default function AuditRegisterListPage() {
             render: (_: unknown, r) => r.checklist_form?.title ?? '—',
           },
         ]}
-      />
-
-      <AuditRegisterFormDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        register={null}
       />
     </>
   );

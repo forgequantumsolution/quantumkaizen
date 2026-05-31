@@ -12,7 +12,6 @@ import {
 } from '@/lib/api/audit';
 import { useHasPermission } from '@/stores/authStore';
 import { AuditStatusBadge } from './auditStatusBadge';
-import AuditRegisterFormDrawer from './AuditRegisterFormDrawer';
 
 export default function AuditRegisterDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,7 +23,6 @@ export default function AuditRegisterDetailPage() {
   const canUpdate = useHasPermission('audit_register.update');
   const canDelete = useHasPermission('audit_register.delete');
 
-  const [editOpen, setEditOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
 
@@ -101,7 +99,7 @@ export default function AuditRegisterDetailPage() {
         </div>
         <div className="flex items-center gap-2">
           {isEditable && canUpdate && (
-            <Button icon={<Edit3 size={14} />} onClick={() => setEditOpen(true)}>
+            <Button icon={<Edit3 size={14} />} onClick={() => nav(`/audit/register/${r.id}/edit`)}>
               Edit
             </Button>
           )}
@@ -162,7 +160,11 @@ export default function AuditRegisterDetailPage() {
           <Field
             label="Audit Master"
             value={
-              r.audit_master ? `${r.audit_master.code} — ${r.audit_master.name}` : '—'
+              r.audit_master
+                ? r.audit_master.code
+                  ? `${r.audit_master.code} — ${r.audit_master.name}`
+                  : r.audit_master.name
+                : '—'
             }
           />
           <Field
@@ -172,10 +174,33 @@ export default function AuditRegisterDetailPage() {
           <Field label="Financial Year" value={r.financial_year ?? '—'} />
           <Field label="Plant" value={r.plant ?? '—'} />
           <Field label="Method" value={r.audit_method ?? '—'} />
-          <Field label="Auditor" value={r.auditor?.name ?? '—'} />
+          <Field label="Lead Auditor" value={r.auditor?.name ?? '—'} />
           <Field label="Approver" value={r.approver?.name ?? '—'} />
-          <Field label="Checklist" value={r.checklist_form?.title ?? '—'} />
+          <Field
+            label="Focus Areas"
+            value={r.focus_areas.length ? r.focus_areas.map((f) => f.name).join(', ') : '—'}
+          />
+          <Field
+            label="Team Members"
+            value={r.team_members.length ? r.team_members.map((m) => m.name).join(', ') : '—'}
+          />
         </div>
+
+        {r.checklist_assignments.length > 0 && (
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">Checklist Assignments</h3>
+            <ul className="space-y-1.5 text-sm">
+              {r.checklist_assignments.map((a) => (
+                <li key={a.checklist_form_id} className="flex flex-wrap gap-x-2 gap-y-1">
+                  <span className="font-medium text-gray-800">{a.checklist_title}:</span>
+                  <span className="text-gray-600">
+                    {a.members.length ? a.members.map((m) => m.name).join(', ') : 'Unassigned'}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {(r.submitted_at || r.approved_at || r.rejection_reason) && (
@@ -218,12 +243,6 @@ export default function AuditRegisterDetailPage() {
           <span className="text-xs text-gray-500 ml-2">({r.program.status})</span>
         </div>
       )}
-
-      <AuditRegisterFormDrawer
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
-        register={r}
-      />
 
       <Modal
         title="Reject Audit Register"

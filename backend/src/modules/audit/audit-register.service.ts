@@ -4,9 +4,13 @@ import { BadRequest, NotFound, Conflict } from '../../lib/httpError';
 import type {
   AuditMasterUpsertInput,
   AuditRegisterUpsertInput,
+  AuditTypeMasterUpsertInput,
   CompleteAuditProgramInput,
   FindingUpsertInput,
+  FocusAreaUpsertInput,
   ListAuditMasterQuery,
+  ListAuditTypeMasterQuery,
+  ListFocusAreaQuery,
   ListAuditProgramQuery,
   ListAuditRegisterQuery,
   ListFindingQuery,
@@ -61,17 +65,22 @@ export const listAuditMasters = async (q: ListAuditMasterQuery) => {
 };
 
 export const createAuditMaster = async (input: AuditMasterUpsertInput, userId?: string) => {
-  const exists = await prisma.auditMaster.findUnique({ where: { code: input.code } });
-  if (exists) throw Conflict('Audit master with this code already exists');
+  if (input.code) {
+    const exists = await prisma.auditMaster.findUnique({ where: { code: input.code } });
+    if (exists) throw Conflict('Audit master with this code already exists');
+  }
+  const checklists = input.checklist_forms ?? [];
   const created = await prisma.auditMaster.create({
     data: {
-      code: input.code,
+      code: input.code ?? null,
       name: input.name,
       description: input.description ?? null,
       auditType: input.audit_type,
       frequency: input.frequency,
       defaultIsoStandardId: input.default_iso_standard_id ?? null,
-      defaultChecklistFormId: input.default_checklist_form_id ?? null,
+      // First selected checklist powers single-checklist consumers (register prefill).
+      defaultChecklistFormId: checklists[0]?.id ?? null,
+      checklistForms: jsonOrNull(checklists),
       scoringRules: jsonOrNull(input.scoring_rules),
       isActive: input.is_active ?? true,
       createdById: userId ?? null,
@@ -87,16 +96,18 @@ export const createAuditMaster = async (input: AuditMasterUpsertInput, userId?: 
 export const updateAuditMaster = async (id: string, input: AuditMasterUpsertInput) => {
   const existing = await prisma.auditMaster.findUnique({ where: { id } });
   if (!existing) throw NotFound('Audit master not found');
+  const checklists = input.checklist_forms ?? [];
   const updated = await prisma.auditMaster.update({
     where: { id },
     data: {
-      code: input.code,
+      code: input.code ?? null,
       name: input.name,
       description: input.description ?? null,
       auditType: input.audit_type,
       frequency: input.frequency,
       defaultIsoStandardId: input.default_iso_standard_id ?? null,
-      defaultChecklistFormId: input.default_checklist_form_id ?? null,
+      defaultChecklistFormId: checklists[0]?.id ?? null,
+      checklistForms: jsonOrNull(checklists),
       scoringRules: jsonOrNull(input.scoring_rules),
       isActive: input.is_active ?? existing.isActive,
     },
@@ -112,6 +123,116 @@ export const deleteAuditMaster = async (id: string) => {
   const m = await prisma.auditMaster.findUnique({ where: { id } });
   if (!m) throw NotFound('Audit master not found');
   await prisma.auditMaster.delete({ where: { id } });
+};
+
+// ────────────────────── Focus Area (lookup master) ──────────────────────
+
+export const listFocusAreas = async (q: ListFocusAreaQuery) => {
+  const where: Prisma.FocusAreaWhereInput = {};
+  if (q.search) where.name = { contains: q.search, mode: 'insensitive' };
+  if (q.is_active !== undefined) where.isActive = q.is_active;
+
+  const [items, total] = await Promise.all([
+    prisma.focusArea.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      skip: (q.page - 1) * q.page_size,
+      take: q.page_size,
+    }),
+    prisma.focusArea.count({ where }),
+  ]);
+  return {
+    data: items.map(serializeLookup),
+    pagination: { total_items: total, page: q.page, page_size: q.page_size },
+  };
+};
+
+export const createFocusArea = async (input: FocusAreaUpsertInput) => {
+  const exists = await prisma.focusArea.findUnique({ where: { name: input.name } });
+  if (exists) throw Conflict('Focus area with this name already exists');
+  const created = await prisma.focusArea.create({
+    data: {
+      name: input.name,
+      description: input.description ?? null,
+      isActive: input.is_active ?? true,
+    },
+  });
+  return serializeLookup(created);
+};
+
+export const updateFocusArea = async (id: string, input: FocusAreaUpsertInput) => {
+  const existing = await prisma.focusArea.findUnique({ where: { id } });
+  if (!existing) throw NotFound('Focus area not found');
+  const updated = await prisma.focusArea.update({
+    where: { id },
+    data: {
+      name: input.name,
+      description: input.description ?? null,
+      isActive: input.is_active ?? existing.isActive,
+    },
+  });
+  return serializeLookup(updated);
+};
+
+export const deleteFocusArea = async (id: string) => {
+  const m = await prisma.focusArea.findUnique({ where: { id } });
+  if (!m) throw NotFound('Focus area not found');
+  await prisma.focusArea.delete({ where: { id } });
+};
+
+// ────────────────────── Audit Type (lookup master) ──────────────────────
+
+export const listAuditTypeMasters = async (q: ListAuditTypeMasterQuery) => {
+  const where: Prisma.AuditTypeMasterWhereInput = {};
+  if (q.search) where.name = { contains: q.search, mode: 'insensitive' };
+  if (q.is_active !== undefined) where.isActive = q.is_active;
+
+  const [items, total] = await Promise.all([
+    prisma.auditTypeMaster.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      skip: (q.page - 1) * q.page_size,
+      take: q.page_size,
+    }),
+    prisma.auditTypeMaster.count({ where }),
+  ]);
+  return {
+    data: items.map(serializeLookup),
+    pagination: { total_items: total, page: q.page, page_size: q.page_size },
+  };
+};
+
+export const createAuditTypeMaster = async (input: AuditTypeMasterUpsertInput) => {
+  const exists = await prisma.auditTypeMaster.findUnique({ where: { name: input.name } });
+  if (exists) throw Conflict('Audit type with this name already exists');
+  const created = await prisma.auditTypeMaster.create({
+    data: {
+      name: input.name,
+      description: input.description ?? null,
+      isActive: input.is_active ?? true,
+    },
+  });
+  return serializeLookup(created);
+};
+
+export const updateAuditTypeMaster = async (id: string, input: AuditTypeMasterUpsertInput) => {
+  const existing = await prisma.auditTypeMaster.findUnique({ where: { id } });
+  if (!existing) throw NotFound('Audit type not found');
+  const updated = await prisma.auditTypeMaster.update({
+    where: { id },
+    data: {
+      name: input.name,
+      description: input.description ?? null,
+      isActive: input.is_active ?? existing.isActive,
+    },
+  });
+  return serializeLookup(updated);
+};
+
+export const deleteAuditTypeMaster = async (id: string) => {
+  const m = await prisma.auditTypeMaster.findUnique({ where: { id } });
+  if (!m) throw NotFound('Audit type not found');
+  await prisma.auditTypeMaster.delete({ where: { id } });
 };
 
 // ────────────────────── Audit Register ──────────────────────
@@ -198,7 +319,11 @@ export const createAuditRegister = async (input: AuditRegisterUpsertInput, userI
       criteria: jsonOrNull(input.criteria),
       departments: jsonOrNull(input.departments),
       focusAreas: jsonOrNull(input.focus_areas),
-      checklistFormId: input.checklist_form_id ?? null,
+      teamMembers: jsonOrNull(input.team_members ?? []),
+      checklistAssignments: jsonOrNull(input.checklist_assignments ?? []),
+      // First assigned checklist powers the single-checklist program flow.
+      checklistFormId:
+        input.checklist_form_id ?? input.checklist_assignments?.[0]?.checklist_form_id ?? null,
       auditorId: input.auditor_id ?? null,
       approverId: input.approver_id ?? null,
       createdById: userId ?? null,
@@ -232,7 +357,10 @@ export const updateAuditRegister = async (id: string, input: AuditRegisterUpsert
       criteria: jsonOrNull(input.criteria),
       departments: jsonOrNull(input.departments),
       focusAreas: jsonOrNull(input.focus_areas),
-      checklistFormId: input.checklist_form_id ?? null,
+      teamMembers: jsonOrNull(input.team_members ?? []),
+      checklistAssignments: jsonOrNull(input.checklist_assignments ?? []),
+      checklistFormId:
+        input.checklist_form_id ?? input.checklist_assignments?.[0]?.checklist_form_id ?? null,
       auditorId: input.auditor_id ?? null,
       approverId: input.approver_id ?? null,
     },
@@ -618,7 +746,25 @@ const serializeMaster = (m: MasterRow) => ({
   frequency: m.frequency,
   default_iso_standard: m.defaultIsoStandard,
   default_checklist_form: m.defaultChecklistForm,
+  checklist_forms: (m.checklistForms as { id: string; title: string }[] | null) ?? [],
   scoring_rules: m.scoringRules,
+  is_active: m.isActive,
+  created_at: m.createdAt,
+  updated_at: m.updatedAt,
+});
+
+// Shared serializer for the simple lookup masters (Focus Area, Audit Type).
+const serializeLookup = (m: {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}) => ({
+  id: m.id,
+  name: m.name,
+  description: m.description,
   is_active: m.isActive,
   created_at: m.createdAt,
   updated_at: m.updatedAt,
@@ -659,6 +805,8 @@ const serializeRegister = (
   criteria: r.criteria ?? [],
   departments: r.departments ?? [],
   focus_areas: r.focusAreas ?? [],
+  team_members: r.teamMembers ?? [],
+  checklist_assignments: r.checklistAssignments ?? [],
   checklist_form: r.checklistForm,
   auditor: r.auditor,
   approver: r.approver,

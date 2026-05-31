@@ -4,12 +4,16 @@ import { success } from '../dynamic-form/dynamic-form.response';
 import type {
   AuditMasterUpsertInput,
   AuditRegisterUpsertInput,
+  AuditTypeMasterUpsertInput,
   CompleteAuditProgramInput,
   FindingUpsertInput,
+  FocusAreaUpsertInput,
   ListAuditMasterQuery,
   ListAuditProgramQuery,
   ListAuditRegisterQuery,
+  ListAuditTypeMasterQuery,
   ListFindingQuery,
+  ListFocusAreaQuery,
   ListNcQuery,
   PromoteFindingToNcInput,
   RaiseCapaInput,
@@ -33,6 +37,40 @@ export const updateMaster = async (req: Request, res: Response) => {
 export const deleteMaster = async (req: Request, res: Response) => {
   await service.deleteAuditMaster(req.params.id as string);
   success(res, 'Audit master deleted');
+};
+
+// ── Focus Area ──
+export const listFocusAreas = async (req: Request, res: Response) => {
+  res.json(await service.listFocusAreas(req.query as unknown as ListFocusAreaQuery));
+};
+export const createFocusArea = async (req: Request, res: Response) => {
+  const data = await service.createFocusArea(req.body as FocusAreaUpsertInput);
+  success(res, 'Focus area created', data, 201);
+};
+export const updateFocusArea = async (req: Request, res: Response) => {
+  const data = await service.updateFocusArea(req.params.id as string, req.body as FocusAreaUpsertInput);
+  success(res, 'Focus area updated', data);
+};
+export const deleteFocusArea = async (req: Request, res: Response) => {
+  await service.deleteFocusArea(req.params.id as string);
+  success(res, 'Focus area deleted');
+};
+
+// ── Audit Type ──
+export const listAuditTypes = async (req: Request, res: Response) => {
+  res.json(await service.listAuditTypeMasters(req.query as unknown as ListAuditTypeMasterQuery));
+};
+export const createAuditType = async (req: Request, res: Response) => {
+  const data = await service.createAuditTypeMaster(req.body as AuditTypeMasterUpsertInput);
+  success(res, 'Audit type created', data, 201);
+};
+export const updateAuditType = async (req: Request, res: Response) => {
+  const data = await service.updateAuditTypeMaster(req.params.id as string, req.body as AuditTypeMasterUpsertInput);
+  success(res, 'Audit type updated', data);
+};
+export const deleteAuditType = async (req: Request, res: Response) => {
+  await service.deleteAuditTypeMaster(req.params.id as string);
+  success(res, 'Audit type deleted');
 };
 
 // ── Audit Register ──

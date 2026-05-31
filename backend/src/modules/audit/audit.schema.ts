@@ -121,13 +121,17 @@ export const NCStatusEnum = z.enum(NC_STATUSES);
 
 // ── Audit Master ──
 export const AuditMasterUpsertSchema = z.object({
-  code: z.string().min(1).max(50),
+  code: z.string().max(50).optional().nullable(),
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional().nullable(),
   audit_type: AuditTypeEnum,
   frequency: AuditFrequencyEnum.default('ANNUAL'),
   default_iso_standard_id: z.string().optional().nullable(),
-  default_checklist_form_id: z.string().optional().nullable(),
+  // Multiple checklists — snapshot of [{ id, title }].
+  checklist_forms: z
+    .array(z.object({ id: z.string(), title: z.string() }))
+    .optional()
+    .default([]),
   scoring_rules: z.unknown().optional().nullable(),
   is_active: z.boolean().optional(),
 });
@@ -140,11 +144,40 @@ export const ListAuditMasterQuerySchema = z.object({
   search: z.string().optional(),
 });
 
+// ── Focus Area (lookup master) ──
+export const FocusAreaUpsertSchema = z.object({
+  name: z.string().min(1).max(150),
+  description: z.string().max(1000).optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+export const ListFocusAreaQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(200).default(50),
+  is_active: z.coerce.boolean().optional(),
+  search: z.string().optional(),
+});
+
+// ── Audit Type (lookup master) ──
+export const AuditTypeMasterUpsertSchema = z.object({
+  name: z.string().min(1).max(150),
+  description: z.string().max(1000).optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+export const ListAuditTypeMasterQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(200).default(50),
+  is_active: z.coerce.boolean().optional(),
+  search: z.string().optional(),
+});
+
 // ── Audit Register ──
 export const AuditRegisterUpsertSchema = z.object({
   title: z.string().min(1).max(200),
   audit_master_id: z.string().optional().nullable(),
-  audit_type: AuditTypeEnum,
+  // Free-form: sourced from the configured "Audit Type" master (or an Audit Master template).
+  audit_type: z.string().min(1).max(150),
   plant: z.string().optional().nullable(),
   description: z.string().max(2000).optional().nullable(),
   planned_date: z.string(),
@@ -158,6 +191,19 @@ export const AuditRegisterUpsertSchema = z.object({
   criteria: z.array(NamedRefSchema).optional(),
   departments: z.array(NamedRefSchema).optional(),
   focus_areas: z.array(NamedRefSchema).optional(),
+  // Audit team members assigned to this register.
+  team_members: z.array(NamedRefSchema).optional().default([]),
+  // Per-checklist member assignments (multiple members per checklist).
+  checklist_assignments: z
+    .array(
+      z.object({
+        checklist_form_id: z.string(),
+        checklist_title: z.string(),
+        members: z.array(NamedRefSchema).default([]),
+      }),
+    )
+    .optional()
+    .default([]),
   checklist_form_id: z.string().optional().nullable(),
   auditor_id: z.string().optional().nullable(),
   approver_id: z.string().optional().nullable(),
@@ -167,7 +213,7 @@ export const ListAuditRegisterQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(200).default(50),
   status: AuditStatusEnum.optional(),
-  audit_type: AuditTypeEnum.optional(),
+  audit_type: z.string().optional(),
   financial_year: z.string().optional(),
   search: z.string().optional(),
 });
@@ -239,6 +285,10 @@ export const UpdateNcStatusSchema = z.object({
 
 export type AuditMasterUpsertInput = z.infer<typeof AuditMasterUpsertSchema>;
 export type ListAuditMasterQuery = z.infer<typeof ListAuditMasterQuerySchema>;
+export type FocusAreaUpsertInput = z.infer<typeof FocusAreaUpsertSchema>;
+export type ListFocusAreaQuery = z.infer<typeof ListFocusAreaQuerySchema>;
+export type AuditTypeMasterUpsertInput = z.infer<typeof AuditTypeMasterUpsertSchema>;
+export type ListAuditTypeMasterQuery = z.infer<typeof ListAuditTypeMasterQuerySchema>;
 export type AuditRegisterUpsertInput = z.infer<typeof AuditRegisterUpsertSchema>;
 export type ListAuditRegisterQuery = z.infer<typeof ListAuditRegisterQuerySchema>;
 export type ApproveAuditRegisterInput = z.infer<typeof ApproveAuditRegisterSchema>;

@@ -1497,7 +1497,7 @@ enum NonConformanceStatus {
 // Audit configuration / template. The "Audit Master" sidebar entry edits these.
 model AuditMaster {
   id          String  @id @default(uuid())
-  code        String  @unique
+  code        String? @unique
   name        String
   description String?
 
@@ -1507,8 +1507,13 @@ model AuditMaster {
   defaultIsoStandardId String?
   defaultIsoStandard   IsoStandard? @relation(fields: [defaultIsoStandardId], references: [id], onDelete: SetNull)
 
+  // Primary checklist (first of the selection) kept for single-checklist consumers
+  // like the audit-register prefill; the full multi-select is stored in checklistForms.
   defaultChecklistFormId String?
   defaultChecklistForm   Form?   @relation("AuditMasterDefaultChecklist", fields: [defaultChecklistFormId], references: [id], onDelete: SetNull)
+
+  // Multiple checklists selectable on the master — JSON snapshot of [{ id, title }].
+  checklistForms Json?
 
   scoringRules Json?
   isActive     Boolean @default(true)
@@ -1525,6 +1530,32 @@ model AuditMaster {
   @@index([isActive])
 }
 
+// Audit "Focus Area" master — reusable lookup for audit scoping (Audit Master config tab).
+model FocusArea {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// Audit "Audit Type" master — reusable lookup describing audit categories (Audit Master config tab).
+model AuditTypeMaster {
+  id          String  @id @default(uuid())
+  name        String  @unique
+  description String?
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
 // A planned audit. Goes through approval, then spawns a single AuditProgram on approval.
 model AuditRegister {
   id             String @id @default(uuid())
@@ -1536,7 +1567,8 @@ model AuditRegister {
   auditMasterId String?
   auditMaster   AuditMaster? @relation(fields: [auditMasterId], references: [id], onDelete: SetNull)
 
-  auditType   AuditType
+  // Free-form to allow the configured "Audit Type" master to drive this value.
+  auditType   String
   plant       String?
   description String?
 
@@ -1555,6 +1587,11 @@ model AuditRegister {
   criteria      Json?
   departments   Json?
   focusAreas    Json?
+
+  // Audit team members — JSON snapshot of [{ id, name }].
+  teamMembers Json?
+  // Per-checklist member assignments — [{ checklist_form_id, checklist_title, members: [{ id, name }] }].
+  checklistAssignments Json?
 
   // Default checklist bound at register time (cloned/instantiated at program start)
   checklistFormId String?
