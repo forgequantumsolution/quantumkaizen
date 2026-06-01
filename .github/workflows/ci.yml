@@ -33,7 +33,7 @@ jobs:
           echo "Root lock file present (npm workspaces)"
 
       - name: Scan for hardcoded secrets (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
