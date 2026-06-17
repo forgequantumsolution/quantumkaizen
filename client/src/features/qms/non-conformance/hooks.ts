@@ -583,6 +583,197 @@ export const mockDairyNCs: NonConformance[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE). Biologics
+// drug-substance (10,000 L microbial fermentation) plus aseptic cartridge
+// fill-finish of human insulin, insulin analogues (glargine, aspart, lispro,
+// degludec) and GLP-1 (semaglutide, liraglutide) pen cartridges. Records are
+// themed to EU GMP Annex 1/2, FDA 21 CFR 600s and ICH Q5/Q6B: visible
+// particulates in cartridges, fill-weight OOS, sterility / bioburden
+// excursions, endotoxin OOS, host cell protein / residual DNA above limit,
+// A280 concentration deviation, container-closure integrity, 2-8 °C cold-chain
+// excursion, Grade A/B environmental monitoring, bioreactor contamination,
+// chromatography column performance drift and cartridge mislabelling.
+export const mockBiologicsNCs: NonConformance[] = [
+  {
+    id: 'bio-nc1', ncNumber: 'NC-BIO-2026-0042', title: 'Visible particulates in semaglutide pen cartridges — Lot SEMA-26-0118',
+    description: 'Manual 100% visual inspection of 1.5 mL semaglutide pen cartridge lot SEMA-26-0118 detected visible translucent particulates in 28 of 6,200 cartridges (0.45% vs. acceptable limit of 0.1%). FTIR identified the particulates as protein aggregate / silicone-oil agglomerates. Over-siliconisation of the glass barrel suspected.',
+    type: 'PRODUCT_NC', severity: 'CRITICAL', status: 'OPEN',
+    source: 'Final Inspection', department: 'Aseptic Fill-Finish', departmentId: 'dept-bio1',
+    productProcess: 'Cartridge Visual Inspection · EU GMP Annex 1', batchLot: 'SEMA-26-0118',
+    assignedTo: 'Dr. Layla Al-Mansoori', assignedToId: 'u-bio1', dueDate: '2026-04-12',
+    priorityJustification: 'Parenteral particulate critical defect; lot on hold. Patient injection-site risk and reportable under FDA 21 CFR 600.14.',
+    containmentActions: [
+      { id: 'bio-ca1', description: 'Quarantine lot SEMA-26-0118 in 2-8 °C bonded store under dual control', owner: 'Dr. Layla Al-Mansoori', dueDate: '2026-03-30', status: 'COMPLETED' },
+      { id: 'bio-ca2', description: 'Halt fill line FF-02 and requalify siliconisation nozzle to validated 0.4-0.8 mg per barrel', owner: 'Omar Al-Farsi', dueDate: '2026-03-31', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-03-29T09:15:00Z', updatedAt: '2026-03-31T11:00:00Z', closedAt: null, createdBy: 'Dr. Layla Al-Mansoori',
+  },
+  {
+    id: 'bio-nc2', ncNumber: 'NC-BIO-2026-0041', title: 'Sterility test failure (USP <71>) — insulin glargine cartridges Lot GLAR-26-0094',
+    description: 'Sterility testing of insulin glargine 3 mL cartridge lot GLAR-26-0094 by membrane filtration showed turbidity in 2 of 20 test units after 14 days incubation. Isolate identified as Micrococcus luteus. Suspected Grade A first-air interruption during aseptic fill.',
+    type: 'PRODUCT_NC', severity: 'CRITICAL', status: 'INVESTIGATION',
+    source: 'Final Inspection', department: 'Microbiology/QC Lab', departmentId: 'dept-bio4',
+    productProcess: 'Aseptic Cartridge Fill · USP <71>', batchLot: 'GLAR-26-0094',
+    assignedTo: 'Fatima Al-Hashimi', assignedToId: 'u-bio3', dueDate: '2026-04-15',
+    priorityJustification: 'Sterility critical; field-alert and potential recall under EU GMP Annex 1 and FDA 21 CFR 600s.',
+    containmentActions: [
+      { id: 'bio-ca3', description: 'Reject and quarantine lot GLAR-26-0094; impound retention samples', owner: 'Fatima Al-Hashimi', dueDate: '2026-03-28', status: 'COMPLETED' },
+      { id: 'bio-ca4', description: 'Initiate Grade A/B re-qualification — smoke study + viable air sampling on fill line FF-01', owner: 'Aisha Khalid', dueDate: '2026-04-05', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-03-26T09:30:00Z', updatedAt: '2026-03-30T15:00:00Z', closedAt: null, createdBy: 'Fatima Al-Hashimi',
+  },
+  {
+    id: 'bio-nc3', ncNumber: 'NC-BIO-2026-0040', title: 'Mislabelled cartridges — insulin aspart printed with lispro artwork — Lot ASP-26-0071',
+    description: 'During end-of-line label verification, 360 pen cartridges of insulin aspart batch ASP-26-0071 were found bearing insulin lispro secondary-label artwork. Cause attributed to incomplete line clearance before product changeover on labelling line LB-03.',
+    type: 'PROCESS_NC', severity: 'CRITICAL', status: 'ROOT_CAUSE',
+    source: 'Internal Audit', department: 'Aseptic Fill-Finish', departmentId: 'dept-bio1',
+    productProcess: 'Cartridge Labelling · EU GMP Annex 2', batchLot: 'ASP-26-0071',
+    assignedTo: 'Omar Al-Farsi', assignedToId: 'u-bio2', dueDate: '2026-04-08',
+    priorityJustification: 'Product mix-up is a critical GMP defect; wrong-analogue dosing is a patient-safety hazard. Reportable under FDA 21 CFR 600.14.',
+    containmentActions: [
+      { id: 'bio-ca5', description: 'Halt labelling line LB-03 and quarantine all cartons from the current run', owner: 'Omar Al-Farsi', dueDate: '2026-03-22', status: 'COMPLETED' },
+      { id: 'bio-ca6', description: '100% reconciliation and re-labelling of lot ASP-26-0071 with correct artwork', owner: 'Yusuf Rahman', dueDate: '2026-04-02', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-03-22T08:00:00Z', updatedAt: '2026-03-28T11:30:00Z', closedAt: null, createdBy: 'Aisha Khalid',
+  },
+  {
+    id: 'bio-nc4', ncNumber: 'NC-BIO-2026-0039', title: 'Host cell protein above limit on insulin drug substance — Lot DS-INS-26-0048',
+    description: 'Host cell protein (HCP) ELISA on human insulin drug-substance lot DS-INS-26-0048 returned 142 ng/mg against the ICH Q6B specification of NMT 100 ng/mg. Suspected reduced clearance from a fouled anion-exchange polishing step.',
+    type: 'OOS', severity: 'MAJOR', status: 'CAPA_PLANNING',
+    source: 'In-Process Inspection', department: 'Downstream Purification', departmentId: 'dept-bio3',
+    productProcess: 'Anion-Exchange Polishing · ICH Q6B', batchLot: 'DS-INS-26-0048',
+    assignedTo: 'Yusuf Rahman', assignedToId: 'u-bio5', dueDate: '2026-04-20',
+    priorityJustification: 'Drug substance held; impurity clearance impacts immunogenicity profile. Affects downstream fill-finish scheduling.',
+    containmentActions: [
+      { id: 'bio-ca7', description: 'Quarantine lot DS-INS-26-0048 and adjacent lots from the same purification campaign', owner: 'Yusuf Rahman', dueDate: '2026-03-20', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-03-19T10:30:00Z', updatedAt: '2026-03-24T16:00:00Z', closedAt: null, createdBy: 'Yusuf Rahman',
+  },
+  {
+    id: 'bio-nc5', ncNumber: 'NC-BIO-2026-0038', title: 'Endotoxin OOS on liraglutide drug substance — Lot DS-LIRA-26-0033',
+    description: 'Bacterial endotoxin testing (kinetic chromogenic LAL, USP <85>) of liraglutide drug-substance lot DS-LIRA-26-0033 returned 0.18 EU/mg against the specification of NMT 0.10 EU/mg. Suspected biofilm in the purified-water feed to the final UF/DF skid.',
+    type: 'OOS', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Microbiology/QC Lab', departmentId: 'dept-bio4',
+    productProcess: 'Endotoxin (LAL) · USP <85>', batchLot: 'DS-LIRA-26-0033',
+    assignedTo: 'Fatima Al-Hashimi', assignedToId: 'u-bio3', dueDate: '2026-03-22',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'bio-ca8', description: 'Quarantine lot DS-LIRA-26-0033 and impound retention samples', owner: 'Fatima Al-Hashimi', dueDate: '2026-03-15', status: 'COMPLETED' },
+      { id: 'bio-ca9', description: 'Hot-WFI sanitisation of UF/DF water feed loop and re-test endotoxin at outlet', owner: 'Khalid Nasser', dueDate: '2026-03-20', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-03-10T09:00:00Z', updatedAt: '2026-03-22T11:00:00Z', closedAt: '2026-03-22T11:00:00Z', createdBy: 'Fatima Al-Hashimi',
+  },
+  {
+    id: 'bio-nc6', ncNumber: 'NC-BIO-2026-0037', title: 'Fill-weight out of specification on insulin degludec cartridges — Lot DEG-26-0204',
+    description: 'In-process check-weighing of insulin degludec 3 mL cartridge lot DEG-26-0204 showed mean fill weight of 3.18 g against the target of 3.00 g ± 0.05 g, with 9 of 200 sampled cartridges above the upper limit. Time-pressure filling pump drift on FF-03 suspected.',
+    type: 'OOS', severity: 'MAJOR', status: 'CAPA_PLANNING',
+    source: 'In-Process Inspection', department: 'Aseptic Fill-Finish', departmentId: 'dept-bio1',
+    productProcess: 'Cartridge Fill · Check-Weigh', batchLot: 'DEG-26-0204',
+    assignedTo: 'Aisha Khalid', assignedToId: 'u-bio4', dueDate: '2026-04-22',
+    priorityJustification: 'Over-fill affects deliverable dose accuracy; lot held pending CAPA effectiveness on pump calibration.',
+    containmentActions: [
+      { id: 'bio-ca10', description: 'Quarantine lot DEG-26-0204 and adjacent lots filled on FF-03 in the same shift', owner: 'Aisha Khalid', dueDate: '2026-04-02', status: 'COMPLETED' },
+      { id: 'bio-ca11', description: 'Recalibrate FF-03 time-pressure fill pump and verify fill-weight CpK ≥ 1.33 on 3 lots', owner: 'Omar Al-Farsi', dueDate: '2026-04-05', status: 'COMPLETED' },
+    ],
+    createdAt: '2026-04-01T10:30:00Z', updatedAt: '2026-04-05T15:00:00Z', closedAt: null, createdBy: 'Aisha Khalid',
+  },
+  {
+    id: 'bio-nc7', ncNumber: 'NC-BIO-2026-0036', title: 'Container-closure integrity failure on insulin lispro cartridges — Lot LIS-26-0312',
+    description: 'High-voltage leak detection (HVLD) container-closure integrity testing of insulin lispro cartridge lot LIS-26-0312 flagged 5 of 100 sampled cartridges with a defective crimp at the plunger / septum seal. Crimp-station jaw wear on capping unit CC-04 suspected.',
+    type: 'PRODUCT_NC', severity: 'CRITICAL', status: 'INVESTIGATION',
+    source: 'Final Inspection', department: 'Aseptic Fill-Finish', departmentId: 'dept-bio1',
+    productProcess: 'Container-Closure Integrity · HVLD', batchLot: 'LIS-26-0312',
+    assignedTo: 'Dr. Layla Al-Mansoori', assignedToId: 'u-bio1', dueDate: '2026-04-18',
+    priorityJustification: 'CCI failure compromises sterility assurance and 2-8 °C shelf life; sterility risk under EU GMP Annex 1.',
+    containmentActions: [
+      { id: 'bio-ca12', description: 'Quarantine lot LIS-26-0312 and pull retention samples for 100% HVLD re-test', owner: 'Dr. Layla Al-Mansoori', dueDate: '2026-04-04', status: 'COMPLETED' },
+      { id: 'bio-ca13', description: 'Halt capping unit CC-04; replace crimp jaws and re-validate residual seal force', owner: 'Omar Al-Farsi', dueDate: '2026-04-15', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-04-03T09:00:00Z', updatedAt: '2026-04-06T16:30:00Z', closedAt: null, createdBy: 'Dr. Layla Al-Mansoori',
+  },
+  {
+    id: 'bio-nc8', ncNumber: 'NC-BIO-2026-0035', title: 'A280 concentration deviation on insulin glargine drug substance — Lot DS-GLAR-26-0089',
+    description: 'UV A280 concentration measurement on insulin glargine drug-substance lot DS-GLAR-26-0089 returned 9.2 mg/mL against the target of 10.0 mg/mL ± 0.5 mg/mL. Under-concentration traced to a UF/DF diafiltration end-point drift on skid UFDF-02.',
+    type: 'OOS', severity: 'MAJOR', status: 'OPEN',
+    source: 'In-Process Inspection', department: 'Downstream Purification', departmentId: 'dept-bio3',
+    productProcess: 'UF/DF Concentration · A280', batchLot: 'DS-GLAR-26-0089',
+    assignedTo: 'Yusuf Rahman', assignedToId: 'u-bio5', dueDate: '2026-04-30',
+    priorityJustification: 'Out-of-target concentration affects fill-finish dose formulation; lot held pending re-concentration assessment.',
+    containmentActions: [
+      { id: 'bio-ca14', description: 'Quarantine lot DS-GLAR-26-0089 and hold at 2-8 °C pending disposition', owner: 'Yusuf Rahman', dueDate: '2026-04-14', status: 'COMPLETED' },
+      { id: 'bio-ca15', description: 'Re-zero UFDF-02 in-line A280 sensor and re-run diafiltration end-point on a validation lot', owner: 'Khalid Nasser', dueDate: '2026-04-22', status: 'IN_PROGRESS' },
+    ],
+    createdAt: '2026-04-10T08:00:00Z', updatedAt: '2026-04-12T15:00:00Z', closedAt: null, createdBy: 'Yusuf Rahman',
+  },
+  {
+    id: 'bio-nc9', ncNumber: 'NC-BIO-2025-0117', title: 'Bioreactor contamination — 10,000 L insulin fermentation Batch FRM-25-0061',
+    description: 'Online optical-density and pH drift during the 10,000 L microbial fermentation of human insulin batch FRM-25-0061 prompted sterility sampling, which confirmed contamination with Bacillus subtilis. Suspected failed sterile filter integrity on the air-sparge line.',
+    type: 'PROCESS_NC', severity: 'CRITICAL', status: 'CLOSED',
+    source: 'In-Process Inspection', department: 'Drug Substance', departmentId: 'dept-bio2',
+    productProcess: '10,000 L Microbial Fermentation', batchLot: 'FRM-25-0061',
+    assignedTo: 'Khalid Nasser', assignedToId: 'u-bio6', dueDate: '2025-11-10',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'bio-ca16', description: 'Abort and discard fermentation batch FRM-25-0061; initiate full CIP/SIP of the bioreactor', owner: 'Khalid Nasser', dueDate: '2025-10-28', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-10-25T11:00:00Z', updatedAt: '2025-11-10T14:00:00Z', closedAt: '2025-11-10T14:00:00Z', createdBy: 'Khalid Nasser',
+  },
+  {
+    id: 'bio-nc10', ncNumber: 'NC-BIO-2025-0098', title: 'Residual host-cell DNA above limit on semaglutide drug substance — Lot DS-SEMA-25-0042',
+    description: 'qPCR residual host-cell DNA testing of semaglutide drug-substance lot DS-SEMA-25-0042 returned 14 ng/dose against the ICH Q5/Q6B specification of NMT 10 ng/dose. Suspected breakthrough on the final size-exclusion chromatography polishing step.',
+    type: 'OOS', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Final Inspection', department: 'Downstream Purification', departmentId: 'dept-bio3',
+    productProcess: 'Residual DNA (qPCR) · ICH Q5', batchLot: 'DS-SEMA-25-0042',
+    assignedTo: 'Yusuf Rahman', assignedToId: 'u-bio5', dueDate: '2025-09-30',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'bio-ca17', description: 'Quarantine lot DS-SEMA-25-0042 and adjacent lots from the same SEC column cycle', owner: 'Yusuf Rahman', dueDate: '2025-09-15', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-09-12T08:30:00Z', updatedAt: '2025-09-30T16:00:00Z', closedAt: '2025-09-30T16:00:00Z', createdBy: 'Yusuf Rahman',
+  },
+  {
+    id: 'bio-nc11', ncNumber: 'NC-BIO-2025-0064', title: 'Grade A environmental monitoring excursion at fill point — Line FF-01',
+    description: 'Active air sampling at the Grade A fill point of insulin aspart fill line FF-01 detected 2 CFU/m³ against the EU GMP Annex 1 limit of <1 CFU/m³. Organism identified as Staphylococcus hominis. Operator intervention during fill suspected.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'In-Process Inspection', department: 'Microbiology/QC Lab', departmentId: 'dept-bio4',
+    productProcess: 'Environmental Monitoring · EU GMP Annex 1', batchLot: null,
+    assignedTo: 'Fatima Al-Hashimi', assignedToId: 'u-bio3', dueDate: '2025-07-05',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'bio-ca18', description: 'Restrict interventions on FF-01 to essential personnel; quarantine concurrently filled cartridges', owner: 'Aisha Khalid', dueDate: '2025-06-25', status: 'COMPLETED' },
+      { id: 'bio-ca19', description: 'Re-qualify Grade A zone (smoke study + repeat viable / non-viable monitoring)', owner: 'Fatima Al-Hashimi', dueDate: '2025-07-02', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-06-15T09:00:00Z', updatedAt: '2025-07-05T11:30:00Z', closedAt: '2025-07-05T11:30:00Z', createdBy: 'Fatima Al-Hashimi',
+  },
+  {
+    id: 'bio-nc12', ncNumber: 'NC-BIO-2025-0048', title: 'Cold-chain 2-8 °C excursion on insulin glargine cartridge shipment SHP-25-0931',
+    description: 'Refrigerated shipment SHP-25-0931 of insulin glargine pen cartridges logged 11 °C cargo temperature for 38 minutes against the validated 2-8 °C cold-chain limit. Suspected refrigeration-unit failure during a customs hold at Abu Dhabi port.',
+    type: 'PROCESS_NC', severity: 'MAJOR', status: 'CLOSED',
+    source: 'Distribution Audit', department: 'QA', departmentId: 'dept-bio5',
+    productProcess: 'Cold-Chain Distribution · 2-8 °C', batchLot: 'GLAR-25-0820',
+    assignedTo: 'Omar Al-Farsi', assignedToId: 'u-bio2', dueDate: '2025-05-30',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'bio-ca20', description: 'Quarantine shipment SHP-25-0931 at destination; evaluate stability impact via MKT calculation', owner: 'Omar Al-Farsi', dueDate: '2025-05-15', status: 'COMPLETED' },
+      { id: 'bio-ca21', description: 'Service the reefer unit and add a redundant IoT temperature logger to the lane', owner: 'Khalid Nasser', dueDate: '2025-05-22', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-05-14T11:00:00Z', updatedAt: '2025-05-30T16:30:00Z', closedAt: '2025-05-30T16:30:00Z', createdBy: 'Omar Al-Farsi',
+  },
+  {
+    id: 'bio-nc13', ncNumber: 'NC-BIO-2025-0031', title: 'Chromatography column performance drift — Protein-A capture step DS-INS-25-0019',
+    description: 'HETP and asymmetry trending on the cation-exchange capture column for human insulin drug substance (lot DS-INS-25-0019) showed HETP rising to 1.9x the validated baseline with peak tailing, indicating column-bed compaction. Reduced dynamic binding capacity and yield loss observed.',
+    type: 'DEVIATION', severity: 'MAJOR', status: 'CLOSED',
+    source: 'In-Process Inspection', department: 'Downstream Purification', departmentId: 'dept-bio3',
+    productProcess: 'Capture Chromatography · HETP Trend', batchLot: 'DS-INS-25-0019',
+    assignedTo: 'Yusuf Rahman', assignedToId: 'u-bio5', dueDate: '2025-03-25',
+    priorityJustification: null,
+    containmentActions: [
+      { id: 'bio-ca22', description: 'Take the capture column out of service; repack the resin bed and re-run HETP / DBC qualification', owner: 'Yusuf Rahman', dueDate: '2025-03-18', status: 'COMPLETED' },
+    ],
+    createdAt: '2025-03-15T08:00:00Z', updatedAt: '2025-03-25T14:30:00Z', closedAt: '2025-03-25T14:30:00Z', createdBy: 'Yusuf Rahman',
+  },
+];
+
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
 const flattenNC = (nc: Record<string, unknown>) =>
@@ -607,7 +798,7 @@ export function useNonConformances(filters: NCFilters = {}) {
         const { data: payload } = await api.get('/qms/non-conformances', { params: filters });
         return unwrapList<NonConformance>(payload, flattenNC as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockNCs, { medical_device: mockMedicalDeviceNCs, dairy: mockDairyNCs });
+        const baseList = pickByIndustry(industry, mockNCs, { medical_device: mockMedicalDeviceNCs, dairy: mockDairyNCs, biologics: mockBiologicsNCs });
         let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((nc) => nc.status === filters.status);
         if (filters.severity) filtered = filtered.filter((nc) => nc.severity === filters.severity);
@@ -637,7 +828,7 @@ export function useNonConformance(id: string) {
         const { data: payload } = await api.get(`/qms/non-conformances/${id}`);
         return unwrapItem<NonConformance>(payload, flattenNC as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockNCs, { medical_device: mockMedicalDeviceNCs, dairy: mockDairyNCs });
+        const baseList = pickByIndustry(industry, mockNCs, { medical_device: mockMedicalDeviceNCs, dairy: mockDairyNCs, biologics: mockBiologicsNCs });
         const nc = baseList.find((n) => n.id === id);
         if (!nc) throw new Error('NC not found');
         return nc;

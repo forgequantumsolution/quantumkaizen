@@ -853,6 +853,203 @@ export const mockMedicalDeviceCAPAs: CAPARecord[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi). EU GMP Annex 1/2,
+// FDA 21 CFR 210/211 & 600s, ICH Q5A-E, 21 CFR Part 11 themed CAPAs for
+// insulin / insulin-analogue / GLP-1 drug-substance and aseptic fill-finish.
+export const mockBiologicsCAPAs: CAPARecord[] = [
+  {
+    id: 'bio-capa1', capaNumber: 'CAPA-BIO-2026-0019',
+    title: 'CAPA — Media-fill failure on aseptic cartridge filler AFL-02 (Grade A line intervention)',
+    description: 'Annual media-fill qualification on cartridge filler AFL-02 yielded 3 contaminated units, exceeding the EU GMP Annex 1 zero-growth acceptance criterion. Investigation linked growth to non-routine manual interventions at the Grade A filling needle during a stopper-bowl jam. CAPA covers intervention re-design, aseptic technique re-qualification and revised media-fill acceptance handling.',
+    source: 'NC', severity: 'CRITICAL', status: 'IMPLEMENTATION',
+    department: 'Aseptic Fill-Finish', productProcess: 'Aseptic Cartridge Fill · EU GMP Annex 1 Media Fill',
+    linkedSourceRecord: 'NC-BIO-2026-0042', owner: 'Dr. Layla Al-Mansoori', ownerId: 'u-bio1', dueDate: '2026-05-10',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why did the media fill fail?',                                     answer: '3 filled cartridge units showed microbial growth after 14-day incubation.' },
+      { whyNumber: 2, question: 'Why was there microbial growth?',                                  answer: 'Non-routine manual interventions were made at the Grade A filling needle to clear a stopper-bowl jam.' },
+      { whyNumber: 3, question: 'Why did the interventions cause contamination?',                   answer: 'Operators reached across the first-air path, disrupting unidirectional airflow over open cartridges.' },
+      { whyNumber: 4, question: 'Why was the intervention performed that way?',                      answer: 'WI-BIO-AFL-07 did not define an aseptic intervention method for stopper-bowl jams.' },
+      { whyNumber: 5, question: 'Why was the intervention not pre-defined and qualified?',          answer: 'Intervention risk assessment under Annex 1 §8 was not completed for this rarely-occurring jam scenario.' },
+    ],
+    fishbone: {
+      man: [{ id: 'bio-mf1', text: 'Operators reached across first-air path during intervention' }, { id: 'bio-mf2', text: 'Aseptic intervention technique not re-qualified within 12 months' }],
+      machine: [{ id: 'bio-mf3', text: 'Stopper-bowl jam triggered unplanned manual intervention' }],
+      material: [],
+      method: [{ id: 'bio-mf4', text: 'WI-BIO-AFL-07 lacked qualified intervention method for stopper-bowl jams' }, { id: 'bio-mf5', text: 'Annex 1 §8 intervention risk assessment incomplete' }],
+      measurement: [{ id: 'bio-mf6', text: 'Interventions not logged against media-fill intervention matrix' }],
+      environment: [{ id: 'bio-mf7', text: 'Grade A unidirectional airflow disrupted during reach-in' }],
+    },
+    actions: [
+      { id: 'bio-a1', description: 'Quarantine AFL-02 line and re-run media fill after intervention re-design; require 3 consecutive passing runs', type: 'CORRECTIVE', owner: 'Dr. Layla Al-Mansoori', dueDate: '2026-04-25', status: 'IN_PROGRESS' },
+      { id: 'bio-a2', description: 'Re-design stopper-bowl jam clearance as a qualified aseptic intervention using transfer tongs; update WI-BIO-AFL-07', type: 'PREVENTIVE', owner: 'Omar Al-Farsi',       dueDate: '2026-04-30', status: 'IN_PROGRESS' },
+      { id: 'bio-a3', description: 'Re-qualify all AFL-02 fill operators on aseptic technique with smoke-study verified first-air practices',                  type: 'PREVENTIVE', owner: 'Fatima Al-Hashimi',   dueDate: '2026-05-05', status: 'PENDING' },
+      { id: 'bio-a4', description: 'Complete Annex 1 §8 intervention risk assessment and incorporate all credible interventions into media-fill matrix',     type: 'PREVENTIVE', owner: 'Khalid Nasser',       dueDate: '2026-05-08', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Three consecutive passing media fills on AFL-02 with zero growth. 100% of credible interventions qualified and incorporated. All fill operators re-qualified on aseptic technique.',
+    monitoringPeriodDays: 180, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'bio-h1', timestamp: '2026-03-30T09:30:00Z', user: 'Dr. Layla Al-Mansoori', action: 'CAPA Initiated',     details: 'Triggered from NC-BIO-2026-0042 media-fill failure' },
+      { id: 'bio-h2', timestamp: '2026-04-05T14:00:00Z', user: 'Omar Al-Farsi',         action: 'Containment Closed', details: 'AFL-02 line quarantined; affected lots held pending re-qualification' },
+    ],
+    createdAt: '2026-03-30T09:30:00Z', updatedAt: '2026-04-05T14:00:00Z', closedAt: null, createdBy: 'Dr. Layla Al-Mansoori',
+  },
+  {
+    id: 'bio-capa2', capaNumber: 'CAPA-BIO-2026-0018',
+    title: 'CAPA — Sterility excursion on insulin glargine cartridge lot GLA-26-0094 (EM excursion Grade A/B)',
+    description: 'Sterility excursion on insulin glargine cartridge lot GLA-26-0094 correlated with an environmental-monitoring excursion at the Grade A/B interface of the fill line. Investigation identified a degraded RABS glove with a micro-pinhole. CAPA covers glove replacement, integrity-test frequency increase and EM trending strengthening.',
+    source: 'NC', severity: 'CRITICAL', status: 'ROOT_CAUSE_ANALYSIS',
+    department: 'Aseptic Fill-Finish', productProcess: 'RABS Grade A/B · Environmental Monitoring',
+    linkedSourceRecord: 'NC-BIO-2026-0041', owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3', dueDate: '2026-05-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why was a sterility excursion observed?',                       answer: 'Micrococcus luteus recovered from a fingertip plate and a filled-unit sterility test.' },
+      { whyNumber: 2, question: 'Why was contamination present at the Grade A interface?',       answer: 'A RABS glove port had a micro-pinhole allowing ingress during fill.' },
+      { whyNumber: 3, question: 'Why was the glove breach not detected earlier?',                answer: 'Glove integrity testing was performed monthly; the pinhole developed mid-cycle.' },
+      { whyNumber: 4, question: 'Why was glove testing only monthly?',                           answer: 'SOP-BIO-EM-03 inherited a frequency from a lower-risk Grade C application.' },
+    ],
+    fishbone: {
+      man: [],
+      machine: [{ id: 'bio-mf8', text: 'RABS glove micro-pinhole at fill-line glove port' }, { id: 'bio-mf9', text: 'RABS pressure differential margin to Grade B narrowed during glove flex' }],
+      material: [{ id: 'bio-mf10', text: 'Glove batch showed earlier-than-expected service-life fatigue' }],
+      method: [{ id: 'bio-mf11', text: 'SOP-BIO-EM-03 glove integrity test frequency only monthly' }],
+      measurement: [{ id: 'bio-mf12', text: 'EM active-air counts not trended against Annex 1 alert/action limits in real time' }],
+      environment: [],
+    },
+    actions: [
+      { id: 'bio-a5', description: 'Replace all RABS gloves on the glargine fill line and physical/pressure-decay integrity test each port', type: 'CORRECTIVE', owner: 'Omar Al-Farsi',     dueDate: '2026-04-12', status: 'COMPLETED', completedDate: '2026-04-11' },
+      { id: 'bio-a6', description: 'Increase RABS glove integrity testing to per-batch with pre/post-fill visual and pressure-decay checks', type: 'PREVENTIVE', owner: 'Fatima Al-Hashimi', dueDate: '2026-04-25', status: 'IN_PROGRESS' },
+      { id: 'bio-a7', description: 'Revise SOP-BIO-EM-03 with risk-based glove test frequency tied to Grade A/B classification',           type: 'PREVENTIVE', owner: 'Khalid Nasser',     dueDate: '2026-05-05', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero sterility excursions over 180-day monitoring period. 100% RABS gloves integrity-tested per batch. EM trends reviewed against Annex 1 limits weekly.',
+    monitoringPeriodDays: 180, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'bio-h3', timestamp: '2026-03-28T10:00:00Z', user: 'Fatima Al-Hashimi', action: 'CAPA Initiated', details: 'Triggered from NC-BIO-2026-0041 sterility excursion' },
+    ],
+    createdAt: '2026-03-28T10:00:00Z', updatedAt: '2026-04-11T17:00:00Z', closedAt: null, createdBy: 'Fatima Al-Hashimi',
+  },
+  {
+    id: 'bio-capa3', capaNumber: 'CAPA-BIO-2025-0058',
+    title: 'CAPA — Endotoxin OOS on human-insulin drug substance batch HI-25-0211',
+    description: 'Bacterial endotoxin (LAL) result exceeded the 21 CFR 211 / USP <85> limit on drug-substance batch HI-25-0211. Root cause traced to inadequate flushing of a single-use transfer line during fermentation harvest, leaving residual endotoxin. CAPA covered flush-cycle revalidation and a per-harvest endotoxin in-process control.',
+    source: 'NC', severity: 'CRITICAL', status: 'CLOSED',
+    department: 'Drug Substance', productProcess: 'Fermentation Harvest · LAL Endotoxin Control',
+    linkedSourceRecord: 'NC-BIO-2025-0098', owner: 'Yusuf Rahman', ownerId: 'u-bio4', dueDate: '2025-12-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why did the endotoxin result exceed the limit?',     answer: 'Residual endotoxin remained in the single-use harvest transfer line.' },
+      { whyNumber: 2, question: 'Why was residual endotoxin present?',                answer: 'The line flush cycle was shorter than required to depyrogenate residual gram-negative load.' },
+      { whyNumber: 3, question: 'Why was the flush cycle insufficient?',              answer: 'No in-process endotoxin check on the harvest stream allowed the gap to go unverified.' },
+    ],
+    fishbone: {
+      man: [], machine: [{ id: 'bio-mf13', text: 'Single-use harvest line flush volume under-specified' }], material: [], method: [{ id: 'bio-mf14', text: 'No per-harvest endotoxin in-process control' }], measurement: [], environment: [],
+    },
+    actions: [
+      { id: 'bio-a8',  description: 'Revalidate single-use harvest line flush cycle to demonstrate endotoxin clearance ≥3 log',      type: 'CORRECTIVE', owner: 'Yusuf Rahman',    dueDate: '2025-09-25', status: 'COMPLETED', completedDate: '2025-09-24' },
+      { id: 'bio-a9',  description: 'Add per-harvest LAL endotoxin in-process control with action limit at 50% of release spec',     type: 'PREVENTIVE', owner: 'Aisha Khalid',    dueDate: '2025-10-10', status: 'COMPLETED', completedDate: '2025-10-08' },
+      { id: 'bio-a10', description: 'Add endotoxin trend dashboard to drug-substance review with weekly QA sign-off',                type: 'PREVENTIVE', owner: 'Hassan Al-Balushi', dueDate: '2025-11-20', status: 'COMPLETED', completedDate: '2025-11-19' },
+    ],
+    effectivenessCriteria: 'Zero endotoxin OOS over 90-day monitoring period. Per-harvest endotoxin IPC logged and reviewed for every batch.',
+    monitoringPeriodDays: 90, effectivenessResult: 'PASS', effectivenessEvidence: 'No endotoxin OOS Sep 2025 – Dec 2025. Per-harvest LAL IPC reviewed for every batch by QC.',
+    history: [],
+    createdAt: '2025-09-15T08:30:00Z', updatedAt: '2025-12-15T14:00:00Z', closedAt: '2025-12-15T14:00:00Z', createdBy: 'Yusuf Rahman',
+  },
+  {
+    id: 'bio-capa4', capaNumber: 'CAPA-BIO-2026-0011',
+    title: 'CAPA — Host cell protein above limit on insulin aspart batch ASP-26-0177 (clearance drift)',
+    description: 'Host cell protein (HCP) by ELISA exceeded the ICH Q6B process-related impurity limit on insulin aspart batch ASP-26-0177. Investigation (NC-BIO-2026-0038) linked the drift to fouled Protein A capture resin past its validated cycle life. CAPA covered resin replacement, downstream revalidation and per-cycle HCP clearance trending.',
+    source: 'NC', severity: 'CRITICAL', status: 'CLOSED',
+    department: 'Downstream Purification', productProcess: 'Protein A Capture · HCP Clearance (ICH Q6B)',
+    linkedSourceRecord: 'NC-BIO-2026-0038', owner: 'Yusuf Rahman', ownerId: 'u-bio4', dueDate: '2026-04-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why was HCP above the limit?',                       answer: 'Capture-step HCP clearance dropped below validated performance.' },
+      { whyNumber: 2, question: 'Why did clearance drop?',                            answer: 'The capture resin was fouled and past its validated cycle life.' },
+      { whyNumber: 3, question: 'Why was the resin used past its cycle life?',         answer: 'Resin cycle count was tracked manually and the lifetime study limit was exceeded undetected.' },
+    ],
+    fishbone: {
+      man: [], machine: [{ id: 'bio-mf-c4a', text: 'Capture resin fouled, exceeded validated cycle life' }],
+      material: [], method: [{ id: 'bio-mf-c4b', text: 'Resin cycle count tracked manually, not enforced by MES' }],
+      measurement: [{ id: 'bio-mf-c4c', text: 'No per-cycle HCP clearance trending against resin life' }],
+      environment: [],
+    },
+    actions: [
+      { id: 'bio-a11', description: 'Replace Protein A capture resin and revalidate downstream HCP clearance over 3 batches',  type: 'CORRECTIVE', owner: 'Yusuf Rahman',  dueDate: '2026-03-20', status: 'COMPLETED', completedDate: '2026-03-20' },
+      { id: 'bio-a12', description: 'Enforce resin cycle-count limit in MES with automatic block at validated lifetime',        type: 'PREVENTIVE', owner: 'Khalid Nasser', dueDate: '2025-10-30', status: 'COMPLETED', completedDate: '2025-10-25' },
+      { id: 'bio-a13', description: 'Add per-cycle HCP clearance trending tied to resin cycle number',                          type: 'PREVENTIVE', owner: 'Aisha Khalid',  dueDate: '2026-02-15', status: 'COMPLETED', completedDate: '2026-02-14' },
+    ],
+    effectivenessCriteria: 'Zero HCP-related NCs over 180-day monitoring period. Resin cycle limit enforced by MES on every campaign.',
+    monitoringPeriodDays: 180,
+    effectivenessResult: 'PASS',
+    effectivenessEvidence: 'No HCP-related NCs Nov 2025 – Apr 2026. MES blocks resin use beyond validated cycle life; HCP clearance trended per cycle.',
+    history: [
+      { id: 'bio-hc4a', timestamp: '2025-11-10T09:00:00Z', user: 'Yusuf Rahman', action: 'CAPA Initiated',         details: 'Triggered from NC-BIO-2026-0038 HCP drift' },
+      { id: 'bio-hc4b', timestamp: '2026-04-15T14:00:00Z', user: 'Yusuf Rahman', action: 'Effectiveness Verified', details: 'PASS — 180-day monitoring complete; CAPA closed' },
+    ],
+    createdAt: '2025-11-10T09:00:00Z', updatedAt: '2026-04-15T14:00:00Z', closedAt: '2026-04-15T14:00:00Z', createdBy: 'Yusuf Rahman',
+  },
+  {
+    id: 'bio-capa5', capaNumber: 'CAPA-BIO-2026-0014',
+    title: 'CAPA — Protein aggregation / HMW species above limit on semaglutide drug product (cold-chain excursion)',
+    description: 'Size-exclusion HPLC detected high-molecular-weight (HMW) aggregate species above the ICH Q6B limit on a semaglutide GLP-1 cartridge lot. Investigation (NC-BIO-2025-0117) traced the aggregation to a 2–8 °C cold-chain excursion during inter-suite transfer of bulk drug product. CAPA delivers transfer-process redesign and continuous cold-chain monitoring.',
+    source: 'NC', severity: 'MAJOR', status: 'IMPLEMENTATION',
+    department: 'Drug Substance', productProcess: 'Bulk DP Hold · Cold-Chain 2–8 °C (ICH Q5C)',
+    linkedSourceRecord: 'NC-BIO-2025-0117', owner: 'Aisha Khalid', ownerId: 'u-bio5', dueDate: '2026-05-30',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why were HMW species above the limit?',           answer: 'Semaglutide protein aggregated during a thermal excursion.' },
+      { whyNumber: 2, question: 'Why did aggregation occur?',                       answer: 'Bulk drug product was held above 8 °C for ~6 hours during inter-suite transfer.' },
+      { whyNumber: 3, question: 'Why was the excursion not prevented?',             answer: 'The transfer cart had no active temperature control and no continuous logger.' },
+      { whyNumber: 4, question: 'Why was an uncontrolled cart used?',               answer: 'The cold-chain risk of the transfer step was not assessed under ICH Q5C stability requirements.' },
+    ],
+    fishbone: {
+      man: [], machine: [{ id: 'bio-mf-c5a', text: 'Transfer cart without active 2–8 °C control' }],
+      material: [], method: [{ id: 'bio-mf-c5b', text: 'Inter-suite transfer step not assessed under ICH Q5C' }, { id: 'bio-mf-c5c', text: 'No continuous temperature logging during transfer' }],
+      measurement: [], environment: [{ id: 'bio-mf-c5d', text: 'Ambient warehouse aisle temperature elevated during transfer window' }],
+    },
+    actions: [
+      { id: 'bio-a14', description: 'Re-test retained samples by SEC-HPLC and quarantine affected semaglutide lot',                          type: 'CORRECTIVE', owner: 'Aisha Khalid',  dueDate: '2026-04-25', status: 'COMPLETED', completedDate: '2026-04-22' },
+      { id: 'bio-a15', description: 'Replace transfer carts with validated active 2–8 °C controlled units with continuous loggers',           type: 'CORRECTIVE', owner: 'Mariam Saeed',  dueDate: '2026-05-10', status: 'IN_PROGRESS' },
+      { id: 'bio-a16', description: 'Add ICH Q5C cold-chain risk assessment to all bulk-DP hold and transfer steps; define max excursion time', type: 'PREVENTIVE', owner: 'Khalid Nasser', dueDate: '2026-05-15', status: 'IN_PROGRESS' },
+      { id: 'bio-a17', description: 'Deploy continuous cold-chain monitoring with alarm-to-QA on any 2–8 °C breach',                          type: 'PREVENTIVE', owner: 'Mariam Saeed',  dueDate: '2026-05-25', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero HMW-aggregate OOS over 12-month monitoring period. 100% of bulk-DP transfers within validated 2–8 °C range with continuous logging.',
+    monitoringPeriodDays: 365, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'bio-hc5a', timestamp: '2025-10-28T11:00:00Z', user: 'Aisha Khalid', action: 'CAPA Initiated',    details: 'Triggered from NC-BIO-2025-0117 HMW species OOS' },
+      { id: 'bio-hc5b', timestamp: '2026-04-22T16:30:00Z', user: 'Aisha Khalid', action: 'Corrective Closed', details: 'Affected lot quarantined; controlled transfer carts being deployed' },
+    ],
+    createdAt: '2025-10-28T11:00:00Z', updatedAt: '2026-04-22T16:30:00Z', closedAt: null, createdBy: 'Aisha Khalid',
+  },
+  {
+    id: 'bio-capa6', capaNumber: 'CAPA-BIO-2026-0017',
+    title: 'CAPA — Cartridge container-closure integrity failures on degludec lot DEG-26-0071',
+    description: 'NC-BIO-2026-0040 identified container-closure integrity (CCI) failures by high-voltage leak detection on insulin degludec cartridges. Root cause traced to a worn crimping cam producing inconsistent cap-seal force. CAPA covers crimper overhaul, CCI revalidation and 100% in-line headspace CCI deployment.',
+    source: 'NC', severity: 'MAJOR', status: 'IMPLEMENTATION',
+    department: 'Aseptic Fill-Finish', productProcess: 'Cartridge Crimp-Seal · CCI (USP <1207>)',
+    linkedSourceRecord: 'NC-BIO-2026-0040', owner: 'Omar Al-Farsi', ownerId: 'u-bio2', dueDate: '2026-05-15',
+    fiveWhys: [
+      { whyNumber: 1, question: 'Why did cartridges fail CCI?',                      answer: 'Cap-seal force was inconsistent, leaving micro-leak paths at the crimp.' },
+      { whyNumber: 2, question: 'Why was the cap-seal force inconsistent?',          answer: 'The crimping cam on the capper was worn beyond service spec.' },
+      { whyNumber: 3, question: 'Why was the worn cam not detected?',                answer: 'Residual seal-force monitoring was sample-based, not 100% in-line.' },
+    ],
+    fishbone: {
+      man: [], machine: [{ id: 'bio-mf-c6a', text: 'Worn crimping cam on capper' }, { id: 'bio-mf-c6b', text: 'Cap-seal force drift outside validated window' }],
+      material: [], method: [{ id: 'bio-mf-c6c', text: 'Seal-force monitoring sample-based, not 100% in-line' }],
+      measurement: [{ id: 'bio-mf-c6d', text: 'No in-line headspace CCI on the cartridge line' }],
+      environment: [],
+    },
+    actions: [
+      { id: 'bio-a18', description: 'Quarantine and 100% re-inspect degludec lot DEG-26-0071 by high-voltage leak detection',  type: 'CORRECTIVE', owner: 'Omar Al-Farsi',  dueDate: '2026-04-02', status: 'IN_PROGRESS' },
+      { id: 'bio-a19', description: 'Overhaul capper crimping cam and revalidate residual seal-force (3 OQ lots)',             type: 'CORRECTIVE', owner: 'Mariam Saeed',  dueDate: '2026-04-15', status: 'COMPLETED', completedDate: '2026-04-15' },
+      { id: 'bio-a20', description: 'Deploy 100% in-line headspace CCI (laser gas-headspace) on the cartridge line',           type: 'PREVENTIVE', owner: 'Khalid Nasser', dueDate: '2026-04-30', status: 'IN_PROGRESS' },
+      { id: 'bio-a21', description: 'Add residual seal-force trending and per-batch crimper PM-hours tracking',                 type: 'PREVENTIVE', owner: 'Omar Al-Farsi',  dueDate: '2026-05-10', status: 'PENDING' },
+    ],
+    effectivenessCriteria: 'Zero CCI failures over 90-day monitoring period. 100% of cartridges pass in-line headspace CCI. Residual seal-force Cpk ≥ 1.33.',
+    monitoringPeriodDays: 90, effectivenessResult: null, effectivenessEvidence: null,
+    history: [
+      { id: 'bio-hc6a', timestamp: '2026-03-22T10:00:00Z', user: 'Omar Al-Farsi', action: 'CAPA Initiated',        details: 'Triggered from NC-BIO-2026-0040 CCI failures' },
+      { id: 'bio-hc6b', timestamp: '2026-04-15T18:00:00Z', user: 'Omar Al-Farsi', action: 'Crimper Overhaul OK',    details: 'Capper cam overhaul verified; residual seal-force revalidated' },
+    ],
+    createdAt: '2026-03-22T10:00:00Z', updatedAt: '2026-04-15T18:00:00Z', closedAt: null, createdBy: 'Omar Al-Farsi',
+  },
+];
+
 // Dairy tenant — FSSAI / ISO 22000 / HACCP themed CAPAs.
 export const mockDairyCAPAs: CAPARecord[] = [
   {
@@ -989,7 +1186,7 @@ export function useCAPAs(filters: CAPAFilters = {}) {
         const { data } = await api.get('/qms/capas', { params: filters });
         return unwrapList<CAPARecord>(data, flattenCAPA as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs });
+        const baseList = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs, biologics: mockBiologicsCAPAs });
         let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((c) => c.status === filters.status);
         if (filters.severity) filtered = filtered.filter((c) => c.severity === filters.severity);
@@ -1019,7 +1216,7 @@ export function useCAPA(id: string) {
         const { data } = await api.get(`/qms/capas/${id}`);
         return unwrapItem<CAPARecord>(data, flattenCAPA as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs });
+        const baseList = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs, biologics: mockBiologicsCAPAs });
         const capa = baseList.find((c) => c.id === id);
         if (!capa) throw new Error('CAPA not found');
         return capa;
@@ -1027,6 +1224,29 @@ export function useCAPA(id: string) {
     },
     enabled: !!id,
   });
+}
+
+// A single corrective/preventive action, flattened out of its parent CAPA and
+// tagged with that CAPA's identity so it can be listed and linked back.
+export interface CAPAActionItem extends CAPAAction {
+  capaId: string;
+  capaNumber: string;
+  capaTitle: string;
+}
+
+// Aggregate every action defined across all CAPAs into one flat list. Powers
+// the "Action Items" page; each item links back to its parent CAPA.
+export function useAllActionItems(filters: CAPAFilters = {}) {
+  const query = useCAPAs(filters);
+  const items: CAPAActionItem[] = (query.data?.data ?? []).flatMap((capa) =>
+    (capa.actions ?? []).map((a) => ({
+      ...a,
+      capaId: capa.id,
+      capaNumber: capa.capaNumber,
+      capaTitle: capa.title,
+    })),
+  );
+  return { ...query, items };
 }
 
 export function useCreateCAPA() {

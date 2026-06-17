@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   Plus,
@@ -29,6 +29,7 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import Tabs from '@/components/ui/Tabs';
+import Modal from '@/components/ui/Modal';
 import ApprovalTimeline from '@/components/ui/ApprovalTimeline';
 import { cn, formatDate, formatDateTime, daysSince } from '@/lib/utils';
 import { useCAPA } from './hooks';
@@ -57,6 +58,19 @@ const FISHBONE_LABELS: Record<string, { label: string; color: string }> = {
 
 // ── Tab Definitions ─────────────────────────────────────────────────────────
 
+// Each lifecycle step opens the tab that holds that stage's detail, so the
+// progress bar doubles as navigation (e.g. clicking "Initiated" jumps to the
+// History timeline where the initiation event is recorded).
+const STEP_TAB: Record<CAPALifecycle, string> = {
+  INITIATED: 'history',
+  CONTAINMENT: 'history',
+  ROOT_CAUSE_ANALYSIS: 'root-cause',
+  ACTION_DEFINITION: 'actions',
+  IMPLEMENTATION: 'actions',
+  EFFECTIVENESS_VERIFICATION: 'effectiveness',
+  CLOSED: 'history',
+};
+
 const TABS = [
   { id: 'details', label: 'Details' },
   { id: 'root-cause', label: 'Root Cause' },
@@ -70,13 +84,31 @@ const TABS = [
 export default function CAPADetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: capa, isLoading } = useCAPA(id!);
   const [activeTab, setActiveTab] = useState('details');
+  const [selectedAction, setSelectedAction] = useState<CAPAAction | null>(null);
+  // Locally-added actions (the "Add Action" form appends here for the demo).
+  const [localActions, setLocalActions] = useState<CAPAAction[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newAction, setNewAction] = useState<{ description: string; type: 'CORRECTIVE' | 'PREVENTIVE'; owner: string; dueDate: string }>(
+    { description: '', type: 'CORRECTIVE', owner: '', dueDate: '' },
+  );
   const [checkIns, setCheckIns] = useState([
     { day: 30, label: '30-Day Check-in', status: 'pending' as 'pending'|'pass'|'fail', notes: '', dueDate: '' },
     { day: 60, label: '60-Day Check-in', status: 'pending' as 'pending'|'pass'|'fail', notes: '', dueDate: '' },
     { day: 90, label: '90-Day Verification', status: 'pending' as 'pending'|'pass'|'fail', notes: '', dueDate: '' },
   ]);
+
+  // Deep-link from the Action Items page: open the Actions tab and pop the
+  // requested action's detail modal.
+  const openActionId = (location.state as { openActionId?: string } | null)?.openActionId;
+  useEffect(() => {
+    if (!openActionId || !capa) return;
+    setActiveTab('actions');
+    const match = capa.actions.find((a) => a.id === openActionId);
+    if (match) setSelectedAction(match);
+  }, [openActionId, capa]);
 
   if (isLoading) {
     return (
@@ -98,6 +130,24 @@ export default function CAPADetailPage() {
   }
 
   const currentStepIdx = LIFECYCLE_STEPS.findIndex((s) => s.key === capa.status);
+  const allActions = [...capa.actions, ...localActions];
+
+  const handleAddAction = () => {
+    if (!newAction.description.trim() || !newAction.owner.trim() || !newAction.dueDate) return;
+    const action: CAPAAction = {
+      id: `local-${Date.now()}`,
+      description: newAction.description.trim(),
+      type: newAction.type,
+      owner: newAction.owner.trim(),
+      dueDate: new Date(newAction.dueDate).toISOString(),
+      status: 'PENDING',
+      completedDate: null,
+      evidence: null,
+    };
+    setLocalActions((prev) => [...prev, action]);
+    setNewAction({ description: '', type: 'CORRECTIVE', owner: '', dueDate: '' });
+    setAddOpen(false);
+  };
 
   // ── Action Columns ──────────────────────────────────────────────────────
 
@@ -189,20 +239,25 @@ export default function CAPADetailPage() {
             const isCurrent = idx === currentStepIdx;
             return (
               <div key={step.key} className="flex items-center gap-1 flex-1">
-                <div className="flex flex-col items-center flex-1 min-w-0">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab(STEP_TAB[step.key])}
+                  title={`View ${step.label} details`}
+                  className="group flex flex-col items-center flex-1 min-w-0 cursor-pointer rounded-md p-1 -m-1 transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-navy-500/30"
+                >
                   <div
                     className={cn(
-                      'w-full h-2 rounded-full transition-colors',
+                      'w-full h-2 rounded-full transition-colors group-hover:opacity-80',
                       isComplete
                         ? 'bg-emerald-500'
                         : isCurrent
                           ? 'bg-blue-600'
-                          : 'bg-gray-200',
+                          : 'bg-gray-200 group-hover:bg-gray-300',
                     )}
                   />
                   <span
                     className={cn(
-                      'mt-2 text-[10px] font-medium text-center leading-tight',
+                      'mt-2 text-[10px] font-medium text-center leading-tight group-hover:underline',
                       isComplete
                         ? 'text-emerald-600'
                         : isCurrent
@@ -212,7 +267,7 @@ export default function CAPADetailPage() {
                   >
                     {step.label}
                   </span>
-                </div>
+                </button>
               </div>
             );
           })}
@@ -230,7 +285,7 @@ export default function CAPADetailPage() {
                   ...t,
                   count:
                     t.id === 'actions'
-                      ? capa.actions.length
+                      ? allActions.length
                       : t.id === 'history'
                         ? capa.history.length
                         : undefined,
@@ -601,19 +656,19 @@ export default function CAPADetailPage() {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <p className="text-sm text-slate-500">
-                      {capa.actions.length} action{capa.actions.length !== 1 ? 's' : ''} defined
+                      {allActions.length} action{allActions.length !== 1 ? 's' : ''} defined
                     </p>
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
                       <Plus className="h-4 w-4" />
                       Add Action
                     </Button>
                   </div>
-                  {capa.actions.length > 0 ? (
+                  {allActions.length > 0 ? (
                     <>
-                      <DataTable columns={actionColumns} data={capa.actions} />
+                      <DataTable columns={actionColumns} data={allActions} onRowClick={setSelectedAction} />
                       <div className="mt-4 space-y-2">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Timeline</p>
-                        {(capa?.actions || []).map((action: any, idx: number) => {
+                        {allActions.map((action: any, idx: number) => {
                           const total = action.targetDate ? Math.max(1, Math.ceil((new Date(action.targetDate).getTime() - new Date(capa.createdAt).getTime()) / 86400000)) : 30;
                           const elapsed = Math.ceil((Date.now() - new Date(capa.createdAt).getTime()) / 86400000);
                           const pct = Math.min(100, Math.max(5, (elapsed / total) * 100));
@@ -827,6 +882,135 @@ export default function CAPADetailPage() {
           </Card>
         </div>
       </div>
+
+      {/* Action detail modal — opened by clicking an Actions table row */}
+      <Modal
+        isOpen={!!selectedAction}
+        onClose={() => setSelectedAction(null)}
+        title={selectedAction ? `${selectedAction.type === 'CORRECTIVE' ? 'Corrective' : 'Preventive'} Action` : ''}
+        size="lg"
+      >
+        {selectedAction && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant={selectedAction.type === 'CORRECTIVE' ? 'info' : 'purple'}>
+                {selectedAction.type}
+              </Badge>
+              <StatusBadge status={selectedAction.status} />
+              <span className="text-xs text-slate-400">{selectedAction.id}</span>
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Description</p>
+              <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{selectedAction.description}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Owner</p>
+                <p className="text-sm text-slate-700">{selectedAction.owner}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Due Date</p>
+                {(() => {
+                  const overdue =
+                    new Date(selectedAction.dueDate) < new Date() &&
+                    selectedAction.status !== 'COMPLETED' &&
+                    selectedAction.status !== 'VERIFIED';
+                  return (
+                    <p className={cn('text-sm text-slate-700', overdue && 'text-red-600 font-semibold')}>
+                      {formatDate(selectedAction.dueDate)}
+                      {overdue && ' (overdue)'}
+                    </p>
+                  );
+                })()}
+              </div>
+              {selectedAction.completedDate && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Completed</p>
+                  <p className="text-sm text-emerald-600 font-medium">{formatDate(selectedAction.completedDate)}</p>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Evidence</p>
+              <p className="text-sm text-slate-600">
+                {selectedAction.evidence || <span className="italic text-slate-400">No evidence attached yet</span>}
+              </p>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Add Action modal */}
+      <Modal
+        isOpen={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Add Action"
+        size="lg"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleAddAction}
+              disabled={!newAction.description.trim() || !newAction.owner.trim() || !newAction.dueDate}
+            >
+              Add Action
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">
+              Description <span className="text-red-500">*</span>
+            </label>
+            <textarea
+              value={newAction.description}
+              onChange={(e) => setNewAction((p) => ({ ...p, description: e.target.value }))}
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/20"
+              placeholder="Describe the corrective or preventive action"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">Type</label>
+              <select
+                value={newAction.type}
+                onChange={(e) => setNewAction((p) => ({ ...p, type: e.target.value as 'CORRECTIVE' | 'PREVENTIVE' }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-navy-500"
+              >
+                <option value="CORRECTIVE">CORRECTIVE</option>
+                <option value="PREVENTIVE">PREVENTIVE</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                Owner <span className="text-red-500">*</span>
+              </label>
+              <input
+                value={newAction.owner}
+                onChange={(e) => setNewAction((p) => ({ ...p, owner: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/20"
+                placeholder="e.g. Omar Al-Farsi"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-slate-700">
+                Due Date <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="date"
+                value={newAction.dueDate}
+                onChange={(e) => setNewAction((p) => ({ ...p, dueDate: e.target.value }))}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/20"
+              />
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

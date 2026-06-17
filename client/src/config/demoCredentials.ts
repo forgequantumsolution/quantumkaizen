@@ -18,6 +18,8 @@ export const DEMO_ACCOUNTS = [
   { role: 'Partner',        email: 'partner@forgequantum.com',            password: 'QuantumK@izen2026' },
   { role: 'MedDevice Admin',email: 'md.admin@forgequantum.com',           password: 'QuantumK@izen2026' },
   { role: 'Dairy Admin',    email: 'dairy.admin@forgequantum.com',        password: 'QuantumK@izen2026' },
+  // Biologics / insulin tenant — Mubadala Bio · DiabTec (Abu Dhabi)
+  { role: 'Biologics Admin',email: 'info@forgequantumsolution.com',       password: 'QuantumK@izen2026' },
   // Pharma seed (also work against the real backend)
   { role: 'Admin',          email: 'admin@aurorabiopharma.com',           password: 'QuantumK@izen2026' },
   { role: 'QA Head',        email: 'qa.head@aurorabiopharma.com',         password: 'QuantumK@izen2026' },

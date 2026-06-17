@@ -19,7 +19,7 @@ import {
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
 import { lookupBadge } from '@/lib/badgeMap';
-import { useSuppliers, mockSuppliers, mockMedicalDeviceSuppliers, mockDairySuppliers } from './hooks';
+import { useSuppliers, mockSuppliers, mockMedicalDeviceSuppliers, mockDairySuppliers, mockBiologicsSuppliers } from './hooks';
 import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { Supplier, SupplierCategory, SupplierStatus } from './hooks';
@@ -96,7 +96,7 @@ export default function SupplierListPage() {
   const suppliers = (result?.data ?? [] as Supplier[]).filter((s: Supplier) => new Date((s as any).createdAt).getFullYear() === year);
 
   const industry = useUserIndustry();
-  const summarySource = pickByIndustry(industry, mockSuppliers, { medical_device: mockMedicalDeviceSuppliers, dairy: mockDairySuppliers });
+  const summarySource = pickByIndustry(industry, mockSuppliers, { medical_device: mockMedicalDeviceSuppliers, dairy: mockDairySuppliers, biologics: mockBiologicsSuppliers });
   const yearSuppliers = useMemo(() => summarySource.filter((s) => new Date(s.createdAt).getFullYear() === year), [summarySource, year]);
 
   // Summary stats

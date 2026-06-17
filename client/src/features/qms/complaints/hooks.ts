@@ -850,6 +850,173 @@ export const mockDairyComplaints: Complaint[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE).
+// Aseptic cartridge fill-finish: insulin, insulin analogues, GLP-1 pen cartridges. PV / vigilance themed.
+export const mockBiologicsComplaints: Complaint[] = [
+  {
+    id: 'bio-cmp1', complaintNumber: 'CMP-BIO-2026-0021',
+    customerName: 'Sheikh Khalifa Medical City — Abu Dhabi', customerContact: 'Pharm. Hessa Al-Rashedi', customerEmail: 'hessa.alrashedi@skmc.ae',
+    subject: 'Cracked and leaking insulin pen cartridges reported by hospital pharmacy — Lot DTC-INS-26-0148',
+    description: 'Outpatient pharmacy at SKMC reported 9 cracked 3 mL insulin pen cartridges from lot DTC-INS-26-0148 with visible solution leakage inside the secondary carton. Cartridges were not dispensed to patients. Pharmacy quarantined the remaining 41 cartridges from the consignment and flagged a potential dose-accuracy and sterility risk.',
+    severity: 'Critical', status: 'Under Investigation',
+    productService: 'DiabTec Insulin 100 IU/mL — 3 mL pen cartridge', batchOrderRef: 'Lot DTC-INS-26-0148',
+    receivedDate: '2026-04-06', responseDue: '2026-04-20',
+    assignedTo: 'Dr. Layla Al-Mansoori', assignedToId: 'u-bio1',
+    containmentActions: [
+      { id: 'bio-cmp-ca1', description: 'Quarantine all unshipped units of lot DTC-INS-26-0148 and adjacent fill lot 0149 at finished-goods warehouse', owner: 'Fatima Al-Hashimi', dueDate: '2026-04-07', status: 'Completed' },
+      { id: 'bio-cmp-ca2', description: 'Recall affected cartridges from SKMC under cold-chain reverse logistics for failure analysis', owner: 'Dr. Layla Al-Mansoori', dueDate: '2026-04-12', status: 'In Progress' },
+    ],
+    investigation: null, resolution: null,
+    communications: [
+      { id: 'bio-cm1', date: '2026-04-06', type: 'Email', direction: 'Inbound', summary: 'Initial complaint with photos of cracked cartridges and leakage in carton', contactPerson: 'Pharm. Hessa Al-Rashedi', user: 'Dr. Layla Al-Mansoori' },
+      { id: 'bio-cm2', date: '2026-04-07', type: 'Phone', direction: 'Outbound', summary: 'Acknowledgement call; arranged temperature-controlled return of affected cartridges', contactPerson: 'Pharm. Hessa Al-Rashedi', user: 'Dr. Layla Al-Mansoori' },
+    ],
+    linkedCAPAs: [{ id: 'bio-capa1', capaNumber: 'CAPA-BIO-2026-0019', title: 'Glass cartridge cracking during cartridge-to-pen assembly', status: 'ROOT_CAUSE_ANALYSIS', type: 'CORRECTIVE' }],
+    history: [{ id: 'bio-cmh1', timestamp: '2026-04-06T08:30:00Z', user: 'Dr. Layla Al-Mansoori', action: 'Complaint received', details: 'Logged from email; assessed Critical due to sterility and dose-accuracy risk; PV notified' }],
+    createdAt: '2026-04-06T08:30:00Z', updatedAt: '2026-04-12T15:00:00Z',
+  },
+  {
+    id: 'bio-cmp2', complaintNumber: 'CMP-BIO-2026-0020',
+    customerName: 'Boots Pharmacy — Dubai Mall, UAE', customerContact: 'Superintendent Pharm. Omar Khalil', customerEmail: 'omar.khalil@boots.ae',
+    subject: 'Patient reports cloudy insulin with visible particulate matter — Lot DTC-INS-26-0142',
+    description: 'A retail patient returned a 3 mL insulin pen cartridge from lot DTC-INS-26-0142 reporting the solution appeared cloudy with floating white particulates instead of clear. Pharmacy inspected two further cartridges from the same dispensed box and confirmed a hazy appearance. Patient advised not to inject; matter escalated as a potential potency and sterility concern.',
+    severity: 'Critical', status: 'Resolution Proposed',
+    productService: 'DiabTec Insulin 100 IU/mL — 3 mL pen cartridge', batchOrderRef: 'Lot DTC-INS-26-0142',
+    receivedDate: '2026-03-19', responseDue: '2026-04-02',
+    assignedTo: 'Dr. Layla Al-Mansoori', assignedToId: 'u-bio1',
+    containmentActions: [
+      { id: 'bio-cmp-ca3', description: 'Recall dispensed and retail stock of lot DTC-INS-26-0142 across UAE pharmacy network', owner: 'Fatima Al-Hashimi', dueDate: '2026-03-22', status: 'Completed' },
+      { id: 'bio-cmp-ca4', description: 'Pull retention vials/cartridges for visual inspection, particulate ID and HMWP/aggregation testing (SEC-HPLC)', owner: 'Mariam Saeed', dueDate: '2026-03-24', status: 'Completed' },
+    ],
+    investigation: {
+      rootCause: 'Protein aggregation in a sub-population of cartridges from lot DTC-INS-26-0142 caused by silicone-oil over-application on cartridge inner wall, promoting interfacial aggregation. Same mechanism flagged in NC-BIO-2026-0044.',
+      methodology: '5-Why + visual inspection + SEC-HPLC for high-molecular-weight proteins + sub-visible particle count (HIAC) + silicone-layer thickness mapping',
+      fiveWhys: [
+        { whyNumber: 1, question: 'Why was the insulin solution cloudy with particulates?', answer: 'Insulin protein had aggregated, forming sub-visible and visible particles.' },
+        { whyNumber: 2, question: 'Why did the protein aggregate?', answer: 'Excess silicone oil on the cartridge inner wall created a hydrophobic interface that nucleated aggregation.' },
+        { whyNumber: 3, question: 'Why was silicone oil in excess?', answer: 'Siliconization spray nozzle on filling line FL-02 drifted high after a maintenance reset; no post-maintenance verification of silicone deposition.' },
+      ],
+      findings: 'Post-maintenance siliconization verification was not part of the line clearance checklist; deposition drifted above the validated 0.3–0.5 mg/cartridge range.',
+      investigatedBy: 'Mariam Saeed', completedDate: '2026-03-28',
+    },
+    resolution: {
+      proposedResolution: 'Recalibrate FL-02 siliconization nozzle, add post-maintenance silicone-deposition verification to line clearance, and revalidate (3-lot OQ). Replace recalled cartridges with verified stock and share root-cause + stability data with Boots.',
+      customerAccepted: true, acceptedDate: '2026-03-31',
+      resolutionDetails: 'Replacement cartridges dispatched under cold-chain 2026-04-01; root-cause report and CoA shared with Boots superintendent pharmacist.',
+      compensationOffered: 'Replacement units at no charge; patient-counselling support material provided',
+      resolvedBy: 'Dr. Layla Al-Mansoori',
+    },
+    communications: [], linkedCAPAs: [{ id: 'bio-capa2', capaNumber: 'CAPA-BIO-2026-0017', title: 'Insulin protein aggregation from over-siliconization', status: 'IMPLEMENTATION', type: 'CORRECTIVE' }],
+    history: [],
+    createdAt: '2026-03-19T09:00:00Z', updatedAt: '2026-03-31T14:00:00Z',
+  },
+  {
+    id: 'bio-cmp3', complaintNumber: 'CMP-BIO-2026-0018',
+    customerName: 'Gulf Drug LLC — Distributor, Dubai', customerContact: 'QA Manager Sara Al-Fardan', customerEmail: 'sara.alfardan@gulfdrug.com',
+    subject: 'Suspected loss of potency after cold-chain temperature excursion in transit — Lot DTC-ANA-26-0103',
+    description: 'Distributor Gulf Drug reported a data-logger temperature excursion (8 h at 12–14 °C, above the 2–8 °C range) on a shipment of insulin analogue (DiabTec Glargine) cartridges, lot DTC-ANA-26-0103. 1,200 cartridges affected. Distributor quarantined the shipment pending a stability impact assessment and potential loss-of-potency determination.',
+    severity: 'Major', status: 'Under Investigation',
+    productService: 'DiabTec Glargine 100 IU/mL — 3 mL pen cartridge', batchOrderRef: 'Lot DTC-ANA-26-0103',
+    receivedDate: '2026-05-04', responseDue: '2026-05-18',
+    assignedTo: 'Fatima Al-Hashimi', assignedToId: 'u-bio2',
+    containmentActions: [
+      { id: 'bio-cmp-ca5', description: 'Quarantine all 1,200 excursion-affected cartridges at Gulf Drug; block further distribution', owner: 'Fatima Al-Hashimi', dueDate: '2026-05-05', status: 'Completed' },
+      { id: 'bio-cmp-ca6', description: 'Retrieve data-logger files and initiate stability-budget / mean-kinetic-temperature impact assessment', owner: 'Mariam Saeed', dueDate: '2026-05-07', status: 'In Progress' },
+    ],
+    investigation: null, resolution: null,
+    communications: [
+      { id: 'bio-cm3', date: '2026-05-04', type: 'Email', direction: 'Inbound', summary: 'Excursion report with data-logger export attached', contactPerson: 'QA Manager Sara Al-Fardan', user: 'Fatima Al-Hashimi' },
+      { id: 'bio-cm4', date: '2026-05-05', type: 'Phone', direction: 'Outbound', summary: 'Acknowledgement; advised quarantine and committed to stability impact assessment within 10 days', contactPerson: 'QA Manager Sara Al-Fardan', user: 'Fatima Al-Hashimi' },
+    ],
+    linkedCAPAs: [], history: [{ id: 'bio-cmh2', timestamp: '2026-05-04T10:15:00Z', user: 'Fatima Al-Hashimi', action: 'Complaint received', details: 'Cold-chain excursion logged; assessed Major pending stability-budget determination' }],
+    createdAt: '2026-05-04T10:15:00Z', updatedAt: '2026-05-07T15:00:00Z',
+  },
+  {
+    id: 'bio-cmp4', complaintNumber: 'CMP-BIO-2026-0015',
+    customerName: 'Cleveland Clinic Abu Dhabi', customerContact: 'Clinical Pharm. Reem Al-Suwaidi', customerEmail: 'reem.alsuwaidi@clevelandclinicabudhabi.ae',
+    subject: 'GLP-1 (semaglutide) pen cartridges fail to seat in reusable pen device — Lot DTC-GLP-26-0071',
+    description: 'Diabetes clinic reported that 7 semaglutide pen cartridges from lot DTC-GLP-26-0071 would not seat correctly in the DiabTec reusable pen device — the cartridge holder would not thread fully, preventing dosing. No patient harm; affected patients re-supplied from a different lot. Suspected cartridge dimensional / crimp issue.',
+    severity: 'Major', status: 'Resolution Proposed',
+    productService: 'DiabTec Semaglutide 1.34 mg/mL — 3 mL pen cartridge', batchOrderRef: 'Lot DTC-GLP-26-0071',
+    receivedDate: '2026-04-21', responseDue: '2026-05-05',
+    assignedTo: 'Mariam Saeed', assignedToId: 'u-bio3',
+    containmentActions: [
+      { id: 'bio-cmp-ca7', description: 'Quarantine lot DTC-GLP-26-0071 and pull retention cartridges for dimensional and crimp-height inspection', owner: 'Mariam Saeed', dueDate: '2026-04-23', status: 'Completed' },
+      { id: 'bio-cmp-ca8', description: 'Replace affected cartridges at Cleveland Clinic from a verified lot', owner: 'Noura Aziz', dueDate: '2026-04-25', status: 'Completed' },
+    ],
+    investigation: {
+      rootCause: 'Aluminium cap crimp height ran high on capping head C-2 of fill line FL-03, leaving the cartridge shoulder slightly oversize so it would not thread into the pen holder. Crimp-height SPC alarm limit was set too wide to catch the drift.',
+      methodology: '5-Why + crimp-height measurement (height/diameter) + capping-head SPC data review + pen-seating functional test',
+      fiveWhys: [
+        { whyNumber: 1, question: 'Why would the cartridge not seat in the pen?', answer: 'The crimped cap shoulder was dimensionally oversize.' },
+        { whyNumber: 2, question: 'Why was the crimp oversize?', answer: 'Capping head C-2 crimp height drifted high during the run.' },
+        { whyNumber: 3, question: 'Why was the drift not caught?', answer: 'Crimp-height SPC control limits were wider than the pen-compatibility tolerance window.' },
+      ],
+      findings: 'SPC limits for crimp height were statistical, not tied to downstream pen-device fit tolerances; functional seating check was end-of-batch only.',
+      investigatedBy: 'Mariam Saeed', completedDate: '2026-04-29',
+    },
+    resolution: {
+      proposedResolution: 'Re-set capping head C-2, tighten crimp-height SPC limits to the pen-device fit window, and add in-process pen-seating functional checks each shift. Replace recalled cartridges and share root-cause report with Cleveland Clinic.',
+      customerAccepted: true, acceptedDate: '2026-05-02',
+      resolutionDetails: 'Replacement cartridges supplied; capping head re-qualified; root-cause + revalidation summary shared.',
+      compensationOffered: 'Replacement units at no charge; clinical-education session for diabetes-clinic staff',
+      resolvedBy: 'Mariam Saeed',
+    },
+    communications: [], linkedCAPAs: [], history: [],
+    createdAt: '2026-04-21T09:00:00Z', updatedAt: '2026-05-02T15:00:00Z',
+  },
+  {
+    id: 'bio-cmp5', complaintNumber: 'CMP-BIO-2026-0012',
+    customerName: 'Hamad Medical Corporation — Doha, Qatar', customerContact: 'Pharm. Aisha Al-Kuwari', customerEmail: 'aisha.alkuwari@hamad.qa',
+    subject: 'Patient adverse event — injection-site reaction reported, pharmacovigilance signal raised (Lot DTC-INS-26-0137)',
+    description: 'Hospital reported a confirmed patient adverse event: recurrent injection-site reactions (redness, induration, localized swelling) in two patients using DiabTec insulin cartridges from lot DTC-INS-26-0137. No systemic reaction. Cases entered into the safety database and assessed as a possible product-related pharmacovigilance signal requiring expedited evaluation.',
+    severity: 'Critical', status: 'Under Investigation',
+    productService: 'DiabTec Insulin 100 IU/mL — 3 mL pen cartridge', batchOrderRef: 'Lot DTC-INS-26-0137',
+    receivedDate: '2026-05-22', responseDue: '2026-06-05',
+    assignedTo: 'Dr. Layla Al-Mansoori', assignedToId: 'u-bio1',
+    containmentActions: [
+      { id: 'bio-cmp-ca9', description: 'Log adverse-event cases in pharmacovigilance database and notify Drug Safety / PV unit for expedited assessment', owner: 'Dr. Layla Al-Mansoori', dueDate: '2026-05-23', status: 'Completed' },
+      { id: 'bio-cmp-ca10', description: 'Quarantine retention samples of lot DTC-INS-26-0137 and test for endotoxin, sub-visible particulates and HMWP', owner: 'Mariam Saeed', dueDate: '2026-05-26', status: 'In Progress' },
+    ],
+    investigation: null, resolution: null,
+    communications: [
+      { id: 'bio-cm5', date: '2026-05-22', type: 'Email', direction: 'Inbound', summary: 'Adverse-event report for two patients with injection-site reactions, CIOMS form attached', contactPerson: 'Pharm. Aisha Al-Kuwari', user: 'Dr. Layla Al-Mansoori' },
+      { id: 'bio-cm6', date: '2026-05-23', type: 'Phone', direction: 'Outbound', summary: 'Acknowledgement; confirmed PV case intake and requested batch and patient usage details', contactPerson: 'Pharm. Aisha Al-Kuwari', user: 'Dr. Layla Al-Mansoori' },
+    ],
+    linkedCAPAs: [{ id: 'bio-capa3', capaNumber: 'CAPA-BIO-2026-0022', title: 'Injection-site reaction signal — endotoxin / particulate evaluation', status: 'ROOT_CAUSE_ANALYSIS', type: 'CORRECTIVE' }],
+    history: [{ id: 'bio-cmh3', timestamp: '2026-05-22T11:00:00Z', user: 'Dr. Layla Al-Mansoori', action: 'Complaint received', details: 'Adverse-event complaint; expedited as Critical PV signal; safety database case opened' }],
+    createdAt: '2026-05-22T11:00:00Z', updatedAt: '2026-05-26T15:00:00Z',
+  },
+  {
+    id: 'bio-cmp6', complaintNumber: 'CMP-BIO-2025-0044',
+    customerName: 'Aster Pharmacy — Sharjah, UAE', customerContact: 'Pharm. Yousef Al-Naqbi', customerEmail: 'yousef.alnaqbi@asterpharmacy.ae',
+    subject: 'GLP-1 semaglutide cartridge underfill — short deliverable doses reported by patient (Lot DTC-GLP-25-0058)',
+    description: 'A patient reported running out of doses earlier than expected on a DiabTec semaglutide cartridge from lot DTC-GLP-25-0058. Pharmacy weigh-checked three remaining cartridges from the same box and found fill volumes ~6% below the declared 3 mL. Suspected fill-weight underdosing affecting deliverable doses.',
+    severity: 'Major', status: 'Closed',
+    productService: 'DiabTec Semaglutide 1.34 mg/mL — 3 mL pen cartridge', batchOrderRef: 'Lot DTC-GLP-25-0058',
+    receivedDate: '2025-11-12', responseDue: '2025-11-26',
+    assignedTo: 'Noura Aziz', assignedToId: 'u-bio4',
+    containmentActions: [
+      { id: 'bio-cmp-ca11', description: 'Quarantine remaining stock of lot DTC-GLP-25-0058 and pull retention cartridges for fill-weight check', owner: 'Noura Aziz', dueDate: '2025-11-14', status: 'Completed' },
+    ],
+    investigation: {
+      rootCause: 'Peristaltic dosing pump on fill line FL-01 drifted low after tubing wear; fill-weight in-process checks were spaced too widely to catch the gradual underfill. Same family as NC-BIO-2025-0061.',
+      methodology: '5-Why + fill-weight re-test of retention samples + dosing-pump tubing inspection + in-process control frequency review',
+      fiveWhys: [], findings: 'Dosing-pump tubing replacement interval was time-based, not wear-based; fill-weight checks every 30 min were insufficient to detect a slow drift.',
+      investigatedBy: 'Noura Aziz', completedDate: '2025-11-22',
+    },
+    resolution: {
+      proposedResolution: 'Move dosing-pump tubing to wear-based replacement, increase fill-weight in-process check frequency, and revalidate fill accuracy. Replace affected cartridges and share fill-weight data with Aster.',
+      customerAccepted: true, acceptedDate: '2025-11-24',
+      resolutionDetails: 'Lot DTC-GLP-25-0058 disposed; replacement stock dispatched with fill-weight certificates; root-cause report shared.',
+      compensationOffered: 'Replacement units at no charge; fill-weight certificates with shipments for 90 days',
+      resolvedBy: 'Noura Aziz',
+    },
+    communications: [], linkedCAPAs: [], history: [],
+    createdAt: '2025-11-12T09:00:00Z', updatedAt: '2025-11-26T16:00:00Z',
+  },
+];
+
 interface ComplaintFilters {
   status?: string;
   severity?: string;
@@ -865,7 +1032,7 @@ export function useComplaints(filters: ComplaintFilters = {}) {
         const { data } = await api.get('/qms/complaints', { params: filters });
         return unwrapList<Complaint>(data, flattenComplaint as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockComplaints, { medical_device: mockMedicalDeviceComplaints, dairy: mockDairyComplaints });
+        const baseList = pickByIndustry(industry, mockComplaints, { medical_device: mockMedicalDeviceComplaints, dairy: mockDairyComplaints, biologics: mockBiologicsComplaints });
         let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((c) => c.status === filters.status);
         if (filters.severity) filtered = filtered.filter((c) => c.severity === filters.severity);
@@ -894,7 +1061,7 @@ export function useComplaint(id: string) {
         const { data } = await api.get(`/qms/complaints/${id}`);
         return unwrapItem<Complaint>(data, flattenComplaint as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockComplaints, { medical_device: mockMedicalDeviceComplaints, dairy: mockDairyComplaints });
+        const baseList = pickByIndustry(industry, mockComplaints, { medical_device: mockMedicalDeviceComplaints, dairy: mockDairyComplaints, biologics: mockBiologicsComplaints });
         const complaint = baseList.find((c) => c.id === id);
         if (!complaint) throw new Error('Complaint not found');
         return complaint;

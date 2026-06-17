@@ -373,6 +373,103 @@ export const mockDairyTrainingPrograms: TrainingProgram[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE).
+// Drug-substance + aseptic cartridge fill-finish (insulin, analogues, GLP-1).
+// EU GMP Annex 1 / 21 CFR Part 11 / GDP themed training programs.
+export const mockBiologicsTrainingPrograms: TrainingProgram[] = [
+  { id: 'bio-tp1',  programId: 'TRN-BIO-0001', title: 'Aseptic Gowning & Behaviour (Grade A/B)',
+    description: 'Mandatory qualification for Grade A/B aseptic operators — gowning sequence, sterile garment integrity, slow-and-deliberate behaviour, first-air protection and intervention discipline per EU GMP Annex 1.',
+    type: 'INDUCTION', status: 'ACTIVE', department: 'Aseptic Fill-Finish',
+    duration: '8 hours', enrolled: 46, completionRate: 97, validityPeriod: '1 year', passingScore: 95,
+    objectives: ['Demonstrate Grade A/B gowning sequence', 'Protect first-air over critical surfaces', 'Identify and respond to gowning breaches'],
+    prerequisites: ['Safety Induction'], createdAt: '2024-07-15T10:00:00Z', updatedAt: '2026-04-12T08:00:00Z',
+  },
+  { id: 'bio-tp2',  programId: 'TRN-BIO-0002', title: 'Media Fill / Aseptic Process Simulation',
+    description: 'Operator qualification and re-qualification through aseptic process simulation — worst-case interventions, line set-up, incubation and acceptance criteria per Annex 1 APS requirements.',
+    type: 'OJT', status: 'ACTIVE', department: 'Aseptic Fill-Finish',
+    duration: '16 hours', enrolled: 32, completionRate: 96, validityPeriod: '6 months', passingScore: 90,
+    objectives: ['Participate in a qualifying media fill run', 'Execute worst-case interventions correctly', 'Interpret APS incubation and acceptance criteria'],
+    prerequisites: ['Aseptic Gowning & Behaviour (Grade A/B)'], createdAt: '2024-08-12T10:00:00Z', updatedAt: '2026-04-12T11:00:00Z',
+  },
+  { id: 'bio-tp3',  programId: 'TRN-BIO-0003', title: 'Environmental Monitoring (Viable & Non-Viable)',
+    description: 'Training for EM technicians — active/passive air sampling, settle and contact plates, total particle counting, sampling locations and trending against Annex 1 grade limits.',
+    type: 'CLASSROOM', status: 'ACTIVE', department: 'QC Lab',
+    duration: '12 hours', enrolled: 21, completionRate: 93, validityPeriod: '2 years', passingScore: 85,
+    objectives: ['Perform viable and non-viable EM sampling', 'Map sampling locations to risk', 'Trend EM data against alert / action limits'],
+    prerequisites: ['Aseptic Gowning & Behaviour (Grade A/B)'], createdAt: '2024-09-22T10:00:00Z', updatedAt: '2026-04-12T11:00:00Z',
+  },
+  { id: 'bio-tp4',  programId: 'TRN-BIO-0004', title: 'Sterility Assurance & Contamination Control Strategy',
+    description: 'Sterility-assurance principles and the site Contamination Control Strategy — sterilisation, depyrogenation, aseptic connections, RABS/isolator integrity and CCS holistic risk review per Annex 1.',
+    type: 'REGULATORY', status: 'ACTIVE', department: 'QA',
+    duration: '8 hours', enrolled: 18, completionRate: 91, validityPeriod: '3 years', passingScore: 85,
+    objectives: ['Explain the elements of a Contamination Control Strategy', 'Link sterility-assurance controls to risk', 'Review aseptic connection practices'],
+    prerequisites: ['Media Fill / Aseptic Process Simulation'], createdAt: '2024-10-22T10:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  { id: 'bio-tp5',  programId: 'TRN-BIO-0005', title: 'Bioreactor & Fermentation Operation',
+    description: 'On-the-job training for upstream operators — seed train expansion, bioreactor set-up, sterile sampling, pH / DO / temperature control and harvest for insulin and GLP-1 expression.',
+    type: 'OJT', status: 'ACTIVE', department: 'Drug Substance',
+    duration: '40 hours', enrolled: 16, completionRate: 92, validityPeriod: '1 year', passingScore: 90,
+    objectives: ['Operate bioreactors within validated parameters', 'Perform sterile sampling and inoculation', 'Manage seed train and harvest steps'],
+    prerequisites: ['Safety Induction'], createdAt: '2024-06-12T10:00:00Z', updatedAt: '2026-04-10T11:00:00Z',
+  },
+  { id: 'bio-tp6',  programId: 'TRN-BIO-0006', title: 'Chromatography Purification (Downstream)',
+    description: 'Downstream-processing training — capture, intermediate and polishing chromatography, column packing/qualification, buffer management and yield/purity acceptance for drug substance.',
+    type: 'CLASSROOM', status: 'ACTIVE', department: 'Drug Substance',
+    duration: '24 hours', enrolled: 14, completionRate: 89, validityPeriod: '3 years', passingScore: 85,
+    objectives: ['Pack and qualify chromatography columns', 'Run capture and polishing steps', 'Interpret purity and yield acceptance criteria'],
+    prerequisites: ['Bioreactor & Fermentation Operation'], createdAt: '2024-07-15T10:00:00Z', updatedAt: '2026-03-10T11:00:00Z',
+  },
+  { id: 'bio-tp7',  programId: 'TRN-BIO-0007', title: 'Cartridge Fill-Finish Line Operation',
+    description: 'Operator training for the aseptic cartridge fill-finish line — fill-weight control, stoppering, crimping, in-process checks and line clearance for insulin / analogue cartridges.',
+    type: 'OJT', status: 'ACTIVE', department: 'Aseptic Fill-Finish',
+    duration: '32 hours', enrolled: 28, completionRate: 94, validityPeriod: '1 year', passingScore: 90,
+    objectives: ['Set up and operate the cartridge fill line', 'Control fill weight within limits', 'Perform line clearance and in-process checks'],
+    prerequisites: ['Aseptic Gowning & Behaviour (Grade A/B)'], createdAt: '2024-09-12T10:00:00Z', updatedAt: '2026-04-12T11:00:00Z',
+  },
+  { id: 'bio-tp8',  programId: 'TRN-BIO-0008', title: 'Container Closure Integrity Testing (CCIT)',
+    description: 'Training on deterministic CCIT methods — high-voltage leak detection and headspace analysis for cartridges, method selection, sampling and result interpretation per USP <1207>.',
+    type: 'CLASSROOM', status: 'ACTIVE', department: 'QC Lab',
+    duration: '8 hours', enrolled: 12, completionRate: 90, validityPeriod: '3 years', passingScore: 85,
+    objectives: ['Select appropriate CCIT methods', 'Operate HVLD / headspace analysers', 'Interpret CCIT results against acceptance criteria'],
+    prerequisites: [], createdAt: '2025-01-10T10:00:00Z', updatedAt: '2026-03-25T13:30:00Z',
+  },
+  { id: 'bio-tp9',  programId: 'TRN-BIO-0009', title: 'Cold-Chain & GDP for Biologics',
+    description: 'Good Distribution Practice training for temperature-sensitive biologics — 2-8 °C handling, shipper qualification, temperature excursion management and GDP documentation for insulin and GLP-1 products.',
+    type: 'REGULATORY', status: 'ACTIVE', department: 'QA',
+    duration: '4 hours', enrolled: 34, completionRate: 88, validityPeriod: '2 years', passingScore: 80,
+    objectives: ['Apply 2-8 °C cold-chain handling rules', 'Manage and assess temperature excursions', 'Maintain GDP distribution records'],
+    prerequisites: [], createdAt: '2024-12-15T10:00:00Z', updatedAt: '2026-03-25T13:30:00Z',
+  },
+  { id: 'bio-tp10', programId: 'TRN-BIO-0010', title: 'Endotoxin & Bioburden Testing',
+    description: 'QC microbiology training — LAL endotoxin testing (kinetic chromogenic), bioburden enumeration, sample handling, and result interpretation against release limits for drug substance and product.',
+    type: 'CLASSROOM', status: 'ACTIVE', department: 'QC Lab',
+    duration: '12 hours', enrolled: 13, completionRate: 90, validityPeriod: '3 years', passingScore: 85,
+    objectives: ['Perform LAL endotoxin testing', 'Enumerate bioburden per compendial methods', 'Interpret results against release limits'],
+    prerequisites: ['Environmental Monitoring (Viable & Non-Viable)'], createdAt: '2025-02-01T10:00:00Z', updatedAt: '2026-03-25T13:30:00Z',
+  },
+  { id: 'bio-tp11', programId: 'TRN-BIO-0011', title: 'Data Integrity (21 CFR Part 11 / ALCOA+)',
+    description: 'Data-integrity training covering 21 CFR Part 11 electronic records / signatures, ALCOA+ principles, audit trail review and good documentation practice for GMP systems.',
+    type: 'REGULATORY', status: 'ACTIVE', department: 'QA',
+    duration: '4 hours', enrolled: 58, completionRate: 95, validityPeriod: '1 year', passingScore: 85,
+    objectives: ['Apply 21 CFR Part 11 record and signature controls', 'Apply ALCOA+ to records', 'Perform audit trail review'],
+    prerequisites: [], createdAt: '2024-11-04T10:00:00Z', updatedAt: '2026-04-12T11:00:00Z',
+  },
+  { id: 'bio-tp12', programId: 'TRN-BIO-0012', title: 'EU GMP Annex 1 — 2022 Update',
+    description: 'Regulatory update on the revised EU GMP Annex 1 — Contamination Control Strategy, QRM, barrier technologies, gowning expectations and impact on site SOPs.',
+    type: 'REGULATORY', status: 'ACTIVE', department: 'Validation',
+    duration: '6 hours', enrolled: 26, completionRate: 89, validityPeriod: '3 years', passingScore: 80,
+    objectives: ['Summarise key Annex 1 2022 changes', 'Map changes to affected SOPs', 'Explain CCS and QRM expectations'],
+    prerequisites: ['Sterility Assurance & Contamination Control Strategy'], createdAt: '2025-04-20T10:00:00Z', updatedAt: '2026-03-25T13:30:00Z',
+  },
+  { id: 'bio-tp13', programId: 'TRN-BIO-0013', title: 'Deviation & CAPA Management',
+    description: 'Refresher on deviation handling and CAPA — classification, root-cause analysis, impact assessment, effectiveness checks and timely closure within the QMS.',
+    type: 'REFRESHER', status: 'ACTIVE', department: 'QA',
+    duration: '3 hours', enrolled: 41, completionRate: 91, validityPeriod: '1 year', passingScore: 80,
+    objectives: ['Classify deviations correctly', 'Conduct structured root-cause analysis', 'Define CAPA with effectiveness checks'],
+    prerequisites: [], createdAt: '2025-05-05T10:00:00Z', updatedAt: '2026-03-25T13:30:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface TrainingFilters {
@@ -384,7 +481,7 @@ interface TrainingFilters {
 
 export function useTrainingPrograms(filters: TrainingFilters = {}) {
   const industry = useUserIndustry();
-  const source = pickByIndustry(industry, mockTrainingPrograms, { medical_device: mockMedicalDeviceTrainingPrograms, dairy: mockDairyTrainingPrograms });
+  const source = pickByIndustry(industry, mockTrainingPrograms, { medical_device: mockMedicalDeviceTrainingPrograms, dairy: mockDairyTrainingPrograms, biologics: mockBiologicsTrainingPrograms });
   const data = useMemo(() => {
     let filtered = [...source];
     if (filters.type) filtered = filtered.filter((p) => p.type === filters.type);
@@ -404,7 +501,7 @@ export function useTrainingPrograms(filters: TrainingFilters = {}) {
 
 export function useTrainingProgram(id: string) {
   const industry = useUserIndustry();
-  const source = pickByIndustry(industry, mockTrainingPrograms, { medical_device: mockMedicalDeviceTrainingPrograms, dairy: mockDairyTrainingPrograms });
+  const source = pickByIndustry(industry, mockTrainingPrograms, { medical_device: mockMedicalDeviceTrainingPrograms, dairy: mockDairyTrainingPrograms, biologics: mockBiologicsTrainingPrograms });
   const program = useMemo(() => source.find((p) => p.id === id) ?? null, [source, id]);
   return { data: program, isLoading: false };
 }
@@ -423,7 +520,7 @@ export function useParticipants(_programId: string) {
 
 export function useTrainingStats() {
   const industry = useUserIndustry();
-  const source = pickByIndustry(industry, mockTrainingPrograms, { medical_device: mockMedicalDeviceTrainingPrograms, dairy: mockDairyTrainingPrograms });
+  const source = pickByIndustry(industry, mockTrainingPrograms, { medical_device: mockMedicalDeviceTrainingPrograms, dairy: mockDairyTrainingPrograms, biologics: mockBiologicsTrainingPrograms });
   const stats = useMemo(() => {
     const active = source.filter((p) => p.status === 'ACTIVE').length;
     const totalEnrolled = source.reduce((sum, p) => sum + p.enrolled, 0);

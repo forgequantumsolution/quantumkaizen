@@ -19,6 +19,7 @@ import NCDetailPage from '@/features/qms/non-conformance/NCDetailPage';
 import CAPAListPage from '@/features/qms/capa/CAPAListPage';
 import CAPACreatePage from '@/features/qms/capa/CAPACreatePage';
 import CAPADetailPage from '@/features/qms/capa/CAPADetailPage';
+import ActionItemsPage from '@/features/qms/capa/ActionItemsPage';
 // QMS — Risk
 import RiskListPage from '@/features/qms/risk/RiskListPage';
 import RiskCreatePage from '@/features/qms/risk/RiskCreatePage';
@@ -103,6 +104,7 @@ export default function App() {
           {/* QMS — CAPA */}
           <Route path="/qms/capa" element={<CAPAListPage />} />
           <Route path="/qms/capa/new" element={<CAPACreatePage />} />
+          <Route path="/qms/action-items" element={<ActionItemsPage />} />
           <Route path="/qms/capa/:id" element={<CAPADetailPage />} />
 
           {/* QMS — Risk */}

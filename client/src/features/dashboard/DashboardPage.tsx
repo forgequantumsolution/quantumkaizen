@@ -97,6 +97,7 @@ export default function DashboardPage() {
   const industryKey =
     user?.industry === 'medical_device' ? 'medicaldevice' :
     user?.industry === 'dairy'          ? 'dairy' :
+    user?.industry === 'biologics'      ? 'biologics' :
     'pharma';
   const d = useDashboardData(dateRange, industryKey);
 

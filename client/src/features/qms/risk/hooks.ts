@@ -778,6 +778,180 @@ export const mockDairyRisks: RiskRecord[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE).
+// ICH Q9 quality-risk-management themed register: aseptic/sterility assurance,
+// bioreactor & viral/microbial safety, downstream clearance, cold-chain, CCI.
+export const mockBiologicsRisks: RiskRecord[] = [
+  {
+    id: 'bio-r1', riskNumber: 'RISK-BIO-2026-0012',
+    title: 'Aseptic process contamination — sterility assurance failure on cartridge fill-finish',
+    description: 'Loss of aseptic conditions on the cartridge fill-finish line (insulin / analogue / GLP-1 cartridges) can compromise sterility assurance and result in non-sterile parenteral product reaching patients. Grade A/B environmental excursions and operator interventions are the primary contamination routes under ICH Q9 / Annex 1.',
+    category: 'SAFETY', department: 'Aseptic Fill-Finish',
+    likelihood: 3, consequence: 5, riskScore: 15, riskLevel: 'CRITICAL',
+    controls: [
+      { id: 'bio-rc1', hierarchy: 'ENGINEERING',    description: 'Restricted Access Barrier System (RABS) with first-air protection over Grade A fill zone', owner: 'Dr. Layla Al-Mansoori', status: 'IMPLEMENTED' },
+      { id: 'bio-rc2', hierarchy: 'ADMINISTRATIVE', description: 'Continuous viable/non-viable environmental monitoring with shift-level trend review',         owner: 'Fatima Al-Hashimi',    status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Dr. Layla Al-Mansoori', ownerId: 'u-bio1', reviewDate: '2026-07-01', history: [],
+    createdAt: '2026-04-01T09:00:00Z', updatedAt: '2026-04-01T09:00:00Z',
+  },
+  {
+    id: 'bio-r2', riskNumber: 'RISK-BIO-2026-0011',
+    title: 'Media fill (aseptic process simulation) failure — line qualification loss',
+    description: 'A failed media fill on the cartridge filling line invalidates the aseptic process simulation, halting commercial release until requalification. Root causes include operator technique drift, gowning breaches and inadequate intervention design under Annex 1 / USP <1116>.',
+    category: 'QUALITY', department: 'Aseptic Fill-Finish',
+    likelihood: 2, consequence: 5, riskScore: 10, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc3', hierarchy: 'ADMINISTRATIVE', description: 'Semi-annual media fill per operator with worst-case intervention matrix and full incubation read', owner: 'Fatima Al-Hashimi',    status: 'IMPLEMENTED' },
+      { id: 'bio-rc4', hierarchy: 'ADMINISTRATIVE', description: 'Annual aseptic gowning re-qualification and aseptic technique re-training programme',              owner: 'Dr. Layla Al-Mansoori', status: 'PLANNED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3', reviewDate: '2026-06-15', history: [],
+    createdAt: '2026-04-02T10:00:00Z', updatedAt: '2026-04-02T10:00:00Z',
+  },
+  {
+    id: 'bio-r3', riskNumber: 'RISK-BIO-2026-0010',
+    title: 'Bioreactor contamination on 10,000 L production fermentation',
+    description: 'Microbial or phage contamination of the 10,000 L drug-substance fermentation results in loss of an entire production batch and potential facility-wide cross-contamination. Failure modes include compromised sterile filtration on inlet gas, seal failures and feed-line breaches.',
+    category: 'OPERATIONAL', department: 'Drug Substance',
+    likelihood: 2, consequence: 5, riskScore: 10, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc5', hierarchy: 'ENGINEERING',    description: 'Redundant sterilising-grade gas inlet filters with integrity test pre/post each batch', owner: 'Omar Al-Farsi',  status: 'IMPLEMENTED' },
+      { id: 'bio-rc6', hierarchy: 'ENGINEERING',    description: 'Automated SIP cycle verification with thermocouple mapping and F0 logging on SCADA',     owner: 'Khalid Nasser',  status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Omar Al-Farsi', ownerId: 'u-bio2', reviewDate: '2026-07-01', history: [],
+    createdAt: '2026-04-03T11:00:00Z', updatedAt: '2026-04-03T11:00:00Z',
+  },
+  {
+    id: 'bio-r4', riskNumber: 'RISK-BIO-2026-0009',
+    title: 'Inadequate host cell protein / residual DNA clearance in downstream purification',
+    description: 'Insufficient clearance of host cell proteins (HCP) and residual host-cell DNA through the chromatography train can lead to immunogenicity and patient harm. Process-validated clearance margins must hold across resin lifetime and load variability.',
+    category: 'SAFETY', department: 'Downstream Purification',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc7', hierarchy: 'ENGINEERING',    description: 'Validated 3-column polishing train with orthogonal HCP/DNA clearance and in-process limits', owner: 'Khalid Nasser', status: 'IMPLEMENTED' },
+      { id: 'bio-rc8', hierarchy: 'ADMINISTRATIVE', description: 'Per-batch HCP ELISA and qPCR residual-DNA release testing against validated acceptance limits', owner: 'Fatima Al-Hashimi', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Khalid Nasser', ownerId: 'u-bio4', reviewDate: '2026-08-01', history: [],
+    createdAt: '2026-04-04T09:00:00Z', updatedAt: '2026-04-04T09:00:00Z',
+  },
+  {
+    id: 'bio-r5', riskNumber: 'RISK-BIO-2026-0008',
+    title: 'Viral / adventitious agent safety breach in cell-culture process',
+    description: 'Introduction of an adventitious viral agent via raw materials or cell bank, combined with insufficient viral clearance capacity, presents a serious patient-safety hazard for the biologic drug substance per ICH Q5A.',
+    category: 'SAFETY', department: 'Drug Substance',
+    likelihood: 2, consequence: 5, riskScore: 10, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc9',  hierarchy: 'ENGINEERING',    description: 'Dedicated low-pH viral inactivation step plus 20 nm nanofiltration with validated LRV',     owner: 'Khalid Nasser',     status: 'IMPLEMENTED' },
+      { id: 'bio-rc10', hierarchy: 'ADMINISTRATIVE', description: 'Adventitious-agent testing of master/working cell banks and bulk harvest per ICH Q5A',       owner: 'Dr. Sami Haddad',   status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Dr. Sami Haddad', ownerId: 'u-bio5', reviewDate: '2026-07-15', history: [],
+    createdAt: '2026-04-05T08:30:00Z', updatedAt: '2026-04-05T08:30:00Z',
+  },
+  {
+    id: 'bio-r6', riskNumber: 'RISK-BIO-2026-0007',
+    title: 'Protein aggregation and loss of stability in insulin / GLP-1 drug product',
+    description: 'Thermal, mechanical or interfacial stress during fill-finish and storage can drive protein aggregation in insulin analogues and GLP-1 products, reducing potency and increasing immunogenicity risk. Stability must be maintained across declared shelf life.',
+    category: 'QUALITY', department: 'Aseptic Fill-Finish',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc11', hierarchy: 'ENGINEERING',    description: 'Low-shear filling pumps and validated formulation surfactant to suppress interfacial aggregation', owner: 'Dr. Layla Al-Mansoori', status: 'IMPLEMENTED' },
+      { id: 'bio-rc12', hierarchy: 'ADMINISTRATIVE', description: 'ICH Q1A stability programme with SEC-HPLC aggregate monitoring at each station',                   owner: 'Dr. Sami Haddad',      status: 'PLANNED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Dr. Sami Haddad', ownerId: 'u-bio5', reviewDate: '2026-08-15', history: [],
+    createdAt: '2026-04-06T09:00:00Z', updatedAt: '2026-04-06T09:00:00Z',
+  },
+  {
+    id: 'bio-r7', riskNumber: 'RISK-BIO-2026-0006',
+    title: 'Cold-chain 2–8 °C excursion during distribution of finished cartridges',
+    description: 'Temperature excursions outside the validated 2–8 °C range during storage and distribution can degrade insulin and GLP-1 cartridges, causing loss of potency. Excursions risk product recall and patient under-dosing.',
+    category: 'QUALITY', department: 'QA',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc13', hierarchy: 'ENGINEERING',    description: 'Validated qualified shippers with continuous GPS temperature dataloggers per shipment',  owner: 'Khalid Nasser',     status: 'IMPLEMENTED' },
+      { id: 'bio-rc14', hierarchy: 'ADMINISTRATIVE', description: 'Excursion-management SOP with stability-budget assessment and quarantine on breach',     owner: 'Fatima Al-Hashimi', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3', reviewDate: '2026-09-01', history: [],
+    createdAt: '2026-04-07T10:00:00Z', updatedAt: '2026-04-07T10:00:00Z',
+  },
+  {
+    id: 'bio-r8', riskNumber: 'RISK-BIO-2026-0005',
+    title: 'Container-closure integrity failure on insulin cartridges',
+    description: 'Loss of container-closure integrity (CCI) on glass cartridges — via crimp-seal defects or plunger seating drift — compromises sterility over shelf life and risks microbial ingress into the parenteral product.',
+    category: 'SAFETY', department: 'Aseptic Fill-Finish',
+    likelihood: 2, consequence: 5, riskScore: 10, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc15', hierarchy: 'ENGINEERING',    description: '100% in-line headspace-gas CCI inspection (laser-based) with auto-reject on every cartridge', owner: 'Dr. Layla Al-Mansoori', status: 'IMPLEMENTED' },
+      { id: 'bio-rc16', hierarchy: 'ADMINISTRATIVE', description: 'Periodic dye-ingress / helium-leak CCI study per USP <1207> on each cartridge format',          owner: 'Fatima Al-Hashimi',    status: 'PLANNED' },
+    ],
+    residualLikelihood: 1, residualConsequence: 5, residualScore: 5, residualLevel: 'MEDIUM',
+    owner: 'Dr. Layla Al-Mansoori', ownerId: 'u-bio1', reviewDate: '2026-07-30', history: [],
+    createdAt: '2026-04-08T11:00:00Z', updatedAt: '2026-04-08T11:00:00Z',
+  },
+  {
+    id: 'bio-r9', riskNumber: 'RISK-BIO-2026-0004',
+    title: 'Cross-contamination between analogue campaigns on shared fill line',
+    description: 'Carry-over between insulin analogue and GLP-1 campaigns on shared filling equipment can introduce cross-product contamination, a patient-safety and identity hazard. Cleaning validation and changeover controls are critical under ICH Q9.',
+    category: 'QUALITY', department: 'Aseptic Fill-Finish',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc17', hierarchy: 'ENGINEERING',    description: 'Single-use product-contact flow path replaced at each campaign changeover',           owner: 'Omar Al-Farsi',     status: 'IMPLEMENTED' },
+      { id: 'bio-rc18', hierarchy: 'ADMINISTRATIVE', description: 'Validated cleaning with swab/rinse TOC and product-specific residue limits on changeover', owner: 'Fatima Al-Hashimi', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Omar Al-Farsi', ownerId: 'u-bio2', reviewDate: '2026-08-01', history: [],
+    createdAt: '2026-04-09T09:30:00Z', updatedAt: '2026-04-09T09:30:00Z',
+  },
+  {
+    id: 'bio-r10', riskNumber: 'RISK-BIO-2026-0003',
+    title: 'Single-use system integrity failure in upstream / downstream operations',
+    description: 'Pinhole leaks or weld failures in single-use bioprocess bags and assemblies can breach sterile boundaries, causing batch loss and contamination. Risk is elevated by handling damage and supplier weld-quality variability.',
+    category: 'OPERATIONAL', department: 'Validation',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc19', hierarchy: 'ENGINEERING',    description: 'Pre-use post-sterilisation integrity testing (PUPSIT) on single-use sterilising filters', owner: 'Khalid Nasser', status: 'IMPLEMENTED' },
+      { id: 'bio-rc20', hierarchy: 'ADMINISTRATIVE', description: 'Incoming AQL inspection and supplier weld-integrity qualification for single-use assemblies', owner: 'Omar Al-Farsi',  status: 'PLANNED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Khalid Nasser', ownerId: 'u-bio4', reviewDate: '2026-09-15', history: [],
+    createdAt: '2026-04-10T10:00:00Z', updatedAt: '2026-04-10T10:00:00Z',
+  },
+  {
+    id: 'bio-r11', riskNumber: 'RISK-BIO-2026-0002',
+    title: 'Chromatography resin lifetime exceedance — carryover and capacity loss',
+    description: 'Use of chromatography resin beyond validated lifetime risks reduced binding capacity, impurity breakthrough and product carryover between cycles. Resin-reuse must be controlled against the validated cycle limit in downstream purification.',
+    category: 'QUALITY', department: 'Downstream Purification',
+    likelihood: 3, consequence: 3, riskScore: 9, riskLevel: 'MEDIUM',
+    controls: [
+      { id: 'bio-rc21', hierarchy: 'ENGINEERING',    description: 'Automated cycle-count interlock on chromatography skid blocking loads beyond validated lifetime', owner: 'Khalid Nasser',   status: 'IMPLEMENTED' },
+      { id: 'bio-rc22', hierarchy: 'ADMINISTRATIVE', description: 'Periodic small-scale resin-lifetime study with HCP/impurity breakthrough monitoring',             owner: 'Dr. Sami Haddad', status: 'PLANNED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 2, residualScore: 4, residualLevel: 'LOW',
+    owner: 'Khalid Nasser', ownerId: 'u-bio4', reviewDate: '2026-10-01', history: [],
+    createdAt: '2026-04-11T11:00:00Z', updatedAt: '2026-04-11T11:00:00Z',
+  },
+  {
+    id: 'bio-r12', riskNumber: 'RISK-BIO-2026-0001',
+    title: 'Single-source dependency for culture media and chromatography resin',
+    description: 'Critical cell-culture media and Protein-A chromatography resin are sourced from single suppliers with no qualified alternate. A supply disruption could halt 10,000 L drug-substance production for multiple campaigns, impacting insulin supply continuity.',
+    category: 'OPERATIONAL', department: 'Drug Substance',
+    likelihood: 3, consequence: 4, riskScore: 12, riskLevel: 'HIGH',
+    controls: [
+      { id: 'bio-rc23', hierarchy: 'ADMINISTRATIVE', description: 'Qualify secondary media and Protein-A resin supplier with comparability protocol', owner: 'Omar Al-Farsi',  status: 'PLANNED' },
+      { id: 'bio-rc24', hierarchy: 'ADMINISTRATIVE', description: 'Maintain 6-month strategic safety stock of media and resin at controlled storage', owner: 'Khalid Nasser', status: 'IMPLEMENTED' },
+    ],
+    residualLikelihood: 2, residualConsequence: 3, residualScore: 6, residualLevel: 'MEDIUM',
+    owner: 'Omar Al-Farsi', ownerId: 'u-bio2', reviewDate: '2026-11-01', history: [],
+    createdAt: '2026-04-12T09:00:00Z', updatedAt: '2026-04-12T09:00:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface RiskFilters {
@@ -797,7 +971,7 @@ export function useRisks(filters: RiskFilters = {}) {
         const { data } = await api.get('/qms/risks', { params: filters });
         return unwrapList<RiskRecord>(data, flattenRisk as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockRisks, { medical_device: mockMedicalDeviceRisks, dairy: mockDairyRisks });
+        const baseList = pickByIndustry(industry, mockRisks, { medical_device: mockMedicalDeviceRisks, dairy: mockDairyRisks, biologics: mockBiologicsRisks });
         let filtered = [...baseList];
         if (filters.riskLevel) filtered = filtered.filter((r) => r.riskLevel === filters.riskLevel);
         if (filters.department) filtered = filtered.filter((r) => r.department === filters.department);
@@ -825,7 +999,7 @@ export function useRisk(id: string) {
         const { data } = await api.get(`/qms/risks/${id}`);
         return unwrapItem<RiskRecord>(data, flattenRisk as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockRisks, { medical_device: mockMedicalDeviceRisks, dairy: mockDairyRisks });
+        const baseList = pickByIndustry(industry, mockRisks, { medical_device: mockMedicalDeviceRisks, dairy: mockDairyRisks, biologics: mockBiologicsRisks });
         const risk = baseList.find((r) => r.id === id);
         if (!risk) throw new Error('Risk not found');
         return risk;

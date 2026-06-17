@@ -801,6 +801,160 @@ export const mockDairyChangeRequests: ChangeRequest[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE): drug-substance + aseptic cartridge fill-finish.
+// ICH Q5E / Q12 / EU GMP Annex 1 / 21 CFR 600 themed change requests.
+export const mockBiologicsChangeRequests: ChangeRequest[] = [
+  {
+    id: 'bio-cr1', crNumber: 'CR-BIO-2026-0014',
+    title: 'Add insulin degludec analogue campaign to aseptic cartridge fill line FFL-02',
+    description: 'Introduce insulin degludec drug product as a new campaign on aseptic cartridge fill-finish line FFL-02 (DiabTec long-acting analogue portfolio), including dedicated formulation buffer set and changeover protocol.',
+    reasonForChange: 'Portfolio expansion to long-acting basal analogue (degludec) for the GCC market. Capacity available on FFL-02; aseptic process simulation (APS) and BLA-equivalent variation filing required.',
+    changeType: 'Product', impactLevel: 'High', status: 'In Implementation',
+    requestor: 'Dr. Layla Al-Mansoori', requestorId: 'u-bio1', department: 'Aseptic Fill-Finish',
+    targetDate: '2026-07-31',
+    impactAssessment: 'New analogue requires 3 media-fill APS runs on FFL-02, formulation buffer qualification, and container-closure integrity testing on the 3 ml cartridge. EU GMP Annex 1 contamination-control strategy updated. Regulatory variation to MoHAP and EMA.',
+    affectedDocuments: ['SOP-BIO-FFL-02', 'CCS-ANNEX1-v4', 'APS-PROT-BIO-2026-03', 'BMR-DEGLUDEC-3ML'],
+    affectedProcesses: ['Aseptic Cartridge Fill', 'Formulation', 'Media-Fill Simulation', 'CCIT'],
+    riskAssessment: 'Cross-contamination risk between analogue campaigns mitigated by validated CIP/SIP changeover and dedicated buffer lines. No new sterility-assurance hazards beyond existing APS coverage.',
+    regulatoryNotification: true, notifyDepartments: ['Regulatory Affairs', 'QA', 'Validation'],
+    implementationTasks: [
+      { id: 'bio-it1', description: 'Qualify degludec formulation buffer set on FFL-02', owner: 'Dr. Layla Al-Mansoori', dueDate: '2026-05-30', status: 'Completed' },
+      { id: 'bio-it2', description: 'Perform 3 media-fill APS runs on FFL-02', owner: 'Yusuf Rahman', dueDate: '2026-06-25', status: 'In Progress' },
+      { id: 'bio-it3', description: 'File variation dossier to MoHAP / EMA', owner: 'Khalid Nasser', dueDate: '2026-07-20', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Dr. Layla Al-Mansoori', timestamp: '2026-03-28T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Fatima Al-Hashimi',     timestamp: '2026-04-02T14:00:00Z' },
+      { name: 'Regulatory Review',   status: 'active',    approver: 'Khalid Nasser' },
+      { name: 'Management Approval', status: 'pending' },
+    ],
+    validationResults: null,
+    history: [{ id: 'bio-ch1', timestamp: '2026-03-28T09:00:00Z', user: 'Dr. Layla Al-Mansoori', action: 'CR opened', details: 'Triggered by degludec portfolio expansion plan' }],
+    createdAt: '2026-03-28T09:00:00Z', updatedAt: '2026-04-04T15:30:00Z',
+  },
+  {
+    id: 'bio-cr2', crNumber: 'CR-BIO-2026-0013',
+    title: 'Qualify second chromatography resin supplier for downstream Protein A capture',
+    description: 'Qualify a secondary supplier of Protein A affinity chromatography resin for the insulin analogue drug-substance capture step to mitigate single-source supply risk RSK-BIO-2026-0011.',
+    reasonForChange: 'Single-source dependency on the primary Protein A resin vendor. Secondary resin shown to be equivalent in binding capacity and ligand-leaching profile during small-scale qualification.',
+    changeType: 'Process', impactLevel: 'High', status: 'Under Review',
+    requestor: 'Omar Al-Farsi', requestorId: 'u-bio2', department: 'Downstream Purification',
+    targetDate: '2026-08-31',
+    impactAssessment: 'Resin change requires 3-cycle dynamic-binding-capacity study, leached-ligand ELISA, and 3 confirmatory drug-substance batches. Comparability per ICH Q5E. Process performance qualification (PPQ) on affected column.',
+    affectedDocuments: ['SOP-BIO-DSP-PROTA-02', 'CMP-ICHQ5E-BIO-007', 'QAA-RESIN-V2'],
+    affectedProcesses: ['Protein A Capture', 'Drug-Substance Manufacture', 'Comparability'],
+    riskAssessment: 'Reduces supply-continuity risk; transient quality risk during qualification mitigated by 3-batch comparability and leached-ligand control.',
+    regulatoryNotification: true, notifyDepartments: ['Regulatory Affairs', 'QA'],
+    implementationTasks: [
+      { id: 'bio-it4', description: '3-cycle dynamic-binding-capacity study on secondary resin', owner: 'Omar Al-Farsi', dueDate: '2026-06-30', status: 'In Progress' },
+      { id: 'bio-it5', description: '3 confirmatory DS batches + ICH Q5E comparability report', owner: 'Omar Al-Farsi', dueDate: '2026-08-15', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator', status: 'completed', approver: 'Omar Al-Farsi',     timestamp: '2026-04-01T09:00:00Z' },
+      { name: 'QA Review', status: 'active',    approver: 'Fatima Al-Hashimi' },
+      { name: 'Management Approval', status: 'pending' },
+    ],
+    validationResults: null, history: [],
+    createdAt: '2026-04-01T09:00:00Z', updatedAt: '2026-04-05T15:00:00Z',
+  },
+  {
+    id: 'bio-cr3', crNumber: 'CR-BIO-2026-0012',
+    title: 'HMI recipe change on fill-finish line FFL-01 — QA-password-locked fill-volume parameter',
+    description: 'Update the HMI recipe on fill-finish line FFL-01 to revise the target fill-volume set-point for the 3 ml insulin cartridge, with the parameter QA-password-locked under Annex 11 / 21 CFR Part 11 access controls.',
+    reasonForChange: 'Process optimisation to reduce overfill while maintaining label-claim deliverable volume. Parameter must be locked to prevent unauthorised operator change (data-integrity control).',
+    changeType: 'System', impactLevel: 'Medium', status: 'Approved',
+    requestor: 'Yusuf Rahman', requestorId: 'u-bio4', department: 'Aseptic Fill-Finish',
+    targetDate: '2026-06-15',
+    impactAssessment: 'HMI recipe / access-control change. Requires CSV re-test of recipe lock, fill-weight check-weigher re-qualification, and in-process fill-volume verification across 3 runs. No formulation change.',
+    affectedDocuments: ['SOP-BIO-FFL-01', 'CSV-PROT-BIO-2026-05', 'ACCESS-MATRIX-PART11'],
+    affectedProcesses: ['Aseptic Cartridge Fill', 'In-Process Control', 'Computer System Validation'],
+    riskAssessment: 'Reduces overfill cost; QA-password lock reduces data-integrity / unauthorised-change risk from 6 to 2.',
+    regulatoryNotification: false, notifyDepartments: ['QA', 'Validation', 'Automation'],
+    implementationTasks: [
+      { id: 'bio-it6', description: 'Update HMI recipe + apply QA-password lock on fill-volume',  owner: 'Yusuf Rahman',  dueDate: '2026-05-20', status: 'Completed' },
+      { id: 'bio-it7', description: 'CSV re-test of recipe lock + 3-run fill-volume verification', owner: 'Fatima Al-Hashimi', dueDate: '2026-06-10', status: 'In Progress' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Yusuf Rahman',       timestamp: '2026-04-02T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Fatima Al-Hashimi',  timestamp: '2026-04-05T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Dr. Layla Al-Mansoori', timestamp: '2026-04-08T11:00:00Z' },
+    ],
+    validationResults: null, history: [],
+    createdAt: '2026-04-02T09:00:00Z', updatedAt: '2026-04-08T11:00:00Z',
+  },
+  {
+    id: 'bio-cr4', crNumber: 'CR-BIO-2026-0011',
+    title: 'Upgrade lyophilizer PLC + extend resin reuse cycles after validation',
+    description: 'Upgrade the lyophilizer LYO-01 PLC to the supported control platform and, in parallel, extend the validated Protein A resin reuse from 80 to 120 cycles based on a lifetime-study small-scale model.',
+    reasonForChange: 'Obsolete LYO-01 PLC no longer vendor-supported (RSK-BIO-2026-0015). Resin lifetime study demonstrates maintained binding capacity and impurity clearance to 120 cycles — reduces consumable cost.',
+    changeType: 'System', impactLevel: 'High', status: 'In Implementation',
+    requestor: 'Omar Al-Farsi', requestorId: 'u-bio2', department: 'Validation',
+    targetDate: '2026-09-30',
+    impactAssessment: 'PLC upgrade requires IQ/OQ/PQ on LYO-01 and 3 confirmatory lyo cycles. Resin reuse extension requires lifetime-study report + concurrent monitoring of HCP/DNA clearance to cycle 120. No product spec change.',
+    affectedDocuments: ['SOP-BIO-LYO-01', 'VMP-BIO-2026-02', 'RESIN-LIFETIME-STUDY-007'],
+    affectedProcesses: ['Lyophilisation', 'Protein A Capture', 'Process Validation'],
+    riskAssessment: 'Reduces obsolescence and consumable-cost risk; resin reuse extension monitored by concurrent impurity-clearance checks (mitigated).',
+    regulatoryNotification: false, notifyDepartments: ['QA', 'Automation', 'Downstream Purification'],
+    implementationTasks: [
+      { id: 'bio-it8', description: 'Install + IQ/OQ/PQ new LYO-01 PLC (3 confirmatory cycles)', owner: 'Yusuf Rahman', dueDate: '2026-07-15', status: 'In Progress' },
+      { id: 'bio-it9', description: 'Issue resin-lifetime study report extending reuse to 120 cycles', owner: 'Omar Al-Farsi', dueDate: '2026-08-30', status: 'Pending' },
+    ],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Omar Al-Farsi',       timestamp: '2026-03-25T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Fatima Al-Hashimi',   timestamp: '2026-03-28T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Dr. Layla Al-Mansoori', timestamp: '2026-04-01T11:00:00Z' },
+    ],
+    validationResults: null, history: [],
+    createdAt: '2026-03-25T09:00:00Z', updatedAt: '2026-04-15T16:00:00Z',
+  },
+  {
+    id: 'bio-cr5', crNumber: 'CR-BIO-2025-0048',
+    title: 'Change single-use bag supplier + update sterilizing-filter spec for formulation',
+    description: 'Qualify a secondary single-use bioprocess bag supplier and update the sterilizing-grade filter specification (0.22 µm PES) for the drug-product formulation step.',
+    reasonForChange: 'Single-source single-use bag supply risk and harmonisation of sterilizing-filter spec across formulation suites. Extractables/leachables data within acceptance.',
+    changeType: 'Product', impactLevel: 'Medium', status: 'Closed',
+    requestor: 'Fatima Al-Hashimi', requestorId: 'u-bio3', department: 'Drug Substance',
+    targetDate: '2025-12-15',
+    impactAssessment: 'Component change. Requires extractables/leachables assessment on new bags, filter bacterial-retention validation (ASTM F838), and 1 confirmatory formulation batch. Updated material specs.',
+    affectedDocuments: ['SOP-BIO-FORM-03', 'SPEC-FILTER-022-PES', 'EL-STUDY-BAG-V2'],
+    affectedProcesses: ['Drug-Product Formulation', 'Sterile Filtration', 'Incoming Inspection'],
+    riskAssessment: 'No new product hazards; bacterial-retention validated per ASTM F838. Reduces single-source supply risk.',
+    regulatoryNotification: false, notifyDepartments: ['QA', 'Regulatory Affairs'],
+    implementationTasks: [],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Fatima Al-Hashimi',   timestamp: '2025-10-15T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Dr. Layla Al-Mansoori', timestamp: '2025-11-08T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Dr. Layla Al-Mansoori', timestamp: '2025-12-01T11:00:00Z' },
+    ],
+    validationResults: { validated: true, validatedBy: 'Fatima Al-Hashimi', validationDate: '2025-12-10', effectivenessConfirmed: true, notes: 'E&L within limits; filter retention validated. No formulation deviations in 3 months post-change.' },
+    history: [],
+    createdAt: '2025-10-15T09:00:00Z', updatedAt: '2025-12-15T14:00:00Z',
+  },
+  {
+    id: 'bio-cr6', crNumber: 'CR-BIO-2025-0033',
+    title: 'Add GLP-1 (semaglutide) drug product + revise environmental monitoring program',
+    description: 'Introduce GLP-1 receptor agonist (semaglutide) drug product to the DiabTec portfolio on a dedicated fill suite, and revise the environmental monitoring (EM) program to align with EU GMP Annex 1 (2022) for the expanded Grade A/B footprint.',
+    reasonForChange: 'Strategic GLP-1 portfolio entry for the GCC diabetes/obesity market. Annex 1 (2022) requires updated EM grid, action/alert limits, and continuous viable/non-viable monitoring of the new suite.',
+    changeType: 'Product', impactLevel: 'High', status: 'Validated',
+    requestor: 'Dr. Layla Al-Mansoori', requestorId: 'u-bio1', department: 'Regulatory Affairs',
+    targetDate: '2025-10-30',
+    impactAssessment: 'New drug product + EM program revision. Requires 3 APS runs on the GLP-1 suite, revised EM sampling plan with new alert/action limits, and BLA/variation filing. Operator gowning re-qualification.',
+    affectedDocuments: ['SOP-BIO-EM-05', 'CCS-ANNEX1-v4', 'BMR-SEMAGLUTIDE-DP', 'APS-PROT-BIO-2025-09'],
+    affectedProcesses: ['Aseptic Fill', 'Environmental Monitoring', 'Comparability', 'Gowning Qualification'],
+    riskAssessment: 'Expanded aseptic footprint controlled by revised Annex 1 EM grid and 3-run APS; net sterility-assurance risk reduced after validation.',
+    regulatoryNotification: true, notifyDepartments: ['Regulatory Affairs', 'QA', 'Validation', 'Aseptic Fill-Finish'],
+    implementationTasks: [],
+    approvalStages: [
+      { name: 'Initiator',           status: 'completed', approver: 'Dr. Layla Al-Mansoori', timestamp: '2025-07-08T09:00:00Z' },
+      { name: 'QA Review',           status: 'completed', approver: 'Fatima Al-Hashimi',     timestamp: '2025-08-12T14:00:00Z' },
+      { name: 'Management Approval', status: 'completed', approver: 'Khalid Nasser',         timestamp: '2025-09-01T11:00:00Z' },
+    ],
+    validationResults: { validated: true, validatedBy: 'Khalid Nasser', validationDate: '2025-10-25', effectivenessConfirmed: true, notes: 'All 3 GLP-1 APS runs passed; revised Annex 1 EM program in routine use with no excursions in first quarter.' },
+    history: [],
+    createdAt: '2025-07-08T09:00:00Z', updatedAt: '2025-10-30T14:00:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface CRFilters {
@@ -820,7 +974,7 @@ export function useChangeRequests(filters: CRFilters = {}) {
         const { data } = await api.get('/qms/change-control', { params: filters });
         return unwrapList<ChangeRequest>(data);
       } catch {
-        const baseList = pickByIndustry(industry, mockChangeRequests, { medical_device: mockMedicalDeviceChangeRequests, dairy: mockDairyChangeRequests });
+        const baseList = pickByIndustry(industry, mockChangeRequests, { medical_device: mockMedicalDeviceChangeRequests, dairy: mockDairyChangeRequests, biologics: mockBiologicsChangeRequests });
         let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((cr) => cr.status === filters.status);
         if (filters.changeType) filtered = filtered.filter((cr) => cr.changeType === filters.changeType);
@@ -849,7 +1003,7 @@ export function useChangeRequest(id: string) {
         const { data } = await api.get(`/qms/change-control/${id}`);
         return unwrapItem<ChangeRequest>(data);
       } catch {
-        const baseList = pickByIndustry(industry, mockChangeRequests, { medical_device: mockMedicalDeviceChangeRequests, dairy: mockDairyChangeRequests });
+        const baseList = pickByIndustry(industry, mockChangeRequests, { medical_device: mockMedicalDeviceChangeRequests, dairy: mockDairyChangeRequests, biologics: mockBiologicsChangeRequests });
         const cr = baseList.find((c) => c.id === id);
         if (!cr) throw new Error('Change request not found');
         return cr;

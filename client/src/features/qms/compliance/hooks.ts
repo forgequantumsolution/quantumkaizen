@@ -675,6 +675,157 @@ export const mockDairyRequirements: ComplianceRequirement[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE): biologics
+// drug-substance (10,000 L fermentation) + aseptic cartridge fill-finish
+// (insulin, analogues, GLP-1). EU GMP Annex 1 / ICH Q5A / ICH Q6B /
+// 21 CFR Part 600 / 21 CFR Part 11 / ICH Q7.
+export const mockBiologicsRequirements: ComplianceRequirement[] = [
+  {
+    id: 'bio-cr1', standard: 'EU GMP Annex 1', clauseNumber: '2.3', clauseTitle: 'Contamination Control Strategy',
+    clauseText: 'A Contamination Control Strategy (CCS) shall be implemented across the facility to define all critical control points and assess the effectiveness of the controls and monitoring measures employed to manage risks to medicinal product quality and safety.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-BIO-CCS-01 Contamination Control Strategy'],
+    linkedDocuments: ['CCS-DIABTEC-2026 Site Contamination Control Strategy'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-03-12', nextReview: '2026-09-12', assessor: 'Dr. Layla Al-Mansoori',
+    findings: 'Site-wide CCS authored and approved; holistic review of fill-finish controls completed. Linked to EM and QRM programs.',
+    gapActions: [], assessmentHistory: [{ date: '2026-03-12', assessor: 'Dr. Layla Al-Mansoori', status: 'COMPLIANT', notes: 'No gaps.' }],
+  },
+  {
+    id: 'bio-cr2', standard: 'EU GMP Annex 1', clauseNumber: '4.29', clauseTitle: 'Environmental and process monitoring — Grade A',
+    clauseText: 'For Grade A zones, continuous viable and total particle monitoring shall be performed for the full duration of critical processing, including equipment assembly, except where justified by contaminants in the process that would damage the particle counter.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-BIO-EM-02 Aseptic Zone Monitoring'],
+    linkedDocuments: ['EM Trend Report Q1-2026', 'Isolator Qualification IQ/OQ-FF-02'],
+    linkedCAPAs: ['CAPA-BIO-2026-0011'],
+    lastAssessed: '2026-04-18', nextReview: '2026-07-18', assessor: 'Omar Al-Farsi',
+    findings: 'Internal audit BIO-F1 noted a gap in continuous total-particle coverage during cartridge-line setup on FF-02. CAPA open.',
+    gapActions: [
+      { id: 'bio-ga1', action: 'Extend continuous particle monitoring to full equipment-assembly window on Line FF-02', owner: 'Omar Al-Farsi', dueDate: '2026-06-30', status: 'In Progress' },
+    ],
+    assessmentHistory: [{ date: '2026-04-18', assessor: 'Omar Al-Farsi', status: 'PARTIAL', notes: 'Open from BIO-F1' }],
+  },
+  {
+    id: 'bio-cr3', standard: 'EU GMP Annex 1', clauseNumber: '9.16', clauseTitle: 'Aseptic Process Simulation (media fill)',
+    clauseText: 'Aseptic process simulations shall be conducted to validate the aseptic process and shall closely simulate the routine aseptic manufacturing process and include all critical subsequent manufacturing steps.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-BIO-APS-01 Media Fill Program'],
+    linkedDocuments: ['APS-FF-02-2026 Media Fill Report'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-02-28', nextReview: '2026-08-28', assessor: 'Dr. Sami Haddad',
+    findings: 'Three consecutive media fills on FF-02 passed with zero contaminated units; worst-case interventions included. Line qualified.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr4', standard: 'EU GMP Annex 1', clauseNumber: '8.123', clauseTitle: 'Sterilising filtration and integrity testing',
+    clauseText: 'The integrity of the sterilised filter assembly shall be verified by testing before use, where this would not affect the validated process, and verified by on-line testing immediately after use by an appropriate method such as a bubble point, diffusive flow, water intrusion or pressure hold test.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-BIO-FIL-03 Sterile Filtration & PUPSIT'],
+    linkedDocuments: ['Filter Validation FV-DS-2025-07'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-03-30', nextReview: '2026-09-30', assessor: 'Dr. Sami Haddad',
+    findings: 'Pre- and post-use integrity testing (PUPSIT) implemented on drug-substance and fill-finish sterilising filters; all releases compliant.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr5', standard: 'ICH Q5A', clauseNumber: '4', clauseTitle: 'Viral clearance evaluation',
+    clauseText: 'The capacity of the manufacturing process to remove and/or inactivate viruses shall be evaluated through validation studies using relevant or specific model viruses spiked at appropriate process steps.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-BIO-VS-01 Viral Safety & Clearance'],
+    linkedDocuments: ['Viral Clearance Study VCS-2025-03'],
+    linkedCAPAs: ['CAPA-BIO-2026-0014'],
+    lastAssessed: '2026-04-05', nextReview: '2026-07-05', assessor: 'Dr. Layla Al-Mansoori',
+    findings: 'Audit BIO-F2 found one downstream chromatography step lacked a documented viral-clearance log-reduction claim for the GLP-1 process. CAPA open.',
+    gapActions: [
+      { id: 'bio-ga2', action: 'Commission spiking study for AEX polishing step (GLP-1) and update viral safety dossier', owner: 'Dr. Sami Haddad', dueDate: '2026-06-20', status: 'In Progress' },
+    ],
+    assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr6', standard: 'ICH Q5A', clauseNumber: '2.3', clauseTitle: 'Microbial / cell-bank characterisation',
+    clauseText: 'Cell substrates used for the production of biotechnological products shall be characterised and tested for the absence of adventitious agents and endogenous viruses at the level of the master and working cell banks.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-BIO-CB-02 Cell Bank Characterisation'],
+    linkedDocuments: ['MCB/WCB Characterisation Report CB-2025-01'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-02-14', nextReview: '2026-08-14', assessor: 'Khalid Nasser',
+    findings: 'MCB and WCB for the insulin host strain fully characterised; adventitious-agent testing complete and within acceptance.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr7', standard: 'ICH Q6B', clauseNumber: '2.1', clauseTitle: 'Specifications — analytical procedures for biotech products',
+    clauseText: 'Specifications shall be established and justified based on data obtained from lots used in preclinical and clinical studies and from lots used for stability studies, and shall consist of a list of tests, references to analytical procedures and appropriate acceptance criteria.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-BIO-SPEC-01 Specification Setting'],
+    linkedDocuments: ['DS/DP Specification SPEC-INS-2025-v4'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-03-22', nextReview: '2026-09-22', assessor: 'Dr. Sami Haddad',
+    findings: 'Drug-substance and drug-product specifications justified per ICH Q6B; identity, purity, potency and impurity tests defined for insulin and analogues.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr8', standard: 'ICH Q6B', clauseNumber: '6.2', clauseTitle: 'Potency assay validation',
+    clauseText: 'A relevant, validated potency assay shall be part of the specifications for a biotechnological or biological product, expressing the specific ability or capacity of the product to achieve its intended biological effect.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-BIO-QC-07 Potency Bioassay'],
+    linkedDocuments: ['Potency Assay Validation PAV-2025-02'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-04-10', nextReview: '2026-07-10', assessor: 'Khalid Nasser',
+    findings: 'Audit BIO-F3 noted the GLP-1 cell-based potency assay validation lacked intermediate-precision data across analysts. Re-validation in progress.',
+    gapActions: [
+      { id: 'bio-ga3', action: 'Complete intermediate-precision arm of GLP-1 potency assay re-validation', owner: 'Khalid Nasser', dueDate: '2026-06-15', status: 'In Progress' },
+    ],
+    assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr9', standard: '21 CFR Part 600', clauseNumber: '600.10', clauseTitle: 'Personnel — qualification and training',
+    clauseText: 'Personnel shall have a capability to perform their assigned functions, have an understanding of the precautions necessary to prevent contamination and microbiological hazards, and be of good health to the extent that their state of health does not adversely affect the product.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-BIO-HR-01 Aseptic Gowning Qualification'],
+    linkedDocuments: ['Gowning Qualification Register 2026'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-03-05', nextReview: '2026-09-05', assessor: 'Omar Al-Farsi',
+    findings: 'All Grade A/B operators hold current gowning qualification and aseptic-technique certification. Health-surveillance program active.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr10', standard: '21 CFR Part 600', clauseNumber: '610.12', clauseTitle: 'Sterility testing of biological products',
+    clauseText: 'The sterility of each lot of each biological product shall be demonstrated by performing sterility tests as prescribed, or by an alternative procedure that has been validated and approved.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-BIO-QC-03 Sterility Test', 'SOP-BIO-QC-04 RMM Sterility'],
+    linkedDocuments: ['Sterility Method Suitability MSV-2025-06'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-02-20', nextReview: '2026-08-20', assessor: 'Dr. Layla Al-Mansoori',
+    findings: 'Closed-system sterility testing under isolator; method suitability validated for all insulin and GLP-1 presentations.',
+    gapActions: [], assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr11', standard: '21 CFR Part 11', clauseNumber: '11.10', clauseTitle: 'Controls for closed systems (data integrity)',
+    clauseText: 'Persons who use closed systems to create, modify, maintain, or transmit electronic records shall employ procedures and controls designed to ensure the authenticity, integrity, and confidentiality of electronic records, including audit trails, access controls and operational system checks.',
+    status: 'PARTIAL',
+    linkedProcedures: ['SOP-BIO-IT-02 Data Integrity & Audit Trail Review'],
+    linkedDocuments: ['CSV Validation Pack — Chromatography Data System'],
+    linkedCAPAs: ['CAPA-BIO-2026-0018'],
+    lastAssessed: '2026-04-25', nextReview: '2026-07-25', assessor: 'Omar Al-Farsi',
+    findings: 'Audit BIO-F4 found periodic audit-trail review was not documented for the QC chromatography data system. CAPA open.',
+    gapActions: [
+      { id: 'bio-ga4', action: 'Implement and document monthly audit-trail review for CDS and standalone balances', owner: 'Omar Al-Farsi', dueDate: '2026-06-10', status: 'Open' },
+    ],
+    assessmentHistory: [],
+  },
+  {
+    id: 'bio-cr12', standard: 'ICH Q7', clauseNumber: '11.1', clauseTitle: 'Batch release of drug substance',
+    clauseText: 'To ensure that each batch of API meets established specifications, written procedures describing the sampling, testing, approval or rejection of materials and the release of the API for use shall be established and followed by the quality unit.',
+    status: 'COMPLIANT',
+    linkedProcedures: ['SOP-BIO-QA-05 Batch Disposition & Release'],
+    linkedDocuments: ['Batch Release Register 2026'],
+    linkedCAPAs: [],
+    lastAssessed: '2026-03-18', nextReview: '2026-09-18', assessor: 'Dr. Sami Haddad',
+    findings: 'Drug-substance batch disposition controlled by the Qualified Person; review-by-exception with full BR checklist. Cold-chain / GDP records verified at release.',
+    gapActions: [], assessmentHistory: [],
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 export function useComplianceRequirements(standard?: string) {
@@ -702,6 +853,10 @@ export function useComplianceRequirements(standard?: string) {
           requirements = standard
             ? mockDairyRequirements.filter(r => r.standard === standard)
             : mockDairyRequirements;
+        } else if (industry === 'biologics') {
+          requirements = standard
+            ? mockBiologicsRequirements.filter(r => r.standard === standard)
+            : mockBiologicsRequirements;
         } else {
           switch (standard) {
             case 'IATF 16949':
@@ -749,6 +904,7 @@ export function useComplianceRequirement(id: string) {
         const all =
           industry === 'medical_device' ? mockMedicalDeviceRequirements :
           industry === 'dairy'          ? mockDairyRequirements :
+          industry === 'biologics'      ? mockBiologicsRequirements :
           [...mockRequirements, ...mockIATFRequirements, ...mockISO14001Requirements, ...mockISO45001Requirements, ...mockPharmaRequirements];
         const req = all.find((r) => r.id === id);
         if (!req) throw new Error('Requirement not found');
