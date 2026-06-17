@@ -6,7 +6,7 @@ import { DEMO_ACCOUNTS } from '@/config/demoCredentials';
 // Industry segment the user belongs to. Drives mock-data filtering across
 // the dashboard and QMS modules so a `medical_device` user only sees
 // medical-device records. Optional — existing pharma demos leave it unset.
-export type UserIndustry = 'medical_device' | 'dairy';
+export type UserIndustry = 'medical_device' | 'dairy' | 'biologics';
 
 interface AuthUser {
   id: string;
@@ -59,6 +59,10 @@ const DEMO_USER_TEMPLATES: Record<string, Omit<AuthUser, 'email'>> = {
   // Dairy tenant — drives the dairy industry filter across dashboard
   // charts and QMS module mock data.
   'dairy.admin@forgequantum.com':       { id: 'demo-dy1',tenantId: 'demo-tenant', name: 'Sandeep Joshi',      role: 'TENANT_ADMIN',        department: 'Quality Assurance', site: 'Pune — Dairy Plant',       employeeId: 'FQ-DY-001', industry: 'dairy' },
+  // Biologics / insulin tenant — Mubadala Bio's DiabTec drug-substance &
+  // cartridge fill-finish facility (Abu Dhabi). Drives the `biologics`
+  // industry filter across the dashboard and every QMS/LMS module.
+  'info@forgequantumsolution.com':      { id: 'demo-bio1',tenantId: 'demo-tenant', name: 'Dr. Layla Al-Mansoori', role: 'TENANT_ADMIN',     department: 'Quality Assurance', site: 'Abu Dhabi — DiabTec',      employeeId: 'MB-BIO-001', industry: 'biologics' },
 };
 
 // Base64-url encode without padding — valid JWT segment.
@@ -83,11 +87,14 @@ function mintSyntheticJwt(user: AuthUser): string {
 }
 
 function tryOfflineLogin(email: string, password: string): { user: AuthUser; token: string } | null {
-  const match = DEMO_ACCOUNTS.find(a => a.email === email && a.password === password);
+  // Email is matched case-insensitively so links/screenshots that capitalise
+  // the address (e.g. info@forgequantumSolution.com) still resolve locally.
+  const normalized = email.trim().toLowerCase();
+  const match = DEMO_ACCOUNTS.find(a => a.email.toLowerCase() === normalized && a.password === password);
   if (!match) return null;
-  const template = DEMO_USER_TEMPLATES[email];
+  const template = DEMO_USER_TEMPLATES[normalized];
   if (!template) return null;
-  const user: AuthUser = { ...template, email };
+  const user: AuthUser = { ...template, email: match.email };
   return { user, token: mintSyntheticJwt(user) };
 }
 

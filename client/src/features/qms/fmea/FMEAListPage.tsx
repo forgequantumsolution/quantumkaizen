@@ -12,7 +12,7 @@ import {
 import type { Column } from '@/components/ui';
 import Tabs from '@/components/ui/Tabs';
 import { cn, formatDate } from '@/lib/utils';
-import { useFMEAs, mockFMEAs, mockMedicalDeviceFMEAs, mockDairyFMEAs } from './hooks';
+import { useFMEAs, mockFMEAs, mockMedicalDeviceFMEAs, mockDairyFMEAs, mockBiologicsFMEAs } from './hooks';
 import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { FMEA } from './hooks';
@@ -36,7 +36,7 @@ export default function FMEAListPage() {
   const fmeas = (result?.data ?? [] as FMEA[]).filter((f: FMEA) => new Date((f as any).createdAt).getFullYear() === year);
 
   const industry = useUserIndustry();
-  const summarySource = pickByIndustry(industry, mockFMEAs, { medical_device: mockMedicalDeviceFMEAs, dairy: mockDairyFMEAs });
+  const summarySource = pickByIndustry(industry, mockFMEAs, { medical_device: mockMedicalDeviceFMEAs, dairy: mockDairyFMEAs, biologics: mockBiologicsFMEAs });
   const yearFMEAs = useMemo(() => summarySource.filter((f) => new Date(f.createdAt).getFullYear() === year), [summarySource, year]);
 
   const fmeaTabs = useMemo(() => [

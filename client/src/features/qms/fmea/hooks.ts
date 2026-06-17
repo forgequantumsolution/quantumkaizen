@@ -513,6 +513,130 @@ export const mockDairyFMEAs: FMEA[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE). Drug-substance
+// (fermentation/upstream, chromatography purification) plus aseptic cartridge
+// fill-finish, lyophilization and cold-chain for insulin, analogues and GLP-1.
+const mockBiologicsFailureModes: FMEAFailureMode[] = [
+  {
+    id: 'bio-fm1', function: 'Seat chlorobutyl stopper to maintain container-closure integrity on insulin cartridge',
+    failureMode: 'Incomplete stopper seating — CCIT failure',
+    effect: 'Loss of sterility and sterile-barrier breach; non-sterile parenteral reaches patient',
+    severity: 10, cause: 'Stopper-insertion vacuum drift on fill-finish line FF-01 (pump seal wear)',
+    occurrence: 3,
+    preventionControl: 'Validated vacuum-stoppering window per EU GMP Annex 1 (2022); PM on insertion pump seals',
+    detectionControl: '100% in-line headspace CCIT (laser-based); residual-seal-force trending',
+    detection: 2, rpn: 60, actionPriority: 'HIGH',
+    recommendedAction: 'Add closed-loop vacuum control with auto-reject on ±5% drift; revalidate CCIT challenge set',
+    responsible: 'Dr. Layla Al-Mansoori', targetDate: '2026-05-30',
+    actionTaken: 'Closed-loop vacuum control live on FF-01; CCIT challenge revalidated (CAPA-BIO-2026-0011)',
+    newSeverity: 10, newOccurrence: 1, newDetection: 2, newRPN: 20,
+  },
+  {
+    id: 'bio-fm2', function: 'Deliver target fill weight 3.0 mL ±2% into 3 mL insulin cartridge',
+    failureMode: 'Fill-weight under-delivery below lower limit',
+    effect: 'Sub-therapeutic dose units; under-fill drives patient under-dosing of insulin analogue',
+    severity: 8, cause: 'Time-pressure dosing pump cavitation from product foaming at filling needle',
+    occurrence: 4,
+    preventionControl: 'Validated fill parameters with anti-foam de-aeration; nitrogen overlay on bulk hold',
+    detectionControl: '100% in-line check-weigh with statistical reject; AQL gravimetric fill verification',
+    detection: 3, rpn: 96, actionPriority: 'HIGH',
+    recommendedAction: 'Switch to peristaltic single-use dosing with feedback check-weigher; requalify fill accuracy',
+    responsible: 'Omar Al-Farsi', targetDate: '2026-06-15',
+    actionTaken: '',
+    newSeverity: null, newOccurrence: null, newDetection: null, newRPN: null,
+  },
+  {
+    id: 'bio-fm3', function: 'Maintain product sterility through 0.22 µm sterilizing-grade filtration of bulk drug product',
+    failureMode: 'Sterilizing filter integrity failure (post-use bubble-point fail)',
+    effect: 'Potential non-sterile batch; bioburden / endotoxin breakthrough into final product',
+    severity: 10, cause: 'Filter membrane stress from over-pressure transient during filtration startup',
+    occurrence: 2,
+    preventionControl: 'Pre- and post-use integrity testing (bubble point); validated max differential pressure',
+    detectionControl: 'Automated integrity-test instrument with pass/fail interlock to release; redundant filtration',
+    detection: 2, rpn: 40, actionPriority: 'HIGH',
+    recommendedAction: 'Install soft-start pressure ramp on filtration skid; add redundant in-series sterilizing filter',
+    responsible: 'Fatima Al-Hashimi', targetDate: '2026-04-28',
+    actionTaken: 'Soft-start ramp commissioned; redundant filter housing qualified (CAPA-BIO-2026-0008)',
+    newSeverity: 10, newOccurrence: 1, newDetection: 2, newRPN: 20,
+  },
+];
+
+export const mockBiologicsFMEAs: FMEA[] = [
+  {
+    id: 'bio-fmea1', fmeaNumber: 'FMEA-BIO-2026-0001',
+    title: 'PFMEA — Aseptic Cartridge Fill-Finish Line (FF-01, insulin analogues)',
+    type: 'PFMEA', productProcess: 'Aseptic Cartridge Fill-Finish · EU GMP Annex 1',
+    status: 'ACTIVE', owner: 'Dr. Layla Al-Mansoori', ownerId: 'u-bio1',
+    teamMembers: ['Omar Al-Farsi', 'Fatima Al-Hashimi', 'Yusuf Rahman'],
+    scope: 'Process failure modes for aseptic fill-finish of 3 mL insulin / analogue cartridges from sterile filtration through filling, stoppering, capping and 100% CCIT on line FF-01 in Grade A isolator.',
+    maxRPN: 96, failureModes: mockBiologicsFailureModes,
+    revisionHistory: [
+      { version: '1.0', date: '2025-12-02', author: 'Dr. Layla Al-Mansoori', changes: 'Initial PFMEA release aligned to EU GMP Annex 1 (2022) contamination control strategy' },
+      { version: '1.1', date: '2026-04-18', author: 'Dr. Layla Al-Mansoori', changes: 'Updated RPN for CCIT failure mode post-CAPA-BIO-2026-0011 verification' },
+    ],
+    createdAt: '2025-12-02T09:00:00Z', updatedAt: '2026-04-18T15:00:00Z',
+  },
+  {
+    id: 'bio-fmea2', fmeaNumber: 'FMEA-BIO-2026-0002',
+    title: 'Process FMEA — Fermentation / Upstream (insulin precursor)',
+    type: 'PFMEA', productProcess: 'Microbial Fermentation · 15,000 L bioreactor train',
+    status: 'ACTIVE', owner: 'Omar Al-Farsi', ownerId: 'u-bio2',
+    teamMembers: ['Dr. Layla Al-Mansoori', 'Yusuf Rahman'],
+    scope: 'Upstream failure modes for media preparation, inoculum scale-up, bioreactor sterilization, foam control and harvest, covering bioreactor foam-out and microbial contamination risk for the insulin-precursor fermentation.',
+    maxRPN: 90,
+    failureModes: [],
+    revisionHistory: [
+      { version: '2.0', date: '2026-04-08', author: 'Omar Al-Farsi', changes: 'Major revision post-NC-BIO-2026-0031; foam-out and antifoam-dosing modes added' },
+    ],
+    createdAt: '2024-09-14T09:00:00Z', updatedAt: '2026-04-08T11:00:00Z',
+  },
+  {
+    id: 'bio-fmea3', fmeaNumber: 'FMEA-BIO-2026-0003',
+    title: 'Process FMEA — Chromatography Purification (capture & polishing)',
+    type: 'PFMEA', productProcess: 'Chromatography Purification · AEX / HIC columns',
+    status: 'ACTIVE', owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3',
+    teamMembers: ['Omar Al-Farsi', 'Yusuf Rahman'],
+    scope: 'Downstream failure modes for column packing quality, buffer composition, load challenge, elution gradient and column channeling / endotoxin breakthrough across the AEX capture and HIC polishing steps.',
+    maxRPN: 100,
+    failureModes: [],
+    revisionHistory: [
+      { version: '1.0', date: '2025-06-20', author: 'Fatima Al-Hashimi', changes: 'Initial release' },
+      { version: '1.1', date: '2026-04-15', author: 'Fatima Al-Hashimi', changes: 'Added column-channeling HETP failure mode post-NC-BIO-2026-0028' },
+    ],
+    createdAt: '2025-06-20T09:00:00Z', updatedAt: '2026-04-15T11:00:00Z',
+  },
+  {
+    id: 'bio-fmea4', fmeaNumber: 'FMEA-BIO-2026-0004',
+    title: 'Process FMEA — Lyophilization (GLP-1 drug product)',
+    type: 'PFMEA', productProcess: 'Lyophilization · freeze-dryer LYO-02',
+    status: 'ACTIVE', owner: 'Yusuf Rahman', ownerId: 'u-bio4',
+    teamMembers: ['Dr. Layla Al-Mansoori', 'Fatima Al-Hashimi'],
+    scope: 'Process failure modes for loading, freezing ramp, primary and secondary drying, shelf-temperature uniformity and stoppering under vacuum for the lyophilized GLP-1 drug product on LYO-02.',
+    maxRPN: 84,
+    failureModes: [],
+    revisionHistory: [
+      { version: '1.0', date: '2025-03-11', author: 'Yusuf Rahman', changes: 'Initial release' },
+      { version: '1.1', date: '2026-04-12', author: 'Yusuf Rahman', changes: 'Added cake-collapse / shelf-temperature drift failure mode post-NC-BIO-2026-0024' },
+    ],
+    createdAt: '2025-03-11T09:00:00Z', updatedAt: '2026-04-12T11:00:00Z',
+  },
+  {
+    id: 'bio-fmea5', fmeaNumber: 'FMEA-BIO-2026-0005',
+    title: 'Process FMEA — Cold-Chain Storage & Distribution (2–8 °C)',
+    type: 'PFMEA', productProcess: 'Cold-Chain · GDP qualified 2–8 °C',
+    status: 'ACTIVE', owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3',
+    teamMembers: ['Yusuf Rahman', 'Omar Al-Farsi'],
+    scope: 'Distribution failure modes for finished-goods cold-room mapping, power-outage response, shipper qualification, temperature monitoring and analogue label mix-up risk for 2–8 °C insulin / GLP-1 product.',
+    maxRPN: 80,
+    failureModes: [],
+    revisionHistory: [
+      { version: '2.0', date: '2026-03-20', author: 'Fatima Al-Hashimi', changes: 'Major revision post-NC-BIO-2026-0019; 2–8 °C excursion and shipper-failure modes added' },
+      { version: '2.1', date: '2026-04-26', author: 'Fatima Al-Hashimi', changes: 'Added analogue label mix-up failure mode post-NC-BIO-2025-0102' },
+    ],
+    createdAt: '2024-10-08T09:00:00Z', updatedAt: '2026-04-26T11:00:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface FMEAFilters {
@@ -531,7 +655,7 @@ export function useFMEAs(filters: FMEAFilters = {}) {
         const { data } = await api.get('/qms/fmea', { params: filters });
         return unwrapList<FMEA>(data);
       } catch {
-        const baseList = pickByIndustry(industry, mockFMEAs, { medical_device: mockMedicalDeviceFMEAs, dairy: mockDairyFMEAs });
+        const baseList = pickByIndustry(industry, mockFMEAs, { medical_device: mockMedicalDeviceFMEAs, dairy: mockDairyFMEAs, biologics: mockBiologicsFMEAs });
         let filtered = [...baseList];
         if (filters.type) filtered = filtered.filter((f) => f.type === filters.type);
         if (filters.status) filtered = filtered.filter((f) => f.status === filters.status);
@@ -559,7 +683,7 @@ export function useFMEA(id: string) {
         const { data } = await api.get(`/qms/fmea/${id}`);
         return unwrapItem<FMEA>(data);
       } catch {
-        const baseList = pickByIndustry(industry, mockFMEAs, { medical_device: mockMedicalDeviceFMEAs, dairy: mockDairyFMEAs });
+        const baseList = pickByIndustry(industry, mockFMEAs, { medical_device: mockMedicalDeviceFMEAs, dairy: mockDairyFMEAs, biologics: mockBiologicsFMEAs });
         const fmea = baseList.find((f) => f.id === id);
         if (!fmea) throw new Error('FMEA not found');
         // For records with no failure modes, lazily attach a representative

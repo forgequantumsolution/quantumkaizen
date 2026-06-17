@@ -402,6 +402,104 @@ export const mockDairySupplierSummary: SupplierSummary = {
   totalSuppliers: 18, approvedSuppliers: 14, suppliersOnWatch: 1, avgSupplierRating: 4.4, supplierNCCount: 2, overdueEvaluations: 0,
 };
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE): drug-substance +
+// aseptic cartridge fill-finish (insulin, analogues, GLP-1). Management Review
+// themes per ICH Q10 / EU GMP Annex 1 — aseptic process & media-fill, sterility
+// / EM trends, CAPA for deviations, cold-chain, PAI/EMA inspection readiness, PQR/APR.
+export const mockBiologicsReviews: ManagementReview[] = [
+  {
+    id: 'bio-mr1', title: 'Q2 2026 Management Review (DiabTec Biologics)', date: '2026-05-12', time: '10:00 AM - 01:30 PM',
+    status: 'Scheduled',
+    attendees: [
+      { name: 'Dr. Layla Al-Mansoori', role: 'Site Quality Director / QP' },
+      { name: 'Omar Al-Farsi',         role: 'Head of Aseptic Manufacturing' },
+      { name: 'Fatima Al-Hashimi',     role: 'Head of QC Micro / Sterility Assurance' },
+      { name: 'Dr. Sami Haddad',       role: 'Head of Drug Substance / Upstream' },
+      { name: 'Khalid Nasser',         role: 'Supply Chain & Cold-Chain Lead' },
+      { name: 'Dr. Layla Al-Mansoori', role: 'Regulatory Affairs (FDA/EMA)' },
+      { name: 'Omar Al-Farsi',         role: 'Validation & Engineering' },
+    ],
+    agenda: [
+      'Review of Q1 2026 MRM action items',
+      'Aseptic process performance — line FF-02 cartridge fill-finish trends',
+      'Media-fill (APS) results — H1 2026 campaign (3 successful runs, 0 contaminated units)',
+      'Sterility & environmental monitoring (EM) trends — Grade A/B excursions',
+      'CAPA effectiveness for biologics deviations (CAPA-BIO-2026-0014, DS bioreactor)',
+      'Cold-chain performance — 2-8°C shipment lane qualification (Abu Dhabi → EU)',
+      'Regulatory inspection readiness — FDA PAI (GLP-1 BLA) and EMA pre-approval',
+      'Product Quality Review (PQR/APR) — insulin glargine & semaglutide GLP-1',
+      'Supplier performance — single-use systems & chromatography resins',
+      'Training compliance and aseptic gowning qualification status',
+    ],
+    minutesSummary: null, actionItems: [],
+  },
+  {
+    id: 'bio-mr2', title: 'Q1 2026 Management Review (DiabTec Biologics)', date: '2026-02-11', time: '10:00 AM - 12:45 PM',
+    status: 'Completed',
+    attendees: [
+      { name: 'Dr. Layla Al-Mansoori', role: 'Site Quality Director / QP',              present: true  },
+      { name: 'Omar Al-Farsi',         role: 'Head of Aseptic Manufacturing',           present: true  },
+      { name: 'Fatima Al-Hashimi',     role: 'Head of QC Micro / Sterility Assurance',  present: true  },
+      { name: 'Dr. Sami Haddad',       role: 'Head of Drug Substance / Upstream',       present: true  },
+      { name: 'Khalid Nasser',         role: 'Supply Chain & Cold-Chain Lead',          present: false },
+      { name: 'Dr. Layla Al-Mansoori', role: 'Regulatory Affairs (FDA/EMA)',            present: true  },
+      { name: 'Omar Al-Farsi',         role: 'Validation & Engineering',                present: true  },
+    ],
+    agenda: [
+      'Review of Q4 2025 MRM action items',
+      'Annex 1 (2022) CCS gap-closure status',
+      'Media-fill program review (post FF-02 intervention CAPA)',
+      'Sterility / EM excursion trends',
+      'Aseptic gowning qualification compliance',
+    ],
+    minutesSummary: 'Review held with 6 of 7 attendees. All Q4 2025 action items completed except Annex 1 CCS holistic-review section (carried to Q2). Media-fill campaign H2 2025 PASS — 3 runs, 0 contaminated units across 14,800 filled cartridges. CAPA-BIO-2025-0061 (FF-02 stopper-bowl intervention) effectiveness PASS — 0 related Grade A interventions over 90-day window. CAPA-BIO-2025-0048 (DS bioreactor bioburden) effectiveness PASS — 6 consecutive batches within limits. PQR for insulin glargine reviewed and approved by QP. Training compliance at 94% — Q2 target 96%. Decision: extend EM trend-review cadence to monthly ahead of FDA PAI.',
+    actionItems: [],
+  },
+  {
+    id: 'bio-mr3', title: 'Q4 2025 Management Review (DiabTec Biologics)', date: '2025-11-13', time: '10:00 AM - 01:00 PM',
+    status: 'Completed',
+    attendees: [
+      { name: 'Dr. Layla Al-Mansoori', role: 'Site Quality Director / QP',              present: true },
+      { name: 'Omar Al-Farsi',         role: 'Head of Aseptic Manufacturing',           present: true },
+      { name: 'Fatima Al-Hashimi',     role: 'Head of QC Micro / Sterility Assurance',  present: true },
+      { name: 'Dr. Sami Haddad',       role: 'Head of Drug Substance / Upstream',       present: true },
+      { name: 'Khalid Nasser',         role: 'Supply Chain & Cold-Chain Lead',          present: true },
+      { name: 'Dr. Layla Al-Mansoori', role: 'Regulatory Affairs (FDA/EMA)',            present: true },
+      { name: 'Omar Al-Farsi',         role: 'Validation & Engineering',                present: true },
+    ],
+    agenda: ['Q3 action item closure', 'FDA PAI readiness (GLP-1 BLA)', 'EMA pre-approval inspection prep', 'Cold-chain lane re-qualification', 'PQR/APR schedule for 2026'],
+    minutesSummary: 'Full attendance. Q3 action items 8 of 8 completed. FDA PAI for semaglutide GLP-1 BLA targeted Q3 2026 — readiness on track, mock-inspection scheduled. EMA pre-approval inspection prep initiated. Cold-chain lane (Abu Dhabi → Frankfurt) re-qualified with 0 temperature excursions across last 12 shipments. 2026 PQR/APR schedule approved for insulin glargine, insulin aspart, and semaglutide.',
+    actionItems: [],
+  },
+];
+
+export const mockBiologicsActionItems: ActionItem[] = [
+  { id: 'bio-ai1', action: 'Close Annex 1 CCS holistic-review section and re-baseline contamination control strategy',  owner: 'Dr. Layla Al-Mansoori', dueDate: '2026-05-20', status: 'In Progress', reviewId: 'bio-mr2', reviewTitle: 'Q1 2026 Management Review (DiabTec Biologics)', priority: 'High',   completionNotes: null },
+  { id: 'bio-ai2', action: 'Complete H1 2026 media-fill (APS) campaign — 3 runs on line FF-02 with 0 contaminated units', owner: 'Omar Al-Farsi',         dueDate: '2026-06-15', status: 'In Progress', reviewId: 'bio-mr2', reviewTitle: 'Q1 2026 Management Review (DiabTec Biologics)', priority: 'High',   completionNotes: null },
+  { id: 'bio-ai3', action: 'Investigate and close Grade A EM excursion trend at FF-02 RABS (CAPA-BIO-2026-0014)',         owner: 'Fatima Al-Hashimi',     dueDate: '2026-05-30', status: 'In Progress', reviewId: 'bio-mr2', reviewTitle: 'Q1 2026 Management Review (DiabTec Biologics)', priority: 'High',   completionNotes: null },
+  { id: 'bio-ai4', action: 'Qualify secondary single-use bioreactor bag supplier for DS upstream (dual-sourcing)',       owner: 'Dr. Sami Haddad',       dueDate: '2026-07-31', status: 'Open',         reviewId: 'bio-mr2', reviewTitle: 'Q1 2026 Management Review (DiabTec Biologics)', priority: 'Medium', completionNotes: null },
+  { id: 'bio-ai5', action: 'Re-qualify 2-8°C cold-chain lane (Abu Dhabi → EU) ahead of GLP-1 commercial launch',        owner: 'Khalid Nasser',         dueDate: '2026-06-10', status: 'In Progress', reviewId: 'bio-mr2', reviewTitle: 'Q1 2026 Management Review (DiabTec Biologics)', priority: 'High',   completionNotes: null },
+  { id: 'bio-ai6', action: 'Lift aseptic-area training compliance from 94% to 96% target by Q2 (gowning re-qual)',       owner: 'Dr. Layla Al-Mansoori', dueDate: '2026-06-30', status: 'Open',         reviewId: 'bio-mr2', reviewTitle: 'Q1 2026 Management Review (DiabTec Biologics)', priority: 'Medium', completionNotes: null },
+];
+
+// KPI totals for a well-controlled mid-sized GMP biologics site (high compliance):
+//   NCs/deviations low open count, fast closure; CAPAs with high effectiveness.
+//   Audit findings dominated by minors; sterility/EM well within control.
+export const mockBiologicsQMSSummary: QMSSummary = {
+  ncCount: 28, ncOpenCount: 5, ncClosedThisQuarter: 11, ncAvgClosureTime: 16,
+  capaCount: 15, capaOpenCount: 4, capaEffectivenessRate: 95,
+  auditFindingsTotal: 9, auditFindingsOpen: 1, auditFindingsMajor: 0,
+};
+export const mockBiologicsDMSSummary: DMSSummary = {
+  totalDocuments: 412, documentsDueForReview: 14, newDocumentsThisQuarter: 11, overdueReviews: 1, pendingApprovals: 4,
+};
+export const mockBiologicsLMSSummary: LMSSummary = {
+  trainingCompliancePercent: 94, totalTrainings: 168, completedTrainings: 158, expiringCertifications: 6, overdueCertifications: 0, avgTrainingHoursPerEmployee: 32,
+};
+export const mockBiologicsSupplierSummary: SupplierSummary = {
+  totalSuppliers: 26, approvedSuppliers: 23, suppliersOnWatch: 1, avgSupplierRating: 4.6, supplierNCCount: 3, overdueEvaluations: 0,
+};
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 export function useManagementReviews() {
@@ -412,11 +510,11 @@ export function useManagementReviews() {
       try {
         const { data } = await api.get('/qms/management-review/meetings');
         const { data: reviews } = unwrapList(data);
-        const actionItems = pickByIndustry(industry, mockActionItems, { medical_device: mockMedicalDeviceActionItems, dairy: mockDairyActionItems });
+        const actionItems = pickByIndustry(industry, mockActionItems, { medical_device: mockMedicalDeviceActionItems, dairy: mockDairyActionItems, biologics: mockBiologicsActionItems });
         return { reviews: reviews as unknown as typeof mockReviews, actionItems };
       } catch {
-        const reviews     = pickByIndustry(industry, mockReviews,     { medical_device: mockMedicalDeviceReviews,     dairy: mockDairyReviews });
-        const actionItems = pickByIndustry(industry, mockActionItems, { medical_device: mockMedicalDeviceActionItems, dairy: mockDairyActionItems });
+        const reviews     = pickByIndustry(industry, mockReviews,     { medical_device: mockMedicalDeviceReviews,     dairy: mockDairyReviews,     biologics: mockBiologicsReviews });
+        const actionItems = pickByIndustry(industry, mockActionItems, { medical_device: mockMedicalDeviceActionItems, dairy: mockDairyActionItems, biologics: mockBiologicsActionItems });
         return { reviews, actionItems };
       }
     },
@@ -449,10 +547,10 @@ export function useManagementReviewSummary() {
         return unwrapItem(data);
       } catch {
         return {
-          qms:      pickByIndustry(industry, mockQMSSummary,      { medical_device: mockMedicalDeviceQMSSummary,      dairy: mockDairyQMSSummary }),
-          dms:      pickByIndustry(industry, mockDMSSummary,      { medical_device: mockMedicalDeviceDMSSummary,      dairy: mockDairyDMSSummary }),
-          lms:      pickByIndustry(industry, mockLMSSummary,      { medical_device: mockMedicalDeviceLMSSummary,      dairy: mockDairyLMSSummary }),
-          supplier: pickByIndustry(industry, mockSupplierSummary, { medical_device: mockMedicalDeviceSupplierSummary, dairy: mockDairySupplierSummary }),
+          qms:      pickByIndustry(industry, mockQMSSummary,      { medical_device: mockMedicalDeviceQMSSummary,      dairy: mockDairyQMSSummary,      biologics: mockBiologicsQMSSummary }),
+          dms:      pickByIndustry(industry, mockDMSSummary,      { medical_device: mockMedicalDeviceDMSSummary,      dairy: mockDairyDMSSummary,      biologics: mockBiologicsDMSSummary }),
+          lms:      pickByIndustry(industry, mockLMSSummary,      { medical_device: mockMedicalDeviceLMSSummary,      dairy: mockDairyLMSSummary,      biologics: mockBiologicsLMSSummary }),
+          supplier: pickByIndustry(industry, mockSupplierSummary, { medical_device: mockMedicalDeviceSupplierSummary, dairy: mockDairySupplierSummary, biologics: mockBiologicsSupplierSummary }),
         };
       }
     },

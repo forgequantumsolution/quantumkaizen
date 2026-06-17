@@ -16,7 +16,7 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import { cn, formatDate } from '@/lib/utils';
-import { useComplaints, mockComplaints, mockMedicalDeviceComplaints, mockDairyComplaints } from './hooks';
+import { useComplaints, mockComplaints, mockMedicalDeviceComplaints, mockDairyComplaints, mockBiologicsComplaints } from './hooks';
 import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { Complaint } from './hooks';
@@ -59,7 +59,7 @@ export default function ComplaintListPage() {
   const complaints = (result?.data ?? [] as Complaint[]).filter((c: Complaint) => new Date(c.receivedDate).getFullYear() === year);
 
   const industry = useUserIndustry();
-  const summarySource = pickByIndustry(industry, mockComplaints, { medical_device: mockMedicalDeviceComplaints, dairy: mockDairyComplaints });
+  const summarySource = pickByIndustry(industry, mockComplaints, { medical_device: mockMedicalDeviceComplaints, dairy: mockDairyComplaints, biologics: mockBiologicsComplaints });
   const yearComplaints = useMemo(() => summarySource.filter((c) => new Date(c.receivedDate).getFullYear() === year), [summarySource, year]);
 
   // Summary counts

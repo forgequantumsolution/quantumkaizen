@@ -396,6 +396,162 @@ export const mockDairyMatrixCells: MatrixCell[] = [
   dyCell('dy-e10','dy-tp8', 'COMPLETED', 90, '2025-12-15', '2026-12-15'),
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE) competency matrix.
+// Drug-substance + aseptic cartridge fill-finish (insulin, analogues, GLP-1).
+export const mockBiologicsEmployees: CompetencyEmployee[] = [
+  { id: 'bio-e1',  name: 'Dr. Layla Al-Mansoori', employeeId: 'FQ-BIO-001', department: 'QA',                    role: 'Head of Quality / QP' },
+  { id: 'bio-e2',  name: 'Omar Al-Farsi',         employeeId: 'FQ-BIO-002', department: 'Aseptic Fill-Finish',   role: 'Fill-Finish Line Lead' },
+  { id: 'bio-e3',  name: 'Fatima Al-Hashimi',     employeeId: 'FQ-BIO-003', department: 'Microbiology / QC Lab', role: 'Sterility Testing Analyst' },
+  { id: 'bio-e4',  name: 'Yusuf Rahman',          employeeId: 'FQ-BIO-004', department: 'Drug Substance',        role: 'Bioreactor Operator' },
+  { id: 'bio-e5',  name: 'Aisha Khalid',          employeeId: 'FQ-BIO-005', department: 'Downstream Purification',role: 'Chromatography Specialist' },
+  { id: 'bio-e6',  name: 'Khalid Nasser',         employeeId: 'FQ-BIO-006', department: 'Aseptic Fill-Finish',   role: 'Aseptic Operator (Grade A/B)' },
+  { id: 'bio-e7',  name: 'Mariam Saeed',          employeeId: 'FQ-BIO-007', department: 'Microbiology / QC Lab', role: 'Environmental Monitoring Analyst' },
+  { id: 'bio-e8',  name: 'Hassan Al-Balushi',     employeeId: 'FQ-BIO-008', department: 'Validation',            role: 'Media Fill / APS Lead' },
+  { id: 'bio-e9',  name: 'Noura Aziz',            employeeId: 'FQ-BIO-009', department: 'QA',                    role: 'Cold-Chain / GDP Coordinator' },
+  { id: 'bio-e10', name: 'Dr. Sami Haddad',       employeeId: 'FQ-BIO-010', department: 'QA',                    role: 'Data Integrity Officer' },
+];
+
+export const mockBiologicsPrograms: CompetencyProgram[] = [
+  { id: 'bio-tp1',  title: 'Aseptic Gowning & Behaviour (Grade A/B)',          shortCode: 'GOWN-AB'  },
+  { id: 'bio-tp2',  title: 'Aseptic Process Simulation / Media Fill',          shortCode: 'APS-MF'   },
+  { id: 'bio-tp3',  title: 'Environmental Monitoring',                         shortCode: 'EM'       },
+  { id: 'bio-tp4',  title: 'Sterility Testing (Ph. Eur. / USP)',               shortCode: 'STER-TEST'},
+  { id: 'bio-tp5',  title: 'Bioreactor Operation',                             shortCode: 'BIOREACT' },
+  { id: 'bio-tp6',  title: 'Chromatography Purification',                      shortCode: 'CHROM'    },
+  { id: 'bio-tp7',  title: 'Cartridge Fill-Finish Line Operation',            shortCode: 'FILL-FIN' },
+  { id: 'bio-tp8',  title: 'Container Closure Integrity Testing',              shortCode: 'CCIT'     },
+  { id: 'bio-tp9',  title: 'Cold-Chain Handling (GDP)',                        shortCode: 'GDP-CC'   },
+  { id: 'bio-tp10', title: 'Data Integrity / 21 CFR Part 11',                  shortCode: 'DI-PART11'},
+  { id: 'bio-tp11', title: 'Deviation / CAPA',                                 shortCode: 'CAPA'     },
+];
+
+const bioCell = (employeeId: string, programId: string, status: CellStatus, score: number | null = null, completionDate: string | null = null, expiryDate: string | null = null, dueDate: string | null = null): MatrixCell => ({
+  employeeId, programId, status, score, completionDate, expiryDate, dueDate,
+});
+
+export const mockBiologicsMatrixCells: MatrixCell[] = [
+  // Dr. Layla Al-Mansoori (Head of Quality / QP)
+  bioCell('bio-e1', 'bio-tp1',  'COMPLETED', 96, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e1', 'bio-tp2',  'NOT_REQUIRED'),
+  bioCell('bio-e1', 'bio-tp3',  'COMPLETED', 92, '2025-10-12', '2026-10-12'),
+  bioCell('bio-e1', 'bio-tp4',  'NOT_REQUIRED'),
+  bioCell('bio-e1', 'bio-tp5',  'NOT_REQUIRED'),
+  bioCell('bio-e1', 'bio-tp6',  'NOT_REQUIRED'),
+  bioCell('bio-e1', 'bio-tp7',  'NOT_REQUIRED'),
+  bioCell('bio-e1', 'bio-tp8',  'COMPLETED', 90, '2025-11-08', '2027-11-08'),
+  bioCell('bio-e1', 'bio-tp9',  'COMPLETED', 94, '2025-08-20', '2026-08-20'),
+  bioCell('bio-e1', 'bio-tp10', 'COMPLETED', 98, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e1', 'bio-tp11', 'COMPLETED', 95, '2025-10-25', '2027-10-25'),
+  // Omar Al-Farsi (Fill-Finish Line Lead)
+  bioCell('bio-e2', 'bio-tp1',  'COMPLETED', 95, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e2', 'bio-tp2',  'COMPLETED', 92, '2025-12-04', '2026-12-04'),
+  bioCell('bio-e2', 'bio-tp3',  'COMPLETED', 88, '2025-10-12', '2026-10-12'),
+  bioCell('bio-e2', 'bio-tp4',  'NOT_REQUIRED'),
+  bioCell('bio-e2', 'bio-tp5',  'NOT_REQUIRED'),
+  bioCell('bio-e2', 'bio-tp6',  'NOT_REQUIRED'),
+  bioCell('bio-e2', 'bio-tp7',  'COMPLETED', 94, '2025-11-18', '2026-11-18'),
+  bioCell('bio-e2', 'bio-tp8',  'COMPLETED', 90, '2025-11-08', '2027-11-08'),
+  bioCell('bio-e2', 'bio-tp9',  'NOT_REQUIRED'),
+  bioCell('bio-e2', 'bio-tp10', 'COMPLETED', 86, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e2', 'bio-tp11', 'COMPLETED', 88, '2025-10-25', '2027-10-25'),
+  // Fatima Al-Hashimi (Sterility Testing Analyst)
+  bioCell('bio-e3', 'bio-tp1',  'COMPLETED', 94, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e3', 'bio-tp2',  'NOT_REQUIRED'),
+  bioCell('bio-e3', 'bio-tp3',  'COMPLETED', 90, '2025-10-12', '2026-10-12'),
+  bioCell('bio-e3', 'bio-tp4',  'COMPLETED', 96, '2025-11-22', '2026-11-22'),
+  bioCell('bio-e3', 'bio-tp5',  'NOT_REQUIRED'),
+  bioCell('bio-e3', 'bio-tp6',  'NOT_REQUIRED'),
+  bioCell('bio-e3', 'bio-tp7',  'NOT_REQUIRED'),
+  bioCell('bio-e3', 'bio-tp8',  'NOT_REQUIRED'),
+  bioCell('bio-e3', 'bio-tp9',  'NOT_REQUIRED'),
+  bioCell('bio-e3', 'bio-tp10', 'COMPLETED', 92, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e3', 'bio-tp11', 'IN_PROGRESS', null, null, null, '2026-07-20'),
+  // Yusuf Rahman (Bioreactor Operator)
+  bioCell('bio-e4', 'bio-tp1',  'COMPLETED', 88, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e4', 'bio-tp2',  'NOT_REQUIRED'),
+  bioCell('bio-e4', 'bio-tp3',  'COMPLETED', 84, '2025-10-12', '2026-10-12'),
+  bioCell('bio-e4', 'bio-tp4',  'NOT_REQUIRED'),
+  bioCell('bio-e4', 'bio-tp5',  'COMPLETED', 95, '2025-12-09', '2027-12-09'),
+  bioCell('bio-e4', 'bio-tp6',  'COMPLETED', 86, '2025-11-15', '2027-11-15'),
+  bioCell('bio-e4', 'bio-tp7',  'NOT_REQUIRED'),
+  bioCell('bio-e4', 'bio-tp8',  'NOT_REQUIRED'),
+  bioCell('bio-e4', 'bio-tp9',  'NOT_REQUIRED'),
+  bioCell('bio-e4', 'bio-tp10', 'COMPLETED', 82, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e4', 'bio-tp11', 'COMPLETED', 84, '2025-10-25', '2027-10-25'),
+  // Aisha Khalid (Chromatography Specialist)
+  bioCell('bio-e5', 'bio-tp1',  'COMPLETED', 90, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e5', 'bio-tp2',  'NOT_REQUIRED'),
+  bioCell('bio-e5', 'bio-tp3',  'COMPLETED', 86, '2025-10-12', '2026-10-12'),
+  bioCell('bio-e5', 'bio-tp4',  'NOT_REQUIRED'),
+  bioCell('bio-e5', 'bio-tp5',  'COMPLETED', 88, '2025-12-09', '2027-12-09'),
+  bioCell('bio-e5', 'bio-tp6',  'COMPLETED', 96, '2025-11-15', '2027-11-15'),
+  bioCell('bio-e5', 'bio-tp7',  'NOT_REQUIRED'),
+  bioCell('bio-e5', 'bio-tp8',  'NOT_REQUIRED'),
+  bioCell('bio-e5', 'bio-tp9',  'NOT_REQUIRED'),
+  bioCell('bio-e5', 'bio-tp10', 'COMPLETED', 90, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e5', 'bio-tp11', 'COMPLETED', 87, '2025-10-25', '2027-10-25'),
+  // Khalid Nasser (Aseptic Operator Grade A/B)
+  bioCell('bio-e6', 'bio-tp1',  'COMPLETED', 92, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e6', 'bio-tp2',  'COMPLETED', 90, '2025-12-04', '2026-12-04'),
+  bioCell('bio-e6', 'bio-tp3',  'COMPLETED', 85, '2025-10-12', '2026-10-12'),
+  bioCell('bio-e6', 'bio-tp4',  'NOT_REQUIRED'),
+  bioCell('bio-e6', 'bio-tp5',  'NOT_REQUIRED'),
+  bioCell('bio-e6', 'bio-tp6',  'NOT_REQUIRED'),
+  bioCell('bio-e6', 'bio-tp7',  'COMPLETED', 91, '2025-11-18', '2026-11-18'),
+  bioCell('bio-e6', 'bio-tp8',  'NOT_REQUIRED'),
+  bioCell('bio-e6', 'bio-tp9',  'NOT_REQUIRED'),
+  bioCell('bio-e6', 'bio-tp10', 'COMPLETED', 84, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e6', 'bio-tp11', 'IN_PROGRESS', null, null, null, '2026-07-30'),
+  // Mariam Saeed (Environmental Monitoring Analyst)
+  bioCell('bio-e7', 'bio-tp1',  'COMPLETED', 90, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e7', 'bio-tp2',  'NOT_REQUIRED'),
+  bioCell('bio-e7', 'bio-tp3',  'COMPLETED', 95, '2025-10-12', '2026-10-12'),
+  bioCell('bio-e7', 'bio-tp4',  'COMPLETED', 87, '2025-11-22', '2026-11-22'),
+  bioCell('bio-e7', 'bio-tp5',  'NOT_REQUIRED'),
+  bioCell('bio-e7', 'bio-tp6',  'NOT_REQUIRED'),
+  bioCell('bio-e7', 'bio-tp7',  'NOT_REQUIRED'),
+  bioCell('bio-e7', 'bio-tp8',  'NOT_REQUIRED'),
+  bioCell('bio-e7', 'bio-tp9',  'NOT_REQUIRED'),
+  bioCell('bio-e7', 'bio-tp10', 'COMPLETED', 88, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e7', 'bio-tp11', 'COMPLETED', 86, '2025-10-25', '2027-10-25'),
+  // Hassan Al-Balushi (Media Fill / APS Lead)
+  bioCell('bio-e8', 'bio-tp1',  'COMPLETED', 94, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e8', 'bio-tp2',  'COMPLETED', 97, '2025-12-04', '2026-12-04'),
+  bioCell('bio-e8', 'bio-tp3',  'COMPLETED', 89, '2025-10-12', '2026-10-12'),
+  bioCell('bio-e8', 'bio-tp4',  'COMPLETED', 88, '2025-11-22', '2026-11-22'),
+  bioCell('bio-e8', 'bio-tp5',  'NOT_REQUIRED'),
+  bioCell('bio-e8', 'bio-tp6',  'NOT_REQUIRED'),
+  bioCell('bio-e8', 'bio-tp7',  'NOT_REQUIRED'),
+  bioCell('bio-e8', 'bio-tp8',  'COMPLETED', 92, '2025-11-08', '2027-11-08'),
+  bioCell('bio-e8', 'bio-tp9',  'NOT_REQUIRED'),
+  bioCell('bio-e8', 'bio-tp10', 'COMPLETED', 90, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e8', 'bio-tp11', 'COMPLETED', 93, '2025-10-25', '2027-10-25'),
+  // Noura Aziz (Cold-Chain / GDP Coordinator)
+  bioCell('bio-e9', 'bio-tp1',  'COMPLETED', 86, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e9', 'bio-tp2',  'NOT_REQUIRED'),
+  bioCell('bio-e9', 'bio-tp3',  'NOT_REQUIRED'),
+  bioCell('bio-e9', 'bio-tp4',  'NOT_REQUIRED'),
+  bioCell('bio-e9', 'bio-tp5',  'NOT_REQUIRED'),
+  bioCell('bio-e9', 'bio-tp6',  'NOT_REQUIRED'),
+  bioCell('bio-e9', 'bio-tp7',  'NOT_REQUIRED'),
+  bioCell('bio-e9', 'bio-tp8',  'COMPLETED', 84, '2025-11-08', '2027-11-08'),
+  bioCell('bio-e9', 'bio-tp9',  'COMPLETED', 95, '2025-08-20', '2026-08-20'),
+  bioCell('bio-e9', 'bio-tp10', 'COMPLETED', 88, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e9', 'bio-tp11', 'COMPLETED', 85, '2025-10-25', '2027-10-25'),
+  // Dr. Sami Haddad (Data Integrity Officer)
+  bioCell('bio-e10', 'bio-tp1',  'COMPLETED', 88, '2025-09-15', '2026-09-15'),
+  bioCell('bio-e10', 'bio-tp2',  'NOT_REQUIRED'),
+  bioCell('bio-e10', 'bio-tp3',  'NOT_REQUIRED'),
+  bioCell('bio-e10', 'bio-tp4',  'NOT_REQUIRED'),
+  bioCell('bio-e10', 'bio-tp5',  'NOT_REQUIRED'),
+  bioCell('bio-e10', 'bio-tp6',  'NOT_REQUIRED'),
+  bioCell('bio-e10', 'bio-tp7',  'NOT_REQUIRED'),
+  bioCell('bio-e10', 'bio-tp8',  'NOT_REQUIRED'),
+  bioCell('bio-e10', 'bio-tp9',  'NOT_REQUIRED'),
+  bioCell('bio-e10', 'bio-tp10', 'COMPLETED', 98, '2025-09-30', '2027-09-30'),
+  bioCell('bio-e10', 'bio-tp11', 'COMPLETED', 94, '2025-10-25', '2027-10-25'),
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface CompetencyFilters {
@@ -405,9 +561,9 @@ interface CompetencyFilters {
 
 export function useCompetencyMatrix(filters: CompetencyFilters = {}) {
   const industry = useUserIndustry();
-  const employeesSrc = pickByIndustry(industry, mockEmployees,    { medical_device: mockMedicalDeviceEmployees,   dairy: mockDairyEmployees });
-  const programsSrc  = pickByIndustry(industry, mockPrograms,     { medical_device: mockMedicalDevicePrograms,    dairy: mockDairyPrograms });
-  const cellsSrc     = pickByIndustry(industry, mockMatrixCells,  { medical_device: mockMedicalDeviceMatrixCells, dairy: mockDairyMatrixCells });
+  const employeesSrc = pickByIndustry(industry, mockEmployees,    { medical_device: mockMedicalDeviceEmployees,   dairy: mockDairyEmployees,   biologics: mockBiologicsEmployees });
+  const programsSrc  = pickByIndustry(industry, mockPrograms,     { medical_device: mockMedicalDevicePrograms,    dairy: mockDairyPrograms,    biologics: mockBiologicsPrograms });
+  const cellsSrc     = pickByIndustry(industry, mockMatrixCells,  { medical_device: mockMedicalDeviceMatrixCells, dairy: mockDairyMatrixCells, biologics: mockBiologicsMatrixCells });
   const result = useMemo(() => {
     let employees = [...employeesSrc];
     if (filters.department) employees = employees.filter((e) => e.department === filters.department);
@@ -424,8 +580,8 @@ export function useCompetencyMatrix(filters: CompetencyFilters = {}) {
 
 export function useGapAnalysis(filters: CompetencyFilters = {}) {
   const industry = useUserIndustry();
-  const employeesSrc = pickByIndustry(industry, mockEmployees,   { medical_device: mockMedicalDeviceEmployees, dairy: mockDairyEmployees });
-  const cellsSrc     = pickByIndustry(industry, mockMatrixCells, { medical_device: mockMedicalDeviceMatrixCells, dairy: mockDairyMatrixCells });
+  const employeesSrc = pickByIndustry(industry, mockEmployees,   { medical_device: mockMedicalDeviceEmployees, dairy: mockDairyEmployees, biologics: mockBiologicsEmployees });
+  const cellsSrc     = pickByIndustry(industry, mockMatrixCells, { medical_device: mockMedicalDeviceMatrixCells, dairy: mockDairyMatrixCells, biologics: mockBiologicsMatrixCells });
   const result = useMemo(() => {
     let employees = [...employeesSrc];
     if (filters.department) employees = employees.filter((e) => e.department === filters.department);

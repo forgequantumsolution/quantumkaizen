@@ -4,7 +4,7 @@ import type { AuditLogEntry } from '@/types';
 // ─────────────────────────────────────────────────────────────────────────────
 // INDUSTRIES
 // ─────────────────────────────────────────────────────────────────────────────
-export type IndustryKey = 'pharma' | 'food' | 'chemical' | 'automotive' | 'vehicle' | 'machinery' | 'medicaldevice' | 'dairy';
+export type IndustryKey = 'pharma' | 'food' | 'chemical' | 'automotive' | 'vehicle' | 'machinery' | 'medicaldevice' | 'dairy' | 'biologics';
 
 export const INDUSTRIES: { key: IndustryKey; label: string; plant: string; city: string; products: string; color: string }[] = [
   { key: 'pharma',        label: 'Pharma & Life Sciences', plant: 'FQS Pharma Pvt. Ltd.',         city: 'Pune',                     products: 'Solid Oral Dosage',                color: '#0a1628' },
@@ -15,6 +15,7 @@ export const INDUSTRIES: { key: IndustryKey; label: string; plant: string; city:
   { key: 'machinery',     label: 'Heavy Machinery',         plant: 'FQS HeavyTech Pvt. Ltd.',       city: 'Coimbatore',                products: 'Hydraulic Presses',                color: '#ef4444' },
   { key: 'medicaldevice', label: 'Medical Devices',         plant: 'FQS MedTech Pvt. Ltd.',         city: 'Bengaluru — MedTech Park', products: 'Disposables · Implants · Connected · ISO 13485', color: '#06b6d4' },
   { key: 'dairy',         label: 'Dairy & Milk Products',   plant: 'FQS Dairy Pvt. Ltd.',           city: 'Pune — Dairy Plant',       products: 'Milk · Curd · Ghee · Butter · Sweets · FSSAI', color: '#f97316' },
+  { key: 'biologics',     label: 'Biologics & Insulin',     plant: 'Mubadala Bio — DiabTec',        city: 'Abu Dhabi, UAE',           products: 'Human Insulin · Analogues · GLP-1 · Cartridge Fill-Finish · EU/US FDA', color: '#14b8a6' },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,6 +49,8 @@ const NC_COUNT: Record<IndustryKey, number[]> = {
   medicaldevice:[17,16,15,17,14,16,13,14,13,12,11,12, 11,10,11,9,10,9,11,8,9,8,10,8, 8,7,8,6,7,6,8,7,8,5,6,7],
   // Dairy: FSSAI / ISO 22000 — seasonal (summer microbio peaks), monsoon adulteration
   dairy:        [12,11,10,11,15,18,19,17,13,11,10,9,  10,9,10,11,14,17,18,16,12,10,9,9,   9,8,9,10,13,16,17,15,11,8,9,10],
+  // Biologics: EU Annex 1 / FDA aseptic — media-fill & sterility driven, tight CAPA loop, steady improvement
+  biologics:    [16,15,14,16,13,15,12,13,12,11,10,11, 10,9,10,8,9,8,10,7,8,7,9,7, 7,6,7,5,6,5,7,6,7,4,5,6],
 };
 
 // Severity split per industry (Critical%, Major%, Minor% — rest is Minor)
@@ -60,6 +63,7 @@ const SEV_SPLIT: Record<IndustryKey, { crit: number; major: number }> = {
   machinery:  { crit: 0.12, major: 0.48 },
   medicaldevice:{ crit: 0.16, major: 0.49 },
   dairy:        { crit: 0.12, major: 0.44 },
+  biologics:    { crit: 0.16, major: 0.49 },
 };
 
 function buildNCSeverity(industry: IndustryKey, indices: number[]) {
@@ -165,6 +169,15 @@ const COMPLAINT_DATA: Record<IndustryKey, { received: number; resolved: number }
     {received:7,resolved:6},{received:6,resolved:7},{received:8,resolved:7},{received:10,resolved:8},{received:14,resolved:11},{received:16,resolved:13},
     {received:13,resolved:13},{received:9,resolved:11},{received:8,resolved:9},{received:6,resolved:7},{received:5,resolved:6},{received:5,resolved:5},
   ],
+  // Biologics: pen-device complaints (cartridge CCIT, particulate, cold-chain excursion, titration) — low volume, tightly controlled
+  biologics: [
+    {received:5,resolved:4},{received:4,resolved:4},{received:6,resolved:5},{received:5,resolved:5},{received:7,resolved:6},{received:5,resolved:6},
+    {received:6,resolved:5},{received:4,resolved:6},{received:5,resolved:5},{received:4,resolved:5},{received:6,resolved:5},{received:4,resolved:5},
+    {received:5,resolved:5},{received:4,resolved:5},{received:5,resolved:4},{received:4,resolved:5},{received:6,resolved:5},{received:4,resolved:5},
+    {received:5,resolved:5},{received:3,resolved:5},{received:4,resolved:4},{received:3,resolved:4},{received:5,resolved:4},{received:3,resolved:4},
+    {received:4,resolved:4},{received:3,resolved:4},{received:4,resolved:3},{received:3,resolved:4},{received:4,resolved:3},{received:3,resolved:4},
+    {received:3,resolved:3},{received:3,resolved:3},{received:4,resolved:3},{received:2,resolved:3},{received:3,resolved:3},{received:2,resolved:3},
+  ],
 };
 
 function buildComplaint(industry: IndustryKey, indices: number[]) {
@@ -204,6 +217,7 @@ const CAPA_BASE: Record<IndustryKey, CAPAStage[]> = {
   machinery:  [{stage:'Initiated',count:2},{stage:'Containment',count:2},{stage:'Root Cause',count:4},{stage:'Action Defn',count:3},{stage:'Implementation',count:7},{stage:'Effectiveness',count:2},{stage:'Closed',count:16}],
   medicaldevice:[{stage:'Initiated',count:3},{stage:'Containment',count:3},{stage:'Root Cause',count:6},{stage:'Action Defn',count:5},{stage:'Implementation',count:10},{stage:'Effectiveness',count:4},{stage:'Closed',count:24}],
   dairy:        [{stage:'Initiated',count:4},{stage:'Containment',count:3},{stage:'Root Cause',count:6},{stage:'Action Defn',count:4},{stage:'Implementation',count:9},{stage:'Effectiveness',count:3},{stage:'Closed',count:21}],
+  biologics:    [{stage:'Initiated',count:3},{stage:'Containment',count:3},{stage:'Root Cause',count:6},{stage:'Action Defn',count:5},{stage:'Implementation',count:10},{stage:'Effectiveness',count:4},{stage:'Closed',count:25}],
 };
 
 function scaleCapa(industry: IndustryKey, range: string): CAPAStage[] {
@@ -221,6 +235,7 @@ const AUDIT_BASE: Record<IndustryKey, AuditFinding[]> = {
   machinery:  [{dept:'Fabrication',Major:3,Minor:5,OFI:2},{dept:'Welding',Major:4,Minor:6,OFI:2},{dept:'Machining',Major:2,Minor:4,OFI:3},{dept:'Assembly',Major:2,Minor:3,OFI:2},{dept:'QC',Major:1,Minor:3,OFI:3}],
   medicaldevice:[{dept:'Sterilization',Major:3,Minor:5,OFI:3},{dept:'Cleanroom Assembly',Major:2,Minor:6,OFI:4},{dept:'Design Controls',Major:2,Minor:4,OFI:5},{dept:'Regulatory Affairs',Major:3,Minor:3,OFI:2},{dept:'QC Lab',Major:1,Minor:3,OFI:3}],
   dairy:        [{dept:'Receiving Dock',Major:3,Minor:5,OFI:3},{dept:'Pasteurization',Major:2,Minor:5,OFI:4},{dept:'Packaging',Major:2,Minor:4,OFI:3},{dept:'Microbiology Lab',Major:2,Minor:6,OFI:3},{dept:'Cold Chain',Major:1,Minor:3,OFI:2}],
+  biologics:    [{dept:'Aseptic Fill-Finish',Major:3,Minor:6,OFI:3},{dept:'Drug Substance (Fermentation)',Major:2,Minor:5,OFI:4},{dept:'Downstream Purification',Major:2,Minor:4,OFI:3},{dept:'Microbiology/QC Lab',Major:2,Minor:6,OFI:4},{dept:'Quality Assurance',Major:1,Minor:3,OFI:3}],
 };
 
 function scaleAudit(industry: IndustryKey, range: string): AuditFinding[] {
@@ -243,6 +258,7 @@ const DOC_BASE: Record<IndustryKey, DocEntry[]> = {
   machinery:  [{status:'Draft',count:5,fill:'#94a3b8'},{status:'Under Review',count:3,fill:'#f59e0b'},{status:'Pending Approval',count:2,fill:'#0ea5e9'},{status:'Approved',count:8,fill:'#10b981'},{status:'Published',count:29,fill:'#0a1628'},{status:'Obsolete',count:4,fill:'#e2e8f0'}],
   medicaldevice:[{status:'Draft',count:8,fill:'#94a3b8'},{status:'Under Review',count:5,fill:'#f59e0b'},{status:'Pending Approval',count:4,fill:'#0ea5e9'},{status:'Approved',count:13,fill:'#10b981'},{status:'Published',count:48,fill:'#0a1628'},{status:'Obsolete',count:7,fill:'#e2e8f0'}],
   dairy:        [{status:'Draft',count:6,fill:'#94a3b8'},{status:'Under Review',count:4,fill:'#f59e0b'},{status:'Pending Approval',count:3,fill:'#0ea5e9'},{status:'Approved',count:11,fill:'#10b981'},{status:'Published',count:41,fill:'#0a1628'},{status:'Obsolete',count:6,fill:'#e2e8f0'}],
+  biologics:    [{status:'Draft',count:8,fill:'#94a3b8'},{status:'Under Review',count:5,fill:'#f59e0b'},{status:'Pending Approval',count:4,fill:'#0ea5e9'},{status:'Approved',count:13,fill:'#10b981'},{status:'Published',count:49,fill:'#0a1628'},{status:'Obsolete',count:7,fill:'#e2e8f0'}],
 };
 
 function scaleDoc(industry: IndustryKey, range: string): DocEntry[] {
@@ -264,6 +280,7 @@ const TRAINING_BASE: Record<IndustryKey, TrainingEntry[]> = {
   machinery:  [{dept:'Design',compliance:93},{dept:'Fabrication',compliance:86},{dept:'Welding',compliance:88},{dept:'Assembly',compliance:90},{dept:'QC',compliance:91},{dept:'Service',compliance:82}],
   medicaldevice:[{dept:'Regulatory Affairs',compliance:97},{dept:'Design Controls',compliance:94},{dept:'Cleanroom Assembly',compliance:92},{dept:'Sterilization',compliance:95},{dept:'QC Lab',compliance:93},{dept:'Post-Market Surveillance',compliance:89}],
   dairy:        [{dept:'QA / HACCP Team',compliance:96},{dept:'Microbiology Lab',compliance:94},{dept:'Pasteurization',compliance:91},{dept:'Packaging',compliance:88},{dept:'Cold Chain',compliance:86},{dept:'Receiving Dock',compliance:84}],
+  biologics:    [{dept:'Quality Assurance',compliance:97},{dept:'Aseptic Fill-Finish',compliance:95},{dept:'Microbiology/QC Lab',compliance:93},{dept:'Downstream Purification',compliance:91},{dept:'Drug Substance (Fermentation)',compliance:90},{dept:'Cold-Chain Warehouse',compliance:87}],
 };
 
 function scaleTraining(industry: IndustryKey, range: string): TrainingEntry[] {
@@ -284,6 +301,7 @@ const SUPPLIER_BASE: Record<IndustryKey, RadarEntry[]> = {
   machinery:  [{metric:'Quality',score:87},{metric:'Delivery',score:84},{metric:'Cost',score:79},{metric:'Responsive',score:82},{metric:'Innovation',score:76},{metric:'Compliance',score:88}],
   medicaldevice:[{metric:'Quality',score:93},{metric:'Delivery',score:86},{metric:'Cost',score:77},{metric:'Responsive',score:87},{metric:'Innovation',score:81},{metric:'Compliance',score:95}],
   dairy:        [{metric:'Quality',score:89},{metric:'Delivery',score:92},{metric:'Cost',score:81},{metric:'Responsive',score:87},{metric:'Innovation',score:70},{metric:'Compliance',score:91}],
+  biologics:    [{metric:'Quality',score:93},{metric:'Delivery',score:85},{metric:'Cost',score:75},{metric:'Responsive',score:86},{metric:'Innovation',score:82},{metric:'Compliance',score:96}],
 };
 
 function scaleSupplier(industry: IndustryKey, range: string): RadarEntry[] {
@@ -304,6 +322,7 @@ const RISK_BASE: Record<IndustryKey, RiskPoint[]> = {
   machinery:  [{x:1,y:2,z:2,label:'Low'},{x:2,y:2,z:3,label:'Low'},{x:3,y:3,z:2,label:'Medium'},{x:4,y:2,z:2,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:1,label:'High'},{x:5,y:4,z:1,label:'Critical'}],
   medicaldevice:[{x:2,y:2,z:4,label:'Low'},{x:3,y:2,z:3,label:'Medium'},{x:2,y:3,z:3,label:'Medium'},{x:3,y:3,z:2,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:2,label:'High'},{x:4,y:4,z:1,label:'Critical'},{x:5,y:4,z:1,label:'Critical'}],
   dairy:        [{x:2,y:2,z:3,label:'Low'},{x:3,y:2,z:3,label:'Medium'},{x:2,y:3,z:2,label:'Medium'},{x:4,y:2,z:2,label:'Medium'},{x:3,y:3,z:2,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:1,label:'High'},{x:5,y:4,z:1,label:'Critical'}],
+  biologics:    [{x:2,y:2,z:4,label:'Low'},{x:3,y:2,z:3,label:'Medium'},{x:2,y:3,z:3,label:'Medium'},{x:3,y:3,z:2,label:'Medium'},{x:4,y:3,z:2,label:'High'},{x:3,y:4,z:2,label:'High'},{x:4,y:4,z:1,label:'Critical'},{x:5,y:4,z:1,label:'Critical'}],
 };
 
 function scaleRisk(industry: IndustryKey, range: string): RiskPoint[] {
@@ -345,6 +364,9 @@ const STATS_90D: Record<IndustryKey, Stats> = {
   // workflow + 2 docs awaiting approval; mean training 89% across 12 programs;
   // mean supplier rating 4.4 / 5 (× 20 = 88).
   dairy:        { openNCs:9,  openCAPAs:6,  pendingApprovals:5,  expiringDocuments:4,  overdueActions:4,  trainingCompliance:89, supplierScore:88, auditCompliance:90 },
+  // Biologics — EU GMP Annex 1 / FDA 21 CFR 210/211 & 600s. Mid-sized, tightly
+  // controlled aseptic site: high training compliance and audit readiness.
+  biologics:    { openNCs:16, openCAPAs:10, pendingApprovals:8,  expiringDocuments:6,  overdueActions:5,  trainingCompliance:93, supplierScore:90, auditCompliance:94 },
 };
 
 const RANGE_SCALE_STATS: Record<string, { nc: number; capa: number; approvals: number; docs: number; actions: number; training: number; supplier: number; audit: number }> = {
@@ -479,6 +501,20 @@ const ACTIVITY: Record<IndustryKey, AuditLogEntry[]> = {
     {id:'dy14', timestamp:'2025-11-04T11:00:00Z', userId:'u-dy2', userName:'Meera Pillai',     action:'CREATE',           entityType:'AUDIT',           entityId:'AUD-DY-2025-FSSAI', changedFields:null, ipAddress:'10.8.1.14'},
     {id:'dy15', timestamp:'2024-06-18T10:00:00Z', userId:'u-dy1', userName:'Sandeep Joshi',    action:'APPROVE',          entityType:'DOCUMENT',        entityId:'FSSAI-LIC-2024',    changedFields:null, ipAddress:'10.8.1.11'},
   ],
+  biologics: [
+    {id:'bi1',  timestamp:'2026-05-18T08:30:00Z', userId:'u-bi1', userName:'Dr. Layla Al-Mansoori', action:'CREATE',       entityType:'NON_CONFORMANCE', entityId:'NC-BIO-2026-0051',  changedFields:null, ipAddress:'10.9.1.11'},
+    {id:'bi2',  timestamp:'2026-05-16T14:00:00Z', userId:'u-bi2', userName:'Omar Al-Farsi',      action:'APPROVE',          entityType:'DOCUMENT',        entityId:'APS-MF-2026-Q2',    changedFields:null, ipAddress:'10.9.1.14'},
+    {id:'bi3',  timestamp:'2026-05-14T11:15:00Z', userId:'u-bi3', userName:'Fatima Al-Hashimi',  action:'UPDATE',           entityType:'CAPA',            entityId:'CAPA-BIO-2026-0023', changedFields:{status:{before:'ROOT_CAUSE_ANALYSIS',after:'IMPLEMENTATION'}}, ipAddress:'10.9.1.19'},
+    {id:'bi4',  timestamp:'2026-05-12T09:45:00Z', userId:'u-bi4', userName:'Yusuf Rahman',       action:'UPDATE',           entityType:'NON_CONFORMANCE', entityId:'NC-BIO-2026-0048',  changedFields:{severity:{before:'MAJOR',after:'CRITICAL'}}, ipAddress:'10.9.1.6'},
+    {id:'bi5',  timestamp:'2026-05-09T15:30:00Z', userId:'u-bi5', userName:'Aisha Khalid',       action:'PUBLISH',          entityType:'DOCUMENT',        entityId:'SOP-BIO-CCIT-04',   changedFields:null, ipAddress:'10.9.1.22'},
+    {id:'bi6',  timestamp:'2026-05-06T08:15:00Z', userId:'u-bi1', userName:'Dr. Layla Al-Mansoori', action:'CREATE',       entityType:'AUDIT',           entityId:'AUD-BIO-2026-ANNEX1', changedFields:null, ipAddress:'10.9.1.11'},
+    {id:'bi7',  timestamp:'2026-05-03T13:00:00Z', userId:'u-bi6', userName:'Khalid Nasser',      action:'CREATE',           entityType:'COMPLAINT',       entityId:'CMP-BIO-2026-0019', changedFields:null, ipAddress:'10.9.1.30'},
+    {id:'bi8',  timestamp:'2026-04-28T10:30:00Z', userId:'u-bi7', userName:'Mariam Saeed',       action:'APPROVE',          entityType:'CHANGE_REQUEST',  entityId:'CR-BIO-2026-0012',  changedFields:null, ipAddress:'10.9.1.18'},
+    {id:'bi9',  timestamp:'2026-04-20T09:00:00Z', userId:'u-bi3', userName:'Fatima Al-Hashimi',  action:'CLOSE',            entityType:'NON_CONFORMANCE', entityId:'NC-BIO-2026-0040',  changedFields:null, ipAddress:'10.9.1.19'},
+    {id:'bi10', timestamp:'2026-03-25T11:00:00Z', userId:'u-bi8', userName:'Hassan Al-Balushi',  action:'CREATE',           entityType:'CAPA',            entityId:'CAPA-BIO-2026-0019', changedFields:null, ipAddress:'10.9.1.25'},
+    {id:'bi11', timestamp:'2025-12-10T14:00:00Z', userId:'u-bi2', userName:'Omar Al-Farsi',      action:'CLOSE',            entityType:'CAPA',            entityId:'CAPA-BIO-2025-0061', changedFields:null, ipAddress:'10.9.1.14'},
+    {id:'bi12', timestamp:'2024-09-15T10:00:00Z', userId:'u-bi1', userName:'Dr. Layla Al-Mansoori', action:'APPROVE',       entityType:'DOCUMENT',        entityId:'VMP-BIO-2024-001',  changedFields:null, ipAddress:'10.9.1.11'},
+  ],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -513,6 +549,7 @@ const INSPECTION_PASS: Record<IndustryKey, number[]> = {
   machinery:  [95,94,96,97,92,93,94,95,94,96,93,95],
   medicaldevice:[96,95,96,98,94,95,95,96,95,97,95,96],
   dairy:        [93,92,94,93,89,87,88,91,93,94,93,94],
+  biologics:    [96,95,97,96,94,95,95,96,96,97,95,97],
 };
 
 const MONTH_12_2024 = ['Jan-24','Feb-24','Mar-24','Apr-24','May-24','Jun-24','Jul-24','Aug-24','Sep-24','Oct-24','Nov-24','Dec-24'];
@@ -534,6 +571,7 @@ const INSPECTION_RESULTS: Record<IndustryKey, InspResult[]> = {
   machinery:  [{ result: 'Pass', count: 76  }, { result: 'Fail', count: 9  }, { result: 'Conditional', count: 7  }, { result: 'Pending', count: 3 }],
   medicaldevice:[{ result: 'Pass', count: 128 }, { result: 'Fail', count: 9  }, { result: 'Conditional', count: 13 }, { result: 'Pending', count: 5 }],
   dairy:        [{ result: 'Pass', count: 168 }, { result: 'Fail', count: 17 }, { result: 'Conditional', count: 14 }, { result: 'Pending', count: 6 }],
+  biologics:    [{ result: 'Pass', count: 134 }, { result: 'Fail', count: 8  }, { result: 'Conditional', count: 12 }, { result: 'Pending', count: 5 }],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -549,6 +587,7 @@ const CALIBRATION_STATUS: Record<IndustryKey, CalibEntry[]> = {
   machinery:  [{ status: 'Current', count: 9,  fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
   medicaldevice:[{ status: 'Current', count: 14, fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
   dairy:        [{ status: 'Current', count: 11, fill: '#22C55E' }, { status: 'Due Soon', count: 4, fill: '#F59E0B' }, { status: 'Overdue', count: 2, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
+  biologics:    [{ status: 'Current', count: 16, fill: '#22C55E' }, { status: 'Due Soon', count: 3, fill: '#F59E0B' }, { status: 'Overdue', count: 1, fill: '#EF4444' }, { status: 'Out of Service', count: 1, fill: '#94a3b8' }],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -564,6 +603,7 @@ const QUALITY_KPIS: Record<IndustryKey, QualityKPI[]> = {
   machinery:  [{ label: 'CAPA Closure Rate', value: '85%', sub: 'Within 30-day target', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '93.2%', sub: 'vs 92% target', color: '#22C55E' }, { label: 'Batch Release OT', value: '90%', sub: 'On-time release rate', color: '#22C55E' }, { label: 'OOS Rate', value: '2.8%', sub: 'Out-of-specification events', color: '#F59E0B' }],
   medicaldevice:[{ label: 'CAPA Closure Rate', value: '91%', sub: 'Within 30-day target — 2 of 8 closed', color: '#22C55E' }, { label: 'First-Pass Inspection', value: '94.2%', sub: 'vs 95% target — 11 of 18 PASS', color: '#C9A84C' }, { label: 'DHR Release OT', value: '93%', sub: 'Device History Record on-time', color: '#22C55E' }, { label: 'MDR/Vigilance Rate', value: '1.8%', sub: 'Reportable events per 1000 units', color: '#F59E0B' }],
   dairy:        [{ label: 'CAPA Closure Rate', value: '88%', sub: 'Within 30-day target — 1 of 4 closed PASS', color: '#22C55E' }, { label: 'Raw-Milk Pass Rate', value: '92.4%', sub: 'vs 94% target — fat/SNF · antibio · AfM1 screen', color: '#C9A84C' }, { label: 'Pasteurization OT', value: '95%', sub: 'On-time release of pasteurized batches', color: '#22C55E' }, { label: 'Cold-Chain Excursions', value: '2.1%', sub: 'Routes with >0.5 °C drift / month', color: '#F59E0B' }],
+  biologics:    [{ label: 'CAPA Closure Rate', value: '90%', sub: 'Within 30-day target — deviation & OOS loop', color: '#22C55E' }, { label: 'Media-Fill Pass Rate', value: '99.7%', sub: 'Aseptic process simulations · 0 contam units', color: '#22C55E' }, { label: 'Lot Release OT', value: '93%', sub: 'On-time release · potency/sterility/endotoxin', color: '#22C55E' }, { label: 'CCIT Reject Rate', value: '0.4%', sub: 'Container-closure integrity fails per lot', color: '#F59E0B' }],
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -629,6 +669,7 @@ export function useDashboardData(dateRange: string, industryKey: IndustryKey = '
       machinery:  [0.22, 0.28, 0.30, 0.08, 0.12],
       medicaldevice:[0.16, 0.26, 0.30, 0.10, 0.18],
       dairy:        [0.18, 0.24, 0.30, 0.12, 0.16],
+      biologics:    [0.34, 0.14, 0.26, 0.16, 0.10],
     };
     const ncTypes = ['Deviation','Product NC','Process NC','OOS','Complaint'];
     const ncByType = ncTypes.map((type, i) => ({

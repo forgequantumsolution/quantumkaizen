@@ -319,6 +319,133 @@ export const mockDairyDocuments: Document[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE).
+// Drug-substance + aseptic cartridge fill-finish (insulin, analogues, GLP-1).
+// EU GMP Annex 1 / 21 CFR Part 11 / FDA BLA controlled documents.
+export const mockBiologicsDocuments: Document[] = [
+  {
+    id: 'bio-d1', documentNumber: 'SOP-BIO-0001', title: 'Sterility Assurance & Aseptic Processing SOP',
+    description: 'Governing SOP for sterility assurance across drug-substance and aseptic cartridge fill-finish, aligned with EU GMP Annex 1 (2022) and PIC/S.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Sterility Assurance', department: 'Aseptic Fill-Finish',
+    departmentId: 'dept-bio-aff', version: '4.0', owner: 'Dr. Layla Al-Mansoori', ownerId: 'u-bio1',
+    effectiveDate: '2025-09-01', expiryDate: '2027-08-31', reviewDate: '2026-09-01',
+    tags: ['Annex 1', 'Sterility Assurance', 'Aseptic'], createdAt: '2024-05-10T10:00:00Z', updatedAt: '2025-09-01T09:00:00Z',
+    changeSummary: 'v4.0: incorporated EU GMP Annex 1 (2022) revision and Contamination Control Strategy linkage',
+  },
+  {
+    id: 'bio-d2', documentNumber: 'VAL-BIO-0012', title: 'Aseptic Process Validation Protocol (Annex 1)',
+    description: 'Process validation protocol for the cartridge aseptic fill-finish line covering line clearance, intervention matrix, and acceptance criteria per Annex 1.',
+    level: 'PROCEDURE', status: 'UNDER_REVIEW', category: 'Validation', department: 'Validation',
+    departmentId: 'dept-bio-val', version: '2.1', owner: 'Omar Al-Farsi', ownerId: 'u-bio2',
+    effectiveDate: null, expiryDate: null, reviewDate: null,
+    tags: ['Annex 1', 'Process Validation', 'Aseptic'], createdAt: '2024-11-02T09:00:00Z', updatedAt: '2026-04-18T11:00:00Z',
+    changeSummary: 'v2.1 draft: added worst-case intervention matrix and revised acceptance criteria',
+  },
+  {
+    id: 'bio-d3', documentNumber: 'VAL-BIO-0018', title: 'Media Fill Qualification Report — Cartridge Line FF-02',
+    description: 'Aseptic Process Simulation (media fill) qualification report for cartridge fill-finish line FF-02; 3 consecutive runs, zero contaminated units accepted.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Validation', department: 'Aseptic Fill-Finish',
+    departmentId: 'dept-bio-aff', version: '1.0', owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3',
+    effectiveDate: '2025-12-05', expiryDate: null, reviewDate: '2026-06-05',
+    tags: ['Media Fill', 'APS', 'Annex 1'], createdAt: '2025-08-15T10:00:00Z', updatedAt: '2025-12-05T09:00:00Z',
+  },
+  {
+    id: 'bio-d4', documentNumber: 'SOP-BIO-0007', title: 'Environmental Monitoring Program',
+    description: 'Viable and non-viable environmental monitoring program for Grade A/B/C/D zones — sampling locations, frequency, alert/action limits and trending per Annex 1.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Environmental Monitoring', department: 'QC Lab',
+    departmentId: 'dept-bio-qc', version: '3.2', owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3',
+    effectiveDate: '2025-10-15', expiryDate: '2027-10-14', reviewDate: '2026-10-15',
+    tags: ['EM', 'Grade A', 'ISO 14644'], createdAt: '2023-07-20T10:00:00Z', updatedAt: '2025-10-15T11:00:00Z',
+    changeSummary: 'v3.2: revised Grade A action limits to <1 CFU and added continuous viable monitoring',
+  },
+  {
+    id: 'bio-d5', documentNumber: 'POL-BIO-0003', title: 'Contamination Control Strategy (CCS)',
+    description: 'Site-level Contamination Control Strategy integrating facility, utilities, personnel, process and monitoring controls per EU GMP Annex 1 §2.',
+    level: 'POLICY', status: 'PUBLISHED', category: 'Sterility Assurance', department: 'QA',
+    departmentId: 'dept-bio-qa', version: '2.0', owner: 'Dr. Layla Al-Mansoori', ownerId: 'u-bio1',
+    effectiveDate: '2025-09-01', expiryDate: '2027-08-31', reviewDate: '2026-09-01',
+    tags: ['CCS', 'Annex 1', 'Contamination Control'], createdAt: '2024-06-01T10:00:00Z', updatedAt: '2025-09-01T09:00:00Z',
+  },
+  {
+    id: 'bio-d6', documentNumber: 'BMR-BIO-0024', title: 'Cartridge Fill-Finish Batch Manufacturing Record — Insulin Glargine 3 mL',
+    description: 'BMR for aseptic fill-finish of insulin glargine 3 mL cartridges — bulk thaw, sterile filtration, filling, stoppering, capping, IPC and release linkage.',
+    level: 'FORM', status: 'PUBLISHED', category: 'Batch Record', department: 'Aseptic Fill-Finish',
+    departmentId: 'dept-bio-aff', version: '1.6', owner: 'Yusuf Rahman', ownerId: 'u-bio4',
+    effectiveDate: '2025-11-20', expiryDate: '2027-11-19', reviewDate: '2026-11-20',
+    tags: ['BMR', 'Insulin Glargine', 'Fill-Finish'], createdAt: '2024-02-04T10:00:00Z', updatedAt: '2025-11-20T11:00:00Z',
+    changeSummary: 'v1.6: added in-line CCIT check and revised IPC weight-check frequency',
+  },
+  {
+    id: 'bio-d7', documentNumber: 'SOP-BIO-0011', title: 'Chromatography Purification SOP — Drug Substance',
+    description: 'Operating SOP for downstream chromatography (capture, polishing) of recombinant insulin drug substance — column packing, loading, elution and CIP/sanitization.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Purification', department: 'Drug Substance',
+    departmentId: 'dept-bio-ds', version: '2.4', owner: 'Omar Al-Farsi', ownerId: 'u-bio2',
+    effectiveDate: '2025-07-10', expiryDate: '2027-07-09', reviewDate: '2026-07-10',
+    tags: ['Chromatography', 'Downstream', 'Purification'], createdAt: '2023-09-12T10:00:00Z', updatedAt: '2025-07-10T09:00:00Z',
+  },
+  {
+    id: 'bio-d8', documentNumber: 'VAL-BIO-0031', title: 'Cleaning Validation Report — Product-Contact Equipment',
+    description: 'Cleaning validation report for shared product-contact equipment on the drug-substance suite — MACO calculation, swab/rinse recovery and worst-case product bracketing.',
+    level: 'PROCEDURE', status: 'PENDING_APPROVAL', category: 'Validation', department: 'Validation',
+    departmentId: 'dept-bio-val', version: '1.0', owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3',
+    effectiveDate: null, expiryDate: null, reviewDate: null,
+    tags: ['Cleaning Validation', 'MACO', 'TOC'], createdAt: '2025-10-30T09:00:00Z', updatedAt: '2026-05-02T11:00:00Z',
+    changeSummary: 'v1.0: pending QA approval — health-based exposure limits (PDE) applied for MACO',
+  },
+  {
+    id: 'bio-d9', documentNumber: 'SOP-BIO-0015', title: 'Cold-Chain Handling SOP — Drug Substance & Finished Cartridges',
+    description: 'SOP for 2-8 °C and frozen (-20 °C / -70 °C) handling, storage, qualified shipping and excursion management for biologic drug substance and finished cartridges.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Cold Chain', department: 'QA',
+    departmentId: 'dept-bio-qa', version: '3.0', owner: 'Yusuf Rahman', ownerId: 'u-bio4',
+    effectiveDate: '2026-01-15', expiryDate: '2028-01-14', reviewDate: '2027-01-15',
+    tags: ['Cold Chain', 'GDP', 'Stability'], createdAt: '2024-04-08T10:00:00Z', updatedAt: '2026-01-15T11:00:00Z',
+    changeSummary: 'v3.0: added qualified shipper matrix and electronic temperature-excursion workflow',
+  },
+  {
+    id: 'bio-d10', documentNumber: 'SPEC-BIO-0009', title: 'Container Closure Integrity Test Method (CCIT)',
+    description: 'Analytical method and specification for deterministic CCIT (high-voltage leak detection) of filled insulin cartridges per USP <1207>.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Specification', department: 'QC Lab',
+    departmentId: 'dept-bio-qc', version: '2.0', owner: 'Fatima Al-Hashimi', ownerId: 'u-bio3',
+    effectiveDate: '2025-08-20', expiryDate: '2027-08-19', reviewDate: '2026-08-20',
+    tags: ['CCIT', 'USP <1207>', 'Container Closure'], createdAt: '2023-11-15T10:00:00Z', updatedAt: '2025-08-20T09:00:00Z',
+  },
+  {
+    id: 'bio-d11', documentNumber: 'SPEC-BIO-0014', title: 'Host Cell Protein (HCP) Assay Method',
+    description: 'ELISA-based Host Cell Protein quantitation method and acceptance specification for recombinant drug substance release and process characterization.',
+    level: 'PROCEDURE', status: 'UNDER_REVIEW', category: 'Specification', department: 'QC Lab',
+    departmentId: 'dept-bio-qc', version: '1.3', owner: 'Omar Al-Farsi', ownerId: 'u-bio2',
+    effectiveDate: null, expiryDate: null, reviewDate: null,
+    tags: ['HCP', 'ELISA', 'Drug Substance'], createdAt: '2024-08-01T10:00:00Z', updatedAt: '2026-04-25T11:00:00Z',
+    changeSummary: 'v1.3 draft: bridging to second-generation HCP antibody coverage per CR-BIO-2026-0008',
+  },
+  {
+    id: 'bio-d12', documentNumber: 'POL-BIO-0020', title: 'Data Integrity Policy (21 CFR Part 11)',
+    description: 'Site data integrity policy enforcing ALCOA+ principles, electronic records / signatures controls and audit-trail review per 21 CFR Part 11 and EU GMP Annex 11.',
+    level: 'POLICY', status: 'PUBLISHED', category: 'Data Integrity', department: 'QA',
+    departmentId: 'dept-bio-qa', version: '2.1', owner: 'Dr. Layla Al-Mansoori', ownerId: 'u-bio1',
+    effectiveDate: '2025-11-01', expiryDate: '2027-10-31', reviewDate: '2026-11-01',
+    tags: ['Data Integrity', '21 CFR Part 11', 'ALCOA+'], createdAt: '2023-10-05T10:00:00Z', updatedAt: '2025-11-01T09:00:00Z',
+    changeSummary: 'v2.1: added mandatory periodic audit-trail review cadence per system criticality',
+  },
+  {
+    id: 'bio-d13', documentNumber: 'BLA-BIO-2025-Q3', title: 'BLA Quality Module (CTD Module 3) — Insulin Drug Product',
+    description: 'Chemistry, Manufacturing and Controls (CTD Module 3) content for the FDA Biologics License Application of the insulin cartridge drug product (S and P sections).',
+    level: 'EXTERNAL', status: 'PUBLISHED', category: 'Regulatory', department: 'Regulatory Affairs',
+    departmentId: 'dept-bio-ra', version: '1.0', owner: 'Yusuf Rahman', ownerId: 'u-bio4',
+    effectiveDate: '2025-12-01', expiryDate: null, reviewDate: '2026-12-01',
+    tags: ['BLA', 'CTD Module 3', 'CMC'], createdAt: '2025-06-10T10:00:00Z', updatedAt: '2025-12-01T09:00:00Z',
+  },
+  {
+    id: 'bio-d14', documentNumber: 'SOP-BIO-0022', title: 'GLP-1 Aseptic Fill-Finish Line Clearance SOP',
+    description: 'Line clearance and changeover SOP for the GLP-1 cartridge fill-finish line — reconciliation, label verification, residual checks and cross-contamination prevention.',
+    level: 'PROCEDURE', status: 'PUBLISHED', category: 'Manufacturing', department: 'Aseptic Fill-Finish',
+    departmentId: 'dept-bio-aff', version: '1.5', owner: 'Yusuf Rahman', ownerId: 'u-bio4',
+    effectiveDate: '2026-02-10', expiryDate: '2028-02-09', reviewDate: '2027-02-10',
+    tags: ['GLP-1', 'Line Clearance', 'Fill-Finish'], createdAt: '2024-09-18T10:00:00Z', updatedAt: '2026-02-10T11:00:00Z',
+    changeSummary: 'v1.5: dual-sign-off line clearance + electronic reconciliation (CAPA-BIO-2026-0014)',
+  },
+];
+
 // ── Hooks ────────────────────────────────────────────────────────────────────
 
 interface DocumentFilters {
@@ -340,7 +467,7 @@ export function useDocuments(filters: DocumentFilters = {}) {
         return unwrapList<Document>(data, flattenDoc as any);
       } catch {
         // Mock fallback
-        const baseList = pickByIndustry(industry, mockDocuments, { medical_device: mockMedicalDeviceDocuments, dairy: mockDairyDocuments });
+        const baseList = pickByIndustry(industry, mockDocuments, { medical_device: mockMedicalDeviceDocuments, dairy: mockDairyDocuments, biologics: mockBiologicsDocuments });
         let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((d) => d.status === filters.status);
         if (filters.level) filtered = filtered.filter((d) => d.level === filters.level);
@@ -375,7 +502,7 @@ export function useDocument(id: string) {
         const { data } = await api.get(`/dms/documents/${id}`);
         return unwrapItem<Document>(data, flattenDoc as any);
       } catch {
-        const baseList = pickByIndustry(industry, mockDocuments, { medical_device: mockMedicalDeviceDocuments, dairy: mockDairyDocuments });
+        const baseList = pickByIndustry(industry, mockDocuments, { medical_device: mockMedicalDeviceDocuments, dairy: mockDairyDocuments, biologics: mockBiologicsDocuments });
         const doc = baseList.find((d) => d.id === id);
         if (!doc) throw new Error('Document not found');
         return doc;

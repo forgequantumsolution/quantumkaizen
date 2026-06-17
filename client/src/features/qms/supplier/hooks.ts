@@ -696,6 +696,154 @@ export const mockDairySuppliers: Supplier[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE): biologics
+// drug-substance + aseptic cartridge fill-finish (insulin, analogues, GLP-1).
+// GMP biologics supplier mix — single-use bioprocess, chromatography, media,
+// primary packaging, sterile filtration, clean utilities, cold-chain, reagents.
+const bio = (q: number, d: number) => ({
+  quality: q, delivery: d, cost: 82, responsiveness: 86, innovation: 81, overallScore: Math.round((q + d) / 2),
+  monthlyTrend: [
+    { month: 'Oct 25', score: Math.round((q + d) / 2) - 2 },
+    { month: 'Nov 25', score: Math.round((q + d) / 2) - 1 },
+    { month: 'Dec 25', score: Math.round((q + d) / 2)     },
+    { month: 'Jan 26', score: Math.round((q + d) / 2) + 1 },
+    { month: 'Feb 26', score: Math.round((q + d) / 2) + 1 },
+    { month: 'Mar 26', score: Math.round((q + d) / 2) + 2 },
+  ],
+});
+
+export const mockBiologicsSuppliers: Supplier[] = [
+  {
+    id: 'bio-sup1', code: 'SUP-BIO-0001', name: 'Sartorius Stedim MENA FZ-LLC', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Khalid Al Mansoori', email: 'khalid.almansoori@sartorius.com', phone: '+971 4 818 9000',
+    address: 'Dubai Science Park, Tower B, Office 1204', city: 'Dubai', state: 'Dubai',
+    productsServices: ['Single-use bioprocess bags & assemblies', 'Flexsafe 2D/3D mixing bags', 'Gamma-irradiated tubing manifolds'],
+    rating: 4.7, performance: bio(95, 93), certExpiry: '2027-04-30', lastAuditDate: '2025-09-16',
+    certifications: [
+      { id: 'bio-sc1', name: 'ISO 9001:2015',        certificateNumber: 'TUV-SUS-90118',  issuedBy: 'TÜV SÜD',  issuedDate: '2024-05-01', expiryDate: '2027-04-30', status: 'VALID' },
+      { id: 'bio-sc2', name: 'USP <88> Class VI / ISO 10993', certificateNumber: 'EXT-SUS-2241', issuedBy: 'Toxikon', issuedDate: '2024-06-12', expiryDate: '2027-06-11', status: 'VALID' },
+    ],
+    audits: [{ id: 'bio-sa1', type: 'Single-use supplier GMP audit', date: '2025-09-16', auditor: 'Dr. Fatima Al Hashimi', score: 94, status: 'COMPLETED', findings: '1 Minor (extractables data pack) — CAR closed', ncCount: 1 }],
+    createdAt: '2024-04-12T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'bio-sup2', code: 'SUP-BIO-0002', name: 'Cytiva Bioprocess Middle East', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Dr. Lina Haddad', email: 'lina.haddad@cytiva.com', phone: '+971 2 654 7800',
+    address: 'Masdar City, Incubator Building, Unit 7', city: 'Abu Dhabi', state: 'Abu Dhabi',
+    productsServices: ['Protein A chromatography resin (MabSelect)', 'Ion-exchange resins', 'Pre-packed columns'],
+    rating: 4.8, performance: bio(97, 94), certExpiry: '2027-08-30', lastAuditDate: '2025-08-05',
+    certifications: [
+      { id: 'bio-sc3', name: 'ISO 9001:2015',          certificateNumber: 'DNV-CYT-7611', issuedBy: 'DNV',  issuedDate: '2024-08-31', expiryDate: '2027-08-30', status: 'VALID' },
+      { id: 'bio-sc4', name: 'EMA EXCiPACT GMP',        certificateNumber: 'EXC-2024-1144', issuedBy: 'EXCiPACT', issuedDate: '2024-01-15', expiryDate: '2026-12-31', status: 'EXPIRING_SOON' },
+    ],
+    audits: [{ id: 'bio-sa2', type: 'Chromatography resin supplier audit', date: '2025-08-05', auditor: 'Omar Khalil', score: 96, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2023-12-01T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'bio-sup3', code: 'SUP-BIO-0003', name: 'Thermo Fisher Scientific (Gibco) Gulf', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Rajesh Menon', email: 'rajesh.menon@thermofisher.com', phone: '+971 4 421 7000',
+    address: 'Jebel Ali Free Zone, JAFZA One, Tower A', city: 'Dubai', state: 'Dubai',
+    productsServices: ['Chemically-defined cell-culture media (CHO)', 'Feeds & supplements', 'L-glutamine substitute'],
+    rating: 4.7, performance: bio(95, 92), certExpiry: '2027-11-30', lastAuditDate: '2025-11-13',
+    certifications: [
+      { id: 'bio-sc5', name: 'ISO 9001:2015',     certificateNumber: 'BSI-TF-22414', issuedBy: 'BSI',  issuedDate: '2024-12-01', expiryDate: '2027-11-30', status: 'VALID' },
+      { id: 'bio-sc6', name: 'IPEC-PQG GMP (media)', certificateNumber: 'IPEC-TF-4118', issuedBy: 'IPEC', issuedDate: '2024-09-12', expiryDate: '2027-09-12', status: 'VALID' },
+    ],
+    audits: [{ id: 'bio-sa3', type: 'Cell-culture media supplier audit', date: '2025-11-13', auditor: 'Dr. Fatima Al Hashimi', score: 95, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2022-02-15T09:00:00Z', updatedAt: '2026-03-12T11:00:00Z',
+  },
+  {
+    id: 'bio-sup4', code: 'SUP-BIO-0004', name: 'SCHOTT Pharma MENA', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Yasmine Bouazizi', email: 'yasmine.bouazizi@schott.com', phone: '+971 2 491 5500',
+    address: 'KIZAD Industrial Zone, Plot AZ-12', city: 'Abu Dhabi', state: 'Abu Dhabi',
+    productsServices: ['Type-I borosilicate glass cartridges (3ml)', 'Elastomer plungers & septa', 'Aluminium crimp caps'],
+    rating: 4.6, performance: bio(94, 92), certExpiry: '2027-04-30', lastAuditDate: '2025-10-16',
+    certifications: [
+      { id: 'bio-sc7', name: 'ISO 15378:2017 (GMP primary packaging)', certificateNumber: 'TUV-PKG-2222', issuedBy: 'TÜV SÜD', issuedDate: '2024-05-01', expiryDate: '2027-04-30', status: 'VALID' },
+      { id: 'bio-sc8', name: 'USP <660> / <381> compliance',          certificateNumber: 'INTERTEK-991', issuedBy: 'Intertek', issuedDate: '2024-09-12', expiryDate: '2026-09-12', status: 'EXPIRING_SOON' },
+    ],
+    audits: [{ id: 'bio-sa4', type: 'Primary packaging GMP audit', date: '2025-10-16', auditor: 'Omar Khalil', score: 90, status: 'COMPLETED', findings: '2 Minor — particulate trend & glass delamination study', ncCount: 2 }],
+    createdAt: '2023-05-10T09:00:00Z', updatedAt: '2026-03-12T11:00:00Z',
+  },
+  {
+    id: 'bio-sup5', code: 'SUP-BIO-0005', name: 'Pall Life Sciences Gulf FZE', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Sami Nasser', email: 'sami.nasser@pall.com', phone: '+971 4 883 1200',
+    address: 'Dubai Investment Park, Block 4, Unit 22', city: 'Dubai', state: 'Dubai',
+    productsServices: ['0.2µm sterilizing-grade filters', 'Mycoplasma-reduction filters', 'Filter integrity test cartridges'],
+    rating: 4.7, performance: bio(96, 93), certExpiry: '2027-02-15', lastAuditDate: '2025-12-10',
+    certifications: [
+      { id: 'bio-sc9',  name: 'ISO 9001:2015',         certificateNumber: 'DNV-PALL-4477', issuedBy: 'DNV', issuedDate: '2024-02-16', expiryDate: '2027-02-15', status: 'VALID' },
+      { id: 'bio-sc10', name: 'ASTM F838 bacterial retention validation', certificateNumber: 'VAL-PALL-3041', issuedBy: 'Nelson Labs', issuedDate: '2024-02-16', expiryDate: '2027-02-15', status: 'VALID' },
+    ],
+    audits: [{ id: 'bio-sa5', type: 'Sterilizing filter supplier audit', date: '2025-12-10', auditor: 'Dr. Fatima Al Hashimi', score: 94, status: 'COMPLETED', findings: '1 OFI on validation guide revision', ncCount: 0 }],
+    createdAt: '2024-02-20T09:00:00Z', updatedAt: '2026-03-12T11:00:00Z',
+  },
+  {
+    id: 'bio-sup6', code: 'SUP-BIO-0006', name: 'BWT Pharma & Biotech Middle East', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Hassan Al Rashed', email: 'hassan.alrashed@bwt.com', phone: '+971 2 555 9100',
+    address: 'Mussafah Industrial Area, M-40, Plot 88', city: 'Abu Dhabi', state: 'Abu Dhabi',
+    productsServices: ['WFI generation skids (distillation)', 'Clean steam generators', 'WFI loop qualification & service'],
+    rating: 4.5, performance: bio(92, 91), certExpiry: '2027-05-31', lastAuditDate: '2026-02-05',
+    certifications: [
+      { id: 'bio-sc11', name: 'ISO 9001:2015',                 certificateNumber: 'BV-BWT-2102', issuedBy: 'Bureau Veritas', issuedDate: '2024-06-01', expiryDate: '2027-05-31', status: 'VALID' },
+      { id: 'bio-sc12', name: 'USP <1231> / Ph.Eur. WFI qualification', certificateNumber: 'QUAL-BWT-3110', issuedBy: 'In-house Validation', issuedDate: '2024-08-12', expiryDate: '2027-08-11', status: 'VALID' },
+    ],
+    audits: [{ id: 'bio-sa6', type: 'Clean-utilities vendor audit', date: '2026-02-05', auditor: 'Omar Khalil', score: 91, status: 'COMPLETED', findings: '1 Minor — endotoxin sampling SOP', ncCount: 1 }],
+    createdAt: '2024-05-08T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'bio-sup7', code: 'SUP-BIO-0007', name: 'Emirates Cold Chain Logistics LLC', category: 'CRITICAL', status: 'APPROVED',
+    contactPerson: 'Noura Al Suwaidi', email: 'noura.alsuwaidi@emiratescoldchain.ae', phone: '+971 2 677 4400',
+    address: 'ICAD III, Logistics Park, Building L-9', city: 'Abu Dhabi', state: 'Abu Dhabi',
+    productsServices: ['2-8°C GDP cold-chain transport', 'Validated reefer & qualified shippers', 'Temperature-excursion management'],
+    rating: 4.6, performance: bio(94, 93), certExpiry: '2027-07-31', lastAuditDate: '2025-08-23',
+    certifications: [
+      { id: 'bio-sc13', name: 'EU GDP (2013/C 343/01) compliance', certificateNumber: 'GDP-ECC-9912', issuedBy: 'SGS', issuedDate: '2024-08-01', expiryDate: '2027-07-31', status: 'VALID' },
+      { id: 'bio-sc14', name: 'IATA CEIV Pharma',                  certificateNumber: 'CEIV-ECC-3344', issuedBy: 'IATA', issuedDate: '2024-04-15', expiryDate: '2027-04-14', status: 'VALID' },
+    ],
+    audits: [{ id: 'bio-sa7', type: 'Cold-chain logistics GDP audit', date: '2025-08-23', auditor: 'Dr. Fatima Al Hashimi', score: 93, status: 'COMPLETED', findings: 'No findings', ncCount: 0 }],
+    createdAt: '2023-08-12T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'bio-sup8', code: 'SUP-BIO-0008', name: 'USP Reference Standards & Bioassay Reagents', category: 'MAJOR', status: 'APPROVED',
+    contactPerson: 'Dr. Amira El-Sayed', email: 'amira.elsayed@usp-reagents.com', phone: '+971 4 360 5500',
+    address: 'Dubai Healthcare City, Building 27, Block A', city: 'Dubai', state: 'Dubai',
+    productsServices: ['Insulin reference standards', 'GLP-1 bioassay reagents', 'HPLC system suitability standards'],
+    rating: 4.5, performance: bio(93, 90), certExpiry: '2027-09-30', lastAuditDate: '2025-09-05',
+    certifications: [
+      { id: 'bio-sc15', name: 'ISO 17034 (reference material producer)', certificateNumber: 'ILAC-RMP-21077', issuedBy: 'ILAC',  issuedDate: '2024-10-01', expiryDate: '2027-09-30', status: 'VALID' },
+      { id: 'bio-sc16', name: 'ISO/IEC 17025',                            certificateNumber: 'ILAC-T-2244', issuedBy: 'ILAC', issuedDate: '2024-02-15', expiryDate: '2027-02-14', status: 'VALID' },
+    ],
+    audits: [{ id: 'bio-sa8', type: 'Reference standard supplier audit', date: '2025-09-05', auditor: 'Omar Khalil', score: 92, status: 'COMPLETED', findings: '1 OFI on CoA traceability', ncCount: 0 }],
+    createdAt: '2022-11-18T09:00:00Z', updatedAt: '2026-03-20T11:00:00Z',
+  },
+  {
+    id: 'bio-sup9', code: 'SUP-BIO-0009', name: 'Hamilton Process Analytics MENA', category: 'MAJOR', status: 'CONDITIONAL',
+    contactPerson: 'Tariq Bensalah', email: 'tariq.bensalah@hamilton.ae', phone: '+971 6 557 2200',
+    address: 'Sharjah Research, Technology & Innovation Park, Unit 14', city: 'Sharjah', state: 'Sharjah',
+    productsServices: ['Single-use pH/DO sensors', 'Optical viable-cell-density probes', 'Pre-calibrated sensor patches'],
+    rating: 3.8, performance: bio(82, 84), certExpiry: '2026-09-30', lastAuditDate: '2026-05-11',
+    certifications: [
+      { id: 'bio-sc17', name: 'ISO 9001:2015', certificateNumber: 'IRQS-HAM-3320', issuedBy: 'IRQS', issuedDate: '2023-10-01', expiryDate: '2026-09-30', status: 'EXPIRING_SOON' },
+      { id: 'bio-sc18', name: 'Sensor calibration validation', certificateNumber: 'CAL-HAM-3411', issuedBy: 'In-house Lab', issuedDate: '2024-04-21', expiryDate: '2026-04-21', status: 'EXPIRING_SOON' },
+    ],
+    audits: [{ id: 'bio-sa9', type: 'For-cause audit (calibration drift)', date: '2026-05-11', auditor: 'Dr. Fatima Al Hashimi', score: 75, status: 'COMPLETED', findings: '1 Major (open), 1 Minor — sensor pre-calibration documentation', ncCount: 2 }],
+    createdAt: '2024-10-12T09:00:00Z', updatedAt: '2026-05-12T15:00:00Z',
+  },
+  {
+    id: 'bio-sup10', code: 'SUP-BIO-0010', name: 'Gulf Pharma Printpack LLC', category: 'MAJOR', status: 'PENDING',
+    contactPerson: 'Reema Al Farsi', email: 'reema.alfarsi@gulfprintpack.ae', phone: '+971 2 558 7700',
+    address: 'Mussafah Industrial Area, M-32, Plot 41', city: 'Abu Dhabi', state: 'Abu Dhabi',
+    productsServices: ['Secondary cartons & inserts', 'Braille-embossed labels', 'Serialization-ready leaflets'],
+    rating: 4.0, performance: bio(86, 85), certExpiry: '2027-05-31', lastAuditDate: '2026-02-06',
+    certifications: [
+      { id: 'bio-sc19', name: 'ISO 15378:2017 (secondary packaging)', certificateNumber: 'TUV-PKG-66501', issuedBy: 'TÜV SÜD', issuedDate: '2024-06-01', expiryDate: '2027-05-31', status: 'VALID' },
+    ],
+    audits: [{ id: 'bio-sa10', type: 'Initial qualification audit', date: '2026-02-06', auditor: 'Omar Khalil', score: 85, status: 'COMPLETED', findings: '3 Minor — qualification in progress', ncCount: 3 }],
+    createdAt: '2025-12-10T09:00:00Z', updatedAt: '2026-02-15T11:00:00Z',
+  },
+];
+
 // ── Hooks ───────────────────────────────────────────────────────────────────
 
 interface SupplierFilters {
@@ -713,7 +861,7 @@ export function useSuppliers(filters: SupplierFilters = {}) {
         const { data } = await api.get('/qms/suppliers', { params: filters });
         return unwrapList<Supplier>(data, normalizeSupplier);
       } catch {
-        const baseList = pickByIndustry(industry, mockSuppliers, { medical_device: mockMedicalDeviceSuppliers, dairy: mockDairySuppliers });
+        const baseList = pickByIndustry(industry, mockSuppliers, { medical_device: mockMedicalDeviceSuppliers, dairy: mockDairySuppliers, biologics: mockBiologicsSuppliers });
         let filtered = [...baseList];
         if (filters.status) filtered = filtered.filter((s) => s.status === filters.status);
         if (filters.category) filtered = filtered.filter((s) => s.category === filters.category);
@@ -741,7 +889,7 @@ export function useSupplier(id: string) {
         const { data } = await api.get(`/qms/suppliers/${id}`);
         return unwrapItem<Supplier>(data, normalizeSupplier);
       } catch {
-        const baseList = pickByIndustry(industry, mockSuppliers, { medical_device: mockMedicalDeviceSuppliers, dairy: mockDairySuppliers });
+        const baseList = pickByIndustry(industry, mockSuppliers, { medical_device: mockMedicalDeviceSuppliers, dairy: mockDairySuppliers, biologics: mockBiologicsSuppliers });
         const supplier = baseList.find((s) => s.id === id);
         if (!supplier) throw new Error('Supplier not found');
         return supplier;

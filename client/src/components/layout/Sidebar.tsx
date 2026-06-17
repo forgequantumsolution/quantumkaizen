@@ -6,7 +6,7 @@ import {
   ChevronRight, Truck, GitBranch, MessageSquareWarning,
   BarChart3, Gauge, ClipboardList, Clock, FileCode,
   ShieldCheck, BookOpen, RefreshCw, Network, ChevronDown,
-  TrendingUp, Trophy,
+  TrendingUp, Trophy, ListChecks,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
@@ -32,6 +32,7 @@ const navigation: NavSection[] = [
     items: [
       { label: 'Non-Conformances', path: '/qms/non-conformances',  icon: AlertTriangle },
       { label: 'CAPA',             path: '/qms/capa',              icon: CheckCircle2 },
+      { label: 'Action Items',     path: '/qms/action-items',      icon: ListChecks },
       { label: 'Risk Register',    path: '/qms/risks',             icon: Shield },
       { label: 'Audits',           path: '/qms/audits',            icon: ClipboardCheck },
       { label: 'FMEA',             path: '/qms/fmea',              icon: Activity },

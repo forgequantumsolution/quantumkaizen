@@ -202,7 +202,7 @@ export default function NCCreatePage() {
       </div>
 
       {/* ── Step Content ─────────────────────────────────────────────────── */}
-      <Card className="max-w-3xl">
+      <Card className="w-full">
         {/* Step 1: Details */}
         {currentStep === 0 && (
           <div className="space-y-5">

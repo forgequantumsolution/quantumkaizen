@@ -470,6 +470,186 @@ const mockDairy: InspectionRecord[] = [
   },
 ];
 
+// Mubadala Bio "DiabTec" (Abu Dhabi, UAE) — biologics drug-substance & aseptic cartridge fill-finish.
+// Incoming materials, in-process and final release inspection records.
+const mockBiologics: InspectionRecord[] = [
+  // ── Incoming materials ──────────────────────────────────────────────────
+  {
+    id: 'INSP-BIO-0001', inspectionNumber: 'INSP-BIO-2026-001', type: 'INCOMING', result: 'PASS',
+    partNumber: 'RM-BIO-MEDIA-001', partName: 'Cell-culture Basal Medium (Chemically Defined, CHO Platform)',
+    supplier: 'Thermo Fisher Scientific (Gibco)',
+    batchNumber: 'TF-CDM-2026-0418', quantity: 800, sampledQuantity: 8, defectsFound: 0,
+    inspector: 'Fatima Al-Hashimi', inspectedAt: '2026-04-12',
+    disposition: 'Accepted — released to controlled +2–8 °C raw-material store',
+    notes: 'Osmolality 305 mOsm/kg (spec 290–320); pH 7.18 (spec 7.0–7.4); endotoxin <0.05 EU/mL; bioburden <1 CFU/10 mL; CoA verified against SPC-RM-BIO-MEDIA-001',
+    createdAt: '2026-04-12',
+  },
+  {
+    id: 'INSP-BIO-0002', inspectionNumber: 'INSP-BIO-2026-002', type: 'INCOMING', result: 'PASS',
+    partNumber: 'RM-BIO-FEED-001', partName: 'Concentrated Cell-culture Feed Supplement (Glucose/Amino-acid)',
+    supplier: 'Merck KGaA (Cellvento)',
+    batchNumber: 'MK-FEED-2026-0207', quantity: 400, sampledQuantity: 4, defectsFound: 0,
+    inspector: 'Fatima Al-Hashimi', inspectedAt: '2026-04-15',
+    disposition: 'Accepted — released to +2–8 °C feed store',
+    notes: 'Identity (FTIR) confirmed; osmolality and pH within range; endotoxin <0.05 EU/mL; sterile filtration integrity certificate verified; cold-chain on arrival 4.1 °C',
+    createdAt: '2026-04-15',
+  },
+  {
+    id: 'INSP-BIO-0003', inspectionNumber: 'INSP-BIO-2026-003', type: 'INCOMING', result: 'CONDITIONAL_PASS',
+    partNumber: 'RM-BIO-RESIN-PROA', partName: 'Protein-A Affinity Chromatography Resin Lot CY-PROA-2026-0033',
+    supplier: 'Cytiva (MabSelect SuRe)',
+    batchNumber: 'CY-PROA-2026-0033', quantity: 25, sampledQuantity: 2, defectsFound: 1,
+    inspector: 'Aisha Khalid', inspectedAt: '2026-03-24',
+    disposition: 'Conditional — release pending dynamic binding capacity (DBC) confirmation column-qual run; lot reserved for DS Train-B',
+    notes: 'Particle-size distribution and ligand-density CoA compliant; one shipping carton showed slurry settling beyond limit — NC-BIO-2026-0021 raised; DBC verification scale-down run in progress in QC Lab',
+    createdAt: '2026-03-24',
+  },
+  {
+    id: 'INSP-BIO-0004', inspectionNumber: 'INSP-BIO-2026-004', type: 'INCOMING', result: 'PASS',
+    partNumber: 'CM-BIO-SUB-2D', partName: 'Single-use 2D Bioprocess Bag Assembly — 200 L (Gamma-irradiated)',
+    supplier: 'Sartorius Stedim Biotech (Flexsafe)',
+    batchNumber: 'SAR-SUB-2026-0451', quantity: 60, sampledQuantity: 6, defectsFound: 0,
+    inspector: 'Hassan Al-Balushi', inspectedAt: '2026-03-30',
+    disposition: 'Accepted — released to single-use consumables store (controlled access)',
+    notes: 'Pre-use pressure-decay integrity test passed on sampled assemblies; gamma-irradiation dose certificate (25–40 kGy) and extractables data verified; tubing/connector configuration matches drawing DWG-BIO-SUB-200L-Rev04',
+    createdAt: '2026-03-30',
+  },
+  {
+    id: 'INSP-BIO-0005', inspectionNumber: 'INSP-BIO-2026-005', type: 'INCOMING', result: 'PASS',
+    partNumber: 'CM-BIO-FILT-02', partName: 'Sterilizing-grade 0.2 µm Filter Cartridge (Sterile Boundary)',
+    supplier: 'Pall Corporation (Supor EKV)',
+    batchNumber: 'PALL-FILT-2026-0188', quantity: 120, sampledQuantity: 12, defectsFound: 0,
+    inspector: 'Hassan Al-Balushi', inspectedAt: '2026-04-03',
+    disposition: 'Accepted — released to Aseptic Fill-Finish sterile-consumables store',
+    notes: 'Forward-flow integrity test within spec on sampled cartridges; bacterial-retention validation (Brevundimonas diminuta) certificate verified; endotoxin <0.05 EU/device; individual cartridge serial traceability confirmed',
+    createdAt: '2026-04-03',
+  },
+  {
+    id: 'INSP-BIO-0006', inspectionNumber: 'INSP-BIO-2026-006', type: 'INCOMING', result: 'PASS',
+    partNumber: 'PM-BIO-CART-3ML', partName: 'Type I Borosilicate Glass Cartridges 3 mL (Insulin Pen)',
+    supplier: 'SCHOTT Pharma',
+    batchNumber: 'SCH-CART-2026-0772', quantity: 240000, sampledQuantity: 200, defectsFound: 0,
+    inspector: 'Aisha Khalid', inspectedAt: '2026-04-06',
+    disposition: 'Accepted — released to primary-packaging store (controlled access)',
+    notes: 'AQL 0.65: dimensional (length, flange OD, bore) within tolerance; cosmetic and particulate inspection zero critical defects; hydrolytic resistance Type I per Ph. Eur. 3.2.1; siliconization layer within spec; CoC verified',
+    createdAt: '2026-04-06',
+  },
+  {
+    id: 'INSP-BIO-0007', inspectionNumber: 'INSP-BIO-2025-094', type: 'INCOMING', result: 'PASS',
+    partNumber: 'PM-BIO-PLUNGER-01', partName: 'Elastomer Plunger/Septum — Coated Bromobutyl (Cartridge)',
+    supplier: 'West Pharmaceutical Services (FluroTec)',
+    batchNumber: 'WST-PLG-2025-0913', quantity: 250000, sampledQuantity: 200, defectsFound: 0,
+    inspector: 'Aisha Khalid', inspectedAt: '2025-12-11',
+    disposition: 'Accepted — released to controlled primary-packaging store',
+    notes: 'AQL 0.65 visual/dimensional pass; functional break-loose & glide force within spec; coating integrity confirmed; USP <381> elastomeric closure compliance and CoA verified; ready-to-sterilize lot tag intact',
+    createdAt: '2025-12-11',
+  },
+  {
+    id: 'INSP-BIO-0008', inspectionNumber: 'INSP-BIO-2025-081', type: 'RECEIVING', result: 'PASS',
+    partNumber: 'RM-BIO-WFI-001', partName: 'Water for Injection (WFI) — Bioprocess Grade',
+    supplier: 'On-site Generation (Multi-effect Distillation)',
+    batchNumber: 'WFI-BIO-2025-0827', quantity: 8000, sampledQuantity: 8, defectsFound: 0,
+    inspector: 'Mariam Saeed', inspectedAt: '2025-10-27',
+    disposition: 'Accepted — released to production WFI loop',
+    notes: 'TOC 0.18 mg/L (NMT 0.5); conductivity 1.1 µS/cm (within Ph. Eur. stage-1); endotoxin 0.03 EU/mL (NMT 0.25); bioburden <1 CFU/100 mL; loop return temperature 82 °C',
+    createdAt: '2025-10-27',
+  },
+  {
+    id: 'INSP-BIO-0009', inspectionNumber: 'INSP-BIO-2025-067', type: 'INCOMING', result: 'PASS',
+    partNumber: 'RM-BIO-REFSTD-INS', partName: 'Insulin Reference Standard (USP/Ph. Eur. Characterized)',
+    supplier: 'USP Reference Standards',
+    batchNumber: 'USP-INS-2025-0344', quantity: 5, sampledQuantity: 1, defectsFound: 0,
+    inspector: 'Mariam Saeed', inspectedAt: '2025-09-08',
+    disposition: 'Accepted — logged into QC reference-standard register; stored at −20 °C',
+    notes: 'Identity, assigned potency and CoA verified; cold-chain on arrival −18.4 °C; container seal intact; unique reference-standard ID issued and chain-of-custody recorded',
+    createdAt: '2025-09-08',
+  },
+  {
+    id: 'INSP-BIO-0010', inspectionNumber: 'INSP-BIO-2025-052', type: 'INCOMING', result: 'FAIL',
+    partNumber: 'RM-BIO-MEDIA-GLP', partName: 'GLP-1 Platform Cell-culture Medium Lot TF-CDM-2025-0611',
+    supplier: 'Thermo Fisher Scientific (Gibco)',
+    batchNumber: 'TF-CDM-2025-0611', quantity: 600, sampledQuantity: 6, defectsFound: 2,
+    inspector: 'Fatima Al-Hashimi', inspectedAt: '2025-07-19',
+    disposition: 'Rejected — returned to supplier under NCR-BIO-2025-0014; replacement lot requested',
+    notes: 'Endotoxin 0.42 EU/mL (spec <0.25); confirmatory LAL on second sample set confirmed OOS; osmolality also at upper edge (322 mOsm/kg, spec 290–320); supplier notified same day and lot quarantined',
+    createdAt: '2025-07-19',
+  },
+  // ── In-process ──────────────────────────────────────────────────────────
+  {
+    id: 'INSP-BIO-0011', inspectionNumber: 'INSP-BIO-2026-011', type: 'IN_PROCESS', result: 'PASS',
+    partNumber: 'WIP-BIO-TITER-INS', partName: 'Bioreactor Harvest Titer — Insulin DS Batch DS-INS-26-0042 (2000 L)',
+    batchNumber: 'DS-INS-26-0042', quantity: 1, sampledQuantity: 3, defectsFound: 0,
+    inspector: 'Aisha Khalid', inspectedAt: '2026-04-08',
+    disposition: 'Approved — proceed to harvest clarification and Protein-A capture',
+    notes: 'Harvest titer 4.6 g/L (action ≥3.5 g/L) by Protein-A HPLC; viable-cell density and viability at harvest within trend; bioburden of harvest pool <1 CFU/10 mL per microbiology release',
+    createdAt: '2026-04-08',
+  },
+  {
+    id: 'INSP-BIO-0012', inspectionNumber: 'INSP-BIO-2026-012', type: 'IN_PROCESS', result: 'PASS',
+    partNumber: 'WIP-BIO-A280-DS', partName: 'Drug-substance A280 Concentration — UF/DF Pool DS-GLP-26-0028',
+    batchNumber: 'DS-GLP-26-0028', quantity: 1, sampledQuantity: 3, defectsFound: 0,
+    inspector: 'Mariam Saeed', inspectedAt: '2026-04-11',
+    disposition: 'Approved — proceed to final 0.2 µm sterile filtration and DS freeze',
+    notes: 'A280 concentration 52.4 mg/mL (spec 45–55 mg/mL); pH 7.2 and osmolality 298 mOsm/kg within range; endotoxin <0.05 EU/mL; bioburden <1 CFU/10 mL',
+    createdAt: '2026-04-11',
+  },
+  {
+    id: 'INSP-BIO-0013', inspectionNumber: 'INSP-BIO-2026-013', type: 'IN_PROCESS', result: 'PASS',
+    partNumber: 'WIP-BIO-FILLWT-CART', partName: 'Aseptic Cartridge Fill-Weight Checkweigh — Insulin Analogue Fill FF-INS-26-0119',
+    batchNumber: 'FF-INS-26-0119', quantity: 96000, sampledQuantity: 120, defectsFound: 0,
+    inspector: 'Hassan Al-Balushi', inspectedAt: '2026-04-14',
+    disposition: 'Approved — proceed to plunger insertion and 100% CCI',
+    notes: '100% in-line checkweigh active; sampled mean fill 3.04 mL equivalent (target 3.0 mL ±2%); Grade A viable monitoring <1 CFU/m³ during fill; no statistical drift on SPC chart',
+    createdAt: '2026-04-14',
+  },
+  {
+    id: 'INSP-BIO-0014', inspectionNumber: 'INSP-BIO-2026-014', type: 'IN_PROCESS', result: 'CONDITIONAL_PASS',
+    partNumber: 'WIP-BIO-CCI-CART', partName: 'Container Closure Integrity (HVLD) — Cartridge Lot FF-GLP-26-0077',
+    batchNumber: 'FF-GLP-26-0077', quantity: 84000, sampledQuantity: 200, defectsFound: 3,
+    inspector: 'Hassan Al-Balushi', inspectedAt: '2026-03-26',
+    disposition: 'Conditional — 100% HVLD re-screen of lot; plunger-insertion depth re-centered on Line FF-2',
+    notes: 'High-voltage leak detection flagged 3 of 200 cartridges with marginal closure; plunger seating depth drift suspected on Line FF-2; NC-BIO-2026-0024 / CAPA-BIO-2026-0012 open',
+    createdAt: '2026-03-26',
+  },
+  {
+    id: 'INSP-BIO-0015', inspectionNumber: 'INSP-BIO-2026-015', type: 'IN_PROCESS', result: 'PASS',
+    partNumber: 'WIP-BIO-BIOBURDEN', partName: 'Pre-filtration Bioburden — Formulated Bulk FF-INS-26-0120',
+    batchNumber: 'FF-INS-26-0120', quantity: 1, sampledQuantity: 2, defectsFound: 0,
+    inspector: 'Mariam Saeed', inspectedAt: '2026-04-15',
+    disposition: 'Approved — release bulk to sterile filtration train',
+    notes: 'Pre-filter bioburden <1 CFU/10 mL (action ≤10 CFU/100 mL); endotoxin 0.06 EU/mL (NMT 0.25); pH 7.3 and osmolality 301 mOsm/kg confirmed by Microbiology and QC Lab',
+    createdAt: '2026-04-15',
+  },
+  {
+    id: 'INSP-BIO-0016', inspectionNumber: 'INSP-BIO-2025-088', type: 'IN_PROCESS', result: 'FAIL',
+    partNumber: 'WIP-BIO-VISUAL-PART', partName: 'Visual Particulate Inspection — Cartridge Lot FF-GLP-25-0214',
+    batchNumber: 'FF-GLP-25-0214', quantity: 78000, sampledQuantity: 1250, defectsFound: 41,
+    inspector: 'Aisha Khalid', inspectedAt: '2025-11-21',
+    disposition: 'Rejected — lot quarantined; investigation into formulation aggregation; NC-BIO-2025-0019 / CAPA-BIO-2025-0011 open',
+    notes: 'Semi-automated visual inspection rejected 41/1250 for visible protein-like particulate; sub-visible particle count (light obscuration, Ph. Eur. 2.9.19) also exceeded ≥10 µm limit on retain; root-cause investigation pointing to UF/DF concentration excursion',
+    createdAt: '2025-11-21',
+  },
+  // ── Final release ─────────────────────────────────────────────────────────
+  {
+    id: 'INSP-BIO-0017', inspectionNumber: 'INSP-BIO-2026-017', type: 'FINAL', result: 'PASS',
+    partNumber: 'FP-BIO-INS-PEN', partName: 'Insulin 100 IU/mL Cartridge — Batch Release FF-INS-26-0115',
+    batchNumber: 'FF-INS-26-0115', quantity: 92000, sampledQuantity: 200, defectsFound: 0,
+    inspector: 'Fatima Al-Hashimi', inspectedAt: '2026-04-09',
+    disposition: 'Released — sterility confirmed; CoA issued; transferred to cold-chain bonded store',
+    notes: 'Assay 99.7%; related substances within limits; endotoxin 0.04 EU/mL (NMT 0.25); sterility Ph. Eur. 2.6.1 no growth at 14 days; CCI pass; sub-visible particles within Ph. Eur. 2.9.19; pH 7.1, osmolality 296 mOsm/kg',
+    createdAt: '2026-04-09',
+  },
+  {
+    id: 'INSP-BIO-0018', inspectionNumber: 'INSP-BIO-2026-018', type: 'FINAL', result: 'PASS',
+    partNumber: 'FP-BIO-GLP1-PEN', partName: 'GLP-1 Analogue 3 mg/mL Cartridge — Batch Release FF-GLP-26-0080',
+    batchNumber: 'FF-GLP-26-0080', quantity: 70000, sampledQuantity: 200, defectsFound: 0,
+    inspector: 'Mariam Saeed', inspectedAt: '2026-04-12',
+    disposition: 'Released — CoA issued; transferred to cold-chain bonded store',
+    notes: 'Assay 100.2%; high-molecular-weight species within limit by SEC; endotoxin 0.05 EU/mL; sterility pass at 14 days; CCI 100% HVLD pass; visual and sub-visible particulate within specification',
+    createdAt: '2026-04-12',
+  },
+];
+
 export function useInspectionRecords(filters?: { type?: string; result?: string }) {
   const industry = useUserIndustry();
   return useQuery({
@@ -480,7 +660,7 @@ export function useInspectionRecords(filters?: { type?: string; result?: string 
         if (!Array.isArray(data)) throw new Error('unexpected response');
         return data as InspectionRecord[];
       } catch {
-        const baseList = pickByIndustry(industry, mock, { medical_device: mockMedicalDevice, dairy: mockDairy });
+        const baseList = pickByIndustry(industry, mock, { medical_device: mockMedicalDevice, dairy: mockDairy, biologics: mockBiologics });
         let r = [...baseList];
         if (filters?.type) r = r.filter(x => x.type === filters.type);
         if (filters?.result) r = r.filter(x => x.result === filters.result);
@@ -500,7 +680,7 @@ export function useInspectionRecord(id: string) {
         if (!data?.id) throw new Error('unexpected response');
         return data as InspectionRecord;
       } catch {
-        const baseList = pickByIndustry(industry, mock, { medical_device: mockMedicalDevice, dairy: mockDairy });
+        const baseList = pickByIndustry(industry, mock, { medical_device: mockMedicalDevice, dairy: mockDairy, biologics: mockBiologics });
         return baseList.find(r => r.id === id) ?? baseList[0];
       }
     },

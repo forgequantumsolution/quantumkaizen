@@ -314,6 +314,96 @@ const mockDairyAudits: Audit[] = [
   },
 ];
 
+// Biologics tenant — Mubadala Bio "DiabTec" (Abu Dhabi, UAE): biologics drug-substance +
+// aseptic cartridge fill-finish (insulin, analogues, GLP-1). EU GMP Annex 1, ICH Q7,
+// FDA PAI readiness, 21 CFR Part 11 and GDP/cold-chain themed audits.
+const mockBiologicsAudits: Audit[] = [
+  {
+    id: 'AUD-BIO-001', auditNumber: 'AUD-BIO-2026-001', title: 'FDA Pre-Approval Inspection (PAI) Readiness Audit',
+    type: 'CERTIFICATION', status: 'PLANNED', standard: 'FDA 21 CFR 211 / 21 CFR 600 / ICH Q7',
+    scope: 'PAI readiness assessment across aseptic cartridge fill-finish, drug-substance fermentation, downstream purification and QC microbiology in support of the insulin analogue BLA submission',
+    department: 'Regulatory Affairs', leadAuditor: 'FDA Investigator (External)', auditTeam: [],
+    plannedStart: '2026-06-22', plannedEnd: '2026-06-26',
+    findings: [],
+    majorFindings: 0, minorFindings: 0, ofiCount: 0, createdAt: '2026-03-05',
+  },
+  {
+    id: 'AUD-BIO-002', auditNumber: 'AUD-BIO-2026-002', title: 'Internal Audit — Aseptic Process & EU GMP Annex 1',
+    type: 'INTERNAL', status: 'IN_PROGRESS', standard: 'EU GMP Annex 1 (2022) / ISO 14644',
+    scope: 'Contamination Control Strategy, Grade A/B cleanroom monitoring, gowning qualification, aseptic process simulation (media fills) and single-use system integrity on the GLP-1 cartridge fill line',
+    department: 'Aseptic Fill-Finish', leadAuditor: 'Dr. Layla Al-Mansoori', auditTeam: ['Omar Al-Farsi', 'Fatima Al-Hashimi'],
+    plannedStart: '2026-04-20', plannedEnd: '2026-04-23',
+    actualStart: '2026-04-20',
+    findings: [
+      { id: 'BIO-F1', type: 'MINOR', clause: 'Annex 1 §4.29', description: 'Continuous viable air monitoring data for Grade A filling zone showed one alert-level excursion on 2026-04-12 without a documented contemporaneous investigation entry', status: 'OPEN' },
+      { id: 'BIO-F2', type: 'OFI',   clause: 'Annex 1 §2.3',  description: 'Contamination Control Strategy document could more explicitly cross-reference single-use system supplier change-control records', status: 'OPEN' },
+    ],
+    majorFindings: 0, minorFindings: 1, ofiCount: 1, createdAt: '2026-04-02',
+  },
+  {
+    id: 'AUD-BIO-003', auditNumber: 'AUD-BIO-2026-003', title: 'Internal Audit — Data Integrity (21 CFR Part 11)',
+    type: 'INTERNAL', status: 'PLANNED', standard: '21 CFR Part 11 / EU GMP Annex 11 / ALCOA+',
+    scope: 'Audit-trail review, user access controls and electronic-record retention across the chromatography data system, bioreactor SCADA and environmental monitoring software in the Microbiology/QC laboratory',
+    department: 'Microbiology/QC Lab', leadAuditor: 'Dr. Sami Haddad', auditTeam: ['Hassan Al-Balushi', 'Fatima Al-Hashimi'],
+    plannedStart: '2026-05-18', plannedEnd: '2026-05-20',
+    findings: [],
+    majorFindings: 0, minorFindings: 0, ofiCount: 0, createdAt: '2026-04-05',
+  },
+  {
+    id: 'AUD-BIO-004', auditNumber: 'AUD-BIO-2025-009', title: 'Sterility Assurance & Environmental Monitoring Program Audit',
+    type: 'INTERNAL', status: 'COMPLETED', standard: 'EU GMP Annex 1 (2022) / USP <1116> / Ph. Eur. 5.1.4',
+    scope: 'End-to-end sterility assurance review: media-fill acceptance criteria, environmental monitoring trending, isolator decontamination cycle and microbial identification practices across drug-substance and fill-finish areas',
+    department: 'Validation', leadAuditor: 'Omar Al-Farsi', auditTeam: ['Dr. Layla Al-Mansoori'],
+    plannedStart: '2025-11-10', plannedEnd: '2025-11-13',
+    actualStart: '2025-11-10', actualEnd: '2025-11-13',
+    findings: [
+      { id: 'BIO-F3', type: 'MAJOR', clause: 'Annex 1 §9.28', description: 'Environmental monitoring trend report for Q3 2025 did not include adverse-trend criteria for Grade B viable counts; an upward shift over three weeks was not escalated as required', status: 'CLOSED' },
+      { id: 'BIO-F4', type: 'MINOR', clause: 'Annex 1 §8.20', description: 'Isolator glove-integrity test records for two fill sessions lacked the verifier signature', status: 'CLOSED' },
+      { id: 'BIO-F5', type: 'OFI',   clause: 'USP <1116>',     description: 'Microbial identification to species level could be extended to all Grade A/B recoveries rather than the current excursion-only practice', status: 'CLOSED' },
+    ],
+    majorFindings: 1, minorFindings: 1, ofiCount: 1, createdAt: '2025-09-20',
+  },
+  {
+    id: 'AUD-BIO-005', auditNumber: 'AUD-BIO-2025-006', title: 'ICH Q7 API Audit — Drug Substance Fermentation & Purification',
+    type: 'INTERNAL', status: 'COMPLETED', standard: 'ICH Q7 / EU GMP Part II',
+    scope: 'Upstream fermentation seed-train control, downstream chromatography column lifetime, viral-clearance validation and in-process control limits for recombinant insulin drug substance',
+    department: 'Drug Substance (Fermentation)', leadAuditor: 'Hassan Al-Balushi', auditTeam: ['Dr. Sami Haddad'],
+    plannedStart: '2025-09-22', plannedEnd: '2025-09-24',
+    actualStart: '2025-09-22', actualEnd: '2025-09-24',
+    findings: [
+      { id: 'BIO-F6', type: 'MINOR', clause: 'ICH Q7 §8.3', description: 'Chromatography resin lifetime study did not document the rationale for the maximum-cycle limit applied to the Capture column', status: 'CLOSED' },
+      { id: 'BIO-F7', type: 'OFI',   clause: 'ICH Q7 §6.5', description: 'Deviation trending for fermentation batch yield could be linked directly to the CAPA system rather than tracked on a separate spreadsheet', status: 'CLOSED' },
+    ],
+    majorFindings: 0, minorFindings: 1, ofiCount: 1, createdAt: '2025-09-01',
+  },
+  {
+    id: 'AUD-BIO-006', auditNumber: 'AUD-BIO-2025-004', title: 'Supplier Audit — Single-Use Systems Vendor',
+    type: 'SUPPLIER', status: 'COMPLETED', standard: 'ISO 13485 / USP <87>/<88> / EU GMP Annex 1',
+    scope: 'Audit of single-use assembly supplier covering gamma-irradiation sterilisation validation, extractables/leachables data, integrity testing and change-notification practices for biologics fill-finish single-use systems',
+    department: 'QA', leadAuditor: 'Fatima Al-Hashimi', auditTeam: ['Omar Al-Farsi'],
+    plannedStart: '2025-07-14', plannedEnd: '2025-07-16',
+    actualStart: '2025-07-14', actualEnd: '2025-07-16',
+    findings: [
+      { id: 'BIO-F8', type: 'MAJOR', clause: 'EU GMP Annex 1 §8.123', description: 'Supplier changed the gamma-irradiation contractor without prior change notification, affecting sterilisation dose mapping for the cartridge filling assembly', status: 'CLOSED' },
+      { id: 'BIO-F9', type: 'MINOR', clause: 'ISO 13485 §7.4.3',     description: 'Extractables study report for the tubing set was not re-issued after a resin formulation change communicated in 2025', status: 'CLOSED' },
+    ],
+    majorFindings: 1, minorFindings: 1, ofiCount: 0, createdAt: '2025-06-25',
+  },
+  {
+    id: 'AUD-BIO-007', auditNumber: 'AUD-BIO-2025-002', title: 'Cold-Chain & GDP Distribution Audit',
+    type: 'INTERNAL', status: 'COMPLETED', standard: 'EU GDP 2013/C 343/01 / WHO TRS 961 Annex 9',
+    scope: 'Temperature-controlled storage qualification (2–8°C), shipper validation, last-mile excursion handling and temperature-mapping of the cold-chain warehouse for insulin and GLP-1 cartridge distribution',
+    department: 'Cold-Chain Warehouse', leadAuditor: 'Dr. Layla Al-Mansoori', auditTeam: ['Hassan Al-Balushi'],
+    plannedStart: '2025-03-10', plannedEnd: '2025-03-12',
+    actualStart: '2025-03-10', actualEnd: '2025-03-12',
+    findings: [
+      { id: 'BIO-F10', type: 'MINOR', clause: 'EU GDP §3.2.1', description: 'Temperature-mapping of cold room CR-02 was performed empty only; a loaded-condition mapping had not been completed within the qualification programme', status: 'CLOSED' },
+      { id: 'BIO-F11', type: 'OFI',   clause: 'EU GDP §9.2',   description: 'Validated shipper qualification could include a summer worst-case ambient profile reflecting Abu Dhabi peak-season transport conditions', status: 'CLOSED' },
+    ],
+    majorFindings: 0, minorFindings: 1, ofiCount: 1, createdAt: '2025-02-20',
+  },
+];
+
 export function useAudits(filters?: { status?: string; type?: string }) {
   const industry = useUserIndustry();
   return useQuery({
@@ -324,7 +414,7 @@ export function useAudits(filters?: { status?: string; type?: string }) {
         const unwrapped = unwrapList<Audit>(data, flattenAudit as any);
         return unwrapped.data;
       } catch {
-        const baseList = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits });
+        const baseList = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits, biologics: mockBiologicsAudits });
         let result = [...baseList];
         if (filters?.status) result = result.filter(a => a.status === filters.status);
         if (filters?.type) result = result.filter(a => a.type === filters.type);
@@ -345,7 +435,7 @@ export function useAudit(id: string) {
         if (!item?.id) throw new Error('unexpected response');
         return item;
       } catch {
-        const baseList = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits });
+        const baseList = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits, biologics: mockBiologicsAudits });
         return baseList.find(a => a.id === id) ?? baseList[0];
       }
     },
@@ -388,7 +478,7 @@ export function useAuditStats() {
   return useQuery({
     queryKey: ['audits', 'stats', industry ?? 'default'],
     queryFn: async () => {
-      let audits: Audit[] = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits });
+      let audits: Audit[] = pickByIndustry(industry, mockAudits, { medical_device: mockMedicalDeviceAudits, dairy: mockDairyAudits, biologics: mockBiologicsAudits });
       try {
         const { data } = await api.get('/qms/audits');
         const unwrapped = unwrapList<Audit>(data, flattenAudit as any).data;

@@ -22,7 +22,7 @@ import {
 } from '@/components/ui';
 import type { Column } from '@/components/ui';
 import { cn, formatDate, daysSince } from '@/lib/utils';
-import { useCAPAs, mockCAPAs, mockMedicalDeviceCAPAs, mockDairyCAPAs } from './hooks';
+import { useCAPAs, mockCAPAs, mockMedicalDeviceCAPAs, mockDairyCAPAs, mockBiologicsCAPAs } from './hooks';
 import { useUserIndustry, pickByIndustry } from '@/lib/userIndustry';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 import type { CAPARecord } from './hooks';
@@ -75,7 +75,7 @@ export default function CAPAListPage() {
   const capas = (result?.data ?? []).filter((c) => new Date(c.createdAt).getFullYear() === year);
 
   const industry = useUserIndustry();
-  const summarySource = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs });
+  const summarySource = pickByIndustry(industry, mockCAPAs, { medical_device: mockMedicalDeviceCAPAs, dairy: mockDairyCAPAs, biologics: mockBiologicsCAPAs });
   const yearCAPAs = useMemo(() => summarySource.filter((c) => new Date(c.createdAt).getFullYear() === year), [summarySource, year]);
 
   const openCount = yearCAPAs.filter((c) =>

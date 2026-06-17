@@ -156,11 +156,55 @@ function buildMockDairyHeatmap(): HeatmapCell[] {
 
 const mockDairyHeatmap: HeatmapCell[] = buildMockDairyHeatmap();
 
+// Biologics analytics — Mubadala Bio "DiabTec" (Abu Dhabi, UAE): biologics
+// drug-substance + aseptic cartridge fill-finish (insulin, analogues, GLP-1).
+// NC trends driven by aseptic/sterility/CCI/cold-chain; well-controlled GMP site.
+const mockBiologicsNCTrends: NCTrendRow[] = MONTHS.map((month, i) => ({
+  month,
+  2024: [4, 3, 5, 4, 6, 4, 3, 5, 4, 5, 3, 4][i],
+  2025: [3, 3, 4, 4, 5, 3, 3, 4, 4, 3, 3, 2][i],
+  2026: [3, 2, 4, 3, 0, 0, 0, 0, 0, 0, 0, 0][i],
+}));
+
+const mockBiologicsAuditVolume: AuditVolumeRow[] = MONTHS.map((month, i) => ({
+  month,
+  2024: [1, 1, 2, 1, 2, 1, 1, 2, 1, 2, 1, 1][i],   // internal + FDA/EMA inspections
+  2025: [2, 1, 2, 1, 2, 1, 1, 2, 1, 2, 2, 1][i],
+  2026: [2, 1, 3, 1, 0, 0, 0, 0, 0, 0, 0, 0][i],
+}));
+
+const mockBiologicsKpiComparison: KpiComparisonRow[] = [
+  { metric: 'Non-Conformances Opened',       2024: 54,  2025: 47,  2026: 12  },
+  { metric: 'CAPAs Initiated',               2024: 24,  2025: 20,  2026: 6   },
+  { metric: 'Audits Conducted',              2024: 16,  2025: 19,  2026: 8   },
+  { metric: 'Deviation Closure Days',        2024: 36,  2025: 30,  2026: 27  },
+  { metric: 'Media-Fill Pass Rate (%)',      2024: 99,  2025: 99,  2026: 100 },
+  { metric: 'Lot Release On-Time (%)',       2024: 92,  2025: 95,  2026: 97  },
+  { metric: 'Right-First-Time Batch (%)',    2024: 91,  2025: 94,  2026: 96  },
+  { metric: 'CAPA Effectiveness (%)',        2024: 86,  2025: 90,  2026: 93  },
+  { metric: 'EM Excursion Rate (%)',         2024: 2.4, 2025: 1.6, 2026: 1.1 },
+];
+
+function buildMockBiologicsHeatmap(): HeatmapCell[] {
+  const cells: HeatmapCell[] = [];
+  const today = new Date();
+  for (let i = 48; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    const r = Math.random();
+    cells.push({ date: iso, count: r < 0.66 ? 0 : r < 0.85 ? 1 : r < 0.93 ? 2 : r < 0.97 ? 3 : 5 });
+  }
+  return cells;
+}
+
+const mockBiologicsHeatmap: HeatmapCell[] = buildMockBiologicsHeatmap();
+
 // ── Hooks ──────────────────────────────────────────────────────────────────
 
 export function useNCTrends() {
   const industry = useUserIndustry();
-  const fallback = pickByIndustry(industry, mockNCTrends, { medical_device: mockMedicalDeviceNCTrends, dairy: mockDairyNCTrends });
+  const fallback = pickByIndustry(industry, mockNCTrends, { medical_device: mockMedicalDeviceNCTrends, dairy: mockDairyNCTrends, biologics: mockBiologicsNCTrends });
   return useQuery<NCTrendRow[]>({
     queryKey: ['analytics', 'nc-trends', industry ?? 'default'],
     queryFn: async () => {
@@ -178,7 +222,7 @@ export function useNCTrends() {
 
 export function useHeatmap() {
   const industry = useUserIndustry();
-  const fallback = pickByIndustry(industry, mockHeatmap, { medical_device: mockMedicalDeviceHeatmap, dairy: mockDairyHeatmap });
+  const fallback = pickByIndustry(industry, mockHeatmap, { medical_device: mockMedicalDeviceHeatmap, dairy: mockDairyHeatmap, biologics: mockBiologicsHeatmap });
   return useQuery<HeatmapCell[]>({
     queryKey: ['analytics', 'heatmap', industry ?? 'default'],
     queryFn: async () => {
@@ -196,7 +240,7 @@ export function useHeatmap() {
 
 export function useKpiComparison() {
   const industry = useUserIndustry();
-  const fallback = pickByIndustry(industry, mockKpiComparison, { medical_device: mockMedicalDeviceKpiComparison, dairy: mockDairyKpiComparison });
+  const fallback = pickByIndustry(industry, mockKpiComparison, { medical_device: mockMedicalDeviceKpiComparison, dairy: mockDairyKpiComparison, biologics: mockBiologicsKpiComparison });
   return useQuery<KpiComparisonRow[]>({
     queryKey: ['analytics', 'kpi-comparison', industry ?? 'default'],
     queryFn: async () => {
@@ -214,7 +258,7 @@ export function useKpiComparison() {
 
 export function useAuditVolume() {
   const industry = useUserIndustry();
-  const fallback = pickByIndustry(industry, mockAuditVolume, { medical_device: mockMedicalDeviceAuditVolume, dairy: mockDairyAuditVolume });
+  const fallback = pickByIndustry(industry, mockAuditVolume, { medical_device: mockMedicalDeviceAuditVolume, dairy: mockDairyAuditVolume, biologics: mockBiologicsAuditVolume });
   return useQuery<AuditVolumeRow[]>({
     queryKey: ['analytics', 'audit-volume', industry ?? 'default'],
     queryFn: async () => {
