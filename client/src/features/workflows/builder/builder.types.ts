@@ -81,6 +81,8 @@ export interface StageNodeData {
   approvalPolicies?: EmbeddedApprovalPolicy[];
   /** Set by TicketFlowCanvas when this stage is one of the ticket's current stages. */
   isCurrent?: boolean;
+  /** Set by TicketFlowCanvas when the parent ticket flow has finished (all stages completed). */
+  isCompleted?: boolean;
   /** Direction of the surrounding flow — controls handle placement. Defaults to 'TB'. */
   flowDirection?: 'TB' | 'LR';
 }

@@ -132,6 +132,16 @@ const PERMISSIONS = [
   { key: 'non_conformance.read',   module: 'NON_CONFORMANCE', action: 'READ',   description: 'View non-conformances (CAPA tracking)' },
   { key: 'non_conformance.create', module: 'NON_CONFORMANCE', action: 'CREATE', description: 'Promote a finding to a non-conformance' },
   { key: 'non_conformance.update', module: 'NON_CONFORMANCE', action: 'UPDATE', description: 'Update NC status / link CAPA ticket' },
+  // ── CAPA (corrective & preventive action) ────────────
+  { key: 'capa.read',   module: 'CAPA', action: 'READ',   description: 'View CAPAs' },
+  { key: 'capa.create', module: 'CAPA', action: 'CREATE', description: 'Raise a CAPA from a non-conformance' },
+  { key: 'capa.update', module: 'CAPA', action: 'UPDATE', description: 'Edit / progress / verify CAPAs' },
+  { key: 'capa.delete', module: 'CAPA', action: 'DELETE', description: 'Delete CAPAs' },
+  // ── Action Items ─────────────────────────────────────
+  { key: 'action_item.read',   module: 'ACTION_ITEM', action: 'READ',   description: 'View action items' },
+  { key: 'action_item.create', module: 'ACTION_ITEM', action: 'CREATE', description: 'Create action items' },
+  { key: 'action_item.update', module: 'ACTION_ITEM', action: 'UPDATE', description: 'Edit / progress action items' },
+  { key: 'action_item.delete', module: 'ACTION_ITEM', action: 'DELETE', description: 'Delete action items' },
   // ── Phase 3 — Approvals ─────────────────────────────
   { key: 'approval.read',          module: 'APPROVAL', action: 'READ',    description: 'View approval instances on tickets' },
   { key: 'approval.decide',        module: 'APPROVAL', action: 'DECIDE',  description: 'Approve or reject a pending approval instance' },

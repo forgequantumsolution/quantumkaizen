@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button, Input, Modal, Spin, message } from 'antd';
-import { ArrowLeft, Edit3, Send, Check, X, PlayCircle } from 'lucide-react';
+import { ArrowLeft, Edit3, Send, Check, X, PlayCircle, FileText, GitBranch, ExternalLink } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import {
   useApproveAuditRegister,
@@ -10,6 +10,7 @@ import {
   useSubmitAuditRegister,
   useDeleteAuditRegister,
 } from '@/lib/api/audit';
+import { useTicket } from '@/lib/api/ticket';
 import { useHasPermission } from '@/stores/authStore';
 import { AuditStatusBadge } from './auditStatusBadge';
 
@@ -141,6 +142,9 @@ export default function AuditRegisterDetailPage() {
               Open Program
             </Button>
           )}
+          <Button icon={<FileText size={14} />} onClick={() => nav(`/audit/register/${r.id}/report`)}>
+            Report
+          </Button>
           {isEditable && canDelete && (
             <Button danger onClick={handleDelete}>
               Delete
@@ -244,6 +248,34 @@ export default function AuditRegisterDetailPage() {
         </div>
       )}
 
+      {r.workflow_ticket_id && (
+        <WorkflowProgressCard
+          ticketId={r.workflow_ticket_id}
+          uniqueId={r.workflow_ticket_unique_id}
+        />
+      )}
+
+      {r.checklist_form && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                <FileText size={14} className="text-gray-500" />
+                Audit Checklist
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">{r.checklist_form.title}</p>
+            </div>
+            <Button
+              type="primary"
+              icon={<FileText size={14} />}
+              onClick={() => nav(`/forms/${r.checklist_form!.id}/fill`)}
+            >
+              Fill Audit Checklist
+            </Button>
+          </div>
+        </div>
+      )}
+
       <Modal
         title="Reject Audit Register"
         open={rejectOpen}
@@ -264,6 +296,76 @@ export default function AuditRegisterDetailPage() {
         />
       </Modal>
     </PageContainer>
+  );
+}
+
+function WorkflowProgressCard({
+  ticketId,
+  uniqueId,
+}: {
+  ticketId: string;
+  uniqueId: string | null;
+}) {
+  const { data: ticket, isLoading } = useTicket(ticketId);
+  const flow = ticket?.flows?.[0];
+  const currentStages = flow?.currentStages ?? [];
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-5">
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+          <GitBranch size={14} className="text-gray-500" />
+          Audit Workflow
+        </h3>
+        <Link
+          to={`/tickets/${ticketId}`}
+          className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+        >
+          Open in workflow <ExternalLink size={12} />
+        </Link>
+      </div>
+      {isLoading ? (
+        <Spin size="small" />
+      ) : ticket ? (
+        <div className="text-sm">
+          <div className="text-gray-700">
+            <span className="font-mono text-gray-500">{uniqueId ?? ticket.uniqueId}</span>
+            {flow ? (
+              <span className="text-xs text-gray-500 ml-2">
+                {flow.workflowName} · v{flow.workflowVersion}
+                {flow.isCompleted ? ' · completed' : ''}
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-2">
+            <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">
+              Current stage{currentStages.length === 1 ? '' : 's'}
+            </div>
+            {currentStages.length === 0 ? (
+              <span className="text-xs text-gray-400">
+                {flow?.isCompleted ? 'Workflow complete' : '—'}
+              </span>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {currentStages.map((s) => (
+                  <span
+                    key={s.id}
+                    className="inline-flex items-center px-2 py-0.5 text-xs rounded border bg-blue-50 text-blue-700 border-blue-200"
+                  >
+                    {s.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="text-[11px] text-gray-400 mt-2">
+            The stage checklist and full progress live on the workflow ticket.
+          </p>
+        </div>
+      ) : (
+        <span className="text-xs text-gray-400">Workflow ticket not found.</span>
+      )}
+    </div>
   );
 }
 

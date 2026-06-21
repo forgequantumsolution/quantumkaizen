@@ -56,6 +56,10 @@ export const listForTicket = async (req: Request, res: Response) => {
   res.json(await service.listForTicket(req.params.id as string));
 };
 
+export const listSubmittedForms = async (req: Request, res: Response) => {
+  res.json(await service.listSubmittedFormsForTicket(req.params.id as string));
+};
+
 export const createWorkflowSubmission = async (req: Request, res: Response) => {
   const ticketId = req.params.id as string;
   const formId = req.params.formId as string;

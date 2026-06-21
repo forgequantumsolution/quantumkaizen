@@ -46,6 +46,45 @@ const bindingSelect = {
   },
 } satisfies Prisma.StageFormBindingSelect;
 
+// ─── Audit checklist (virtual bindings) ─────────────────────────────────────
+//
+// Audit tickets carry their selected checklist on the linked AuditRegister
+// (per-register, chosen from the audit master), NOT as workflow-level
+// StageFormBindings — binding them on the shared stage would leak every audit's
+// checklist onto every other audit on the same workflow. Instead we surface the
+// register's checklist forms as PER-TICKET virtual bindings whose id encodes the
+// stage + form: `audit:<stageId>:<formId>`. Submissions for these are stored
+// with bindingId = null but full (ticketId, stageId, formId) context, so they
+// track + render through the same StageFormSection as real bindings.
+const AUDIT_BINDING_PREFIX = 'audit:';
+
+/** Distinct checklist Form ids selected on the audit register linked to this
+ *  ticket (via customFields.audit_register_id). [] if not an audit ticket. */
+const auditChecklistFormIds = async (
+  customFields: Prisma.JsonValue | null | undefined,
+): Promise<string[]> => {
+  const cf = (customFields ?? {}) as Record<string, unknown>;
+  const registerId =
+    typeof cf.audit_register_id === 'string' ? cf.audit_register_id : null;
+  if (!registerId) return [];
+
+  const reg = await prisma.auditRegister.findUnique({
+    where: { id: registerId },
+    select: { checklistFormId: true, checklistAssignments: true },
+  });
+  if (!reg) return [];
+
+  const ids = new Set<string>();
+  const assignments = Array.isArray(reg.checklistAssignments)
+    ? (reg.checklistAssignments as Array<{ checklist_form_id?: unknown }>)
+    : [];
+  for (const a of assignments) {
+    if (a && typeof a.checklist_form_id === 'string') ids.add(a.checklist_form_id);
+  }
+  if (reg.checklistFormId) ids.add(reg.checklistFormId);
+  return [...ids];
+};
+
 // ─── Binding CRUD ──────────────────────────────────────────────────────────
 
 export const listForWorkflow = async (
@@ -162,10 +201,12 @@ export const listForTicket = async (ticketId: string) => {
     select: {
       id: true,
       isDeleted: true,
+      customFields: true,
       flows: {
         select: {
           id: true,
-          currentStages: { select: { id: true } },
+          workflowId: true,
+          currentStages: { select: { id: true, name: true, canonicalId: true } },
         },
       },
     },
@@ -177,7 +218,22 @@ export const listForTicket = async (ticketId: string) => {
   );
   if (currentStageIds.length === 0) return { bindings: [] };
 
-  const bindings = await prisma.stageFormBinding.findMany({
+  // Stage metadata for shaping virtual bindings (name/canonicalId/workflowId).
+  const stageMeta = new Map<
+    string,
+    { name: string; canonicalId: string; workflowId: string }
+  >();
+  for (const f of ticket.flows) {
+    for (const s of f.currentStages) {
+      stageMeta.set(s.id, {
+        name: s.name,
+        canonicalId: s.canonicalId,
+        workflowId: f.workflowId,
+      });
+    }
+  }
+
+  const realBindings = await prisma.stageFormBinding.findMany({
     where: {
       stageId: { in: currentStageIds },
       isDeleted: false,
@@ -186,6 +242,59 @@ export const listForTicket = async (ticketId: string) => {
     orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
     select: bindingSelect,
   });
+
+  // Normalise real bindings to a plain shape so they merge cleanly with the
+  // virtual audit-checklist bindings below.
+  const bindings = realBindings.map((b) => ({
+    id: b.id,
+    workflowId: b.workflowId,
+    stageId: b.stageId,
+    formId: b.formId,
+    isRequired: b.isRequired,
+    position: b.position,
+    isActive: b.isActive,
+    isDeleted: b.isDeleted,
+    createdAt: b.createdAt,
+    updatedAt: b.updatedAt,
+    stage: b.stage,
+    form: b.form,
+  }));
+
+  // Append the audit register's checklist(s) as per-ticket virtual bindings on
+  // every current stage (deduped against any real binding for the same form).
+  const auditFormIds = await auditChecklistFormIds(ticket.customFields);
+  if (auditFormIds.length) {
+    const auditForms = await prisma.form.findMany({
+      where: { id: { in: auditFormIds } },
+      select: { id: true, title: true, version: true, versionId: true, status: true },
+    });
+    const realKeys = new Set(bindings.map((b) => `${b.stageId}:${b.formId}`));
+    const now = new Date();
+    for (const stageId of currentStageIds) {
+      const meta = stageMeta.get(stageId);
+      if (!meta) continue;
+      let position = 1000;
+      for (const form of auditForms) {
+        if (realKeys.has(`${stageId}:${form.id}`)) continue;
+        bindings.push({
+          id: `${AUDIT_BINDING_PREFIX}${stageId}:${form.id}`,
+          workflowId: meta.workflowId,
+          stageId,
+          formId: form.id,
+          isRequired: true,
+          position: position++,
+          isActive: true,
+          isDeleted: false,
+          createdAt: now,
+          updatedAt: now,
+          stage: { id: stageId, name: meta.name, canonicalId: meta.canonicalId },
+          form,
+        });
+      }
+    }
+  }
+
+  if (bindings.length === 0) return { bindings: [] };
 
   // Scope submissions to the CURRENT visit of each stage. After a RETURN the
   // ticket re-enters with a fresh tracking row; submissions from a prior visit
@@ -251,6 +360,62 @@ export const listForTicket = async (ticketId: string) => {
   };
 };
 
+// ─── Submitted-forms history (read-only) ───────────────────────────────────
+
+/**
+ * Every SUBMITTED form/checklist on the ticket, across ALL stages it has passed
+ * through — so filled forms remain viewable after the ticket leaves a stage or
+ * completes (when `listForTicket` returns nothing because there's no current
+ * stage). Current-stage submissions are excluded: those are already shown,
+ * actionable, by the StageFormSection. Ordered oldest → newest.
+ */
+export const listSubmittedFormsForTicket = async (ticketId: string) => {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: ticketId },
+    select: {
+      id: true,
+      isDeleted: true,
+      flows: { select: { currentStages: { select: { id: true } } } },
+    },
+  });
+  if (!ticket || ticket.isDeleted) throw NotFound('Ticket not found');
+
+  const currentStageIds = new Set(
+    ticket.flows.flatMap((f) => f.currentStages.map((s) => s.id)),
+  );
+
+  const subs = await prisma.formSubmission.findMany({
+    where: { ticketId, status: 'SUBMITTED' },
+    orderBy: { submittedAt: 'asc' },
+    select: {
+      id: true,
+      formId: true,
+      stageId: true,
+      status: true,
+      submittedAt: true,
+      submittedBy: { select: { id: true, name: true, email: true } },
+      form: { select: { title: true } },
+      stage: { select: { name: true } },
+    },
+  });
+
+  const submissions = subs
+    // Skip the current stage's forms — StageFormSection renders those.
+    .filter((s) => !s.stageId || !currentStageIds.has(s.stageId))
+    .map((s) => ({
+      id: s.id,
+      formId: s.formId,
+      formTitle: s.form?.title ?? 'Form',
+      stageId: s.stageId,
+      stageName: s.stage?.name ?? null,
+      status: s.status,
+      submittedAt: s.submittedAt,
+      submittedBy: s.submittedBy,
+    }));
+
+  return { submissions };
+};
+
 // ─── Workflow-bound submission ─────────────────────────────────────────────
 
 /**
@@ -271,6 +436,7 @@ export const createWorkflowSubmission = async (
     select: {
       id: true,
       isDeleted: true,
+      customFields: true,
       flows: {
         select: {
           id: true,
@@ -283,6 +449,62 @@ export const createWorkflowSubmission = async (
   const currentStageIds = new Set(
     ticket.flows.flatMap((f) => f.currentStages.map((s) => s.id)),
   );
+
+  // Virtual audit-checklist binding (`audit:<stageId>:<formId>`): the form comes
+  // from the linked audit register, not a StageFormBinding row. Validate the
+  // stage is current and the form is one of the register's selected checklists,
+  // then store the submission with bindingId = null but full stage context.
+  if (input.bindingId.startsWith(AUDIT_BINDING_PREFIX)) {
+    const rest = input.bindingId.slice(AUDIT_BINDING_PREFIX.length);
+    const sep = rest.lastIndexOf(':');
+    const stageId = sep > -1 ? rest.slice(0, sep) : '';
+    const bindingFormId = sep > -1 ? rest.slice(sep + 1) : '';
+    if (!stageId || !bindingFormId) throw BadRequest('Malformed audit form binding');
+    if (bindingFormId !== formId) throw BadRequest("Binding's form does not match the URL");
+    if (!currentStageIds.has(stageId)) {
+      throw Forbidden('This checklist is not on the ticket’s current stage');
+    }
+    const allowed = await auditChecklistFormIds(ticket.customFields);
+    if (!allowed.includes(formId)) {
+      throw Forbidden('Form is not part of this audit’s checklist');
+    }
+    const flow = ticket.flows.find((f) =>
+      f.currentStages.some((s) => s.id === stageId),
+    );
+    const latest = await prisma.form.findUnique({
+      where: { id: formId },
+      select: { id: true, versionId: true },
+    });
+    if (!latest) throw NotFound('Form not found');
+
+    return prisma.formSubmission.create({
+      data: {
+        formId,
+        versionId: latest.versionId,
+        status: input.status,
+        responses: input.responses as Prisma.InputJsonValue,
+        meta: (input.meta ?? {}) as Prisma.InputJsonValue,
+        submittedById,
+        submittedAt: input.status === 'SUBMITTED' ? new Date() : null,
+        ticketId,
+        stageId,
+        flowId: flow?.id ?? null,
+        bindingId: null,
+      },
+      select: {
+        id: true,
+        formId: true,
+        versionId: true,
+        status: true,
+        ticketId: true,
+        stageId: true,
+        flowId: true,
+        bindingId: true,
+        submittedAt: true,
+        submittedBy: { select: { id: true, name: true, email: true } },
+      },
+    });
+  }
 
   // Verify the binding: belongs to a current stage, matches the route's formId.
   const binding = await prisma.stageFormBinding.findUnique({

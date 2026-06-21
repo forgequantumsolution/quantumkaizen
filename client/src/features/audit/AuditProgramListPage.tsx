@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input, Table } from 'antd';
-import { Search } from 'lucide-react';
+import { Search, CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAuditPrograms, type AuditProgram, type ProgramStatus } from '@/lib/api/audit';
 import { ProgramStatusBadge } from './auditStatusBadge';
+import AuditSchedulePage from './AuditSchedulePage';
 
 const TABS: { key: ProgramStatus | 'ALL'; label: string }[] = [
   { key: 'ALL', label: 'All' },
@@ -17,6 +18,7 @@ export default function AuditProgramListPage() {
   const nav = useNavigate();
   const [status, setStatus] = useState<ProgramStatus | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const { data, isLoading } = useAuditPrograms({
     status: status === 'ALL' ? undefined : status,
@@ -123,6 +125,28 @@ export default function AuditProgramListPage() {
           },
         ]}
       />
+
+      {/* Schedule — recurrence rules + calendar, collapsible below the list. */}
+      <div className="mt-6 border-t border-gray-200 pt-4">
+        <button
+          type="button"
+          onClick={() => setScheduleOpen((v) => !v)}
+          className="inline-flex items-center gap-2 text-sm font-semibold text-gray-900 hover:text-blue-700"
+        >
+          {scheduleOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          <CalendarDays size={15} className="text-gray-500" />
+          Audit Schedule
+          <span className="text-xs font-normal text-gray-500">
+            recurrence rules &amp; planned-audit calendar
+          </span>
+        </button>
+
+        {scheduleOpen && (
+          <div className="mt-4">
+            <AuditSchedulePage />
+          </div>
+        )}
+      </div>
     </>
   );
 }

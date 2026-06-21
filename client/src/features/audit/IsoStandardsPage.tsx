@@ -23,6 +23,7 @@ import {
   type IsoSubClauseDto,
 } from '@/lib/api/audit';
 import { useHasPermission } from '@/stores/authStore';
+import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 
 export default function IsoStandardsPage() {
   const canCreate = useHasPermission('iso_standard.create');
@@ -32,20 +33,20 @@ export default function IsoStandardsPage() {
   const { data, isLoading } = useIsoStandards();
   const rows: IsoStandardSummary[] = data?.data ?? [];
   const deleteMut = useDeleteIsoStandard();
+  const confirmDelete = useConfirmDelete();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<IsoStandardSummary | null>(null);
 
-  const handleDelete = async (s: IsoStandardSummary) => {
-    if (!confirm(`Delete ISO standard "${s.name}"?\n(This will also delete its clauses.)`))
-      return;
-    try {
-      await deleteMut.mutateAsync(s.id);
-      message.success('ISO standard deleted');
-    } catch (err) {
-      message.error(extractErr(err));
-    }
-  };
+  const handleDelete = (s: IsoStandardSummary) =>
+    confirmDelete({
+      entityLabel: 'ISO standard',
+      name: s.name,
+      extraWarning: 'This will also delete its clauses. This action cannot be undone.',
+      mutate: () => deleteMut.mutateAsync(s.id),
+      invalidateKey: ['iso-standards'],
+      successMessage: 'ISO standard deleted',
+    });
 
   return (
     <>

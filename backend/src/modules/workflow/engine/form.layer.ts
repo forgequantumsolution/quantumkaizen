@@ -42,7 +42,14 @@ export const findUnsatisfiedRequiredForms = async (
       form: { select: { title: true } },
     },
   });
-  if (bindings.length === 0) return [];
+
+  // Audit tickets carry their checklist on the linked AuditRegister (attached
+  // from the audit master), surfaced as per-ticket virtual bindings rather than
+  // real StageFormBinding rows (see stage-form.service.ts). Treat those as
+  // required too — but skip the initial stage so the audit kickoff isn't blocked.
+  const auditForms = await requiredAuditChecklistForms(tx, ticketId, stageId);
+
+  if (bindings.length === 0 && auditForms.length === 0) return [];
 
   // Each stage entry is a fresh fill opportunity. After a RETURN the ticket
   // re-opens a tracking row with a new `enteredAt`; older submissions belonged
@@ -54,24 +61,104 @@ export const findUnsatisfiedRequiredForms = async (
   });
   const since = activeTracking?.enteredAt ?? new Date(0);
 
-  const submittedFormIds = await tx.formSubmission
-    .findMany({
-      where: {
-        ticketId,
-        stageId,
-        status: 'SUBMITTED',
-        submittedAt: { gte: since },
-        formId: { in: bindings.map((b) => b.formId) },
-      },
-      select: { formId: true },
-    })
-    .then((rows) => new Set(rows.map((r) => r.formId)));
+  const out: UnsatisfiedFormBinding[] = [];
 
-  return bindings
-    .filter((b) => !submittedFormIds.has(b.formId))
-    .map((b) => ({
-      bindingId: b.id,
-      formId: b.formId,
-      title: b.form.title,
-    }));
+  // Real stage-form bindings: satisfied only by a submission from THIS visit.
+  if (bindings.length > 0) {
+    const submittedFormIds = await tx.formSubmission
+      .findMany({
+        where: {
+          ticketId,
+          stageId,
+          status: 'SUBMITTED',
+          submittedAt: { gte: since },
+          formId: { in: bindings.map((b) => b.formId) },
+        },
+        select: { formId: true },
+      })
+      .then((rows) => new Set(rows.map((r) => r.formId)));
+    for (const b of bindings) {
+      if (!submittedFormIds.has(b.formId)) {
+        out.push({ bindingId: b.id, formId: b.formId, title: b.form.title });
+      }
+    }
+  }
+
+  // Audit checklist: satisfied ticket-wide (filled once on any working stage it
+  // stays done), so the auditor isn't forced to re-submit at Verify / close.
+  if (auditForms.length > 0) {
+    const realFormIds = new Set(bindings.map((b) => b.formId));
+    const pending = auditForms.filter((f) => !realFormIds.has(f.formId));
+    if (pending.length > 0) {
+      const submitted = await tx.formSubmission
+        .findMany({
+          where: {
+            ticketId,
+            status: 'SUBMITTED',
+            formId: { in: pending.map((f) => f.formId) },
+          },
+          select: { formId: true },
+        })
+        .then((rows) => new Set(rows.map((r) => r.formId)));
+      for (const f of pending) {
+        if (!submitted.has(f.formId)) {
+          out.push({
+            bindingId: `audit:${stageId}:${f.formId}`,
+            formId: f.formId,
+            title: f.title,
+          });
+        }
+      }
+    }
+  }
+
+  return out;
+};
+
+/**
+ * Checklist forms the linked audit register requires on this stage. Empty unless
+ * the ticket is audit-linked (`customFields.audit_register_id`) AND the stage is
+ * not the workflow's initial stage.
+ */
+const requiredAuditChecklistForms = async (
+  tx: Tx,
+  ticketId: string,
+  stageId: string,
+): Promise<{ formId: string; title: string }[]> => {
+  const stage = await tx.workflowStage.findUnique({
+    where: { id: stageId },
+    select: { isInitialStage: true },
+  });
+  if (!stage || stage.isInitialStage) return [];
+
+  const ticket = await tx.ticket.findUnique({
+    where: { id: ticketId },
+    select: { customFields: true },
+  });
+  const cf = (ticket?.customFields ?? {}) as Record<string, unknown>;
+  const registerId =
+    typeof cf.audit_register_id === 'string' ? cf.audit_register_id : null;
+  if (!registerId) return [];
+
+  const reg = await tx.auditRegister.findUnique({
+    where: { id: registerId },
+    select: { checklistFormId: true, checklistAssignments: true },
+  });
+  if (!reg) return [];
+
+  const ids = new Set<string>();
+  const assignments = Array.isArray(reg.checklistAssignments)
+    ? (reg.checklistAssignments as Array<{ checklist_form_id?: unknown }>)
+    : [];
+  for (const a of assignments) {
+    if (a && typeof a.checklist_form_id === 'string') ids.add(a.checklist_form_id);
+  }
+  if (reg.checklistFormId) ids.add(reg.checklistFormId);
+  if (ids.size === 0) return [];
+
+  const forms = await tx.form.findMany({
+    where: { id: { in: [...ids] } },
+    select: { id: true, title: true },
+  });
+  return forms.map((f) => ({ formId: f.id, title: f.title }));
 };

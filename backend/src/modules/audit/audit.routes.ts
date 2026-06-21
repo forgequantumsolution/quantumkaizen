@@ -1,7 +1,23 @@
 import { Router } from 'express';
 import * as ctrl from './audit.controller';
 import * as registerCtrl from './audit-register.controller';
+import * as capaCtrl from './capa.controller';
+import * as dashboardCtrl from './audit-dashboard.controller';
+import * as scheduleCtrl from './audit-schedule.controller';
+import * as complianceCtrl from './compliance.controller';
 import {
+  AuditScheduleRuleUpsertSchema,
+  ListScheduleRuleQuerySchema,
+  CalendarQuerySchema,
+  SignSchema,
+  TrailParamSchema,
+  CapaCreateSchema,
+  CapaUpdateSchema,
+  UpdateCapaStatusSchema,
+  ListCapaQuerySchema,
+  ActionItemUpsertSchema,
+  UpdateActionItemStatusSchema,
+  ListActionItemQuerySchema,
   AuditScheduleUpsertSchema,
   IdParamSchema,
   IsoUpsertSchema,
@@ -36,6 +52,17 @@ import { asyncHandler } from '../../lib/asyncHandler';
 const router = Router();
 
 router.use(requireAuth);
+
+// Audit dashboard (KPIs + charts). Visible to anyone who can read registers.
+router.get('/audit/dashboard', requirePermission('audit_register.read'), asyncHandler(dashboardCtrl.getDashboard));
+
+// Audit schedule rules (recurrence) + calendar. Reuse legacy audit_schedule.* perms.
+router.get('/audit/schedule-rules', requirePermission('audit_schedule.read'), validate(ListScheduleRuleQuerySchema, 'query'), asyncHandler(scheduleCtrl.listRules));
+router.post('/audit/schedule-rules', requirePermission('audit_schedule.create'), validate(AuditScheduleRuleUpsertSchema), asyncHandler(scheduleCtrl.createRule));
+router.put('/audit/schedule-rules/:id', requirePermission('audit_schedule.update'), validate(IdParamSchema, 'params'), validate(AuditScheduleRuleUpsertSchema), asyncHandler(scheduleCtrl.updateRule));
+router.delete('/audit/schedule-rules/:id', requirePermission('audit_schedule.delete'), validate(IdParamSchema, 'params'), asyncHandler(scheduleCtrl.deleteRule));
+router.post('/audit/schedule-rules/run-now', requirePermission('audit_schedule.create'), asyncHandler(scheduleCtrl.runNow));
+router.get('/audit/calendar', requirePermission('audit_register.read'), validate(CalendarQuerySchema, 'query'), asyncHandler(scheduleCtrl.getCalendar));
 
 // ISO standards (frontend uses /api/get_complete_iso_standards etc.)
 router.get('/get_complete_iso_standards', requirePermission('iso_standard.read'), validate(ListIsoQuerySchema, 'query'), asyncHandler(ctrl.listIso));
@@ -77,6 +104,7 @@ router.delete('/audit/audit-types/:id', requirePermission('audit_type.delete'), 
 // ── Audit Register ──
 router.get('/audit/registers', requirePermission('audit_register.read'), validate(ListAuditRegisterQuerySchema, 'query'), asyncHandler(registerCtrl.listRegisters));
 router.get('/audit/registers/:id', requirePermission('audit_register.read'), validate(IdParamSchema, 'params'), asyncHandler(registerCtrl.getRegister));
+router.get('/audit/registers/:id/report', requirePermission('audit_register.read'), validate(IdParamSchema, 'params'), asyncHandler(dashboardCtrl.getReport));
 router.post('/audit/registers', requirePermission('audit_register.create'), validate(AuditRegisterUpsertSchema), asyncHandler(registerCtrl.createRegister));
 router.put('/audit/registers/:id', requirePermission('audit_register.update'), validate(IdParamSchema, 'params'), validate(AuditRegisterUpsertSchema), asyncHandler(registerCtrl.updateRegister));
 router.post('/audit/registers/:id/submit', requirePermission('audit_register.update'), validate(IdParamSchema, 'params'), asyncHandler(registerCtrl.submitRegister));
@@ -101,5 +129,25 @@ router.post('/audit/findings/:findingId/promote-nc', requirePermission('non_conf
 router.get('/audit/non-conformances', requirePermission('non_conformance.read'), validate(ListNcQuerySchema, 'query'), asyncHandler(registerCtrl.listNcs));
 router.post('/audit/non-conformances/:id/raise-capa', requirePermission('non_conformance.update'), validate(IdParamSchema, 'params'), validate(RaiseCapaSchema), asyncHandler(registerCtrl.raiseCapa));
 router.patch('/audit/non-conformances/:id/status', requirePermission('non_conformance.update'), validate(IdParamSchema, 'params'), validate(UpdateNcStatusSchema), asyncHandler(registerCtrl.updateNcStatus));
+
+// ── CAPA (first-class) ──
+router.get('/audit/capas', requirePermission('capa.read'), validate(ListCapaQuerySchema, 'query'), asyncHandler(capaCtrl.listCapas));
+router.get('/audit/capas/:id', requirePermission('capa.read'), validate(IdParamSchema, 'params'), asyncHandler(capaCtrl.getCapa));
+router.post('/audit/capas', requirePermission('capa.create'), validate(CapaCreateSchema), asyncHandler(capaCtrl.createCapa));
+router.put('/audit/capas/:id', requirePermission('capa.update'), validate(IdParamSchema, 'params'), validate(CapaUpdateSchema), asyncHandler(capaCtrl.updateCapa));
+router.patch('/audit/capas/:id/status', requirePermission('capa.update'), validate(IdParamSchema, 'params'), validate(UpdateCapaStatusSchema), asyncHandler(capaCtrl.updateCapaStatus));
+router.delete('/audit/capas/:id', requirePermission('capa.delete'), validate(IdParamSchema, 'params'), asyncHandler(capaCtrl.deleteCapa));
+
+// ── Action Items ──
+router.get('/audit/action-items', requirePermission('action_item.read'), validate(ListActionItemQuerySchema, 'query'), asyncHandler(capaCtrl.listActionItems));
+router.post('/audit/action-items', requirePermission('action_item.create'), validate(ActionItemUpsertSchema), asyncHandler(capaCtrl.createActionItem));
+router.put('/audit/action-items/:id', requirePermission('action_item.update'), validate(IdParamSchema, 'params'), validate(ActionItemUpsertSchema), asyncHandler(capaCtrl.updateActionItem));
+router.patch('/audit/action-items/:id/status', requirePermission('action_item.update'), validate(IdParamSchema, 'params'), validate(UpdateActionItemStatusSchema), asyncHandler(capaCtrl.updateActionItemStatus));
+router.delete('/audit/action-items/:id', requirePermission('action_item.delete'), validate(IdParamSchema, 'params'), asyncHandler(capaCtrl.deleteActionItem));
+
+// ── Compliance: audit trail + e-signatures ──
+router.get('/audit/trail/:entityType/:entityId', requirePermission('audit_register.read'), validate(TrailParamSchema, 'params'), asyncHandler(complianceCtrl.getTrail));
+router.get('/audit/signatures/:entityType/:entityId', requirePermission('audit_register.read'), validate(TrailParamSchema, 'params'), asyncHandler(complianceCtrl.getSignatures));
+router.post('/audit/signatures', validate(SignSchema), asyncHandler(complianceCtrl.sign));
 
 export default router;

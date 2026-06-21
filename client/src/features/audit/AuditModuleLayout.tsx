@@ -1,12 +1,19 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { ClipboardCheck, PlayCircle, AlertOctagon } from 'lucide-react';
+import { LayoutDashboard, Briefcase, ClipboardCheck, PlayCircle, AlertOctagon, ShieldCheck, ListTodo } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn } from '@/lib/utils';
 
+// Schedule lives as a section on the Audit Program page (Register → Program flow),
+// so it's no longer a top-level tab. "My Workspace" surfaces the audit workflow
+// tickets (PRs) on the generic module workspace, embedded under these tabs.
 const TABS = [
+  { to: '/audit/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/audit/workspace', label: 'My Workspace', icon: Briefcase },
   { to: '/audit/register', label: 'Audit Register', icon: ClipboardCheck },
   { to: '/audit/program', label: 'Audit Program', icon: PlayCircle },
   { to: '/audit/non-conformance', label: 'Non-Conformance', icon: AlertOctagon },
+  { to: '/audit/capa', label: 'CAPA', icon: ShieldCheck },
+  { to: '/audit/actions', label: 'Action Items', icon: ListTodo },
 ];
 
 export default function AuditModuleLayout() {

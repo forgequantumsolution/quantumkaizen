@@ -11,6 +11,7 @@ import ActionBar from './detail/ActionBar';
 import ApprovalAwaitingCard from './detail/ApprovalAwaitingCard';
 import TicketHeaderCard from './detail/TicketHeaderCard';
 import StageFormSection from './detail/StageFormSection';
+import TicketFormHistory from './detail/TicketFormHistory';
 import TicketFlowCanvas, { type SelectedStageInfo } from './detail/TicketFlowCanvas';
 import TicketActivityModal from './detail/TicketActivityModal';
 import TicketDetailsModal from './detail/TicketDetailsModal';
@@ -25,14 +26,15 @@ export default function TicketDetailPage() {
   const deleteTicket = useDeleteTicket();
   const { modal } = App.useApp();
 
-  const [workflowOpen, setWorkflowOpen] = useState(false);
+  // Diagram open by default — it's the selector that drives the stage form view.
+  const [workflowOpen, setWorkflowOpen] = useState(true);
   const [activityOpen, setActivityOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedStage, setSelectedStage] = useState<SelectedStageInfo | null>(null);
 
   useEffect(() => {
     setSelectedStage(null);
-    setWorkflowOpen(false);
+    setWorkflowOpen(true);
     setActivityOpen(false);
     setDetailsOpen(false);
   }, [id]);
@@ -109,6 +111,7 @@ export default function TicketDetailPage() {
               workflowId={flow.workflow.id}
               currentStageIds={flow.currentStages.map((s) => s.canonicalId)}
               currentPersistedStageIds={flow.currentStages.map((s) => s.id)}
+              isCompleted={isCompleted}
               direction="LR"
               height={240}
               onStageNodeClick={setSelectedStage}
@@ -142,6 +145,13 @@ export default function TicketDetailPage() {
         )}
 
         <StageFormSection ticketId={ticket.id} />
+
+        <TicketFormHistory
+          ticketId={ticket.id}
+          selectedStageId={selectedStage?.persistedId ?? null}
+          currentStageIds={flow?.currentStages.map((s) => s.id) ?? []}
+          isCompleted={isCompleted}
+        />
 
         <ApprovalAwaitingCard ticketId={ticket.id} />
       </div>

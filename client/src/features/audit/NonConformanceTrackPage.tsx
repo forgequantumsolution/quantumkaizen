@@ -1,17 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Button, Modal, Select, Spin, Table, message } from 'antd';
+import { Link, useNavigate } from 'react-router-dom';
+import { Button, Input, Modal, Select, Spin, Table, message } from 'antd';
 import {
   useNonConformances,
-  useRaiseCapa,
+  useCreateCapa,
   useUpdateNcStatus,
   type FindingSeverity,
   type NonConformance,
   type NonConformanceStatus,
+  type CapaType,
 } from '@/lib/api/audit';
 import { useHasPermission } from '@/stores/authStore';
-import { useTickets } from '@/lib/api/ticket';
-import { useWorkflowTypes } from '@/lib/api/workflowLookups';
 import { FindingSeverityBadge, NcStatusBadge } from './auditStatusBadge';
 
 type TrackMode = 'department' | 'severity' | 'status' | 'auditor';
@@ -40,6 +39,7 @@ export default function NonConformanceTrackPage() {
   const [severityFilter, setSeverityFilter] = useState<FindingSeverity | 'ALL'>('ALL');
 
   const canUpdate = useHasPermission('non_conformance.update');
+  const canCreateCapa = useHasPermission('capa.create');
   const updateStatus = useUpdateNcStatus();
   const [capaTarget, setCapaTarget] = useState<NonConformance | null>(null);
 
@@ -235,14 +235,21 @@ export default function NonConformanceTrackPage() {
                     title: 'CAPA',
                     width: 150,
                     render: (_: unknown, r) =>
-                      r.capa_ticket ? (
+                      r.capa ? (
+                        <Link
+                          to={`/audit/capa/${r.capa.id}`}
+                          className="font-mono text-blue-600 hover:underline"
+                        >
+                          {r.capa.capaNumber}
+                        </Link>
+                      ) : r.capa_ticket ? (
                         <Link
                           to={`/tickets/${r.capa_ticket.id}`}
                           className="font-mono text-amber-700 hover:underline"
                         >
                           {r.capa_ticket.uniqueId}
                         </Link>
-                      ) : canUpdate ? (
+                      ) : canCreateCapa ? (
                         <Button size="small" onClick={() => setCapaTarget(r)}>
                           Raise CAPA
                         </Button>
@@ -265,7 +272,9 @@ export default function NonConformanceTrackPage() {
   );
 }
 
-/* ─── Raise CAPA modal: pick an existing CAPA-workflow ticket and link it ─── */
+/* ─── Raise CAPA modal: create a first-class CAPA from this non-conformance ─── */
+
+const CAPA_TYPES: CapaType[] = ['CORRECTIVE', 'PREVENTIVE', 'BOTH'];
 
 function RaiseCapaModal({
   nc,
@@ -274,28 +283,29 @@ function RaiseCapaModal({
   nc: NonConformance | null;
   onClose: () => void;
 }) {
-  const [ticketId, setTicketId] = useState<string | undefined>();
-  const { data: types } = useWorkflowTypes();
-  const capaType = (types ?? []).find((t) => /capa/i.test(t.name));
-  const { data: ticketResp, isLoading } = useTickets({
-    workflowTypeId: capaType?.id,
-    pageSize: 100,
-    status: 'open',
-  });
-  const tickets = ticketResp?.items ?? [];
+  const nav = useNavigate();
+  const createMut = useCreateCapa();
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState<CapaType>('CORRECTIVE');
 
-  const raiseMut = useRaiseCapa();
+  // Seed the title from the source finding when the modal opens for a new NC.
+  const seededFor = useMemo(() => nc?.id, [nc]);
+  const effectiveTitle =
+    title || (nc ? `CAPA for ${nc.nc_number} — ${nc.finding.description ?? ''}`.slice(0, 160) : '');
 
   const submit = async () => {
-    if (!nc || !ticketId) {
-      message.error('Select a CAPA ticket to link');
-      return;
-    }
+    if (!nc) return;
     try {
-      await raiseMut.mutateAsync({ id: nc.id, capa_ticket_id: ticketId });
-      message.success('CAPA ticket linked');
-      setTicketId(undefined);
+      const res = await createMut.mutateAsync({
+        title: effectiveTitle.trim() || `CAPA for ${nc.nc_number}`,
+        type,
+        non_conformance_id: nc.id,
+      });
+      message.success('CAPA raised — NC moved to CAPA_RAISED');
+      setTitle('');
       onClose();
+      const id = (res as { data?: { id?: string } })?.data?.id;
+      if (id) nav(`/audit/capa/${id}`);
     } catch (err) {
       message.error(extractErr(err));
     }
@@ -303,38 +313,41 @@ function RaiseCapaModal({
 
   return (
     <Modal
+      key={seededFor}
       title={nc ? `Raise CAPA for ${nc.nc_number}` : 'Raise CAPA'}
       open={!!nc}
       onCancel={() => {
-        setTicketId(undefined);
+        setTitle('');
         onClose();
       }}
       onOk={submit}
-      okText="Link CAPA"
-      okButtonProps={{ loading: raiseMut.isPending }}
+      okText="Raise CAPA"
+      okButtonProps={{ loading: createMut.isPending }}
     >
-      <p className="text-sm text-gray-600 mb-2">
-        Pick an existing CAPA ticket to link. This sets the NC status to{' '}
-        <span className="font-mono">CAPA_RAISED</span>.
+      <p className="text-sm text-gray-600 mb-3">
+        Creates a CAPA linked to this non-conformance and sets its status to{' '}
+        <span className="font-mono">CAPA_RAISED</span>. You'll be taken to the CAPA workspace to
+        record root cause and actions.
       </p>
-      {!capaType && (
-        <p className="text-xs text-amber-700 mb-2">
-          No workflow type matching "CAPA" was found — showing all open tickets.
-        </p>
-      )}
-      <Select
-        value={ticketId}
-        onChange={setTicketId}
-        loading={isLoading}
-        showSearch
-        optionFilterProp="label"
-        placeholder="Search by ticket # or title…"
-        className="w-full"
-        options={tickets.map((t) => ({
-          value: t.id,
-          label: `${t.uniqueId} — ${t.title}`,
-        }))}
-      />
+      <div className="space-y-3">
+        <div>
+          <label className="block text-[11px] font-medium text-gray-600 mb-1">Title</label>
+          <Input
+            value={effectiveTitle}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="CAPA title"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-medium text-gray-600 mb-1">Type</label>
+          <Select
+            value={type}
+            onChange={setType}
+            options={CAPA_TYPES.map((t) => ({ value: t, label: t }))}
+            className="w-full"
+          />
+        </div>
+      </div>
     </Modal>
   );
 }

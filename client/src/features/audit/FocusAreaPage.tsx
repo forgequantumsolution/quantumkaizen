@@ -13,6 +13,7 @@ export default function FocusAreaPage() {
       subtitle="Reusable audit focus areas used when scoping audits."
       namePlaceholder="Quality Management System"
       permissionPrefix="focus_area"
+      invalidateKey={['audit', 'focus-areas']}
       useList={useFocusAreas}
       useCreate={useCreateFocusArea}
       useUpdate={useUpdateFocusArea}

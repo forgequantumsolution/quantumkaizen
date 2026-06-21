@@ -124,8 +124,8 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
 
   if (isCompleted) {
     return (
-      <Card className="!p-3">
-        <p className="text-sm text-gray-600">
+      <Card className="!px-3 !py-2">
+        <p className="text-xs text-gray-600">
           <span className="font-semibold">Completed</span> — no further actions.
         </p>
       </Card>
@@ -134,71 +134,76 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
 
   return (
     <>
-      <Card className="!p-3">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <h3 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1">
-              Stage actions
-            </h3>
-            {isLoading ? (
-              <p className="text-xs text-gray-500">Loading...</p>
-            ) : stageActions.length === 0 ? (
-              <p className="text-xs text-gray-500">No active stages.</p>
-            ) : (
-              <div className="space-y-2">
-                {stageActions.map((stage) => (
-                  <div key={stage.stageId}>
-                    <p className="text-xs font-medium text-gray-900 mb-1">{stage.stageName}</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {stage.actions.length === 0 && (
-                        <span className="text-xs text-gray-400 italic">No actions configured</span>
-                      )}
-                      {stage.actions.map((a) => {
-                        const Icon = BEHAVIOR_ICON[a.behavior];
-                        const disabled =
-                          !a.canPerform || !canTransition || isOnHold || formsBlocked;
-                        const tooltip = !a.canPerform
-                          ? a.canPerformReason
-                          : isOnHold
-                            ? 'Ticket is on hold'
-                            : formsBlocked
-                              ? formsBlockedReason
-                              : undefined;
-                        return (
-                          <Button
-                            key={a.id}
-                            variant={BEHAVIOR_VARIANT[a.behavior]}
-                            size="sm"
-                            disabled={disabled}
-                            onClick={() => setPending({ action: a, stage })}
-                            title={tooltip}
-                          >
-                            <Icon size={12} />
-                            <span className="ml-1">{a.name}</span>
-                          </Button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+      <Card className="!px-3 !py-2">
+        {isLoading ? (
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="font-semibold text-gray-700 uppercase tracking-wide">Stage Actions</span>
+            <span>·</span>
+            <span>Loading…</span>
           </div>
-          {isOnHold && (
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleResume}
-                isLoading={resume.isPending}
-                disabled={!canTransition}
-              >
-                <Play size={12} />
-                <span className="ml-1">Resume</span>
-              </Button>
-            </div>
-          )}
-        </div>
+        ) : stageActions.length === 0 ? (
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <span className="font-semibold text-gray-700 uppercase tracking-wide">Stage Actions</span>
+            <span>·</span>
+            <span>No active stages.</span>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {stageActions.map((stage) => (
+              <div key={stage.stageId} className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+                    Stage Actions
+                  </span>
+                  <span className="text-gray-300">·</span>
+                  <span className="text-xs font-medium text-gray-900 truncate">{stage.stageName}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 ml-auto">
+                  {stage.actions.length === 0 && (
+                    <span className="text-xs text-gray-400 italic">No actions configured</span>
+                  )}
+                  {stage.actions.map((a) => {
+                    const Icon = BEHAVIOR_ICON[a.behavior];
+                    const disabled =
+                      !a.canPerform || !canTransition || isOnHold || formsBlocked;
+                    const tooltip = !a.canPerform
+                      ? a.canPerformReason
+                      : isOnHold
+                        ? 'Ticket is on hold'
+                        : formsBlocked
+                          ? formsBlockedReason
+                          : undefined;
+                    return (
+                      <Button
+                        key={a.id}
+                        variant={BEHAVIOR_VARIANT[a.behavior]}
+                        size="sm"
+                        disabled={disabled}
+                        onClick={() => setPending({ action: a, stage })}
+                        title={tooltip}
+                      >
+                        <Icon size={12} />
+                        <span className="ml-1">{a.name}</span>
+                      </Button>
+                    );
+                  })}
+                  {isOnHold && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleResume}
+                      isLoading={resume.isPending}
+                      disabled={!canTransition}
+                    >
+                      <Play size={12} />
+                      <span className="ml-1">Resume</span>
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Modal

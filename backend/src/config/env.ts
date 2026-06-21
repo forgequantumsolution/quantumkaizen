@@ -16,6 +16,8 @@ const EnvSchema = z.object({
   // Standard 5-field crontab.
   SLA_SWEEP_CRON: z.string().default('*/15 * * * *'),
   APPROVAL_DEADLINE_CRON: z.string().default('*/30 * * * *'),
+  // Audit schedule recurrence sweep — spawns due audits from schedule rules.
+  AUDIT_SCHEDULE_CRON: z.string().default('0 1 * * *'),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

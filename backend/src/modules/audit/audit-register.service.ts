@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound, Conflict } from '../../lib/httpError';
+import { writeTrail } from './compliance.service';
+import { raiseTicket as engineRaiseTicket } from '../workflow/engine/orchestrator';
 import type {
   AuditMasterUpsertInput,
   AuditRegisterUpsertInput,
@@ -326,6 +328,9 @@ export const createAuditRegister = async (input: AuditRegisterUpsertInput, userI
         input.checklist_form_id ?? input.checklist_assignments?.[0]?.checklist_form_id ?? null,
       auditorId: input.auditor_id ?? null,
       approverId: input.approver_id ?? null,
+      // Workflow the audit follows once approved (the stage checklist + progress
+      // live on the ticket raised at approval, same as a CAPA ticket).
+      workflowId: input.workflow_id ?? null,
       createdById: userId ?? null,
     },
   });
@@ -363,6 +368,7 @@ export const updateAuditRegister = async (id: string, input: AuditRegisterUpsert
         input.checklist_form_id ?? input.checklist_assignments?.[0]?.checklist_form_id ?? null,
       auditorId: input.auditor_id ?? null,
       approverId: input.approver_id ?? null,
+      workflowId: input.workflow_id ?? null,
     },
   });
   return getAuditRegister(id);
@@ -411,6 +417,52 @@ export const approveAuditRegister = async (id: string, userId: string) => {
       },
     });
   });
+  await writeTrail(
+    {
+      entityType: 'AuditRegister',
+      entityId: id,
+      action: 'TRANSITION',
+      field: 'status',
+      oldValue: r.status,
+      newValue: 'APPROVED',
+    },
+    userId,
+  );
+
+  // If the register names a workflow and hasn't been linked yet, raise a ticket
+  // on it so the audit follows that workflow — its per-stage checklist + progress
+  // live on the ticket, exactly like a CAPA ticket. Best-effort: a missing or
+  // inactive workflow must not block approval.
+  if (r.workflowId && !r.workflowTicketId) {
+    try {
+      const t = await engineRaiseTicket(
+        {
+          workflowId: r.workflowId,
+          title: r.title,
+          description: `Audit ${r.registerNumber} approved — performing audit per workflow.`,
+          // Carry the audit + its selected checklist onto the ticket so the
+          // auditor can open/fill it when performing the audit.
+          customFields: {
+            audit_register_id: r.id,
+            audit_register_number: r.registerNumber,
+            audit_checklist_form_id: r.checklistFormId ?? null,
+          },
+        },
+        { id: userId },
+      );
+      await prisma.auditRegister.update({
+        where: { id },
+        data: { workflowTicketId: t.ticketId, workflowTicketUniqueId: t.uniqueId },
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[audit-register] failed to raise workflow ticket for ${r.registerNumber}:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
   return getAuditRegister(id);
 };
 
@@ -431,6 +483,18 @@ export const rejectAuditRegister = async (
       approvedAt: new Date(),
     },
   });
+  await writeTrail(
+    {
+      entityType: 'AuditRegister',
+      entityId: id,
+      action: 'TRANSITION',
+      field: 'status',
+      oldValue: r.status,
+      newValue: 'REJECTED',
+      reason: input.reason,
+    },
+    userId,
+  );
   return getAuditRegister(id);
 };
 
@@ -677,6 +741,7 @@ export const listNcs = async (q: ListNcQuery) => {
       },
       department: { select: { id: true, name: true, code: true } },
       capaTicket: { select: { id: true, uniqueId: true, title: true } },
+      capa: { select: { id: true, capaNumber: true, status: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -808,6 +873,9 @@ const serializeRegister = (
   team_members: r.teamMembers ?? [],
   checklist_assignments: r.checklistAssignments ?? [],
   checklist_form: r.checklistForm,
+  workflow_id: r.workflowId,
+  workflow_ticket_id: r.workflowTicketId,
+  workflow_ticket_unique_id: r.workflowTicketUniqueId,
   auditor: r.auditor,
   approver: r.approver,
   submitted_at: r.submittedAt,
@@ -945,6 +1013,7 @@ const serializeNc = (n: {
   };
   department?: { id: string; name: string; code?: string } | null;
   capaTicket?: { id: string; uniqueId: string; title: string } | null;
+  capa?: { id: string; capaNumber: string; status: string } | null;
   createdAt: Date;
   updatedAt: Date;
 }) => ({
@@ -958,6 +1027,7 @@ const serializeNc = (n: {
   finding: n.finding,
   department: n.department ?? null,
   capa_ticket: n.capaTicket ?? null,
+  capa: n.capa ?? null,
   created_at: n.createdAt,
   updated_at: n.updatedAt,
 });

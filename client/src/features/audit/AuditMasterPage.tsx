@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Button, Space, Spin, Table, message } from 'antd';
+import { Button, Space, Spin, Table } from 'antd';
 import { Plus, Edit3, Trash2 } from 'lucide-react';
 import {
   useAuditMasters,
@@ -9,6 +9,7 @@ import {
   type AuditType,
 } from '@/lib/api/audit';
 import { useHasPermission } from '@/stores/authStore';
+import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 
 export default function AuditMasterPage() {
   const nav = useNavigate();
@@ -19,16 +20,15 @@ export default function AuditMasterPage() {
   const { data, isLoading } = useAuditMasters({ page_size: 200 });
   const rows: AuditMaster[] = data?.data ?? [];
   const deleteMut = useDeleteAuditMaster();
+  const confirmDelete = useConfirmDelete();
 
-  const handleDelete = async (m: AuditMaster) => {
-    if (!confirm(`Delete master "${m.code}"?`)) return;
-    try {
-      await deleteMut.mutateAsync(m.id);
-      message.success('Audit master deleted');
-    } catch (err) {
-      message.error(extractErr(err));
-    }
-  };
+  const handleDelete = (m: AuditMaster) =>
+    confirmDelete({
+      entityLabel: 'audit master',
+      name: m.name,
+      mutate: () => deleteMut.mutateAsync(m.id),
+      invalidateKey: ['audit', 'masters'],
+    });
 
   return (
     <>
@@ -128,12 +128,5 @@ export default function AuditMasterPage() {
         />
       )}
     </>
-  );
-}
-
-function extractErr(err: unknown): string {
-  return (
-    (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-      ?.error?.message ?? 'Operation failed'
   );
 }

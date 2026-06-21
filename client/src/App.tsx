@@ -27,6 +27,12 @@ import AuditRegisterFormPage from '@/features/audit/AuditRegisterFormPage';
 import AuditProgramListPage from '@/features/audit/AuditProgramListPage';
 import AuditProgramExecutionPage from '@/features/audit/AuditProgramExecutionPage';
 import NonConformanceTrackPage from '@/features/audit/NonConformanceTrackPage';
+import AuditDashboardPage from '@/features/audit/AuditDashboardPage';
+import AuditWorkspacePage from '@/features/audit/AuditWorkspacePage';
+import AuditReportPage from '@/features/audit/AuditReportPage';
+import CapaListPage from '@/features/audit/CapaListPage';
+import CapaDetailPage from '@/features/audit/CapaDetailPage';
+import ActionItemsPage from '@/features/audit/ActionItemsPage';
 import AuditConfigLayout from '@/features/audit/AuditConfigLayout';
 import AuditMasterPage from '@/features/audit/AuditMasterPage';
 import AuditMasterFormPage from '@/features/audit/AuditMasterFormPage';
@@ -69,15 +75,23 @@ export default function App() {
           <Route path="/forms/:id/fill" element={<FormFillPage />} />
 
           {/* Audit module — Register → Approval → Program → Non-Conformance */}
-          <Route path="/audit" element={<Navigate to="/audit/register" replace />} />
+          <Route path="/audit" element={<Navigate to="/audit/dashboard" replace />} />
           <Route element={<AuditModuleLayout />}>
+            <Route path="/audit/dashboard" element={<AuditDashboardPage />} />
+            <Route path="/audit/workspace" element={<AuditWorkspacePage />} />
+            {/* Schedule now lives as a section on the Audit Program page. */}
+            <Route path="/audit/schedule" element={<Navigate to="/audit/program" replace />} />
             <Route path="/audit/register" element={<AuditRegisterListPage />} />
             <Route path="/audit/program" element={<AuditProgramListPage />} />
             <Route path="/audit/non-conformance" element={<NonConformanceTrackPage />} />
+            <Route path="/audit/capa" element={<CapaListPage />} />
+            <Route path="/audit/actions" element={<ActionItemsPage />} />
           </Route>
+          <Route path="/audit/capa/:id" element={<CapaDetailPage />} />
           <Route path="/audit/register/new" element={<AuditRegisterFormPage />} />
           <Route path="/audit/register/:id/edit" element={<AuditRegisterFormPage />} />
           <Route path="/audit/register/:id" element={<AuditRegisterDetailPage />} />
+          <Route path="/audit/register/:id/report" element={<AuditReportPage />} />
           <Route path="/audit/program/:id" element={<AuditProgramExecutionPage />} />
           <Route path="/audit/master/new" element={<AuditMasterFormPage />} />
           <Route path="/audit/master/:id/edit" element={<AuditMasterFormPage />} />

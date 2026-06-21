@@ -29,13 +29,17 @@ import { checkApprovalDeadlines } from './sweeps/checkApprovalDeadlines';
 import {
   APPROVAL_DEADLINE_JOB,
   APPROVAL_DEADLINE_QUEUE,
+  AUDIT_SCHEDULE_JOB,
+  AUDIT_SCHEDULE_QUEUE,
   closeAll,
   getApprovalDeadlineQueue,
+  getAuditScheduleQueue,
   getConnection,
   getSlaSweepQueue,
   SLA_SWEEP_JOB,
   SLA_SWEEP_QUEUE,
 } from './queue';
+import { spawnDueAudits } from './sweeps/spawnDueAudits';
 
 const log = (msg: string, extra?: Record<string, unknown>) => {
   // eslint-disable-next-line no-console
@@ -58,7 +62,8 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
   // ── Schedule repeating jobs (idempotent — same `repeat.key` won't duplicate) ──
   const slaQueue = getSlaSweepQueue();
   const approvalQueue = getApprovalDeadlineQueue();
-  if (!slaQueue || !approvalQueue) {
+  const auditScheduleQueue = getAuditScheduleQueue();
+  if (!slaQueue || !approvalQueue || !auditScheduleQueue) {
     err('Queue construction failed despite Redis connection present — bailing.');
     process.exit(1);
   }
@@ -77,6 +82,15 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
     {},
     {
       repeat: { pattern: env.APPROVAL_DEADLINE_CRON, key: 'approval-deadline-cron' },
+      removeOnComplete: { count: 100 },
+      removeOnFail: { count: 200 },
+    },
+  );
+  await auditScheduleQueue.add(
+    AUDIT_SCHEDULE_JOB,
+    {},
+    {
+      repeat: { pattern: env.AUDIT_SCHEDULE_CRON, key: 'audit-schedule-cron' },
       removeOnComplete: { count: 100 },
       removeOnFail: { count: 200 },
     },
@@ -115,6 +129,22 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
     err(`approval-deadline job ${job?.id} failed`, { error: e.message }),
   );
 
+  const auditScheduleWorker = new Worker(
+    AUDIT_SCHEDULE_QUEUE,
+    async (job: Job) => {
+      log(`processing ${job.name} id=${job.id}`);
+      const result = await spawnDueAudits();
+      return result;
+    },
+    { connection: conn, concurrency: 1 },
+  );
+  auditScheduleWorker.on('completed', (job, result) =>
+    log(`audit-schedule job ${job.id} complete`, result as Record<string, unknown>),
+  );
+  auditScheduleWorker.on('failed', (job, e) =>
+    err(`audit-schedule job ${job?.id} failed`, { error: e.message }),
+  );
+
   log('workers running; press Ctrl+C to stop');
 
   // ── Graceful shutdown ──
@@ -122,6 +152,7 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
     log(`received ${signal}, shutting down…`);
     await slaWorker.close();
     await approvalWorker.close();
+    await auditScheduleWorker.close();
     await closeAll();
     await prisma.$disconnect();
     log('shutdown complete');

@@ -13,6 +13,7 @@ export default function AuditTypePage() {
       subtitle="Reusable audit types / categories used across audit masters."
       namePlaceholder="Process Audit"
       permissionPrefix="audit_type"
+      invalidateKey={['audit', 'audit-types']}
       useList={useAuditTypes}
       useCreate={useCreateAuditType}
       useUpdate={useUpdateAuditType}

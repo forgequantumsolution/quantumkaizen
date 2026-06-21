@@ -412,3 +412,11 @@ html.dark {
     overflow: hidden;
   }
 }
+
+/* Centered confirm modal — centers the footer buttons and removes the default
+   icon column so our custom centered layout in the content slot doesn't get
+   pushed left. */
+.qk-center-confirm .ant-modal-confirm-body { display: block !important; }
+.qk-center-confirm .ant-modal-confirm-body > .anticon { display: none !important; }
+.qk-center-confirm .ant-modal-confirm-content { margin-inline-start: 0 !important; }
+.qk-center-confirm .ant-modal-confirm-btns { display: flex; justify-content: center; gap: 8px; }

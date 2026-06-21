@@ -19,6 +19,7 @@ import {
   type NamedRef,
 } from '@/lib/api/audit';
 import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useWorkflows } from '@/lib/api/workflow';
 
 interface DraftState {
   title: string;
@@ -35,6 +36,7 @@ interface DraftState {
   checklist_assignments: ChecklistAssignment[];
   auditor_id: string | null;
   approver_id: string | null;
+  workflow_id: string | null;
 }
 
 const initialDraft = (r: AuditRegister | null): DraftState => ({
@@ -52,6 +54,7 @@ const initialDraft = (r: AuditRegister | null): DraftState => ({
   checklist_assignments: r?.checklist_assignments ?? [],
   auditor_id: r?.auditor?.id ?? null,
   approver_id: r?.approver?.id ?? null,
+  workflow_id: r?.workflow_id ?? null,
 });
 
 export default function AuditRegisterFormPage() {
@@ -86,6 +89,12 @@ export default function AuditRegisterFormPage() {
 
   const { data: isoData } = useIsoStandards();
   const isoStandards = isoData?.data ?? [];
+
+  // Workflows the audit can follow — only published/active ones, like Raise Ticket.
+  const { data: workflowsData } = useWorkflows({ pageSize: 200, status: 'ACTIVE' });
+  const activeWorkflows = (workflowsData?.items ?? []).filter(
+    (w) => w.workflowStatus === 'ACTIVE',
+  );
 
   const createMut = useCreateAuditRegister();
   const updateMut = useUpdateAuditRegister(id ?? '');
@@ -187,6 +196,7 @@ export default function AuditRegisterFormPage() {
       checklist_form_id: draft.checklist_assignments[0]?.checklist_form_id ?? null,
       auditor_id: draft.auditor_id,
       approver_id: draft.approver_id,
+      workflow_id: draft.workflow_id,
     };
     try {
       if (isEdit) {
@@ -383,6 +393,22 @@ export default function AuditRegisterFormPage() {
             options={users.map((u) => ({ value: u.id, label: u.name }))}
             className="w-full"
           />
+        </Field>
+        <Field label="Audit Workflow">
+          <Select
+            value={draft.workflow_id ?? undefined}
+            onChange={(v) => update('workflow_id', v ?? null)}
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="Follow a workflow (optional)"
+            options={activeWorkflows.map((w) => ({ value: w.id, label: w.name }))}
+            className="w-full"
+          />
+          <p className="text-[11px] text-gray-400 mt-1">
+            On approval, the audit starts on this workflow — fill each stage's
+            checklist on the workflow ticket.
+          </p>
         </Field>
         <Field label="Audit Team Members *">
           <Select

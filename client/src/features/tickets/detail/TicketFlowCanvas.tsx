@@ -30,6 +30,8 @@ interface Props {
   currentStageIds?: string[];
   /** Stage persisted IDs (UUIDs) — used as a fallback match. */
   currentPersistedStageIds?: string[];
+  /** When true, every stage in the graph renders in its "completed" colour. */
+  isCompleted?: boolean;
   height?: number;
   interactive?: boolean;
   /** Layout direction: 'LR' horizontal (default), 'TB' top-to-bottom. */
@@ -44,6 +46,7 @@ export default function TicketFlowCanvas({
   workflowId,
   currentStageIds = [],
   currentPersistedStageIds = [],
+  isCompleted = false,
   height = 420,
   interactive = true,
   direction = 'LR',
@@ -88,14 +91,22 @@ export default function TicketFlowCanvas({
         (data.persistedStageId
           ? currentPersistedSet.has(data.persistedStageId)
           : false);
-      return { ...n, data: { ...data, isCurrent, flowDirection: direction } };
+      return {
+        ...n,
+        data: {
+          ...data,
+          isCurrent: isCompleted ? false : isCurrent,
+          isCompleted,
+          flowDirection: direction,
+        },
+      };
     });
 
     const laidOut = layoutGraph(decorated, rawEdges, { direction });
     setNodes(laidOut);
     setEdges(rawEdges);
     needsFitView.current = true;
-  }, [flowJson, currentIdSet, currentPersistedSet, direction, setNodes, setEdges]);
+  }, [flowJson, currentIdSet, currentPersistedSet, isCompleted, direction, setNodes, setEdges]);
 
   useEffect(() => {
     if (!needsFitView.current || nodes.length === 0) return;

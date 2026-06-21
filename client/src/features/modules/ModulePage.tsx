@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { App } from 'antd';
 import {
@@ -105,8 +105,22 @@ const relativeDays = (iso: string): string => {
   return `${days} days`;
 };
 
-export default function ModulePage() {
-  const { typeId = '' } = useParams<{ typeId: string }>();
+interface ModulePageProps {
+  /** Override the workflow type id (when not taken from the URL :typeId param). */
+  typeId?: string;
+  /** Embedded mode — render inside another layout (e.g. the Audit module tabs):
+   *  no PageContainer, no title, no Dashboard/Workspace sub-tabs; locked to the
+   *  workspace ticket list. */
+  embedded?: boolean;
+}
+
+export default function ModulePage({
+  typeId: propTypeId,
+  embedded = false,
+}: ModulePageProps = {}) {
+  const params = useParams<{ typeId: string }>();
+  const typeId = propTypeId ?? params.typeId ?? '';
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const hasPermission = useAuthStore((s) => s.hasPermission);
@@ -122,7 +136,11 @@ export default function ModulePage() {
     [types, typeId],
   );
 
-  const [tab, setTab] = useState<Tab>('dashboard');
+  // Allow deep-linking straight to the workspace (e.g. the Audit module's
+  // "My Workspace" tab links here with ?tab=workspace).
+  const initialTab: Tab =
+    embedded || searchParams.get('tab') === 'workspace' ? 'workspace' : 'dashboard';
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [activeKpi, setActiveKpi] = useState<KpiId | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounced(searchInput, 250);
@@ -133,14 +151,16 @@ export default function ModulePage() {
   const [workflowFilterId, setWorkflowFilterId] = useState<string>('');
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Reset state when switching modules
+  // Reset state when switching modules — honoring a ?tab= deep-link.
   useEffect(() => {
-    setTab('dashboard');
+    setTab(
+      embedded || searchParams.get('tab') === 'workspace' ? 'workspace' : 'dashboard',
+    );
     setActiveKpi(null);
     setSearchInput('');
     setPriorityId('');
     setWorkflowFilterId('');
-  }, [typeId]);
+  }, [typeId, searchParams, embedded]);
 
   // Single fetch for the module — KPIs and table are derived from this.
   // Backend caps pageSize at 200; KPI counts beyond that will under-report.
@@ -304,13 +324,15 @@ export default function ModulePage() {
   const codePrefix = workflowType?.codePrefix;
   const hasFilter = !!priorityId || !!workflowFilterId;
 
-  return (
-    <PageContainer>
+  const body = (
+    <>
       {/* ── Top header (title + search + filter + buttons) ──────────────── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-          {moduleName}
-        </h1>
+        {!embedded && (
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+            {moduleName}
+          </h1>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative w-64">
             <Search
@@ -337,26 +359,30 @@ export default function ModulePage() {
               </span>
             )}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/dashboard')}
-          >
-            <LayoutDashboard size={14} />
-            <span className="ml-1.5">View Dashboard</span>
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              setTab('dashboard');
-              setActiveKpi(null);
-              setSearchInput('');
-            }}
-          >
-            <History size={14} />
-            <span className="ml-1.5">Recent {moduleName} Details</span>
-          </Button>
+          {!embedded && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/dashboard')}
+            >
+              <LayoutDashboard size={14} />
+              <span className="ml-1.5">View Dashboard</span>
+            </Button>
+          )}
+          {!embedded && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setTab('dashboard');
+                setActiveKpi(null);
+                setSearchInput('');
+              }}
+            >
+              <History size={14} />
+              <span className="ml-1.5">Recent {moduleName} Details</span>
+            </Button>
+          )}
           {canCreate && (
             <Button
               variant="primary"
@@ -377,25 +403,27 @@ export default function ModulePage() {
       </div>
 
       {/* ── Sub-tabs ────────────────────────────────────────────────────── */}
-      <div className="mt-3 border-b border-gray-200 flex items-center gap-1">
-        <TabButton
-          active={tab === 'dashboard'}
-          onClick={() => setTab('dashboard')}
-          icon={<LayoutDashboard size={14} />}
-          label="Dashboard"
-        />
-        <TabButton
-          active={tab === 'workspace'}
-          onClick={() => setTab('workspace')}
-          icon={<Briefcase size={14} />}
-          label="My Workspace"
-        />
-        {codePrefix && (
-          <span className="ml-auto text-[11px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mb-1.5">
-            {codePrefix}
-          </span>
-        )}
-      </div>
+      {!embedded && (
+        <div className="mt-3 border-b border-gray-200 flex items-center gap-1">
+          <TabButton
+            active={tab === 'dashboard'}
+            onClick={() => setTab('dashboard')}
+            icon={<LayoutDashboard size={14} />}
+            label="Dashboard"
+          />
+          <TabButton
+            active={tab === 'workspace'}
+            onClick={() => setTab('workspace')}
+            icon={<Briefcase size={14} />}
+            label="My Workspace"
+          />
+          {codePrefix && (
+            <span className="ml-auto text-[11px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mb-1.5">
+              {codePrefix}
+            </span>
+          )}
+        </div>
+      )}
 
       {tab === 'dashboard' && (
         <>
@@ -578,8 +606,12 @@ export default function ModulePage() {
         onClose={() => setCreateOpen(false)}
         workflowTypeId={typeId}
       />
-    </PageContainer>
+    </>
   );
+
+  // Embedded (e.g. inside the Audit module tabs) skips its own PageContainer so
+  // it nests under the host layout cleanly.
+  return embedded ? body : <PageContainer>{body}</PageContainer>;
 }
 
 /* ── Helper components ───────────────────────────────────────────────── */

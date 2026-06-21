@@ -11,9 +11,10 @@ import {
   type TablePaginationConfig,
 } from 'antd';
 import { Plus, Edit3, Trash2 } from 'lucide-react';
-import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query';
+import type { QueryKey, UseMutationResult, UseQueryResult } from '@tanstack/react-query';
 import type { LookupMaster, LookupMasterUpsert } from '@/lib/api/audit';
 import { useHasPermission } from '@/stores/authStore';
+import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 
 interface PaginatedResp {
   data: LookupMaster[];
@@ -29,6 +30,8 @@ interface LookupMasterPageProps {
   namePlaceholder: string;
   /** Permission prefix, e.g. "focus_area" → focus_area.create/update/delete. */
   permissionPrefix: string;
+  /** React Query key prefix to invalidate on delete (e.g. ['audit', 'focus-areas']). */
+  invalidateKey: QueryKey;
   useList: (q?: { page_size?: number }) => UseQueryResult<PaginatedResp>;
   useCreate: () => UseMutationResult<unknown, unknown, LookupMasterUpsert>;
   useUpdate: (id: string) => UseMutationResult<unknown, unknown, LookupMasterUpsert>;
@@ -40,6 +43,7 @@ export default function LookupMasterPage({
   subtitle,
   namePlaceholder,
   permissionPrefix,
+  invalidateKey,
   useList,
   useCreate,
   useUpdate,
@@ -52,19 +56,19 @@ export default function LookupMasterPage({
   const { data, isLoading } = useList({ page_size: 200 });
   const rows: LookupMaster[] = data?.data ?? [];
   const deleteMut = useDelete();
+  const confirmDelete = useConfirmDelete();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<LookupMaster | null>(null);
 
-  const handleDelete = async (m: LookupMaster) => {
-    if (!confirm(`Delete "${m.name}"?`)) return;
-    try {
-      await deleteMut.mutateAsync(m.id);
-      message.success(`${title} deleted`);
-    } catch (err) {
-      message.error(extractErr(err));
-    }
-  };
+  const handleDelete = (m: LookupMaster) =>
+    confirmDelete({
+      entityLabel: title.toLowerCase(),
+      name: m.name,
+      mutate: () => deleteMut.mutateAsync(m.id),
+      invalidateKey,
+      successMessage: `${title} deleted`,
+    });
 
   const pagination: TablePaginationConfig = { pageSize: 30, showSizeChanger: false };
 

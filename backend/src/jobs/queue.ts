@@ -40,12 +40,15 @@ export const getConnection = (): IORedis | null => {
 
 export const SLA_SWEEP_QUEUE = 'sla-sweep';
 export const APPROVAL_DEADLINE_QUEUE = 'approval-deadline';
+export const AUDIT_SCHEDULE_QUEUE = 'audit-schedule';
 
 export const SLA_SWEEP_JOB = 'check-sla-timers';
 export const APPROVAL_DEADLINE_JOB = 'check-approval-deadlines';
+export const AUDIT_SCHEDULE_JOB = 'spawn-due-audits';
 
 let _slaQueue: Queue | null = null;
 let _approvalQueue: Queue | null = null;
+let _auditScheduleQueue: Queue | null = null;
 
 export const getSlaSweepQueue = (): Queue | null => {
   const conn = getConnection();
@@ -63,6 +66,14 @@ export const getApprovalDeadlineQueue = (): Queue | null => {
   return _approvalQueue;
 };
 
+export const getAuditScheduleQueue = (): Queue | null => {
+  const conn = getConnection();
+  if (!conn) return null;
+  if (_auditScheduleQueue) return _auditScheduleQueue;
+  _auditScheduleQueue = new Queue(AUDIT_SCHEDULE_QUEUE, { connection: conn });
+  return _auditScheduleQueue;
+};
+
 /**
  * Close all open queue + connection handles. Used in worker.ts shutdown so
  * the process exits cleanly on SIGINT/SIGTERM.
@@ -75,6 +86,10 @@ export const closeAll = async (): Promise<void> => {
   if (_approvalQueue) {
     await _approvalQueue.close();
     _approvalQueue = null;
+  }
+  if (_auditScheduleQueue) {
+    await _auditScheduleQueue.close();
+    _auditScheduleQueue = null;
   }
   if (_connection) {
     await _connection.quit();

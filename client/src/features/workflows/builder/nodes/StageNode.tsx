@@ -1,5 +1,5 @@
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { CircleDot, Mail, PlayCircle } from 'lucide-react';
+import { CheckCircle2, CircleDot, Mail, PlayCircle } from 'lucide-react';
 import type { StageNodeData } from '../builder.types';
 
 const HANDLE_STYLE: React.CSSProperties = {
@@ -13,29 +13,34 @@ export default function StageNode({ data, selected }: NodeProps<StageNodeData>) 
   const primary = data.primary_actions ?? [];
   const secondary = data.secondary_actions ?? [];
   const isCurrent = data.isCurrent === true;
+  const isCompleted = data.isCompleted === true;
   const isLR = data.flowDirection === 'LR';
   const targetPos = isLR ? Position.Left : Position.Top;
   const sourcePos = isLR ? Position.Right : Position.Bottom;
 
-  // Precedence: isCurrent (gold pulse) > selected (gold) > initial (green) > default
-  const borderColor = isCurrent
-    ? '#C9A84C'
-    : selected
+  // Precedence: isCompleted (green filled) > isCurrent (gold pulse) > selected (gold) > initial (green) > default
+  const borderColor = isCompleted
+    ? '#16A34A'
+    : isCurrent
       ? '#C9A84C'
-      : data.is_initial_stage
-        ? '#22C55E'
-        : '#E8ECF2';
-  const borderWidth = isCurrent ? 3 : selected ? 2 : 1;
-  const boxShadow = isCurrent
-    ? '0 0 0 6px rgba(201,168,76,0.18), 0 4px 14px rgba(201,168,76,0.25)'
-    : selected
-      ? '0 0 0 3px rgba(201,168,76,0.18)'
-      : undefined;
+      : selected
+        ? '#C9A84C'
+        : data.is_initial_stage
+          ? '#22C55E'
+          : '#E8ECF2';
+  const borderWidth = isCompleted ? 2 : isCurrent ? 3 : selected ? 2 : 1;
+  const boxShadow = isCompleted
+    ? '0 0 0 4px rgba(34,197,94,0.15), 0 4px 12px rgba(34,197,94,0.18)'
+    : isCurrent
+      ? '0 0 0 6px rgba(201,168,76,0.18), 0 4px 14px rgba(201,168,76,0.25)'
+      : selected
+        ? '0 0 0 3px rgba(201,168,76,0.18)'
+        : undefined;
 
   return (
     <div
-      className={`rounded-lg border bg-white shadow-sm transition-all ${
-        isCurrent ? 'ticket-current-stage' : ''
+      className={`rounded-lg border shadow-sm transition-all ${
+        isCurrent && !isCompleted ? 'ticket-current-stage' : ''
       }`}
       style={{
         minWidth: 200,
@@ -43,29 +48,46 @@ export default function StageNode({ data, selected }: NodeProps<StageNodeData>) 
         borderColor,
         borderWidth,
         boxShadow,
+        background: isCompleted ? '#F0FDF4' : '#fff',
       }}
     >
       <Handle type="target" position={targetPos} style={HANDLE_STYLE} />
       <div
         className="px-3 py-2 border-b text-xs font-medium tracking-wide uppercase"
         style={{
-          color: isCurrent ? '#8A6C18' : data.is_initial_stage ? '#16A34A' : '#475569',
-          borderColor: '#E8ECF2',
-          background: isCurrent
-            ? '#FFFBEB'
-            : data.is_initial_stage
-              ? '#F0FDF4'
-              : '#FAFAFC',
+          color: isCompleted
+            ? '#15803D'
+            : isCurrent
+              ? '#8A6C18'
+              : data.is_initial_stage
+                ? '#16A34A'
+                : '#475569',
+          borderColor: isCompleted ? '#BBF7D0' : '#E8ECF2',
+          background: isCompleted
+            ? '#DCFCE7'
+            : isCurrent
+              ? '#FFFBEB'
+              : data.is_initial_stage
+                ? '#F0FDF4'
+                : '#FAFAFC',
         }}
       >
         <div className="flex items-center gap-1.5">
-          {isCurrent ? (
+          {isCompleted ? (
+            <CheckCircle2 size={12} />
+          ) : isCurrent ? (
             <PlayCircle size={12} />
           ) : data.is_initial_stage ? (
             <CircleDot size={12} />
           ) : null}
           <span>
-            {isCurrent ? 'Current Stage' : data.is_initial_stage ? 'Initial Stage' : 'Stage'}
+            {isCompleted
+              ? 'Completed'
+              : isCurrent
+                ? 'Current Stage'
+                : data.is_initial_stage
+                  ? 'Initial Stage'
+                  : 'Stage'}
           </span>
           {data.email_notification && <Mail size={12} className="ml-auto" />}
         </div>

@@ -71,6 +71,11 @@ model User {
   auditRegistersApproved  AuditRegister[]  @relation("AuditRegisterApprovedBy")
   auditFindingsCreated    AuditFinding[]   @relation("AuditFindingCreatedBy")
   nonConformancesCreated  NonConformance[] @relation("NonConformanceCreatedBy")
+  capasOwned              Capa[]           @relation("CapaOwner")
+  capasVerified           Capa[]           @relation("CapaVerifiedBy")
+  capasCreated            Capa[]           @relation("CapaCreatedBy")
+  actionItemsOwned        ActionItem[]     @relation("ActionItemOwner")
+  actionItemsCreated      ActionItem[]     @relation("ActionItemCreatedBy")
 
   // Phase 3 — Approvals + SLA
   approverOnPolicies      ApprovalPolicy[] @relation("ApprovalPolicyApproverUsers")
@@ -113,6 +118,7 @@ model Department {
   tickets Ticket[] @relation("TicketDepartment")
 
   nonConformances NonConformance[] @relation("NonConformanceDepartment")
+  capas           Capa[]           @relation("CapaDepartment")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1518,7 +1524,8 @@ model AuditMaster {
   scoringRules Json?
   isActive     Boolean @default(true)
 
-  registers AuditRegister[]
+  registers     AuditRegister[]
+  scheduleRules AuditScheduleRule[]
 
   createdById String?
   createdBy   User?   @relation("AuditMasterCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -1528,6 +1535,38 @@ model AuditMaster {
 
   @@index([auditType])
   @@index([isActive])
+}
+
+// A recurrence rule that auto-spawns DRAFT AuditRegisters from a master on a
+// cadence. A background sweep (jobs/sweeps/spawnDueAudits) advances nextRunAt.
+model AuditScheduleRule {
+  id            String         @id @default(uuid())
+  name          String
+  auditMasterId String
+  auditMaster   AuditMaster    @relation(fields: [auditMasterId], references: [id], onDelete: Cascade)
+  frequency     AuditFrequency
+  anchorDate    DateTime
+  leadTimeDays  Int            @default(14) // create the register N days before the planned date
+  plant         String?
+  // Optional workflow the spawned audit follows. When set, the schedule sweep
+  // raises a workflow ticket (carrying the stage checklist + progress) and
+  // links it on the generated AuditRegister.
+  workflowId    String?
+  // Optional checklist form selected at schedule time. Copied onto each
+  // generated audit's checklistFormId so it's the checklist used when the
+  // audit is performed.
+  checklistFormId String?
+  // Stored as plain columns (no FK) to keep this migration self-contained.
+  defaultAuditorId String?
+  isActive         Boolean   @default(true)
+  lastSpawnedAt    DateTime?
+  nextRunAt        DateTime
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([isActive, nextRunAt])
+  @@index([auditMasterId])
 }
 
 // Audit "Focus Area" master — reusable lookup for audit scoping (Audit Master config tab).
@@ -1596,6 +1635,13 @@ model AuditRegister {
   // Default checklist bound at register time (cloned/instantiated at program start)
   checklistFormId String?
   checklistForm   Form?   @relation("AuditRegisterChecklist", fields: [checklistFormId], references: [id], onDelete: SetNull)
+
+  // Workflow integration — when an audit is generated from a schedule rule that
+  // specifies a workflow, a ticket is raised on it. These columns link the
+  // audit to that ticket so its stage progress + checklist can be surfaced.
+  workflowId             String?
+  workflowTicketId       String?
+  workflowTicketUniqueId String?
 
   auditorId String?
   auditor   User?   @relation("AuditRegisterAuditor", fields: [auditorId], references: [id], onDelete: SetNull)
@@ -1671,6 +1717,7 @@ model AuditFinding {
   recommendation String?
 
   nonConformance NonConformance?
+  actionItems    ActionItem[]    @relation("ActionItemFinding")
 
   createdById String?
   createdBy   User?   @relation("AuditFindingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -1698,8 +1745,14 @@ model NonConformance {
   departmentId String?
   department   Department? @relation("NonConformanceDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
 
+  // Legacy bridge: link to a generic workflow Ticket used as CAPA. Kept for
+  // backward-compat; the first-class Capa model below is the preferred path.
   capaTicketId String? @unique
   capaTicket   Ticket? @relation("NonConformanceCapaTicket", fields: [capaTicketId], references: [id], onDelete: SetNull)
+
+  // First-class CAPA raised from this non-conformance (1-1).
+  capa        Capa?        @relation("CapaNonConformance")
+  actionItems ActionItem[] @relation("ActionItemNc")
 
   dueDate  DateTime?
   closedAt DateTime?
@@ -1713,4 +1766,154 @@ model NonConformance {
   @@index([status])
   @@index([track])
   @@index([departmentId])
+}
+
+// ============================================================
+// CAPA (Corrective & Preventive Action) — first-class object.
+// Raised from a NonConformance (or standalone), runs its own lifecycle,
+// owns ActionItems, and on closure can drive the source NC to closure.
+// ============================================================
+
+enum CapaType {
+  CORRECTIVE
+  PREVENTIVE
+  BOTH
+}
+
+enum CapaStatus {
+  OPEN
+  INVESTIGATION
+  PLAN
+  IMPLEMENTATION
+  VERIFICATION
+  CLOSED
+  CANCELLED
+}
+
+model Capa {
+  id          String     @id @default(uuid())
+  capaNumber  String     @unique // CAPA-YYYY-XXXX
+  type        CapaType   @default(CORRECTIVE)
+  status      CapaStatus @default(OPEN)
+  title       String
+  description String?
+
+  // Origin non-conformance (optional — a CAPA may be standalone). 1-1.
+  nonConformanceId String?         @unique
+  nonConformance   NonConformance? @relation("CapaNonConformance", fields: [nonConformanceId], references: [id], onDelete: SetNull)
+
+  // Root cause analysis. rootCauseData holds structured 5-why / fishbone.
+  rootCause        String?
+  rootCauseData    Json?
+  correctiveAction String?
+  preventiveAction String?
+
+  ownerId      String?
+  owner        User?       @relation("CapaOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  departmentId String?
+  department   Department? @relation("CapaDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+
+  dueDate            DateTime?
+  implementedAt      DateTime?
+  // Effectiveness verification.
+  verifiedById       String?
+  verifiedBy         User?     @relation("CapaVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt         DateTime?
+  effectivenessCheck String?
+  effectivenessDue   DateTime?
+  closedAt           DateTime?
+
+  actionItems ActionItem[] @relation("ActionItemCapa")
+
+  createdById String?
+  createdBy   User?    @relation("CapaCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([ownerId])
+  @@index([departmentId])
+}
+
+// A lightweight, assignable task. Hangs off a CAPA, NC or finding (any/none).
+model ActionItem {
+  id           String             @id @default(uuid())
+  actionNumber String             @unique // AI-YYYY-XXXX
+  title        String
+  description  String?
+  status       ActionItemStatus   @default(OPEN)
+  priority     ActionItemPriority @default(MEDIUM)
+
+  ownerId     String?
+  owner       User?     @relation("ActionItemOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  dueDate     DateTime?
+  completedAt DateTime?
+
+  // Optional parents — an action item can be attached to one of these.
+  capaId           String?
+  capa             Capa?           @relation("ActionItemCapa", fields: [capaId], references: [id], onDelete: Cascade)
+  nonConformanceId String?
+  nonConformance   NonConformance? @relation("ActionItemNc", fields: [nonConformanceId], references: [id], onDelete: SetNull)
+  findingId        String?
+  finding          AuditFinding?   @relation("ActionItemFinding", fields: [findingId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdBy   User?    @relation("ActionItemCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status, dueDate])
+  @@index([ownerId])
+  @@index([capaId])
+}
+
+enum ActionItemStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  VERIFIED
+  CANCELLED
+}
+
+enum ActionItemPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ============================================================
+// Compliance: immutable audit trail + 21 CFR Part 11 e-signatures.
+// Both are append-only (no update/delete service paths). userName is
+// denormalized so the record survives user deletion. userId kept as a
+// plain column (no FK) so this stays self-contained.
+// ============================================================
+
+model AuditTrailEntry {
+  id         String   @id @default(uuid())
+  entityType String // "Capa" | "AuditRegister" | "NonConformance" | ...
+  entityId   String
+  action     String // CREATE | UPDATE | TRANSITION | SIGN | DELETE
+  field      String?
+  oldValue   String?
+  newValue   String?
+  reason     String?
+  userId     String?
+  userName   String
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model ESignature {
+  id         String   @id @default(uuid())
+  entityType String
+  entityId   String
+  meaning    String // "Approved" | "Reviewed" | "Verified & Closed" | ...
+  userId     String
+  userName   String
+  signedAt   DateTime @default(now())
+
+  @@index([entityType, entityId])
 }

@@ -134,6 +134,9 @@ export interface AuditRegister {
   team_members: NamedRef[];
   checklist_assignments: ChecklistAssignment[];
   checklist_form: { id: string; title: string; kind?: string } | null;
+  workflow_id: string | null;
+  workflow_ticket_id: string | null;
+  workflow_ticket_unique_id: string | null;
   auditor: IdName | null;
   approver: IdName | null;
   submitted_at: string | null;
@@ -168,6 +171,7 @@ export interface AuditRegisterUpsert {
   checklist_form_id?: string | null;
   auditor_id?: string | null;
   approver_id?: string | null;
+  workflow_id?: string | null;
 }
 
 // ── Audit Program ──
@@ -247,6 +251,7 @@ export interface NonConformance {
   };
   department: { id: string; name: string; code?: string } | null;
   capa_ticket: { id: string; uniqueId: string; title: string } | null;
+  capa: { id: string; capaNumber: string; status: NonConformanceStatus | string } | null;
   created_at: string;
   updated_at: string;
 }
@@ -262,6 +267,9 @@ export const auditKeys = {
   program: (id: string) => ['audit', 'programs', id] as const,
   findings: (q: ListFindingQuery = {}) => ['audit', 'findings', q] as const,
   ncs: (q: ListNcQuery = {}) => ['audit', 'non-conformances', q] as const,
+  capas: (q: ListCapaQuery = {}) => ['audit', 'capas', q] as const,
+  capa: (id: string) => ['audit', 'capas', id] as const,
+  actionItems: (q: ListActionItemQuery = {}) => ['audit', 'action-items', q] as const,
 };
 
 // ── Query interfaces ──
@@ -715,5 +723,485 @@ export const useUpdateNcStatus = () => {
         .then((r) => r.data),
     onSuccess: () =>
       qc.invalidateQueries({ queryKey: ['audit', 'non-conformances'] }),
+  });
+};
+
+// ─────────────────────────────── Audit report ───────────────────────────────
+
+export interface AuditReport {
+  generated_at: string;
+  register: {
+    register_number: string;
+    title: string;
+    status: AuditStatus;
+    audit_type: string;
+    plant: string | null;
+    planned_date: string;
+    financial_year: string | null;
+    audit_method: string | null;
+    iso_standard: string | null;
+    audit_master: string | null;
+    auditor: string | null;
+    approver: string | null;
+    approved_by: string | null;
+    approved_at: string | null;
+    created_by: string | null;
+    description: string | null;
+  };
+  program: {
+    program_number: string;
+    status: ProgramStatus;
+    started_at: string | null;
+    completed_at: string | null;
+    summary: string | null;
+    score: number | null;
+  } | null;
+  summary: { total_findings: number; by_severity: Record<string, number> };
+  findings: Array<{
+    finding_number: string;
+    severity: FindingSeverity;
+    status: FindingStatus;
+    clause_ref: string | null;
+    description: string;
+    recommendation: string | null;
+    non_conformance: {
+      nc_number: string;
+      status: NonConformanceStatus;
+      department: string | null;
+      capa: {
+        capa_number: string;
+        status: CapaStatus;
+        type: CapaType;
+        root_cause: string | null;
+        corrective_action: string | null;
+        preventive_action: string | null;
+        owner: string | null;
+      } | null;
+    } | null;
+  }>;
+  signatures: Array<{ meaning: string; user_name: string; signed_at: string }>;
+}
+
+export const useAuditReport = (registerId: string | undefined) =>
+  useQuery<{ data: AuditReport }>({
+    queryKey: ['audit', 'report', registerId ?? ''],
+    queryFn: () => api.get(`/audit/registers/${registerId}/report`).then((r) => r.data),
+    enabled: !!registerId,
+  });
+
+// ─────────────────────────────── Compliance: trail + e-signatures ───────────
+
+export interface TrailEntry {
+  id: string;
+  action: string;
+  field: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  reason: string | null;
+  user_name: string;
+  created_at: string;
+}
+
+export interface SignatureEntry {
+  id: string;
+  meaning: string;
+  user_name: string;
+  signed_at: string;
+}
+
+export const useAuditTrail = (entityType: string, entityId: string | undefined) =>
+  useQuery<{ data: TrailEntry[] }>({
+    queryKey: ['audit', 'trail', entityType, entityId ?? ''],
+    queryFn: () => api.get(`/audit/trail/${entityType}/${entityId}`).then((r) => r.data),
+    enabled: !!entityId,
+  });
+
+export const useSignatures = (entityType: string, entityId: string | undefined) =>
+  useQuery<{ data: SignatureEntry[] }>({
+    queryKey: ['audit', 'signatures', entityType, entityId ?? ''],
+    queryFn: () => api.get(`/audit/signatures/${entityType}/${entityId}`).then((r) => r.data),
+    enabled: !!entityId,
+  });
+
+export const useSignEntity = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      entity_type: string;
+      entity_id: string;
+      meaning: string;
+      credential: string;
+    }) => api.post('/audit/signatures', body).then((r) => r.data),
+    onSuccess: (_d, vars) => {
+      qc.invalidateQueries({ queryKey: ['audit', 'signatures', vars.entity_type, vars.entity_id] });
+      qc.invalidateQueries({ queryKey: ['audit', 'trail', vars.entity_type, vars.entity_id] });
+    },
+  });
+};
+
+// ─────────────────────────────── Schedule rules + calendar ──────────────────
+
+export interface AuditScheduleRule {
+  id: string;
+  name: string;
+  audit_master: { id: string; name: string; code: string | null; auditType: string } | null;
+  frequency: AuditFrequency;
+  anchor_date: string;
+  lead_time_days: number;
+  plant: string | null;
+  default_auditor_id: string | null;
+  workflow_id: string | null;
+  checklist_form_id: string | null;
+  is_active: boolean;
+  last_spawned_at: string | null;
+  next_run_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuditScheduleRuleUpsert {
+  name: string;
+  audit_master_id: string;
+  frequency: AuditFrequency;
+  anchor_date: string;
+  lead_time_days?: number;
+  plant?: string | null;
+  default_auditor_id?: string | null;
+  workflow_id?: string | null;
+  checklist_form_id?: string | null;
+  is_active?: boolean;
+}
+
+export interface CalendarAudit {
+  id: string;
+  register_number: string;
+  title: string;
+  status: AuditStatus;
+  audit_type: string;
+  planned_date: string;
+}
+
+export const useScheduleRules = () =>
+  useQuery<{ data: AuditScheduleRule[] }>({
+    queryKey: ['audit', 'schedule-rules'],
+    queryFn: () => api.get('/audit/schedule-rules').then((r) => r.data),
+  });
+
+export const useCreateScheduleRule = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AuditScheduleRuleUpsert) =>
+      api.post('/audit/schedule-rules', body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'schedule-rules'] }),
+  });
+};
+
+export const useUpdateScheduleRule = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AuditScheduleRuleUpsert) =>
+      api.put(`/audit/schedule-rules/${id}`, body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'schedule-rules'] }),
+  });
+};
+
+export const useDeleteScheduleRule = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/audit/schedule-rules/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'schedule-rules'] }),
+  });
+};
+
+export const useRunScheduleSweep = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post('/audit/schedule-rules/run-now').then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['audit', 'schedule-rules'] });
+      qc.invalidateQueries({ queryKey: ['audit', 'registers'] });
+      qc.invalidateQueries({ queryKey: ['audit', 'calendar'] });
+    },
+  });
+};
+
+export const useAuditCalendar = (from?: string, to?: string) =>
+  useQuery<{ data: CalendarAudit[] }>({
+    queryKey: ['audit', 'calendar', from ?? '', to ?? ''],
+    queryFn: () =>
+      api.get('/audit/calendar', { params: { from, to } }).then((r) => r.data),
+  });
+
+// ─────────────────────────────── Dashboard ──────────────────────────────────
+
+export interface AuditDashboard {
+  kpis: {
+    total_audits: number;
+    completed_audits: number;
+    completion_rate: number;
+    in_progress_audits: number;
+    open_findings: number;
+    open_ncs: number;
+    open_capas: number;
+    overdue_capas: number;
+    open_actions: number;
+    overdue_actions: number;
+    overdue_ncs: number;
+  };
+  registers_by_status: Record<string, number>;
+  programs_by_status: Record<string, number>;
+  findings_by_severity: Record<string, number>;
+  ncs_by_status: Record<string, number>;
+  capas_by_status: Record<string, number>;
+  actions_by_status: Record<string, number>;
+  upcoming_audits: Array<{
+    id: string;
+    register_number: string;
+    title: string;
+    planned_date: string;
+    status: AuditStatus;
+  }>;
+  recent_findings: Array<{
+    id: string;
+    finding_number: string;
+    severity: FindingSeverity;
+    status: FindingStatus;
+    description: string;
+    audit_title: string | null;
+    program_id: string | null;
+    created_at: string;
+  }>;
+}
+
+export const useAuditDashboard = (financialYear?: string) =>
+  useQuery<{ data: AuditDashboard }>({
+    queryKey: ['audit', 'dashboard', financialYear ?? 'all'],
+    queryFn: () =>
+      api
+        .get('/audit/dashboard', { params: financialYear ? { financial_year: financialYear } : {} })
+        .then((r) => r.data),
+  });
+
+// ─────────────────────────────── CAPA (first-class) ─────────────────────────
+
+export type CapaType = 'CORRECTIVE' | 'PREVENTIVE' | 'BOTH';
+export type CapaStatus =
+  | 'OPEN'
+  | 'INVESTIGATION'
+  | 'PLAN'
+  | 'IMPLEMENTATION'
+  | 'VERIFICATION'
+  | 'CLOSED'
+  | 'CANCELLED';
+
+export interface Capa {
+  id: string;
+  capa_number: string;
+  type: CapaType;
+  status: CapaStatus;
+  title: string;
+  description: string | null;
+  non_conformance: {
+    id: string;
+    ncNumber: string;
+    status: NonConformanceStatus;
+    severity: FindingSeverity;
+    finding: { id: string; findingNumber: string; description: string } | null;
+  } | null;
+  root_cause: string | null;
+  root_cause_data: unknown;
+  corrective_action: string | null;
+  preventive_action: string | null;
+  owner: IdName | null;
+  department: { id: string; name: string; code?: string } | null;
+  due_date: string | null;
+  implemented_at: string | null;
+  verified_by: IdName | null;
+  verified_at: string | null;
+  effectiveness_check: string | null;
+  effectiveness_due: string | null;
+  closed_at: string | null;
+  action_item_count: number;
+  created_by: IdName | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListCapaQuery {
+  status?: CapaStatus;
+  type?: CapaType;
+  owner_id?: string;
+  department_id?: string;
+  search?: string;
+}
+
+export interface CapaCreate {
+  title: string;
+  description?: string | null;
+  type?: CapaType;
+  non_conformance_id?: string | null;
+  owner_id?: string | null;
+  department_id?: string | null;
+  due_date?: string | null;
+}
+
+export interface CapaUpdate {
+  title?: string;
+  description?: string | null;
+  type?: CapaType;
+  root_cause?: string | null;
+  root_cause_data?: unknown;
+  corrective_action?: string | null;
+  preventive_action?: string | null;
+  owner_id?: string | null;
+  department_id?: string | null;
+  due_date?: string | null;
+  effectiveness_check?: string | null;
+  effectiveness_due?: string | null;
+}
+
+export const useCapas = (q: ListCapaQuery = {}) =>
+  useQuery<{ data: Capa[] }>({
+    queryKey: auditKeys.capas(q),
+    queryFn: () => api.get('/audit/capas', { params: q }).then((r) => r.data),
+  });
+
+export const useCapa = (id: string | undefined) =>
+  useQuery<{ data: Capa }>({
+    queryKey: auditKeys.capa(id ?? ''),
+    queryFn: () => api.get(`/audit/capas/${id}`).then((r) => r.data),
+    enabled: !!id,
+  });
+
+export const useCreateCapa = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CapaCreate) => api.post('/audit/capas', body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['audit', 'capas'] });
+      qc.invalidateQueries({ queryKey: ['audit', 'non-conformances'] });
+    },
+  });
+};
+
+export const useUpdateCapa = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: CapaUpdate) => api.put(`/audit/capas/${id}`, body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['audit', 'capas'] });
+    },
+  });
+};
+
+export const useUpdateCapaStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: CapaStatus }) =>
+      api.patch(`/audit/capas/${id}/status`, { status }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['audit', 'capas'] });
+      qc.invalidateQueries({ queryKey: ['audit', 'non-conformances'] });
+    },
+  });
+};
+
+export const useDeleteCapa = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/audit/capas/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'capas'] }),
+  });
+};
+
+// ─────────────────────────────── Action Items ───────────────────────────────
+
+export type ActionItemStatus = 'OPEN' | 'IN_PROGRESS' | 'DONE' | 'VERIFIED' | 'CANCELLED';
+export type ActionItemPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+
+export interface ActionItem {
+  id: string;
+  action_number: string;
+  title: string;
+  description: string | null;
+  status: ActionItemStatus;
+  priority: ActionItemPriority;
+  owner: IdName | null;
+  due_date: string | null;
+  completed_at: string | null;
+  capa: { id: string; capaNumber: string; title: string } | null;
+  non_conformance: { id: string; ncNumber: string } | null;
+  finding: { id: string; findingNumber: string } | null;
+  created_by: IdName | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ListActionItemQuery {
+  status?: ActionItemStatus;
+  priority?: ActionItemPriority;
+  owner_id?: string;
+  capa_id?: string;
+  non_conformance_id?: string;
+  finding_id?: string;
+  search?: string;
+}
+
+export interface ActionItemUpsert {
+  title: string;
+  description?: string | null;
+  status?: ActionItemStatus;
+  priority?: ActionItemPriority;
+  owner_id?: string | null;
+  due_date?: string | null;
+  capa_id?: string | null;
+  non_conformance_id?: string | null;
+  finding_id?: string | null;
+}
+
+export const useActionItems = (q: ListActionItemQuery = {}) =>
+  useQuery<{ data: ActionItem[] }>({
+    queryKey: auditKeys.actionItems(q),
+    queryFn: () => api.get('/audit/action-items', { params: q }).then((r) => r.data),
+  });
+
+export const useCreateActionItem = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ActionItemUpsert) =>
+      api.post('/audit/action-items', body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['audit', 'action-items'] });
+      qc.invalidateQueries({ queryKey: ['audit', 'capas'] });
+    },
+  });
+};
+
+export const useUpdateActionItem = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ActionItemUpsert) =>
+      api.put(`/audit/action-items/${id}`, body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['audit', 'action-items'] });
+      qc.invalidateQueries({ queryKey: ['audit', 'capas'] });
+    },
+  });
+};
+
+export const useUpdateActionItemStatus = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: ActionItemStatus }) =>
+      api.patch(`/audit/action-items/${id}/status`, { status }).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'action-items'] }),
+  });
+};
+
+export const useDeleteActionItem = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/audit/action-items/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'action-items'] }),
   });
 };

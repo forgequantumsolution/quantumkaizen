@@ -207,6 +207,7 @@ export const AuditRegisterUpsertSchema = z.object({
   checklist_form_id: z.string().optional().nullable(),
   auditor_id: z.string().optional().nullable(),
   approver_id: z.string().optional().nullable(),
+  workflow_id: z.string().optional().nullable(),
 });
 
 export const ListAuditRegisterQuerySchema = z.object({
@@ -302,3 +303,149 @@ export type PromoteFindingToNcInput = z.infer<typeof PromoteFindingToNcSchema>;
 export type ListNcQuery = z.infer<typeof ListNcQuerySchema>;
 export type RaiseCapaInput = z.infer<typeof RaiseCapaSchema>;
 export type UpdateNcStatusInput = z.infer<typeof UpdateNcStatusSchema>;
+
+// =====================================================================
+// CAPA (first-class) + Action Item schemas
+// =====================================================================
+
+const CAPA_TYPES = ['CORRECTIVE', 'PREVENTIVE', 'BOTH'] as const;
+const CAPA_STATUSES = [
+  'OPEN',
+  'INVESTIGATION',
+  'PLAN',
+  'IMPLEMENTATION',
+  'VERIFICATION',
+  'CLOSED',
+  'CANCELLED',
+] as const;
+const ACTION_ITEM_STATUSES = ['OPEN', 'IN_PROGRESS', 'DONE', 'VERIFIED', 'CANCELLED'] as const;
+const ACTION_ITEM_PRIORITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
+
+export const CapaTypeEnum = z.enum(CAPA_TYPES);
+export const CapaStatusEnum = z.enum(CAPA_STATUSES);
+export const ActionItemStatusEnum = z.enum(ACTION_ITEM_STATUSES);
+export const ActionItemPriorityEnum = z.enum(ACTION_ITEM_PRIORITIES);
+
+// ── CAPA ──
+export const CapaCreateSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(4000).optional().nullable(),
+  type: CapaTypeEnum.default('CORRECTIVE'),
+  // Origin NC — when set, the CAPA is linked and the NC is moved to CAPA_RAISED.
+  non_conformance_id: z.string().optional().nullable(),
+  owner_id: z.string().optional().nullable(),
+  department_id: z.string().optional().nullable(),
+  due_date: z.string().optional().nullable(),
+});
+
+export const CapaUpdateSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(4000).optional().nullable(),
+  type: CapaTypeEnum.optional(),
+  root_cause: z.string().max(4000).optional().nullable(),
+  root_cause_data: z.unknown().optional().nullable(),
+  corrective_action: z.string().max(4000).optional().nullable(),
+  preventive_action: z.string().max(4000).optional().nullable(),
+  owner_id: z.string().optional().nullable(),
+  department_id: z.string().optional().nullable(),
+  due_date: z.string().optional().nullable(),
+  effectiveness_check: z.string().max(4000).optional().nullable(),
+  effectiveness_due: z.string().optional().nullable(),
+});
+
+export const UpdateCapaStatusSchema = z.object({
+  status: CapaStatusEnum,
+});
+
+export const ListCapaQuerySchema = z.object({
+  status: CapaStatusEnum.optional(),
+  type: CapaTypeEnum.optional(),
+  owner_id: z.string().optional(),
+  department_id: z.string().optional(),
+  search: z.string().optional(),
+});
+
+// ── Action Item ──
+export const ActionItemUpsertSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    description: z.string().max(4000).optional().nullable(),
+    status: ActionItemStatusEnum.optional(),
+    priority: ActionItemPriorityEnum.default('MEDIUM'),
+    owner_id: z.string().optional().nullable(),
+    due_date: z.string().optional().nullable(),
+    capa_id: z.string().optional().nullable(),
+    non_conformance_id: z.string().optional().nullable(),
+    finding_id: z.string().optional().nullable(),
+  });
+
+export const UpdateActionItemStatusSchema = z.object({
+  status: ActionItemStatusEnum,
+});
+
+export const ListActionItemQuerySchema = z.object({
+  status: ActionItemStatusEnum.optional(),
+  priority: ActionItemPriorityEnum.optional(),
+  owner_id: z.string().optional(),
+  capa_id: z.string().optional(),
+  non_conformance_id: z.string().optional(),
+  finding_id: z.string().optional(),
+  search: z.string().optional(),
+});
+
+export type CapaCreateInput = z.infer<typeof CapaCreateSchema>;
+export type CapaUpdateInput = z.infer<typeof CapaUpdateSchema>;
+export type UpdateCapaStatusInput = z.infer<typeof UpdateCapaStatusSchema>;
+export type ListCapaQuery = z.infer<typeof ListCapaQuerySchema>;
+export type ActionItemUpsertInput = z.infer<typeof ActionItemUpsertSchema>;
+export type UpdateActionItemStatusInput = z.infer<typeof UpdateActionItemStatusSchema>;
+export type ListActionItemQuery = z.infer<typeof ListActionItemQuerySchema>;
+
+// =====================================================================
+// Audit Schedule Rule (recurrence) schemas
+// =====================================================================
+
+export const AuditScheduleRuleUpsertSchema = z.object({
+  name: z.string().min(1).max(200),
+  audit_master_id: z.string(),
+  frequency: AuditFrequencyEnum,
+  anchor_date: z.string(),
+  lead_time_days: z.coerce.number().int().min(0).max(365).default(14),
+  plant: z.string().max(200).optional().nullable(),
+  default_auditor_id: z.string().optional().nullable(),
+  workflow_id: z.string().optional().nullable(),
+  checklist_form_id: z.string().optional().nullable(),
+  is_active: z.boolean().optional(),
+});
+
+export const ListScheduleRuleQuerySchema = z.object({
+  is_active: z.coerce.boolean().optional(),
+  audit_master_id: z.string().optional(),
+});
+
+export const CalendarQuerySchema = z.object({
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+
+export type AuditScheduleRuleUpsertInput = z.infer<typeof AuditScheduleRuleUpsertSchema>;
+export type ListScheduleRuleQuery = z.infer<typeof ListScheduleRuleQuerySchema>;
+export type CalendarQuery = z.infer<typeof CalendarQuerySchema>;
+
+// =====================================================================
+// Compliance — e-signature
+// =====================================================================
+
+export const SignSchema = z.object({
+  entity_type: z.string().min(1).max(60),
+  entity_id: z.string().min(1),
+  meaning: z.string().min(1).max(200),
+  credential: z.string().min(1).max(200),
+});
+
+export const TrailParamSchema = z.object({
+  entityType: z.string().min(1).max(60),
+  entityId: z.string().min(1),
+});
+
+export type SignSchemaInput = z.infer<typeof SignSchema>;
