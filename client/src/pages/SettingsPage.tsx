@@ -26,18 +26,19 @@ import FormListPage from "@/features/forms/FormListPage";
 
 type Section = "master-data" | "workflows" | "forms";
 
-// Tabs that appear *inside* the Master Data section.
+// Tabs that appear *inside* the Master Data section. `permission` gates each tab
+// (see lib/navAccess.ts + Access Control → Menu Access); undefined = always shown.
 const masterDataTabs = [
-  { key: "general",        label: "General",        icon: Building2 },
-  { key: "users",          label: "Users",          icon: UsersIcon },
-  { key: "departments",    label: "Departments",    icon: Layers },
-  { key: "sites",          label: "Sites",          icon: MapPin },
-  { key: "roles",          label: "Roles",          icon: KeyRound },
-  { key: "access",         label: "Access Control", icon: Lock },
-  { key: "workflow-types", label: "Workflow Types", icon: Workflow },
-  { key: "severities",     label: "Severities",     icon: AlertOctagon },
-  { key: "notifications",  label: "Notifications",  icon: Bell },
-  { key: "security",       label: "Security",       icon: Shield },
+  { key: "general",        label: "General",        icon: Building2,    permission: undefined },
+  { key: "users",          label: "Users",          icon: UsersIcon,   permission: "user.read" },
+  { key: "departments",    label: "Departments",    icon: Layers,      permission: "department.read" },
+  { key: "sites",          label: "Sites",          icon: MapPin,      permission: undefined },
+  { key: "roles",          label: "Roles",          icon: KeyRound,    permission: "role.read" },
+  { key: "access",         label: "Access Control", icon: Lock,        permission: "role.read" },
+  { key: "workflow-types", label: "Workflow Types", icon: Workflow,    permission: "workflow.lookups.read" },
+  { key: "severities",     label: "Severities",     icon: AlertOctagon, permission: "workflow.lookups.read" },
+  { key: "notifications",  label: "Notifications",  icon: Bell,        permission: undefined },
+  { key: "security",       label: "Security",       icon: Shield,      permission: undefined },
 ] as const;
 
 type MdTab = (typeof masterDataTabs)[number]["key"];
@@ -161,7 +162,9 @@ export default function SettingsPage() {
         <>
           <div className="border-b border-gray-200">
             <nav role="tablist" className="flex gap-1 overflow-x-auto -mb-px">
-              {masterDataTabs.map((tab) => {
+              {masterDataTabs
+                .filter((tab) => !tab.permission || hasPermission(tab.permission))
+                .map((tab) => {
                 const Icon = tab.icon;
                 const isActive = activeTab === tab.key;
                 return (

@@ -1,20 +1,24 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { Database, FileText, Target, ListChecks } from "lucide-react";
 import PageContainer from "@/components/layout/PageContainer";
+import { useAuthStore } from "@/stores/authStore";
 import { cn } from "@/lib/utils";
 
+// `permission` gates each tab — see lib/navAccess.ts + Access Control → Menu Access.
 const TABS = [
-  { to: "/audit/master", label: "Audit Master", icon: Database },
-  { to: "/audit/focus-areas", label: "Focus Area", icon: Target },
-  { to: "/audit/audit-types", label: "Audit Type", icon: ListChecks },
-  { to: "/audit/iso-standards", label: "ISO Standards", icon: FileText },
+  { to: "/audit/master", label: "Audit Master", icon: Database, permission: "audit_master.read" },
+  { to: "/audit/focus-areas", label: "Focus Area", icon: Target, permission: "focus_area.read" },
+  { to: "/audit/audit-types", label: "Audit Type", icon: ListChecks, permission: "audit_type.read" },
+  { to: "/audit/iso-standards", label: "ISO Standards", icon: FileText, permission: "iso_standard.read" },
 ];
 
 export default function AuditConfigLayout() {
+  const hasPermission = useAuthStore((s) => s.hasPermission);
+  const tabs = TABS.filter((t) => hasPermission(t.permission));
   return (
     <PageContainer>
       <div className="flex items-center gap-1 border-b border-gray-200 mb-5">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const Icon = t.icon;
           return (
             <NavLink

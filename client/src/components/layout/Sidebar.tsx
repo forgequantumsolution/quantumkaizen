@@ -21,6 +21,10 @@ interface NavItem {
   path?: string;
   icon: React.ElementType;
   children?: NavItem[];
+  /** Permission key that gates this item (see lib/navAccess.ts). When set and
+   * the user lacks it, the item is hidden. Parents with children stay visible
+   * only while at least one child survives gating. */
+  permission?: string;
   /** Extra pathname prefixes that should also mark this item active — useful
    * for entries that land on one route but share a layout with siblings (e.g.
    * "Audit" points to /audit/register but should stay active on /audit/program). */
@@ -90,6 +94,7 @@ export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const recentItems = useRecentItemsStore();
   const user        = useAuthStore(s => s.user);
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const { data: workflowTypes } = useWorkflowTypes();
 
   const navigation = useMemo<NavSection[]>(() => {
@@ -102,12 +107,14 @@ export default function Sidebar() {
         label: 'Audit',
         path: '/audit/register',
         icon: ClipboardCheck,
+        permission: 'audit_register.read',
         activeForPrefixes: ['/audit/register', '/audit/program', '/audit/non-conformance'],
       },
       {
         label: 'Audit Master',
         path: '/audit/master',
         icon: Database,
+        permission: 'audit_master.read',
         activeForPrefixes: ['/audit/master', '/audit/iso-standards'],
       },
     ];
@@ -122,6 +129,9 @@ export default function Sidebar() {
           // group; first child becomes the navigation target in collapsed mode.
           path: isAudit ? undefined : `/modules/${t.id}`,
           icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
+          // Workflow-type modules surface ticket workspaces — gate on ticket.read.
+          // Audit gates via its children (audit_register/master.read) instead.
+          permission: isAudit ? undefined : 'ticket.read',
           children: isAudit ? auditChildren : undefined,
         };
       });
@@ -144,8 +154,8 @@ export default function Sidebar() {
           label: 'Configuration',
           icon: Settings,
           children: [
-            { label: 'Workflows',   path: '/settings?section=workflows', icon: GitBranch },
-            { label: 'Forms',       path: '/settings?section=forms',     icon: ClipboardList },
+            { label: 'Workflows',   path: '/settings?section=workflows', icon: GitBranch, permission: 'workflow.read' },
+            { label: 'Forms',       path: '/settings?section=forms',     icon: ClipboardList, permission: 'form.read' },
             { label: 'Master Data', path: '/settings',                   icon: Database },
             { label: 'Appearance',  path: '/appearance',                 icon: Palette },
           ],
@@ -153,8 +163,24 @@ export default function Sidebar() {
       ],
     });
 
-    return sections;
-  }, [workflowTypes]);
+    // Gate by permission: drop items the user can't access, and any parent whose
+    // children all got dropped. SUPER_ADMIN holds every key, so it's unaffected.
+    const gate = (items: NavItem[]): NavItem[] =>
+      items
+        .map((it) => {
+          const children = it.children ? gate(it.children) : undefined;
+          return { ...it, children };
+        })
+        .filter((it) => {
+          if (it.children && it.children.length === 0 && !it.path) return false;
+          if (it.permission && !hasPermission(it.permission)) return false;
+          return true;
+        });
+
+    return sections
+      .map((s) => ({ ...s, items: gate(s.items) }))
+      .filter((s) => s.items.length > 0);
+  }, [workflowTypes, hasPermission]);
 
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({});
   const toggleSection = (title: string) =>

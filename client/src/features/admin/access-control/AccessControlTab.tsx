@@ -14,6 +14,7 @@ import {
   User as UserIcon,
   ChevronRight,
   CheckCircle2,
+  LayoutGrid,
 } from 'lucide-react';
 import {
   useRoles,
@@ -26,9 +27,10 @@ import { useAdminUsers } from '@/features/admin/users/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useHasPermission } from '@/stores/authStore';
 import { Input } from '@/components/ui';
+import { NAV_ACCESS } from '@/lib/navAccess';
 import { cn } from '@/lib/utils';
 
-type View = 'role' | 'user';
+type View = 'menu' | 'role' | 'user';
 
 const PAGE_SIZE_PERMS = 15;
 const PAGE_SIZE_USERS = 20;
@@ -66,10 +68,16 @@ export default function AccessControlTab() {
         </div>
         <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
           <TopTab
+            active={view === 'menu'}
+            onClick={() => setView('menu')}
+            icon={<LayoutGrid size={13} />}
+            label="Menu Access"
+          />
+          <TopTab
             active={view === 'role'}
             onClick={() => setView('role')}
             icon={<Shield size={13} />}
-            label="By Role"
+            label="By Permission"
           />
           <TopTab
             active={view === 'user'}
@@ -80,13 +88,15 @@ export default function AccessControlTab() {
         </div>
       </div>
 
-      {view === 'role' ? (
+      {view === 'menu' && <MenuAccessView canEdit={canEdit} />}
+      {view === 'role' && (
         <ByRoleView
           canEdit={canEdit}
           pendingRoleId={pendingRoleId}
           onConsumePendingRoleId={() => setPendingRoleId(null)}
         />
-      ) : (
+      )}
+      {view === 'user' && (
         <ByUserView
           onEditRole={(roleId) => {
             setPendingRoleId(roleId);
@@ -94,6 +104,224 @@ export default function AccessControlTab() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/* ── Menu Access view (module → tab matrix per role) ─────────────────── */
+
+interface MenuAccessViewProps {
+  canEdit: boolean;
+}
+
+function MenuAccessView({ canEdit }: MenuAccessViewProps) {
+  const { data: rolesResp, isLoading: rolesLoading } = useRoles({ pageSize: 200 });
+  const roles = useMemo(() => rolesResp?.items ?? [], [rolesResp]);
+  const { data: permGroups = [], isLoading: permsLoading } = usePermissionsGrouped();
+  const setPermissions = useSetRolePermissions();
+
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null);
+  // Pending granted permission-id set for the selected role (null = pristine).
+  const [draft, setDraft] = useState<Set<string> | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedRoleId && roles.length > 0) setSelectedRoleId(roles[0]!.id);
+  }, [roles, selectedRoleId]);
+  useEffect(() => {
+    setDraft(null);
+    setSaveError(null);
+  }, [selectedRoleId]);
+
+  // permission key → permission id (the role API works on ids).
+  const idByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    permGroups.forEach((g) =>
+      g.permissions.forEach((p) => m.set(p.key, p.id)),
+    );
+    return m;
+  }, [permGroups]);
+
+  const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
+
+  const originalIds = useMemo(
+    () => new Set(selectedRole?.permissions.map((p) => p.id) ?? []),
+    [selectedRole],
+  );
+  const granted = draft ?? originalIds;
+
+  const hasKey = (permKey: string): boolean => {
+    const id = idByKey.get(permKey);
+    return !!id && granted.has(id);
+  };
+
+  const setKey = (permKey: string, on: boolean) => {
+    const id = idByKey.get(permKey);
+    if (!id) return;
+    setDraft((prev) => {
+      const next = new Set(prev ?? originalIds);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleModuleAll = (moduleKey: string, on: boolean) => {
+    const mod = NAV_ACCESS.find((m) => m.key === moduleKey);
+    if (!mod) return;
+    setDraft((prev) => {
+      const next = new Set(prev ?? originalIds);
+      mod.tabs.forEach((t) => {
+        const id = idByKey.get(t.permission);
+        if (!id) return;
+        if (on) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
+  };
+
+  const isDirty = useMemo(() => {
+    if (!draft) return false;
+    if (draft.size !== originalIds.size) return true;
+    for (const id of draft) if (!originalIds.has(id)) return true;
+    return false;
+  }, [draft, originalIds]);
+
+  const save = async () => {
+    if (!selectedRoleId || !draft) return;
+    setSaveError(null);
+    try {
+      await setPermissions.mutateAsync({
+        id: selectedRoleId,
+        permissionIds: [...draft],
+      });
+      setDraft(null);
+    } catch (err: unknown) {
+      setSaveError(
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
+          ?.error?.message ?? 'Save failed',
+      );
+    }
+  };
+
+  if (rolesLoading || permsLoading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Spin />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
+        <div className="md:col-span-5">
+          <label className="block text-[11px] font-medium text-gray-600 mb-1">Role</label>
+          <AntSelect
+            value={selectedRoleId ?? undefined}
+            onChange={(v) => setSelectedRoleId(v)}
+            placeholder="Select a role"
+            className="w-full"
+            options={roles.map((r) => ({
+              value: r.id,
+              label: (
+                <span className="inline-flex items-center gap-1.5">
+                  {r.name}
+                  {r.isSystem && <Lock size={10} className="text-gray-400" />}
+                </span>
+              ),
+            }))}
+          />
+        </div>
+        <div className="md:col-span-7 text-[11px] text-gray-500 md:pb-2">
+          Choose which <span className="font-medium text-gray-700">modules and tabs</span> this
+          role can open. Tabs sharing a permission toggle together.
+        </div>
+      </div>
+
+      {/* Save bar */}
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-xs">
+          {isDirty ? (
+            <span className="text-amber-700 font-medium">Unsaved changes</span>
+          ) : (
+            <span className="text-gray-400">No pending changes</span>
+          )}
+        </div>
+        {canEdit && (
+          <div className="flex items-center gap-2">
+            <AntButton onClick={() => setDraft(null)} disabled={!isDirty}>
+              Reset
+            </AntButton>
+            <AntButton
+              type="primary"
+              icon={<Save size={14} />}
+              onClick={save}
+              loading={setPermissions.isPending}
+              disabled={!isDirty}
+            >
+              Save Changes
+            </AntButton>
+          </div>
+        )}
+      </div>
+
+      {saveError && (
+        <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          {saveError}
+        </div>
+      )}
+
+      {/* Module → tab matrix */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {NAV_ACCESS.map((mod) => {
+          const allOn = mod.tabs.every((t) => hasKey(t.permission));
+          return (
+            <div key={mod.key} className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+              <div className="flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                <div className="min-w-0">
+                  <div className="text-sm font-semibold text-gray-900">{mod.label}</div>
+                  {mod.description && (
+                    <div className="text-[11px] text-gray-500 truncate">{mod.description}</div>
+                  )}
+                </div>
+                {canEdit && (
+                  <AntButton
+                    type="link"
+                    size="small"
+                    onClick={() => toggleModuleAll(mod.key, !allOn)}
+                  >
+                    {allOn ? 'Clear all' : 'Select all'}
+                  </AntButton>
+                )}
+              </div>
+              <ul className="divide-y divide-gray-50">
+                {mod.tabs.map((t) => {
+                  const checked = hasKey(t.permission);
+                  const missing = !idByKey.has(t.permission);
+                  return (
+                    <li key={t.key} className="flex items-center gap-3 px-4 py-2.5">
+                      <AntCheckbox
+                        checked={checked}
+                        disabled={!canEdit || !selectedRoleId || missing}
+                        onChange={(e) => setKey(t.permission, e.target.checked)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm text-gray-800">{t.label}</div>
+                        <div className="font-mono text-[10px] text-gray-400">{t.permission}</div>
+                      </div>
+                      {missing && (
+                        <span className="text-[10px] text-amber-600">unknown key</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
