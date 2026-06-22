@@ -83,6 +83,9 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - uses: actions/checkout@v4
@@ -105,6 +108,16 @@ jobs:
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/var/www/qk-v2/
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             'chmod +x /var/www/qk-v2/deploy.sh'
+
+      # Authenticate the VPS Docker to GHCR every deploy so we never rely on a
+      # persistent login that can expire/clear (the cause of "registry: denied").
+      # The token is piped over SSH stdin so it isn't visible in the VPS process list.
+      - name: Log VPS in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "$GHCR_TOKEN" | ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin"
 
       - name: Pull images, migrate, restart on VPS
         env:
