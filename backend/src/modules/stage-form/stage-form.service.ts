@@ -14,6 +14,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, Forbidden, NotFound } from '../../lib/httpError';
+import { isAuditFormsStage } from '../../lib/auditFormsStage';
 import type {
   CreateStageFormBindingInput,
   CreateWorkflowSubmissionInput,
@@ -206,7 +207,9 @@ export const listForTicket = async (ticketId: string) => {
         select: {
           id: true,
           workflowId: true,
-          currentStages: { select: { id: true, name: true, canonicalId: true } },
+          currentStages: {
+            select: { id: true, name: true, canonicalId: true, stageType: true },
+          },
         },
       },
     },
@@ -221,7 +224,7 @@ export const listForTicket = async (ticketId: string) => {
   // Stage metadata for shaping virtual bindings (name/canonicalId/workflowId).
   const stageMeta = new Map<
     string,
-    { name: string; canonicalId: string; workflowId: string }
+    { name: string; canonicalId: string; workflowId: string; stageType: string }
   >();
   for (const f of ticket.flows) {
     for (const s of f.currentStages) {
@@ -229,6 +232,7 @@ export const listForTicket = async (ticketId: string) => {
         name: s.name,
         canonicalId: s.canonicalId,
         workflowId: f.workflowId,
+        stageType: s.stageType,
       });
     }
   }
@@ -273,6 +277,9 @@ export const listForTicket = async (ticketId: string) => {
     for (const stageId of currentStageIds) {
       const meta = stageMeta.get(stageId);
       if (!meta) continue;
+      // The dynamic audit checklist appears ONLY on the audit-forms stage
+      // ("Perform Audit"); other stages show only manually-bound forms.
+      if (!isAuditFormsStage(meta)) continue;
       let position = 1000;
       for (const form of auditForms) {
         if (realKeys.has(`${stageId}:${form.id}`)) continue;

@@ -15,6 +15,7 @@
  * allowed to be any version of the logical form (Q3 sign-off).
  */
 import type { Prisma } from '@prisma/client';
+import { isAuditFormsStage } from '../../../lib/auditFormsStage';
 
 type Tx = Prisma.TransactionClient;
 
@@ -117,8 +118,9 @@ export const findUnsatisfiedRequiredForms = async (
 
 /**
  * Checklist forms the linked audit register requires on this stage. Empty unless
- * the ticket is audit-linked (`customFields.audit_register_id`) AND the stage is
- * not the workflow's initial stage.
+ * the ticket is audit-linked (`customFields.audit_register_id`) AND this is the
+ * audit-forms stage ("Perform Audit") — the only stage the dynamic checklist
+ * appears on. Other stages gate only on their manually-bound forms.
  */
 const requiredAuditChecklistForms = async (
   tx: Tx,
@@ -127,9 +129,9 @@ const requiredAuditChecklistForms = async (
 ): Promise<{ formId: string; title: string }[]> => {
   const stage = await tx.workflowStage.findUnique({
     where: { id: stageId },
-    select: { isInitialStage: true },
+    select: { name: true, stageType: true },
   });
-  if (!stage || stage.isInitialStage) return [];
+  if (!stage || !isAuditFormsStage(stage)) return [];
 
   const ticket = await tx.ticket.findUnique({
     where: { id: ticketId },

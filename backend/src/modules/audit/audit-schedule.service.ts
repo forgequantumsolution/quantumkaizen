@@ -101,7 +101,27 @@ export const createScheduleRule = async (
     },
     include: ruleInclude,
   });
-  return serializeRule(created);
+  // Scheduled for today (or earlier) → spawn the audit + its workflow ticket (PR)
+  // immediately instead of waiting for the cron sweep. Best-effort.
+  await spawnNowQuietly(created.id);
+  return serializeRule(await refetchRule(created.id, created));
+};
+
+const refetchRule = async (id: string, fallback: RuleRow): Promise<RuleRow> => {
+  const fresh = await prisma.auditScheduleRule.findUnique({ where: { id }, include: ruleInclude });
+  return fresh ?? fallback;
+};
+
+const spawnNowQuietly = async (ruleId: string) => {
+  try {
+    await spawnScheduleRuleNow(ruleId);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[audit-schedule] immediate spawn failed for rule ${ruleId}:`,
+      e instanceof Error ? e.message : e,
+    );
+  }
 };
 
 export const updateScheduleRule = async (id: string, input: AuditScheduleRuleUpsertInput) => {
@@ -126,7 +146,9 @@ export const updateScheduleRule = async (id: string, input: AuditScheduleRuleUps
     },
     include: ruleInclude,
   });
-  return serializeRule(updated);
+  // If now scheduled for today (or earlier) and active, spawn immediately.
+  await spawnNowQuietly(updated.id);
+  return serializeRule(await refetchRule(updated.id, updated));
 };
 
 export const deleteScheduleRule = async (id: string) => {
@@ -135,23 +157,21 @@ export const deleteScheduleRule = async (id: string) => {
   await prisma.auditScheduleRule.delete({ where: { id } });
 };
 
-// ── The sweep: spawn DRAFT registers for any rule whose nextRunAt is due ──
-// Shared by the BullMQ worker and the POST /run-now endpoint. Returns a summary.
-export const spawnDueAudits = async (now = new Date()) => {
-  const due = await prisma.auditScheduleRule.findMany({
-    where: { isActive: true, nextRunAt: { lte: now } },
-    include: { auditMaster: true },
-  });
+type DueScheduleRule = Prisma.AuditScheduleRuleGetPayload<{ include: { auditMaster: true } }>;
 
-  const spawned: Array<{
-    rule_id: string;
-    register_id: string;
-    register_number: string;
-    workflow_ticket_id: string | null;
-    workflow_ticket_unique_id: string | null;
-  }> = [];
+interface SpawnEntry {
+  rule_id: string;
+  register_id: string;
+  register_number: string;
+  workflow_ticket_id: string | null;
+  workflow_ticket_unique_id: string | null;
+}
 
-  for (const rule of due) {
+// Spawn a DRAFT register (and a workflow ticket / "PR" when the rule names a
+// workflow) from a single due rule, then advance its nextRunAt. Shared by the
+// cron sweep and the immediate spawn-on-create path.
+const spawnFromRule = async (rule: DueScheduleRule, now: Date): Promise<SpawnEntry> => {
+  {
     const plannedDate = rule.nextRunAt;
     const year = plannedDate.getFullYear();
     const master = rule.auditMaster;
@@ -229,16 +249,41 @@ export const spawnDueAudits = async (now = new Date()) => {
       }
     }
 
-    spawned.push({
+    return {
       rule_id: rule.id,
       register_id: reg.id,
       register_number: reg.registerNumber,
       workflow_ticket_id: workflowTicket?.ticketId ?? null,
       workflow_ticket_unique_id: workflowTicket?.uniqueId ?? null,
-    });
+    };
   }
+};
 
+// ── The sweep: spawn DRAFT registers for any rule whose nextRunAt is due ──
+// Shared by the BullMQ worker and the POST /run-now endpoint. Returns a summary.
+export const spawnDueAudits = async (now = new Date()) => {
+  const due = await prisma.auditScheduleRule.findMany({
+    where: { isActive: true, nextRunAt: { lte: now } },
+    include: { auditMaster: true },
+  });
+  const spawned: SpawnEntry[] = [];
+  for (const rule of due) spawned.push(await spawnFromRule(rule, now));
   return { spawned_count: spawned.length, spawned };
+};
+
+// Immediately spawn for ONE rule if it's active and already due — used when a
+// schedule is created/updated with a current (or past) date, so the audit and
+// its workflow ticket (PR) appear right away instead of waiting for the cron.
+export const spawnScheduleRuleNow = async (
+  ruleId: string,
+  now = new Date(),
+): Promise<SpawnEntry | null> => {
+  const rule = await prisma.auditScheduleRule.findFirst({
+    where: { id: ruleId, isActive: true, nextRunAt: { lte: now } },
+    include: { auditMaster: true },
+  });
+  if (!rule) return null;
+  return spawnFromRule(rule, now);
 };
 
 // ── Calendar feed: planned audits (registers) within a date range ──

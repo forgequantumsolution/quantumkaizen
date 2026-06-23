@@ -324,6 +324,37 @@ export default function ModulePage({
   const codePrefix = workflowType?.codePrefix;
   const hasFilter = !!priorityId || !!workflowFilterId;
 
+  // Download + Customize Columns — shown on its own row on the full page, but
+  // tucked to the right of the header row when embedded (Audit My Workspace).
+  const tableToolbar = (
+    <>
+      <Button variant="outline" size="sm" onClick={handleDownload}>
+        <Download size={14} />
+        <span className="ml-1.5">Download</span>
+      </Button>
+      <div className="relative">
+        <Button variant="outline" size="sm" onClick={() => setColumnsOpen((v) => !v)}>
+          <Settings2 size={14} />
+          <span className="ml-1.5">Customize Columns</span>
+        </Button>
+        {columnsOpen && (
+          <ColumnsPopover
+            visible={visibleCols}
+            onToggle={(id) => {
+              setVisibleCols((s) => {
+                const next = new Set(s);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              });
+            }}
+            onClose={() => setColumnsOpen(false)}
+          />
+        )}
+      </div>
+    </>
+  );
+
   const body = (
     <>
       {/* ── Top header (title + search + filter + buttons) ──────────────── */}
@@ -383,7 +414,7 @@ export default function ModulePage({
               <span className="ml-1.5">Recent {moduleName} Details</span>
             </Button>
           )}
-          {canCreate && (
+          {!embedded && canCreate && (
             <Button
               variant="primary"
               size="sm"
@@ -400,6 +431,11 @@ export default function ModulePage({
             </Button>
           )}
         </div>
+
+        {/* Embedded: keep the table toolbar on the same row, pushed right. */}
+        {embedded && (tab === 'workspace' || activeKpi) && (
+          <div className="flex items-center gap-2 flex-wrap ml-auto">{tableToolbar}</div>
+        )}
       </div>
 
       {/* ── Sub-tabs ────────────────────────────────────────────────────── */}
@@ -451,37 +487,11 @@ export default function ModulePage({
         </>
       )}
 
-      {/* ── Toolbar (Download + Customize Columns only) ─────────────────── */}
-      {(tab === 'workspace' || activeKpi) && (
+      {/* ── Toolbar (Download + Customize Columns) — own row on the full page;
+           embedded mode renders these in the header row above instead. ──── */}
+      {!embedded && (tab === 'workspace' || activeKpi) && (
         <div className="mt-4 flex items-center justify-end gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={handleDownload}>
-            <Download size={14} />
-            <span className="ml-1.5">Download</span>
-          </Button>
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setColumnsOpen((v) => !v)}
-            >
-              <Settings2 size={14} />
-              <span className="ml-1.5">Customize Columns</span>
-            </Button>
-            {columnsOpen && (
-              <ColumnsPopover
-                visible={visibleCols}
-                onToggle={(id) => {
-                  setVisibleCols((s) => {
-                    const next = new Set(s);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  });
-                }}
-                onClose={() => setColumnsOpen(false)}
-              />
-            )}
-          </div>
+          {tableToolbar}
         </div>
       )}
 
