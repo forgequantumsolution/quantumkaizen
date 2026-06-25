@@ -40,6 +40,9 @@ import {
   SLA_SWEEP_QUEUE,
 } from './queue';
 import { spawnDueAudits } from './sweeps/spawnDueAudits';
+import { flagOverdueReviews } from './sweeps/flagOverdueReviews';
+import { flagExpiringCertifications } from './sweeps/flagExpiringCertifications';
+import { flagDueStabilityPulls } from './sweeps/flagDueStabilityPulls';
 
 const log = (msg: string, extra?: Record<string, unknown>) => {
   // eslint-disable-next-line no-console
@@ -134,7 +137,11 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
     async (job: Job) => {
       log(`processing ${job.name} id=${job.id}`);
       const result = await spawnDueAudits();
-      return result;
+      // Piggyback the DMS review + LIMS certification-expiry sweeps on the tick.
+      const review = await flagOverdueReviews();
+      const certs = await flagExpiringCertifications();
+      const stability = await flagDueStabilityPulls();
+      return { ...result, review, certs, stability };
     },
     { connection: conn, concurrency: 1 },
   );

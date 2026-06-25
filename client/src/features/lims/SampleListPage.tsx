@@ -1,0 +1,130 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { App, Button, DatePicker, Drawer, Input, InputNumber, Select, Space, Table } from 'antd';
+import { TestTubes, Plus, Search } from 'lucide-react';
+import type { Dayjs } from 'dayjs';
+import PageContainer from '@/components/layout/PageContainer';
+import { useHasPermission } from '@/stores/authStore';
+import {
+  useSamples, useRegisterSample, useStorageLocations,
+  SAMPLE_STATUS_LABELS, type SampleSummary, type SampleStatus, type RegisterSampleBody,
+} from '@/lib/api/samples';
+import { useSpecs, useLabs } from '@/lib/api/lims';
+
+export const STATUS_BADGE: Record<SampleStatus, string> = {
+  REGISTERED: 'bg-gray-100 text-gray-700 border-gray-200',
+  IN_TESTING: 'bg-blue-50 text-blue-700 border-blue-200',
+  IN_REVIEW: 'bg-amber-50 text-amber-700 border-amber-200',
+  RELEASED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  REJECTED: 'bg-red-50 text-red-700 border-red-200',
+  CANCELLED: 'bg-slate-100 text-slate-500 border-slate-200',
+};
+const SAMPLE_TYPES = ['Raw Material', 'Finished Product', 'In-Process', 'Stability', 'Water', 'Environmental'];
+const PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
+
+export default function SampleListPage() {
+  const nav = useNavigate();
+  const canCreate = useHasPermission('sample.create');
+  const [status, setStatus] = useState<SampleStatus | undefined>();
+  const [search, setSearch] = useState('');
+  const { data, isLoading } = useSamples({ status, search: search || undefined });
+  const rows = data?.data ?? [];
+  const [open, setOpen] = useState(false);
+
+  return (
+    <PageContainer>
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><TestTubes size={22} className="text-gray-500" />Samples</h1>
+          <p className="text-xs text-gray-500 mt-0.5">Register samples with a barcode and an unbroken chain of custody.</p>
+        </div>
+        {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>Register Sample</Button>}
+      </div>
+
+      <div className="flex items-center justify-end gap-2 mb-3">
+        <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 160 }}
+          options={Object.entries(SAMPLE_STATUS_LABELS).map(([v, label]) => ({ value: v, label }))} />
+        <div className="relative">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+          <Input placeholder="Search no. / barcode / product / batch…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 280 }} />
+        </div>
+      </div>
+
+      <Table<SampleSummary>
+        size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}
+        onRow={(r) => ({ onClick: () => nav(`/lims/samples/${r.id}`), style: { cursor: 'pointer' } })}
+        columns={[
+          { title: 'Sample No.', dataIndex: 'sample_number', width: 150, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
+          { title: 'Product', dataIndex: 'product_name', ellipsis: true },
+          { title: 'Batch', dataIndex: 'batch_no', width: 110, render: (v: string | null) => v ?? '—' },
+          { title: 'Type', dataIndex: 'sample_type', width: 130, render: (v: string | null) => v ?? '—' },
+          { title: 'Aliquots', dataIndex: 'aliquot_count', width: 80 },
+          {
+            title: 'Status', width: 120,
+            render: (_: unknown, r) => <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${STATUS_BADGE[r.status]}`}>{SAMPLE_STATUS_LABELS[r.status]}</span>,
+          },
+          { title: 'Registered', width: 110, render: (_: unknown, r) => new Date(r.created_at).toLocaleDateString() },
+        ]}
+      />
+
+      <RegisterDrawer open={open} onClose={() => setOpen(false)} onDone={(id) => { setOpen(false); nav(`/lims/samples/${id}`); }} />
+    </PageContainer>
+  );
+}
+
+function RegisterDrawer({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (id: string) => void }) {
+  const { message } = App.useApp();
+  const registerMut = useRegisterSample();
+  const { data: specs } = useSpecs({ status: 'APPROVED' });
+  const { data: labsData } = useLabs({ is_active: true });
+  const { data: storage } = useStorageLocations();
+  const labs = labsData?.data ?? [];
+
+  const [f, setF] = useState<RegisterSampleBody>({ product_name: '' });
+  const [collected, setCollected] = useState<Dayjs | null>(null);
+  const [received, setReceived] = useState<Dayjs | null>(null);
+  const set = <K extends keyof RegisterSampleBody>(k: K, v: RegisterSampleBody[K]) => setF((p) => ({ ...p, [k]: v }));
+
+  const submit = async () => {
+    if (!f.product_name?.trim()) return message.error('Product name is required');
+    try {
+      const created = await registerMut.mutateAsync({ ...f, collected_at: collected ? collected.toISOString() : null, received_at: received ? received.toISOString() : null });
+      message.success(`Registered ${created.sample_number}`);
+      setF({ product_name: '' }); setCollected(null); setReceived(null);
+      onDone(created.id);
+    } catch (e) { message.error((e as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Failed'); }
+  };
+
+  return (
+    <Drawer title="Register Sample" open={open} onClose={onClose} width={480} destroyOnClose
+      footer={<Space className="flex justify-end"><Button onClick={onClose}>Cancel</Button><Button type="primary" onClick={submit} loading={registerMut.isPending}>Register</Button></Space>}>
+      <div className="space-y-3">
+        <F label="Product / Material *"><Input value={f.product_name} onChange={(e) => set('product_name', e.target.value)} /></F>
+        <div className="grid grid-cols-2 gap-3">
+          <F label="Batch No."><Input value={f.batch_no ?? ''} onChange={(e) => set('batch_no', e.target.value)} /></F>
+          <F label="Type"><Select value={f.sample_type ?? undefined} onChange={(v) => set('sample_type', v)} allowClear className="w-full" options={SAMPLE_TYPES.map((t) => ({ value: t, label: t }))} /></F>
+        </div>
+        <F label="Specification"><Select value={f.specification_id ?? undefined} onChange={(v) => set('specification_id', v ?? null)} allowClear showSearch optionFilterProp="label" placeholder="Approved spec" className="w-full" options={(specs?.data ?? []).map((s) => ({ value: s.id, label: `${s.code} — ${s.product_name}` }))} /></F>
+        <div className="grid grid-cols-2 gap-3">
+          <F label="Lab"><Select value={f.lab_id ?? undefined} onChange={(v) => set('lab_id', v ?? null)} allowClear showSearch optionFilterProp="label" className="w-full" options={labs.map((l) => ({ value: l.id, label: `${l.code} — ${l.name}` }))} /></F>
+          <F label="Priority"><Select value={f.priority ?? undefined} onChange={(v) => set('priority', v)} allowClear className="w-full" options={PRIORITIES.map((p) => ({ value: p, label: p }))} /></F>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <F label="Quantity"><InputNumber value={f.quantity ?? undefined} onChange={(v) => set('quantity', v ?? null)} min={0} className="w-full" /></F>
+          <F label="Unit"><Input value={f.unit ?? ''} onChange={(e) => set('unit', e.target.value)} placeholder="g, mL…" /></F>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <F label="Collected"><DatePicker value={collected ?? undefined} onChange={(d) => setCollected(d ?? null)} className="w-full" /></F>
+          <F label="Received"><DatePicker value={received ?? undefined} onChange={(d) => setReceived(d ?? null)} className="w-full" /></F>
+        </div>
+        <F label="Source Site"><Input value={f.source_site ?? ''} onChange={(e) => set('source_site', e.target.value)} /></F>
+        <F label="Initial Storage"><Select value={f.current_location_id ?? undefined} onChange={(v) => set('current_location_id', v ?? null)} allowClear showSearch optionFilterProp="label" className="w-full" options={(storage?.data ?? []).map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))} /></F>
+        <F label="Remarks"><Input.TextArea rows={2} value={f.remarks ?? ''} onChange={(e) => set('remarks', e.target.value)} /></F>
+      </div>
+    </Drawer>
+  );
+}
+
+function F({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div><label className="block text-[11px] font-medium text-gray-600 mb-1">{label}</label>{children}</div>;
+}

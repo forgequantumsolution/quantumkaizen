@@ -7,6 +7,8 @@ import {
   GitBranch, Layers, FileText, Beaker, BookOpen,
   Database, ClipboardList,
   ClipboardCheck, PlayCircle, AlertOctagon,
+  GraduationCap, FlaskConical, Gauge, BadgeCheck, ScrollText, TestTubes, Snowflake,
+  Package, Atom, Ruler, MapPin, Users, Truck, Activity, Thermometer, Award, ShieldCheck, Settings2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
@@ -139,7 +141,28 @@ export default function Sidebar() {
     const sections: NavSection[] = [
       {
         title: '',
-        items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
+        items: [
+          { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
+          { label: 'Documents', path: '/dms', icon: FileText, permission: 'document.read' },
+          { label: 'Training', path: '/training', icon: GraduationCap, permission: 'training.read' },
+          {
+            // Day-to-day LIMS operations; all set-up-once master data lives in
+            // the single "Configuration" entry (LimsConfigLayout, grouped tabs).
+            label: 'LIMS',
+            icon: FlaskConical,
+            children: [
+              { label: 'Dashboard', path: '/lims/dashboard', icon: LayoutDashboard, permission: 'lims_dashboard.read' },
+              { label: 'Samples', path: '/lims/samples', icon: TestTubes, permission: 'sample.read' },
+              { label: 'Worklists', path: '/lims/worklists', icon: ClipboardList, permission: 'worklist.read' },
+              { label: 'Quality Control', path: '/lims/qc', icon: Activity, permission: 'qc.read' },
+              { label: 'Stability', path: '/lims/stability', icon: Thermometer, permission: 'stability.read' },
+              { label: 'OOS Investigations', path: '/lims/oos', icon: AlertTriangle, permission: 'oos.read' },
+              { label: 'Certificates (CoA)', path: '/lims/coa', icon: Award, permission: 'coa.read' },
+              { label: 'Data Review', path: '/lims/data-review', icon: ShieldCheck, permission: 'data_review.read' },
+              { label: 'Configuration', path: '/lims/config', icon: Settings2, permission: 'lab.read' },
+            ],
+          },
+        ],
       },
     ];
 

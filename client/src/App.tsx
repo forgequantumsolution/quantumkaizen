@@ -29,6 +29,43 @@ import AuditProgramExecutionPage from '@/features/audit/AuditProgramExecutionPag
 import NonConformanceTrackPage from '@/features/audit/NonConformanceTrackPage';
 import AuditDashboardPage from '@/features/audit/AuditDashboardPage';
 import AuditWorkspacePage from '@/features/audit/AuditWorkspacePage';
+import DocumentListPage from '@/features/dms/DocumentListPage';
+import DocumentEditorPage from '@/features/dms/DocumentEditorPage';
+import DocumentDetailPage from '@/features/dms/DocumentDetailPage';
+import TrainingListPage from '@/features/training/TrainingListPage';
+import TrainingDetailPage from '@/features/training/TrainingDetailPage';
+import LabRegistryPage from '@/features/lims/LabRegistryPage';
+import EquipmentListPage from '@/features/lims/EquipmentListPage';
+import EquipmentDetailPage from '@/features/lims/EquipmentDetailPage';
+import CertificationsPage from '@/features/lims/CertificationsPage';
+import MethodsPage from '@/features/lims/MethodsPage';
+import SpecListPage from '@/features/lims/SpecListPage';
+import SpecDetailPage from '@/features/lims/SpecDetailPage';
+import SampleListPage from '@/features/lims/SampleListPage';
+import SampleDetailPage from '@/features/lims/SampleDetailPage';
+import StorageLocationsPage from '@/features/lims/StorageLocationsPage';
+import ProductsPage from '@/features/lims/ProductsPage';
+import AnalytesPage from '@/features/lims/AnalytesPage';
+import UnitsPage from '@/features/lims/UnitsPage';
+import SamplingPointsPage from '@/features/lims/SamplingPointsPage';
+import CustomersPage from '@/features/lims/CustomersPage';
+import SuppliersPage from '@/features/lims/SuppliersPage';
+import TestDefinitionsPage from '@/features/lims/TestDefinitionsPage';
+import TestPanelsPage from '@/features/lims/TestPanelsPage';
+import SpecVersionsPage from '@/features/lims/SpecVersionsPage';
+import WorklistsPage from '@/features/lims/WorklistsPage';
+import OosListPage from '@/features/lims/OosListPage';
+import OosDetailPage from '@/features/lims/OosDetailPage';
+import QcMaterialsPage from '@/features/lims/QcMaterialsPage';
+import QcChartPage from '@/features/lims/QcChartPage';
+import StabilityListPage from '@/features/lims/StabilityListPage';
+import StabilityDetailPage from '@/features/lims/StabilityDetailPage';
+import CoaListPage from '@/features/lims/CoaListPage';
+import CoaDetailPage from '@/features/lims/CoaDetailPage';
+import CoaVerifyPage from '@/features/lims/CoaVerifyPage';
+import LimsDashboardPage from '@/features/lims/LimsDashboardPage';
+import DataReviewPage from '@/features/lims/DataReviewPage';
+import LimsConfigLayout from '@/features/lims/LimsConfigLayout';
 import AuditReportPage from '@/features/audit/AuditReportPage';
 import CapaListPage from '@/features/audit/CapaListPage';
 import CapaDetailPage from '@/features/audit/CapaDetailPage';
@@ -53,6 +90,8 @@ export default function App() {
       {/* Public */}
       <Route path="/" element={<LoginPage />} />
       <Route path="/login" element={<LoginPage />} />
+      {/* Public CoA QR verification — no auth */}
+      <Route path="/verify/coa/:token" element={<CoaVerifyPage />} />
 
       {/* Protected */}
       <Route element={<ProtectedRoute />}>
@@ -73,6 +112,59 @@ export default function App() {
           <Route path="/forms/field-types" element={<FieldTypesPage />} />
           <Route path="/forms/:id/builder" element={<FormBuilderPage />} />
           <Route path="/forms/:id/fill" element={<FormFillPage />} />
+
+          {/* DMS — controlled documents (online editor) */}
+          <Route path="/dms" element={<DocumentListPage />} />
+          <Route path="/dms/new" element={<DocumentEditorPage />} />
+          <Route path="/dms/:id" element={<DocumentDetailPage />} />
+          <Route path="/dms/:id/edit" element={<DocumentEditorPage />} />
+
+          {/* Training & Competency */}
+          <Route path="/training" element={<TrainingListPage />} />
+          <Route path="/training/:id" element={<TrainingDetailPage />} />
+
+          {/* LIMS — operational (day-to-day) */}
+          <Route path="/lims/samples" element={<SampleListPage />} />
+          <Route path="/lims/samples/:id" element={<SampleDetailPage />} />
+
+          {/* LIMS Configuration — all set-up-once master data under one grouped area */}
+          <Route path="/lims/config" element={<Navigate to="/lims/labs" replace />} />
+          <Route element={<LimsConfigLayout />}>
+            <Route path="/lims/labs" element={<LabRegistryPage />} />
+            <Route path="/lims/equipment" element={<EquipmentListPage />} />
+            <Route path="/lims/storage" element={<StorageLocationsPage />} />
+            <Route path="/lims/certifications" element={<CertificationsPage />} />
+            <Route path="/lims/products" element={<ProductsPage />} />
+            <Route path="/lims/analytes" element={<AnalytesPage />} />
+            <Route path="/lims/units" element={<UnitsPage />} />
+            <Route path="/lims/sampling-points" element={<SamplingPointsPage />} />
+            <Route path="/lims/customers" element={<CustomersPage />} />
+            <Route path="/lims/suppliers" element={<SuppliersPage />} />
+            <Route path="/lims/methods" element={<MethodsPage />} />
+            <Route path="/lims/tests" element={<TestDefinitionsPage />} />
+            <Route path="/lims/panels" element={<TestPanelsPage />} />
+            <Route path="/lims/specifications" element={<SpecListPage />} />
+            <Route path="/lims/spec-versions" element={<SpecVersionsPage />} />
+          </Route>
+          {/* Config detail/editor pages (full-page, outside the config nav) */}
+          <Route path="/lims/equipment/:id" element={<EquipmentDetailPage />} />
+          <Route path="/lims/specifications/new" element={<SpecDetailPage />} />
+          <Route path="/lims/specifications/:id" element={<SpecDetailPage />} />
+
+          {/* LIMS 2.0 — M-LIMS-B core testing */}
+          <Route path="/lims/worklists" element={<WorklistsPage />} />
+          <Route path="/lims/oos" element={<OosListPage />} />
+          <Route path="/lims/oos/:id" element={<OosDetailPage />} />
+          {/* LIMS 2.0 — M-LIMS-C: QC + Stability */}
+          <Route path="/lims/qc" element={<QcMaterialsPage />} />
+          <Route path="/lims/qc/:id" element={<QcChartPage />} />
+          <Route path="/lims/stability" element={<StabilityListPage />} />
+          <Route path="/lims/stability/:id" element={<StabilityDetailPage />} />
+          {/* LIMS 2.0 — M-LIMS-D: CoA, dashboard, data review */}
+          <Route path="/lims/coa" element={<CoaListPage />} />
+          <Route path="/lims/coa/:id" element={<CoaDetailPage />} />
+          <Route path="/lims/dashboard" element={<LimsDashboardPage />} />
+          <Route path="/lims/data-review" element={<DataReviewPage />} />
 
           {/* Audit module — Register → Approval → Program → Non-Conformance */}
           <Route path="/audit" element={<Navigate to="/audit/dashboard" replace />} />
