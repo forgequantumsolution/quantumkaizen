@@ -10,6 +10,7 @@ import {
   SAMPLE_STATUS_LABELS, type SampleSummary, type SampleStatus, type RegisterSampleBody,
 } from '@/lib/api/samples';
 import { useSpecs, useLabs } from '@/lib/api/lims';
+import { useProducts } from '@/lib/api/product';
 
 export const STATUS_BADGE: Record<SampleStatus, string> = {
   REGISTERED: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -78,6 +79,8 @@ function RegisterDrawer({ open, onClose, onDone }: { open: boolean; onClose: () 
   const { data: specs } = useSpecs({ status: 'APPROVED' });
   const { data: labsData } = useLabs({ is_active: true });
   const { data: storage } = useStorageLocations();
+  const { data: productsData } = useProducts();
+  const products = productsData?.data ?? [];
   const labs = labsData?.data ?? [];
 
   const [f, setF] = useState<RegisterSampleBody>({ product_name: '' });
@@ -99,7 +102,16 @@ function RegisterDrawer({ open, onClose, onDone }: { open: boolean; onClose: () 
     <Drawer title="Register Sample" open={open} onClose={onClose} width={480} destroyOnClose
       footer={<Space className="flex justify-end"><Button onClick={onClose}>Cancel</Button><Button type="primary" onClick={submit} loading={registerMut.isPending}>Register</Button></Space>}>
       <div className="space-y-3">
-        <F label="Product / Material *"><Input value={f.product_name} onChange={(e) => set('product_name', e.target.value)} /></F>
+        <F label="Product (master)">
+          <Select
+            value={f.product_id ?? undefined}
+            onChange={(v) => { const p = products.find((x) => x.id === v); setF((prev) => ({ ...prev, product_id: v ?? null, product_name: p ? p.name : prev.product_name })); }}
+            allowClear showSearch optionFilterProp="label" className="w-full"
+            placeholder="Link to a product (auto-attaches its test panel + spec)"
+            options={products.map((p) => ({ value: p.id, label: `${p.code} — ${p.name}` }))}
+          />
+        </F>
+        <F label="Product / Material name *"><Input value={f.product_name} onChange={(e) => set('product_name', e.target.value)} placeholder="Auto-filled from the product, or type a free-text name" /></F>
         <div className="grid grid-cols-2 gap-3">
           <F label="Batch No."><Input value={f.batch_no ?? ''} onChange={(e) => set('batch_no', e.target.value)} /></F>
           <F label="Type"><Select value={f.sample_type ?? undefined} onChange={(v) => set('sample_type', v)} allowClear className="w-full" options={SAMPLE_TYPES.map((t) => ({ value: t, label: t }))} /></F>

@@ -8,6 +8,7 @@ import {
   useCoas, useGenerateCoa, useCoaTemplates, useCreateCoaTemplate, useUpdateCoaTemplate, useDeleteCoaTemplate,
   COA_STATUS_BADGE, type Coa, type CoaStatus, type CoaTemplate, type CoaTemplateUpsert,
 } from '@/lib/api/coa';
+import { useSamples } from '@/lib/api/samples';
 
 const STATUS_OPTIONS: { value: CoaStatus; label: string }[] = [
   { value: 'DRAFT', label: 'Draft' }, { value: 'ISSUED', label: 'Issued' }, { value: 'REVOKED', label: 'Revoked' },
@@ -74,23 +75,28 @@ export default function CoaListPage() {
 function GenerateModal({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (id: string) => void }) {
   const { message } = App.useApp();
   const mut = useGenerateCoa();
-  const [sampleId, setSampleId] = useState('');
+  const { data: samples } = useSamples();
+  // Certificates are issued off released results; surface released samples first.
+  const sampleOpts = [...(samples?.data ?? [])]
+    .sort((a, b) => (a.status === 'RELEASED' ? -1 : 0) - (b.status === 'RELEASED' ? -1 : 0))
+    .map((s) => ({ value: s.id, label: `${s.sample_number} — ${s.product_name}${s.batch_no ? ` · ${s.batch_no}` : ''} (${s.status})` }));
+  const [sampleId, setSampleId] = useState<string | undefined>();
   const [conclusion, setConclusion] = useState('');
   const submit = async () => {
-    if (!sampleId.trim()) return message.error('Sample id is required');
+    if (!sampleId) return message.error('Select a sample');
     try {
-      const created = await mut.mutateAsync({ sample_id: sampleId.trim(), conclusion: conclusion || null });
+      const created = await mut.mutateAsync({ sample_id: sampleId, conclusion: conclusion || null });
       message.success(`Generated ${created.coa_number}`);
-      setSampleId(''); setConclusion('');
+      setSampleId(undefined); setConclusion('');
       onDone(created.id);
     } catch (e) { message.error(extractErr(e)); }
   };
   return (
     <Modal title="Generate Certificate of Analysis" open={open} onCancel={onClose} onOk={submit} okText="Generate" okButtonProps={{ loading: mut.isPending }} centered destroyOnClose>
       <div className="space-y-3">
-        <F label="Sample ID *">
-          <Input value={sampleId} onChange={(e) => setSampleId(e.target.value)} placeholder="Sample UUID" />
-          <p className="text-[11px] text-gray-400 mt-1">Enter a tested sample's id to snapshot its results into a certificate.</p>
+        <F label="Sample *">
+          <Select value={sampleId} onChange={setSampleId} showSearch optionFilterProp="label" className="w-full" placeholder="Select a tested sample" options={sampleOpts} />
+          <p className="text-[11px] text-gray-400 mt-1">Snapshots the sample&apos;s test results into a certificate.</p>
         </F>
         <F label="Conclusion"><Input.TextArea rows={2} value={conclusion} onChange={(e) => setConclusion(e.target.value)} placeholder="Optional overall conclusion" /></F>
       </div>

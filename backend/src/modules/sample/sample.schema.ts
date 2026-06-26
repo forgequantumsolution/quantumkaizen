@@ -29,6 +29,7 @@ export const ListSampleQuerySchema = z.object({
 
 export const RegisterSampleSchema = z.object({
   product_name: z.string().min(1).max(200),
+  product_id: z.string().uuid().optional().nullable(), // LIMS 2.0 — link to Product master (drives panel + spec)
   batch_no: z.string().max(120).optional().nullable(),
   sample_type: z.string().max(80).optional().nullable(),
   source_site: z.string().max(200).optional().nullable(),

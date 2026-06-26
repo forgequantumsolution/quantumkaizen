@@ -14,6 +14,7 @@ export const ProductUpsertSchema = z.object({
   strength: z.string().max(120).optional().nullable(),
   category: z.string().max(120).optional().nullable(),
   markets: z.string().max(500).optional().nullable(),
+  default_panel_id: z.string().uuid().optional().nullable(), // LIMS 2.0 — panel auto-attached at sample login
   is_active: z.boolean().optional(),
 });
 

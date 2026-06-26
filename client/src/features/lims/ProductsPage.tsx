@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { App, Button, Drawer, Input, Space, Switch, Table } from 'antd';
+import { App, Button, Drawer, Input, Select, Space, Switch, Table } from 'antd';
 import { Package, Plus, Search, Edit3, Trash2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
@@ -7,6 +7,7 @@ import {
   useProducts, useCreateProduct, useUpdateProduct, useDeleteProduct,
   type Product, type ProductUpsert,
 } from '@/lib/api/product';
+import { useTestPanels } from '@/lib/api/testDefinition';
 
 export default function ProductsPage() {
   const { modal, message } = App.useApp();
@@ -72,12 +73,14 @@ function ProductDrawer({ open, onClose, product }: { open: boolean; onClose: () 
   const { message } = App.useApp();
   const createMut = useCreateProduct();
   const updateMut = useUpdateProduct(product?.id ?? '');
+  const { data: panels } = useTestPanels();
+  const panelOpts = (panels?.data ?? []).map((p) => ({ value: p.id, label: `${p.code} — ${p.name} (${p.item_count} tests)` }));
   const [form, setForm] = useState<ProductUpsert>({ name: '' });
 
   useEffect(() => {
     if (open) setForm(product ? {
       name: product.name, grade: product.grade, dosage_form: product.dosage_form, strength: product.strength,
-      category: product.category, markets: product.markets, is_active: product.is_active,
+      category: product.category, markets: product.markets, default_panel_id: product.default_panel_id, is_active: product.is_active,
     } : { name: '', is_active: true });
   }, [open, product]);
 
@@ -106,6 +109,7 @@ function ProductDrawer({ open, onClose, product }: { open: boolean; onClose: () 
           <F label="Category"><Input value={form.category ?? ''} onChange={(e) => set('category', e.target.value)} placeholder="e.g. Analgesic" /></F>
         </div>
         <F label="Markets"><Input value={form.markets ?? ''} onChange={(e) => set('markets', e.target.value)} placeholder="Comma-separated, e.g. US, EU, IN" /></F>
+        <F label="Default Test Panel"><Select allowClear showSearch optionFilterProp="label" className="w-full" placeholder="Auto-attached at sample login" value={form.default_panel_id ?? undefined} onChange={(v) => set('default_panel_id', v ?? null)} options={panelOpts} /></F>
         <div className="flex items-center gap-2"><Switch checked={form.is_active ?? true} onChange={(v) => set('is_active', v)} /><span className="text-sm text-gray-700">Active</span></div>
       </div>
     </Drawer>

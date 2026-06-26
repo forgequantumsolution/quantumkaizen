@@ -19,6 +19,7 @@ const serialize = (p: Prisma.ProductGetPayload<object>) => ({
   strength: p.strength,
   category: p.category,
   markets: p.markets,
+  default_panel_id: p.defaultPanelId,
   is_active: p.isActive,
   created_at: p.createdAt,
   updated_at: p.updatedAt,
@@ -61,6 +62,7 @@ export const createProduct = async (input: ProductUpsertInput, userId?: string) 
       strength: input.strength ?? null,
       category: input.category ?? null,
       markets: input.markets ?? null,
+      defaultPanelId: input.default_panel_id ?? null,
       isActive: input.is_active ?? true,
       createdById: userId ?? null,
     },
@@ -80,6 +82,7 @@ export const updateProduct = async (id: string, input: ProductUpsertInput, userI
       strength: input.strength ?? null,
       category: input.category ?? null,
       markets: input.markets ?? null,
+      defaultPanelId: input.default_panel_id ?? null,
       isActive: input.is_active ?? existing.isActive,
     },
   });

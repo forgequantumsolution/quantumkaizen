@@ -71,7 +71,7 @@ const storageNames = async (ids: (string | null)[]) => {
 
 const serializeSample = async (s: SampleRow, full = false) => {
   const base = {
-    id: s.id, sample_number: s.sampleNumber, barcode: s.barcode, product_name: s.productName,
+    id: s.id, sample_number: s.sampleNumber, barcode: s.barcode, product_name: s.productName, product_id: s.productId,
     batch_no: s.batchNo, sample_type: s.sampleType, source_site: s.sourceSite, specification_id: s.specificationId,
     quantity: s.quantity, unit: s.unit, collected_at: s.collectedAt, received_at: s.receivedAt,
     status: s.status, lab_id: s.labId, current_location_id: s.currentLocationId, priority: s.priority,
@@ -129,11 +129,18 @@ export const getSample = async (id: string) => serializeSample(await getRow(id),
 export const registerSample = async (input: RegisterSampleInput, userId?: string) => {
   const year = new Date().getFullYear();
   const sampleNumber = await nextSampleNumber(year);
+  // When linked to a Product master, denormalise its name so lists/labels stay
+  // consistent even if the free-text field was left blank or stale.
+  const product = input.product_id
+    ? await prisma.product.findFirst({ where: { id: input.product_id, isDeleted: false }, select: { name: true } })
+    : null;
+  if (input.product_id && !product) throw BadRequest('Linked product not found');
   const created = await prisma.sample.create({
     data: {
       sampleNumber,
       barcode: sampleNumber,
-      productName: input.product_name,
+      productName: product?.name ?? input.product_name,
+      productId: input.product_id ?? null,
       batchNo: input.batch_no ?? null,
       sampleType: input.sample_type ?? null,
       sourceSite: input.source_site ?? null,
@@ -164,10 +171,15 @@ export const registerSample = async (input: RegisterSampleInput, userId?: string
 export const updateSample = async (id: string, input: UpdateSampleInput, userId?: string) => {
   const e = await getRow(id);
   if (e.status === 'RELEASED' || e.status === 'REJECTED') throw BadRequest('Released/rejected samples cannot be edited');
+  const product = input.product_id
+    ? await prisma.product.findFirst({ where: { id: input.product_id, isDeleted: false }, select: { name: true } })
+    : null;
+  if (input.product_id && !product) throw BadRequest('Linked product not found');
   await prisma.sample.update({
     where: { id },
     data: {
-      productName: input.product_name ?? e.productName,
+      productName: product?.name ?? input.product_name ?? e.productName,
+      productId: input.product_id !== undefined ? input.product_id : e.productId,
       batchNo: input.batch_no ?? e.batchNo,
       sampleType: input.sample_type ?? e.sampleType,
       sourceSite: input.source_site ?? e.sourceSite,

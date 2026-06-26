@@ -64,6 +64,9 @@ export const assignTests = async (sampleId: string, input: AssignTestsInput, use
   const spec = await effectiveSpecVersion(sample.productId);
   const lines = (spec?.lines ?? []) as unknown as SpecLine[];
 
+  // A whole panel can be many tests × analytes; against a remote DB the per-row
+  // round-trips can exceed Prisma's default 5s interactive-transaction window, so
+  // give it more headroom (the work is bounded by the panel size).
   const created = await prisma.$transaction(async (tx) => {
     const out: string[] = [];
     for (const def of defs) {
@@ -87,7 +90,7 @@ export const assignTests = async (sampleId: string, input: AssignTestsInput, use
       out.push(st.id);
     }
     return out;
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
 
   if (spec && sample.specVersionId !== spec.id) await prisma.sample.update({ where: { id: sampleId }, data: { specVersionId: spec.id } });
   await writeTrail({ entityType: 'Sample', entityId: sampleId, action: 'UPDATE', field: 'tests', newValue: `Assigned ${created.length} test(s)` }, userId);
@@ -170,7 +173,7 @@ export const enterResults = async (sampleTestId: string, input: EnterResultsInpu
         overallResult: allEntered ? (anyOos ? 'OOS' : 'PASS') : null,
       },
     });
-  });
+  }, { timeout: 30_000, maxWait: 10_000 });
 
   await writeTrail({ entityType: 'SampleTest', entityId: sampleTestId, action: 'UPDATE', field: 'results', newValue: oosResultIds.length ? `OOS x${oosResultIds.length}` : 'entered' }, userId);
 

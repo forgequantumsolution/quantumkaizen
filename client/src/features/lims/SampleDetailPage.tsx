@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, DatePicker, Input, InputNumber, Modal, Select, Spin, Table } from 'antd';
-import { ArrowLeft, TestTube, History, Boxes, Plus, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, TestTube, History, Boxes, Plus, ArrowRightLeft, FileBadge } from 'lucide-react';
+import { useGenerateCoa } from '@/lib/api/coa';
 import type { Dayjs } from 'dayjs';
 import { QRCodeSVG } from 'qrcode.react';
 import PageContainer from '@/components/layout/PageContainer';
@@ -13,10 +14,12 @@ import {
 import { STATUS_BADGE } from './SampleListPage';
 import SampleTestsPanel from './SampleTestsPanel';
 
+// Lifecycle progression only. Final RELEASE/REJECT is an e-signed disposition
+// (see SampleTestsPanel) — gated on reviewed tests + no OOS — not a free enum hop.
 const NEXT: Record<SampleStatus, { status: SampleStatus; label: string; danger?: boolean }[]> = {
   REGISTERED: [{ status: 'IN_TESTING', label: 'Start Testing' }, { status: 'CANCELLED', label: 'Cancel', danger: true }],
-  IN_TESTING: [{ status: 'IN_REVIEW', label: 'Send to Review' }, { status: 'REJECTED', label: 'Reject', danger: true }],
-  IN_REVIEW: [{ status: 'RELEASED', label: 'Release' }, { status: 'IN_TESTING', label: 'Return to Testing' }, { status: 'REJECTED', label: 'Reject', danger: true }],
+  IN_TESTING: [{ status: 'IN_REVIEW', label: 'Send to Review' }],
+  IN_REVIEW: [{ status: 'IN_TESTING', label: 'Return to Testing' }],
   RELEASED: [], REJECTED: [], CANCELLED: [],
 };
 const CUSTODY_ACTIONS: CustodyAction[] = ['RECEIVED', 'TRANSFERRED', 'STORED', 'RETURNED', 'DISPOSED'];
@@ -27,8 +30,10 @@ export default function SampleDetailPage() {
   const { modal, message } = App.useApp();
   const canUpdate = useHasPermission('sample.update');
 
+  const canGenerateCoa = useHasPermission('coa.create');
   const { data: s, isLoading } = useSample(id);
   const transitionMut = useTransitionSample(id ?? '');
+  const generateCoaMut = useGenerateCoa();
   const { data: storage } = useStorageLocations();
   const storageOpts = (storage?.data ?? []).map((x) => ({ value: x.id, label: `${x.code} — ${x.name}` }));
 
@@ -45,6 +50,14 @@ export default function SampleDetailPage() {
       onOk: async () => { try { await transitionMut.mutateAsync({ status }); message.success('Status updated'); } catch (e) { message.error(extractErr(e)); } },
     });
 
+  const doGenerateCoa = async () => {
+    try {
+      const coa = await generateCoaMut.mutateAsync({ sample_id: s.id, conclusion: null });
+      message.success(`Generated ${coa.coa_number}`);
+      nav(`/lims/coa/${coa.id}`);
+    } catch (e) { message.error(extractErr(e)); }
+  };
+
   return (
     <PageContainer>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
@@ -54,15 +67,18 @@ export default function SampleDetailPage() {
           <span className="font-mono text-sm text-gray-700">{s.sample_number}</span>
           <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${STATUS_BADGE[s.status]}`}>{SAMPLE_STATUS_LABELS[s.status]}</span>
         </div>
-        {canUpdate && (
-          <div className="flex items-center gap-2 flex-wrap">
-            {NEXT[s.status].map((t) => (
-              <Button key={t.status} danger={t.danger} type={t.danger ? 'default' : 'primary'} onClick={() => doTransition(t.status, t.label, t.danger)} loading={transitionMut.isPending}>
-                {t.label}
-              </Button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {canUpdate && NEXT[s.status].map((t) => (
+            <Button key={t.status} danger={t.danger} type={t.danger ? 'default' : 'primary'} onClick={() => doTransition(t.status, t.label, t.danger)} loading={transitionMut.isPending}>
+              {t.label}
+            </Button>
+          ))}
+          {canGenerateCoa && s.status === 'RELEASED' && (
+            <Button type="primary" icon={<FileBadge size={14} />} onClick={doGenerateCoa} loading={generateCoaMut.isPending}>
+              Generate CoA
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
@@ -111,7 +127,7 @@ export default function SampleDetailPage() {
 
       {/* Tests & Results (LIMS 2.0 — assign → enter results → review → disposition) */}
       <div className="mb-4">
-        <SampleTestsPanel sampleId={s.id} canRelease={s.status !== 'RELEASED' && s.status !== 'REJECTED'} />
+        <SampleTestsPanel sampleId={s.id} status={s.status} canRelease={s.status !== 'RELEASED' && s.status !== 'REJECTED'} />
       </div>
 
       {/* Chain of custody */}

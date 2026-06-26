@@ -19,7 +19,7 @@ export interface Aliquot {
   id: string; code: string; storage_location_name: string | null; temp_zone: string | null; quantity: number | null; unit: string | null; expiry_at: string | null; status: string; created_at: string;
 }
 export interface SampleSummary {
-  id: string; sample_number: string; barcode: string; product_name: string; batch_no: string | null; sample_type: string | null;
+  id: string; sample_number: string; barcode: string; product_name: string; product_id: string | null; batch_no: string | null; sample_type: string | null;
   source_site: string | null; specification_id: string | null; quantity: number | null; unit: string | null;
   collected_at: string | null; received_at: string | null; status: SampleStatus; lab_id: string | null;
   current_location_id: string | null; priority: string | null; remarks: string | null; aliquot_count: number;
@@ -30,7 +30,7 @@ export interface SampleDetail extends SampleSummary {
   custody_events: CustodyEvent[]; aliquots: Aliquot[];
 }
 export interface RegisterSampleBody {
-  product_name: string; batch_no?: string | null; sample_type?: string | null; source_site?: string | null;
+  product_name: string; product_id?: string | null; batch_no?: string | null; sample_type?: string | null; source_site?: string | null;
   specification_id?: string | null; quantity?: number | null; unit?: string | null; collected_at?: string | null;
   received_at?: string | null; lab_id?: string | null; current_location_id?: string | null; priority?: string | null; remarks?: string | null;
 }

@@ -1,19 +1,20 @@
 import { useState, useEffect } from 'react';
-import { App, Button, Input, InputNumber, Modal, Table } from 'antd';
+import { App, Button, Input, InputNumber, Modal, Radio, Select, Table } from 'antd';
 import { FlaskConical, Plus, ClipboardCheck, ShieldCheck } from 'lucide-react';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useSampleTestsForSample, useAssignTests, useEnterResults, useReviewTest, useDisposeSample,
   SAMPLE_TEST_STATUS_BADGE, SAMPLE_TEST_STATUS_LABELS, EVALUATION_BADGE, EVALUATION_LABELS,
   OVERALL_RESULT_BADGE, specLimitLabel,
-  type SampleTest, type Result,
+  type SampleTest, type Result, type AssignTestsBody,
 } from '@/lib/api/testing';
+import { useTestPanels, useTestDefinitions } from '@/lib/api/testDefinition';
 
 function extractErr(err: unknown): string {
   return (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Operation failed';
 }
 
-export default function SampleTestsPanel({ sampleId, canRelease }: { sampleId: string; canRelease?: boolean }) {
+export default function SampleTestsPanel({ sampleId, canRelease, status }: { sampleId: string; canRelease?: boolean; status?: string }) {
   const canEnter = useHasPermission('result.enter');
   const canDispose = useHasPermission('sample.dispose');
 
@@ -22,6 +23,14 @@ export default function SampleTestsPanel({ sampleId, canRelease }: { sampleId: s
 
   const [assignOpen, setAssignOpen] = useState(false);
   const [disposeMode, setDisposeMode] = useState<'RELEASED' | 'REJECTED' | null>(null);
+
+  // Disposition only makes sense once there are tests to release against.
+  const showDisposition = canRelease && tests.length > 0;
+  const allReviewed = tests.length > 0 && tests.every((t) => t.review_status === 'APPROVED');
+  const anyOos = tests.some((t) => t.overall_result === 'OOS' || t.overall_result === 'FAIL');
+  // Release is gated (matches the backend): sample in review, every test approved, no OOS.
+  const canReleaseNow = status === 'IN_REVIEW' && allReviewed && !anyOos;
+  const releaseHint = anyOos ? 'Out-of-spec results present' : !allReviewed ? 'All tests must be review-approved' : status !== 'IN_REVIEW' ? 'Send the sample to review first' : '';
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -44,14 +53,15 @@ export default function SampleTestsPanel({ sampleId, canRelease }: { sampleId: s
         </div>
       )}
 
-      {canRelease && (
+      {showDisposition && (
         <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
           <div className="text-[11px] text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-            <ShieldCheck size={13} className="text-gray-400" />Disposition
+            <ShieldCheck size={13} className="text-gray-400" />Disposition (e-signed)
+            {!canReleaseNow && releaseHint && <span className="normal-case text-amber-600">· {releaseHint}</span>}
           </div>
           {canDispose && (
             <div className="flex items-center gap-2">
-              <Button type="primary" onClick={() => setDisposeMode('RELEASED')}>Release</Button>
+              <Button type="primary" disabled={!canReleaseNow} onClick={() => setDisposeMode('RELEASED')}>Release</Button>
               <Button danger onClick={() => setDisposeMode('REJECTED')}>Reject</Button>
             </div>
           )}
@@ -144,19 +154,51 @@ function TestCard({ test, canEnter }: { test: SampleTest; canEnter: boolean }) {
   );
 }
 
+type AssignMode = 'product' | 'panel' | 'tests';
+
 function AssignModal({ open, onClose, sampleId }: { open: boolean; onClose: () => void; sampleId: string }) {
   const { message } = App.useApp();
   const mut = useAssignTests(sampleId);
+  const [mode, setMode] = useState<AssignMode>('product');
+  const [panelId, setPanelId] = useState<string | undefined>();
+  const [defIds, setDefIds] = useState<string[]>([]);
+
+  const { data: panels } = useTestPanels();
+  const { data: defs } = useTestDefinitions({ status: 'APPROVED' });
+
+  useEffect(() => { if (open) { setMode('product'); setPanelId(undefined); setDefIds([]); } }, [open]);
+
   const submit = async () => {
+    let body: AssignTestsBody;
+    if (mode === 'product') body = { from_product: true };
+    else if (mode === 'panel') { if (!panelId) return message.error('Select a panel'); body = { panel_id: panelId }; }
+    else { if (!defIds.length) return message.error('Select at least one test'); body = { test_definition_ids: defIds }; }
     try {
-      const res = await mut.mutateAsync({ from_product: true });
-      message.success(`Assigned ${res.assigned} test(s)${res.spec_version ? ` from ${res.spec_version.code}` : ''}`);
+      const res = await mut.mutateAsync(body);
+      message.success(`Assigned ${res.assigned} test(s)${res.spec_version ? ` · spec ${res.spec_version.code}` : ' · no spec bound'}`);
       onClose();
     } catch (e) { message.error(extractErr(e)); }
   };
+
   return (
-    <Modal title="Assign Tests" open={open} onCancel={onClose} onOk={submit} okText="Auto-assign from product panel" okButtonProps={{ loading: mut.isPending }} centered>
-      <p className="text-sm text-gray-600">Assign the tests from this product&apos;s default panel to the sample. The active specification version will be applied automatically.</p>
+    <Modal title="Assign Tests" open={open} onCancel={onClose} onOk={submit} okText="Assign" okButtonProps={{ loading: mut.isPending }} centered destroyOnClose>
+      <div className="space-y-3">
+        <Radio.Group value={mode} onChange={(e) => setMode(e.target.value)} optionType="button" buttonStyle="solid" size="small"
+          options={[{ value: 'product', label: 'Product panel' }, { value: 'panel', label: 'Pick a panel' }, { value: 'tests', label: 'Pick tests' }]} />
+        {mode === 'product' && (
+          <p className="text-sm text-gray-600">Assign the tests from this product&apos;s default panel. The active specification version is applied automatically. Requires the sample to be linked to a product that has a default panel.</p>
+        )}
+        {mode === 'panel' && (
+          <div><label className="block text-[11px] font-medium text-gray-600 mb-1">Test panel</label>
+            <Select value={panelId} onChange={setPanelId} showSearch optionFilterProp="label" className="w-full" placeholder="Select a panel"
+              options={(panels?.data ?? []).map((p) => ({ value: p.id, label: `${p.code} — ${p.name} (${p.item_count} tests)` }))} /></div>
+        )}
+        {mode === 'tests' && (
+          <div><label className="block text-[11px] font-medium text-gray-600 mb-1">Tests</label>
+            <Select mode="multiple" value={defIds} onChange={setDefIds} showSearch optionFilterProp="label" className="w-full" placeholder="Select one or more tests"
+              options={(defs?.data ?? []).map((d) => ({ value: d.id, label: `${d.code} — ${d.name}` }))} /></div>
+        )}
+      </div>
     </Modal>
   );
 }
