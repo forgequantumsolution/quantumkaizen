@@ -5,9 +5,10 @@
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { BadRequest, NotFound } from '../../lib/httpError';
+import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
 import { writeTrail, recordSignature } from '../audit/compliance.service';
-import type { OpenInvestigationInput, UpdateInvestigationInput, AdvancePhaseInput, CloseInvestigationInput, ListInvestigationQuery } from './oos.schema';
+import { createCapa } from '../audit/capa.service';
+import type { OpenInvestigationInput, UpdateInvestigationInput, AdvancePhaseInput, CloseInvestigationInput, CreateCapaFromOosInput, ListInvestigationQuery } from './oos.schema';
 
 const PHASES = ['PHASE_1A', 'PHASE_1B', 'PHASE_2', 'CLOSED'];
 
@@ -53,7 +54,51 @@ const get = async (id: string) => {
   if (!o) throw NotFound('Investigation not found');
   return o;
 };
-export const getInvestigation = async (id: string) => serialize(await get(id));
+
+// Enrich with the linked QMS CAPA's number/status (soft cross-module read) so the
+// LIMS UI can show a label + link without the client making a second call.
+const withCapa = async (o: Prisma.OosInvestigationGetPayload<object>) => {
+  const base = serialize(o);
+  if (!o.capaId) return { ...base, capa: null };
+  const capa = await prisma.capa.findUnique({ where: { id: o.capaId }, select: { id: true, capaNumber: true, status: true } });
+  return { ...base, capa: capa ? { id: capa.id, capa_number: capa.capaNumber, status: capa.status } : null };
+};
+
+export const getInvestigation = async (id: string) => withCapa(await get(id));
+
+/**
+ * Raise a QMS CAPA from this OOS investigation and link it (sets `capaId`). The
+ * LIMS → QMS bridge: a confirmed lab failure becomes a tracked corrective action.
+ */
+export const createCapaForInvestigation = async (
+  id: string,
+  input: CreateCapaFromOosInput,
+  userId?: string,
+) => {
+  const o = await get(id);
+  if (o.capaId) throw Conflict('This investigation already has a linked CAPA');
+
+  const capa = await createCapa(
+    {
+      title: input.title ?? o.title,
+      type: input.type ?? 'CORRECTIVE',
+      description: `Raised from OOS investigation ${o.code}${o.title ? ` — ${o.title}` : ''}.`,
+      owner_id: input.owner_id ?? null,
+      due_date: input.due_date ?? null,
+    },
+    userId,
+  );
+
+  const updated = await prisma.oosInvestigation.update({
+    where: { id },
+    data: { capaId: capa.id, status: o.status === 'OPEN' ? 'IN_PROGRESS' : o.status },
+  });
+  await writeTrail(
+    { entityType: 'OosInvestigation', entityId: id, action: 'UPDATE', field: 'capaId', newValue: capa.capa_number },
+    userId,
+  );
+  return { investigation: await withCapa(updated), capa: { id: capa.id, capa_number: capa.capa_number } };
+};
 
 export const updateInvestigation = async (id: string, input: UpdateInvestigationInput, userId?: string) => {
   const o = await get(id);

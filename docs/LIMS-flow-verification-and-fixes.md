@@ -238,3 +238,30 @@ three modes with the spec bound, OOS auto-raises on a limit breach, CoA issues a
 verifies by QR, and the reviewer account logs in. Demo DB left at 4 samples / 4
 products / 3 panels / 3 approved spec versions, with SMP-2026-0001 mid-testing
 showing a live OOS.
+
+---
+
+## 7. LIMS → QMS bridge: OOS → CAPA (added 2026-06-27)
+
+The cross-module link (`OosInvestigation.capaId`) was previously a free-text id
+field. It is now a first-class action:
+
+**Backend**
+- `modules/oos/oos.service.ts` — `createCapaForInvestigation()` raises a QMS `Capa`
+  (via `audit/capa.service.createCapa`) with a description back-referencing the OOS
+  code, links it (`capaId`), and moves the OOS `OPEN → IN_PROGRESS`; `Conflict` if
+  already linked. `getInvestigation()` now enriches with the linked CAPA's
+  `{ id, capa_number, status }`.
+- `modules/oos/oos.controller.ts` / `oos.routes.ts` — `POST /api/oos/:id/capa`
+  (permission `capa.create`); schema `CreateCapaFromOosSchema`.
+
+**Frontend**
+- `lib/api/oos.ts` — `capa` field on `Investigation`; `useCreateCapaFromOos`.
+- `features/lims/OosDetailPage.tsx` — "Raise CAPA" action (creates + links a CAPA,
+  prefilled from the OOS), a clickable **Linked CAPA** chip → `/audit/capa/:id`, and
+  the close modal's free-text CAPA id replaced with a picker of existing CAPAs.
+
+**Verified:** `POST /oos/:id/capa` → 201 (CAPA-2026-0004 created, OOS → IN_PROGRESS,
+detail shows the CAPA); the QMS CAPA carries "Raised from OOS investigation
+OOS-2026-0001…"; a second attempt returns 409; the UI renders the linked-CAPA chip
+and the close-modal picker with no API errors.

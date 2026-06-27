@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { App, Button, Input, Modal, Select, Spin, Switch } from 'antd';
-import { AlertTriangle, ArrowLeft } from 'lucide-react';
+import { App, Button, DatePicker, Input, Modal, Select, Spin, Switch } from 'antd';
+import { AlertTriangle, ArrowLeft, ShieldPlus, ExternalLink } from 'lucide-react';
+import type { Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
 import {
@@ -9,12 +10,16 @@ import {
   useUpdateInvestigation,
   useAdvancePhase,
   useCloseInvestigation,
+  useCreateCapaFromOos,
   PHASE_LABELS,
   STATUS_BADGE,
   CLASSIFICATION_LABELS,
   type OosPhase,
   type OosClassification,
 } from '@/lib/api/oos';
+import { useCapas, type CapaType } from '@/lib/api/audit';
+
+const CAPA_TYPES: CapaType[] = ['CORRECTIVE', 'PREVENTIVE', 'BOTH'];
 
 const ADVANCE_FLOW: OosPhase[] = ['PHASE_1A', 'PHASE_1B', 'PHASE_2'];
 const CLASSIFICATIONS: OosClassification[] = ['LAB_ERROR', 'NON_LAB_ERROR', 'CONFIRMED_OOS', 'INVALIDATED'];
@@ -24,12 +29,14 @@ export default function OosDetailPage() {
   const { message } = App.useApp();
   const canUpdate = useHasPermission('oos.update');
   const canClose = useHasPermission('oos.close');
+  const canCreateCapa = useHasPermission('capa.create');
 
   const { data: inv, isLoading } = useInvestigation(id);
   const updateMut = useUpdateInvestigation(id ?? '');
   const advanceMut = useAdvancePhase(id ?? '');
 
   const [closeOpen, setCloseOpen] = useState(false);
+  const [capaOpen, setCapaOpen] = useState(false);
   const [hypothesis, setHypothesis] = useState('');
   const [summary, setSummary] = useState('');
   const [retest, setRetest] = useState(false);
@@ -103,6 +110,11 @@ export default function OosDetailPage() {
         </div>
         {!closed && (
           <div className="flex items-center gap-2 flex-wrap">
+            {canCreateCapa && !inv.capa && (
+              <Button icon={<ShieldPlus size={14} />} onClick={() => setCapaOpen(true)}>
+                Raise CAPA
+              </Button>
+            )}
             {canUpdate && nextPhase && (
               <Button type="primary" onClick={advance} loading={advanceMut.isPending}>
                 Advance to {PHASE_LABELS[nextPhase]}
@@ -136,6 +148,16 @@ export default function OosDetailPage() {
           <Field label="Retest required" value={inv.retest_required ? 'Yes' : 'No'} />
           <Field label="Resample required" value={inv.resample_required ? 'Yes' : 'No'} />
           <Field label="Closed" value={inv.closed_at ? new Date(inv.closed_at).toLocaleString() : '—'} />
+          <div>
+            <div className="text-[11px] text-gray-500 uppercase tracking-wide">Linked CAPA</div>
+            {inv.capa ? (
+              <Link to={`/audit/capa/${inv.capa.id}`} className="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 mt-0.5">
+                {inv.capa.capa_number} <span className="text-[10px] text-gray-400">({inv.capa.status})</span> <ExternalLink size={12} />
+              </Link>
+            ) : (
+              <div className="text-sm text-gray-400 mt-0.5">— none</div>
+            )}
+          </div>
         </div>
         {inv.conclusion && (
           <div className="mt-3 pt-3 border-t border-gray-100">
@@ -181,16 +203,48 @@ export default function OosDetailPage() {
       )}
 
       <CloseModal open={closeOpen} onClose={() => setCloseOpen(false)} id={id ?? ''} />
+      <RaiseCapaModal open={capaOpen} onClose={() => setCapaOpen(false)} id={id ?? ''} defaultTitle={inv.title} />
     </PageContainer>
+  );
+}
+
+function RaiseCapaModal({ open, onClose, id, defaultTitle }: { open: boolean; onClose: () => void; id: string; defaultTitle: string }) {
+  const { message } = App.useApp();
+  const mut = useCreateCapaFromOos(id);
+  const [title, setTitle] = useState('');
+  const [type, setType] = useState<CapaType>('CORRECTIVE');
+  const [due, setDue] = useState<Dayjs | null>(null);
+
+  useEffect(() => { if (open) { setTitle(defaultTitle ?? ''); setType('CORRECTIVE'); setDue(null); } }, [open, defaultTitle]);
+
+  const submit = async () => {
+    try {
+      const res = await mut.mutateAsync({ title: title.trim() || undefined, type, due_date: due ? due.toISOString() : null });
+      message.success(`Raised ${res.capa.capa_number} and linked it to this investigation`);
+      onClose();
+    } catch (e) { message.error(extractErr(e)); }
+  };
+
+  return (
+    <Modal title="Raise CAPA from this OOS" open={open} onCancel={onClose} onOk={submit} okText="Raise & link" okButtonProps={{ loading: mut.isPending }} centered destroyOnClose>
+      <p className="text-sm text-gray-600 mb-3">Creates a QMS corrective/preventive action and links it back to this investigation. The CAPA opens in the Audit/QMS module for root-cause, actions and verification.</p>
+      <div className="space-y-3">
+        <Labeled label="Title *"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="CAPA title" /></Labeled>
+        <Labeled label="Type"><Select value={type} onChange={setType} className="w-full" options={CAPA_TYPES.map((t) => ({ value: t, label: t.charAt(0) + t.slice(1).toLowerCase() }))} /></Labeled>
+        <Labeled label="Target due date"><DatePicker value={due ?? undefined} onChange={(d) => setDue(d ?? null)} className="w-full" /></Labeled>
+      </div>
+    </Modal>
   );
 }
 
 function CloseModal({ open, onClose, id }: { open: boolean; onClose: () => void; id: string }) {
   const { message } = App.useApp();
   const closeMut = useCloseInvestigation(id);
+  const { data: capas } = useCapas();
+  const capaOpts = (capas?.data ?? []).map((c) => ({ value: c.id, label: `${c.capa_number} — ${c.title} (${c.status})` }));
   const [classification, setClassification] = useState<OosClassification>('LAB_ERROR');
   const [conclusion, setConclusion] = useState('');
-  const [capaId, setCapaId] = useState('');
+  const [capaId, setCapaId] = useState<string | undefined>();
   const [credential, setCredential] = useState('');
 
   const submit = async () => {
@@ -198,13 +252,13 @@ function CloseModal({ open, onClose, id }: { open: boolean; onClose: () => void;
       await closeMut.mutateAsync({
         classification,
         conclusion: conclusion || null,
-        capa_id: capaId.trim() || null,
+        capa_id: capaId || null,
         credential: credential || null,
       });
       message.success('Investigation closed');
       onClose();
       setConclusion('');
-      setCapaId('');
+      setCapaId(undefined);
       setCredential('');
     } catch (e) {
       message.error(extractErr(e));
@@ -233,8 +287,17 @@ function CloseModal({ open, onClose, id }: { open: boolean; onClose: () => void;
         <Labeled label="Conclusion">
           <Input.TextArea rows={3} value={conclusion} onChange={(e) => setConclusion(e.target.value)} />
         </Labeled>
-        <Labeled label="CAPA ID">
-          <Input value={capaId} onChange={(e) => setCapaId(e.target.value)} placeholder="Linked CAPA (optional)" />
+        <Labeled label="Link CAPA">
+          <Select
+            value={capaId}
+            onChange={setCapaId}
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            className="w-full"
+            placeholder="Link an existing CAPA (optional)"
+            options={capaOpts}
+          />
         </Labeled>
         <Labeled label="Signature PIN / password">
           <Input.Password

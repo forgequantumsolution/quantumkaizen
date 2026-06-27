@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import * as svc from './oos.service';
-import type { OpenInvestigationInput, UpdateInvestigationInput, AdvancePhaseInput, CloseInvestigationInput, ListInvestigationQuery } from './oos.schema';
+import type { OpenInvestigationInput, UpdateInvestigationInput, AdvancePhaseInput, CloseInvestigationInput, CreateCapaFromOosInput, ListInvestigationQuery } from './oos.schema';
 
 const uid = (req: Request) => req.user?.userId;
 
@@ -10,3 +10,4 @@ export const open = async (req: Request, res: Response) => res.status(201).json(
 export const update = async (req: Request, res: Response) => res.json(await svc.updateInvestigation(req.params.id as string, req.body as UpdateInvestigationInput, uid(req)));
 export const advance = async (req: Request, res: Response) => res.json(await svc.advancePhase(req.params.id as string, req.body as AdvancePhaseInput, uid(req)));
 export const close = async (req: Request, res: Response) => res.json(await svc.closeInvestigation(req.params.id as string, req.body as CloseInvestigationInput, uid(req)));
+export const createCapa = async (req: Request, res: Response) => res.status(201).json(await svc.createCapaForInvestigation(req.params.id as string, req.body as CreateCapaFromOosInput, uid(req)));

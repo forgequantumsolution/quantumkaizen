@@ -24,10 +24,22 @@ export interface Investigation {
   resample_required: boolean;
   conclusion: string | null;
   capa_id: string | null;
+  capa?: { id: string; capa_number: string; status: string } | null;
   opened_at: string;
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface CreateCapaFromOosBody {
+  title?: string;
+  type?: 'CORRECTIVE' | 'PREVENTIVE' | 'BOTH';
+  owner_id?: string | null;
+  due_date?: string | null;
+}
+export interface CreateCapaFromOosResponse {
+  investigation: Investigation;
+  capa: { id: string; capa_number: string };
 }
 
 export interface OpenInvestigationBody {
@@ -106,6 +118,18 @@ export const useCloseInvestigation = (id: string) => {
   return useMutation<Investigation, unknown, CloseInvestigationBody>({
     mutationFn: (b) => api.post(`/oos/${id}/close`, b).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.all }),
+  });
+};
+
+// LIMS → QMS bridge: raise a CAPA from this OOS investigation and link it.
+export const useCreateCapaFromOos = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation<CreateCapaFromOosResponse, unknown, CreateCapaFromOosBody>({
+    mutationFn: (b) => api.post(`/oos/${id}/capa`, b).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: keys.all });
+      qc.invalidateQueries({ queryKey: ['audit', 'capas'] });
+    },
   });
 };
 
