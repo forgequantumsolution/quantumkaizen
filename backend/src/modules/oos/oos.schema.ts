@@ -42,9 +42,13 @@ export const CloseInvestigationSchema = z.object({
 // Raise a QMS CAPA directly from this OOS investigation (LIMS → QMS bridge).
 export const CreateCapaFromOosSchema = z.object({
   title: z.string().min(1).max(200).optional(),
+  description: z.string().max(4000).optional().nullable(),
   type: z.enum(['CORRECTIVE', 'PREVENTIVE', 'BOTH']).optional(),
   owner_id: z.string().optional().nullable(),
   due_date: z.string().optional().nullable(),
+  // CAPA workflow initiation-stage form: { sectionName: { fieldName: value } }
+  init_form_id: z.string().optional().nullable(),
+  init_responses: z.record(z.record(z.unknown())).optional(),
 });
 
 export type CreateCapaFromOosInput = z.infer<typeof CreateCapaFromOosSchema>;

@@ -80,6 +80,56 @@ const findActiveCapaWorkflow = async () =>
     select: { id: true },
   });
 
+// The CAPA workflow's initial-stage required form binding (+ its schema), so the
+// LIMS can collect & pre-fill the initiation data when raising a CAPA from an OOS.
+const getCapaInitiationBinding = async () => {
+  const wf = await findActiveCapaWorkflow();
+  if (!wf) return null;
+  const stage = await prisma.workflowStage.findFirst({
+    where: { workflowId: wf.id, isInitialStage: true, isDeleted: false },
+    select: { id: true },
+  });
+  if (!stage) return null;
+  const binding = await prisma.stageFormBinding.findFirst({
+    where: { stageId: stage.id, isActive: true, isDeleted: false },
+    orderBy: { position: 'asc' },
+    select: {
+      id: true, formId: true,
+      form: {
+        select: {
+          id: true, title: true, versionId: true,
+          sections: {
+            orderBy: { position: 'asc' },
+            select: { name: true, fields: { orderBy: { position: 'asc' }, select: { name: true, label: true, typeName: true, required: true, options: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!binding) return null;
+  return { workflowId: wf.id, stageId: stage.id, binding };
+};
+
+// Public: the initiation form schema (for the Raise-CAPA modal). null if none.
+export const getCapaInitForm = async () => {
+  const init = await getCapaInitiationBinding();
+  if (!init) return { form: null };
+  const f = init.binding.form;
+  return {
+    form: {
+      form_id: f.id,
+      title: f.title,
+      sections: f.sections.map((s) => ({
+        name: s.name,
+        fields: s.fields.map((fl) => ({
+          name: fl.name, label: fl.label, type: fl.typeName ?? 'text', required: fl.required,
+          options: Array.isArray(fl.options) ? fl.options : [],
+        })),
+      })),
+    },
+  };
+};
+
 /**
  * LIMS → QMS bridge. From an OOS investigation, raise BOTH:
  *  - a standalone CAPA record (audit module), and
@@ -106,17 +156,19 @@ export const createCapaForInvestigation = async (
     userId,
   );
 
-  // Also raise a CAPA workflow ticket so it shows in the team's CAPA workflow.
+  // Also raise a CAPA workflow ticket so it shows in the team's CAPA workflow, and
+  // pre-fill its initiation-stage form from the data captured in the modal.
   let ticket: { ticketId: string; uniqueId: string } | null = null;
   try {
-    const wf = await findActiveCapaWorkflow();
+    const init = await getCapaInitiationBinding();
+    const wf = init ? { id: init.workflowId } : await findActiveCapaWorkflow();
     if (!wf) throw new Error('no ACTIVE CAPA workflow found');
     if (!userId) throw new Error('no actor to raise the CAPA ticket');
     const t = await engineRaiseTicket(
       {
         workflowId: wf.id,
         title: input.title ?? `CAPA — ${o.title}`,
-        description: `Raised from OOS investigation ${o.code}. Linked CAPA record ${capa.capa_number}.`,
+        description: input.description ?? `Raised from OOS investigation ${o.code}. Linked CAPA record ${capa.capa_number}.`,
         dueDate: input.due_date ?? null,
         customFields: {
           oos_investigation_id: o.id,
@@ -129,10 +181,29 @@ export const createCapaForInvestigation = async (
       { id: userId },
     );
     ticket = { ticketId: t.ticketId, uniqueId: t.uniqueId };
+
+    // Fill the initiation stage's required form so the ticket isn't blocked there.
+    if (init && input.init_responses && Object.keys(input.init_responses).length > 0) {
+      await prisma.formSubmission.create({
+        data: {
+          formId: init.binding.formId,
+          versionId: init.binding.form.versionId,
+          status: 'SUBMITTED',
+          responses: input.init_responses as Prisma.InputJsonValue,
+          meta: { source: 'oos', oos_code: o.code } as Prisma.InputJsonValue,
+          submittedById: userId,
+          submittedAt: new Date(),
+          ticketId: t.ticketId,
+          stageId: init.stageId,
+          flowId: t.flowId,
+          bindingId: init.binding.id,
+        },
+      });
+    }
   } catch (e) {
     // eslint-disable-next-line no-console
     console.error(
-      `[oos] CAPA record ${capa.capa_number} created but workflow ticket was not raised:`,
+      `[oos] CAPA record ${capa.capa_number} created but workflow ticket/initiation form was not fully set up:`,
       e instanceof Error ? e.message : e,
     );
   }

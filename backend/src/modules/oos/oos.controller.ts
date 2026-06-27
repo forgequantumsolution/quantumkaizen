@@ -11,3 +11,4 @@ export const update = async (req: Request, res: Response) => res.json(await svc.
 export const advance = async (req: Request, res: Response) => res.json(await svc.advancePhase(req.params.id as string, req.body as AdvancePhaseInput, uid(req)));
 export const close = async (req: Request, res: Response) => res.json(await svc.closeInvestigation(req.params.id as string, req.body as CloseInvestigationInput, uid(req)));
 export const createCapa = async (req: Request, res: Response) => res.status(201).json(await svc.createCapaForInvestigation(req.params.id as string, req.body as CreateCapaFromOosInput, uid(req)));
+export const capaInitForm = async (_req: Request, res: Response) => res.json(await svc.getCapaInitForm());

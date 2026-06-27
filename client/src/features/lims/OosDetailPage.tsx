@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { App, Button, DatePicker, Input, Modal, Select, Spin, Switch } from 'antd';
+import { App, Button, DatePicker, Input, Modal, Radio, Select, Spin, Switch } from 'antd';
 import { AlertTriangle, ArrowLeft, ShieldPlus, ExternalLink } from 'lucide-react';
 import type { Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
@@ -11,11 +11,14 @@ import {
   useAdvancePhase,
   useCloseInvestigation,
   useCreateCapaFromOos,
+  useCapaInitForm,
   PHASE_LABELS,
   STATUS_BADGE,
   CLASSIFICATION_LABELS,
   type OosPhase,
   type OosClassification,
+  type Investigation,
+  type CapaInitField,
 } from '@/lib/api/oos';
 import { useCapas, type CapaType } from '@/lib/api/audit';
 
@@ -213,40 +216,130 @@ export default function OosDetailPage() {
       )}
 
       <CloseModal open={closeOpen} onClose={() => setCloseOpen(false)} id={id ?? ''} />
-      <RaiseCapaModal open={capaOpen} onClose={() => setCapaOpen(false)} id={id ?? ''} defaultTitle={inv.title} />
+      <RaiseCapaModal open={capaOpen} onClose={() => setCapaOpen(false)} oos={inv} />
     </PageContainer>
   );
 }
 
-function RaiseCapaModal({ open, onClose, id, defaultTitle }: { open: boolean; onClose: () => void; id: string; defaultTitle: string }) {
+// Renders one CAPA-initiation field by its form type.
+function InitFieldInput({ field, value, onChange }: { field: CapaInitField; value: unknown; onChange: (v: unknown) => void }) {
+  const opts = (field.options ?? []).map((o) => ({ value: o.value, label: o.label }));
+  switch (field.type) {
+    case 'textarea':
+      return <Input.TextArea rows={3} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
+    case 'select':
+    case 'dropdown':
+      return <Select className="w-full" allowClear value={(value as string) || undefined} onChange={(v) => onChange(v ?? '')} options={opts} placeholder="Select…" />;
+    case 'radio':
+      return <Radio.Group value={value} onChange={(e) => onChange(e.target.value)} options={opts} />;
+    case 'multi_text':
+      return <Select mode="tags" className="w-full" value={(value as string[]) ?? []} onChange={(v) => onChange(v)} options={opts} placeholder="Type and press Enter…" tokenSeparators={[',']} />;
+    default:
+      return <Input value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} />;
+  }
+}
+
+function RaiseCapaModal({ open, onClose, oos }: { open: boolean; onClose: () => void; oos: Investigation }) {
   const { message } = App.useApp();
-  const mut = useCreateCapaFromOos(id);
-  const [title, setTitle] = useState('');
+  const mut = useCreateCapaFromOos(oos.id);
+  const { data: schema, isLoading } = useCapaInitForm(open);
+  const form = schema?.form ?? null;
+
   const [type, setType] = useState<CapaType>('CORRECTIVE');
   const [due, setDue] = useState<Dayjs | null>(null);
+  // responses keyed by { sectionName: { fieldName: value } }
+  const [resp, setResp] = useState<Record<string, Record<string, unknown>>>({});
 
-  useEffect(() => { if (open) { setTitle(defaultTitle ?? ''); setType('CORRECTIVE'); setDue(null); } }, [open, defaultTitle]);
+  // Pre-fill the initiation fields from the investigation when the schema arrives.
+  useEffect(() => {
+    if (!open) return;
+    setType('CORRECTIVE');
+    setDue(null);
+    if (!form) { setResp({}); return; }
+    const next: Record<string, Record<string, unknown>> = {};
+    for (const s of form.sections) {
+      next[s.name] = {};
+      for (const f of s.fields) {
+        const lbl = f.label.toLowerCase();
+        let v: unknown = f.type === 'multi_text' ? [] : '';
+        if (/title/.test(lbl)) v = oos.title;
+        else if (/desc/.test(lbl)) v = `Raised from OOS investigation ${oos.code}: ${oos.title}.`;
+        else if (/affected|area/.test(lbl)) v = f.type === 'multi_text' ? [oos.sample_id ? `Sample ${oos.sample_id}` : 'See investigation'] : '';
+        next[s.name][f.name] = v;
+      }
+    }
+    setResp(next);
+  }, [open, form, oos]);
+
+  const setField = (section: string, field: string, value: unknown) =>
+    setResp((p) => ({ ...p, [section]: { ...(p[section] ?? {}), [field]: value } }));
+
+  const toast = (res: Awaited<ReturnType<typeof mut.mutateAsync>>) =>
+    message.success(
+      res.capa_ticket
+        ? `Raised ${res.capa.capa_number} + CAPA ticket ${res.capa_ticket.unique_id ?? ''} (initiation filled)`
+        : `Raised ${res.capa.capa_number} (CAPA workflow ticket not raised — see logs)`,
+    );
 
   const submit = async () => {
+    if (!form) {
+      try { toast(await mut.mutateAsync({ type, due_date: due ? due.toISOString() : null })); onClose(); }
+      catch (e) { message.error(extractErr(e)); }
+      return;
+    }
+    // Required-field validation.
+    for (const s of form.sections) {
+      for (const f of s.fields) {
+        if (!f.required) continue;
+        const val = resp[s.name]?.[f.name];
+        const empty = val == null || val === '' || (Array.isArray(val) && val.length === 0);
+        if (empty) return message.error(`${f.label} is required`);
+      }
+    }
+    // Derive the CAPA record title/description from the matching init fields.
+    let title = oos.title;
+    let description: string | undefined;
+    for (const s of form.sections) {
+      for (const f of s.fields) {
+        const lbl = f.label.toLowerCase();
+        const val = resp[s.name]?.[f.name];
+        if (/title/.test(lbl) && val) title = String(val);
+        if (/desc/.test(lbl) && val) description = String(val);
+      }
+    }
     try {
-      const res = await mut.mutateAsync({ title: title.trim() || undefined, type, due_date: due ? due.toISOString() : null });
-      message.success(
-        res.capa_ticket
-          ? `Raised ${res.capa.capa_number} + CAPA workflow ticket ${res.capa_ticket.unique_id ?? ''} and linked them`
-          : `Raised ${res.capa.capa_number} (CAPA workflow ticket not raised — see logs)`,
-      );
+      toast(await mut.mutateAsync({ title, description, type, due_date: due ? due.toISOString() : null, init_form_id: form.form_id, init_responses: resp }));
       onClose();
     } catch (e) { message.error(extractErr(e)); }
   };
 
   return (
-    <Modal title="Raise CAPA from this OOS" open={open} onCancel={onClose} onOk={submit} okText="Raise & link" okButtonProps={{ loading: mut.isPending }} centered destroyOnClose>
-      <p className="text-sm text-gray-600 mb-3">Creates a QMS corrective/preventive action and links it back to this investigation. The CAPA opens in the Audit/QMS module for root-cause, actions and verification.</p>
-      <div className="space-y-3">
-        <Labeled label="Title *"><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="CAPA title" /></Labeled>
-        <Labeled label="Type"><Select value={type} onChange={setType} className="w-full" options={CAPA_TYPES.map((t) => ({ value: t, label: t.charAt(0) + t.slice(1).toLowerCase() }))} /></Labeled>
-        <Labeled label="Target due date"><DatePicker value={due ?? undefined} onChange={(d) => setDue(d ?? null)} className="w-full" /></Labeled>
-      </div>
+    <Modal title="Raise CAPA from this OOS" open={open} onCancel={onClose} onOk={submit} okText="Raise & link" okButtonProps={{ loading: mut.isPending }} centered destroyOnClose width={580}>
+      <p className="text-sm text-gray-600 mb-3">Creates a CAPA record and a ticket on the CAPA workflow, with its <b>initiation stage pre-filled</b> from this investigation. Review the details below before raising.</p>
+      {isLoading ? (
+        <div className="py-8 text-center"><Spin /></div>
+      ) : (
+        <div className="space-y-3 max-h-[60vh] overflow-auto pr-1">
+          <div className="grid grid-cols-2 gap-3">
+            <Labeled label="CAPA type"><Select value={type} onChange={setType} className="w-full" options={CAPA_TYPES.map((t) => ({ value: t, label: t.charAt(0) + t.slice(1).toLowerCase() }))} /></Labeled>
+            <Labeled label="Target due date"><DatePicker value={due ?? undefined} onChange={(d) => setDue(d ?? null)} className="w-full" /></Labeled>
+          </div>
+          {form ? (
+            form.sections.map((s) => (
+              <div key={s.name} className="space-y-3">
+                {form.sections.length > 1 && <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide pt-1">{s.name}</div>}
+                {s.fields.map((f) => (
+                  <Labeled key={f.name} label={`${f.label}${f.required ? ' *' : ''}`}>
+                    <InitFieldInput field={f} value={resp[s.name]?.[f.name]} onChange={(v) => setField(s.name, f.name, v)} />
+                  </Labeled>
+                ))}
+              </div>
+            ))
+          ) : (
+            <div className="text-sm text-amber-600">No CAPA initiation form is configured on the active CAPA workflow — a CAPA record and ticket will still be created.</div>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }

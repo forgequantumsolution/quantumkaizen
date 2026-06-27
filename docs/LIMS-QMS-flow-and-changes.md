@@ -265,6 +265,30 @@ Verified: `POST /oos/:id/capa` created CAPA-2026-0006 **and** ticket **CAP-FQS-0
 on the CAPA workflow; the ticket appears in the tickets list; OOS detail shows both
 links. `tsc` clean both sides.
 
+### 3.6d Pre-fill the CAPA ticket's initiation stage (2026-06-27)
+
+The raised CAPA ticket landed on its **CAPA Initiation Stage** with an empty required
+form ("CAPA Initiation": Title, Description, Category, Department, Severity, Affected
+Areas), so it couldn't advance. Now the Raise-CAPA modal collects that data (pre-filled
+from the OOS) and the ticket lands with the initiation form already submitted.
+
+- `backend/src/modules/oos/oos.service.ts` — `getCapaInitForm()` returns the active CAPA
+  workflow's initial-stage form schema (sections → fields → type/required/options).
+  `createCapaForInvestigation()` accepts `init_responses` and, after raising the ticket,
+  creates a **SUBMITTED `FormSubmission`** for the initiation binding/stage/flow so the
+  stage is satisfied. `GET /api/oos/capa-init-form` added (perm `capa.create`).
+- `oos.schema.ts` — `description`, `init_form_id`, `init_responses` on the create schema.
+- `client/src/lib/api/oos.ts` — `CapaInitForm`/`CapaInitField` types, `useCapaInitForm`,
+  and the new create-body fields.
+- `client/src/features/lims/OosDetailPage.tsx` — the Raise-CAPA modal now fetches the
+  initiation form and **renders its fields dynamically** (text/textarea/select/radio/
+  multi_text) with options, pre-filling Title/Description/Affected Areas from the OOS,
+  validating required fields, and submitting the responses.
+
+Verified: `GET /oos/capa-init-form` returns all 6 fields; raising created CAPA-2026-0007
++ ticket CAP-FQS-007 with a **SUBMITTED** initiation `FormSubmission` (all fields filled);
+the modal renders the fields pre-filled. `tsc` clean both sides.
+
 ### 3.7 Docs added
 - `docs/LIMS-flow-verification-and-fixes.md` — original gap analysis + applied-fix log.
 - `docs/LIMS-QMS-flow-and-changes.md` — this file.

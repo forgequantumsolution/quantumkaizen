@@ -32,11 +32,28 @@ export interface Investigation {
   updated_at: string;
 }
 
+export interface CapaInitField {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+  options: { label: string; value: string }[];
+}
+export interface CapaInitForm {
+  form_id: string;
+  title: string;
+  sections: { name: string; fields: CapaInitField[] }[];
+}
+
 export interface CreateCapaFromOosBody {
   title?: string;
+  description?: string | null;
   type?: 'CORRECTIVE' | 'PREVENTIVE' | 'BOTH';
   owner_id?: string | null;
   due_date?: string | null;
+  init_form_id?: string | null;
+  // { sectionName: { fieldName: value } }
+  init_responses?: Record<string, Record<string, unknown>>;
 }
 export interface CreateCapaFromOosResponse {
   investigation: Investigation;
@@ -122,6 +139,15 @@ export const useCloseInvestigation = (id: string) => {
     onSuccess: () => qc.invalidateQueries({ queryKey: keys.all }),
   });
 };
+
+// The CAPA workflow's initiation-stage form schema (for the Raise-CAPA modal).
+export const useCapaInitForm = (enabled: boolean) =>
+  useQuery<{ form: CapaInitForm | null }>({
+    queryKey: ['oos', 'capa-init-form'],
+    queryFn: () => api.get('/oos/capa-init-form').then((r) => r.data),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
 
 // LIMS → QMS bridge: raise a CAPA from this OOS investigation and link it.
 export const useCreateCapaFromOos = (id: string) => {

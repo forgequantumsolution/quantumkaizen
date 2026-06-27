@@ -12,6 +12,8 @@ import { asyncHandler } from '../../lib/asyncHandler';
 const router = Router();
 router.use(requireAuth);
 
+// CAPA workflow initiation form schema (for the Raise-CAPA modal). Before '/:id'.
+router.get('/capa-init-form', requirePermission('capa.create'), asyncHandler(ctrl.capaInitForm));
 router.get('/', requirePermission('oos.read'), validate(ListInvestigationQuerySchema, 'query'), asyncHandler(ctrl.list));
 router.post('/', requirePermission('oos.create'), validate(OpenInvestigationSchema), asyncHandler(ctrl.open));
 router.get('/:id', requirePermission('oos.read'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.get));
