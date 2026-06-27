@@ -1540,30 +1540,30 @@ model AuditMaster {
 // A recurrence rule that auto-spawns DRAFT AuditRegisters from a master on a
 // cadence. A background sweep (jobs/sweeps/spawnDueAudits) advances nextRunAt.
 model AuditScheduleRule {
-  id            String         @id @default(uuid())
-  name          String
-  auditMasterId String
-  auditMaster   AuditMaster    @relation(fields: [auditMasterId], references: [id], onDelete: Cascade)
-  frequency     AuditFrequency
-  anchorDate    DateTime
-  leadTimeDays  Int            @default(14) // create the register N days before the planned date
-  plant         String?
+  id               String         @id @default(uuid())
+  name             String
+  auditMasterId    String
+  auditMaster      AuditMaster    @relation(fields: [auditMasterId], references: [id], onDelete: Cascade)
+  frequency        AuditFrequency
+  anchorDate       DateTime
+  leadTimeDays     Int            @default(14) // create the register N days before the planned date
+  plant            String?
   // Optional workflow the spawned audit follows. When set, the schedule sweep
   // raises a workflow ticket (carrying the stage checklist + progress) and
   // links it on the generated AuditRegister.
-  workflowId    String?
+  workflowId       String?
   // Optional checklist form selected at schedule time. Copied onto each
   // generated audit's checklistFormId so it's the checklist used when the
   // audit is performed.
-  checklistFormId String?
+  checklistFormId  String?
   // Stored as plain columns (no FK) to keep this migration self-contained.
   defaultAuditorId String?
-  isActive         Boolean   @default(true)
+  isActive         Boolean        @default(true)
   lastSpawnedAt    DateTime?
   nextRunAt        DateTime
   createdById      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([isActive, nextRunAt])
   @@index([auditMasterId])
@@ -1628,7 +1628,7 @@ model AuditRegister {
   focusAreas    Json?
 
   // Audit team members — JSON snapshot of [{ id, name }].
-  teamMembers Json?
+  teamMembers          Json?
   // Per-checklist member assignments — [{ checklist_form_id, checklist_title, members: [{ id, name }] }].
   checklistAssignments Json?
 
@@ -1959,14 +1959,14 @@ model Document {
   status      DocumentStatus @default(DRAFT)
   description String?
 
-  departmentId String?
-  ownerId      String?
+  departmentId     String?
+  ownerId          String?
   // Points at the DocumentVersion currently in force (plain id — avoids a second
   // Document↔DocumentVersion relation).
   currentVersionId String?
 
-  effectiveDate DateTime?
-  reviewDueDate DateTime?
+  effectiveDate   DateTime?
+  reviewDueDate   DateTime?
   // Set by the periodic-review sweep when an effective doc passes its review due
   // date; cleared on re-review / re-issue. Hook for proactive notifications.
   reviewOverdueAt DateTime?
@@ -1985,22 +1985,22 @@ model Document {
 }
 
 model DocumentVersion {
-  id         String  @id @default(uuid())
+  id         String   @id @default(uuid())
   documentId String
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
 
-  version      Int
-  versionLabel String // e.g. "1.0", "2.0"
-  contentType  DocContentType @default(EDITOR)
-  content      String? // HTML authored in the online editor (EDITOR mode)
+  version       Int
+  versionLabel  String // e.g. "1.0", "2.0"
+  contentType   DocContentType @default(EDITOR)
+  content       String? // HTML authored in the online editor (EDITOR mode)
   // FILE mode — uploaded document stored inline as a base64 data URL.
-  fileName     String?
-  fileMime     String?
-  fileSize     Int?
-  fileData     String? // data URL ("data:<mime>;base64,…")
+  fileName      String?
+  fileMime      String?
+  fileSize      Int?
+  fileData      String? // data URL ("data:<mime>;base64,…")
   changeSummary String?
-  authorId     String?
-  isLocked     Boolean  @default(false) // locked once issued (read-only)
+  authorId      String?
+  isLocked      Boolean        @default(false) // locked once issued (read-only)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2052,10 +2052,10 @@ model TrainingItem {
   roleId      String? // optional "required for this role"
   isActive    Boolean @default(true)
 
-  isDeleted   Boolean   @default(false)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   assignments TrainingAssignment[]
 
@@ -2100,10 +2100,10 @@ model Lab {
   contactEmail  String?
   isActive      Boolean @default(true)
 
-  isDeleted   Boolean   @default(false)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   equipment      Equipment[]
   certifications Certification[]
@@ -2143,10 +2143,10 @@ model Equipment {
   lastCalibratedAt         DateTime?
   calibrationDueAt         DateTime?
 
-  isDeleted   Boolean   @default(false)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   calibrations CalibrationRecord[]
   sampleTests  SampleTest[]
@@ -2175,23 +2175,23 @@ model CalibrationRecord {
 
 // ─────────────────────────── LIMS — Certifications ───────────────────────────
 model Certification {
-  id        String  @id @default(uuid())
-  code      String  @unique
-  type      String // GMP | NABL | ISO 17025 | USFDA | OTHER (free text)
-  number    String?
-  labId     String? // optional link to a Lab
-  lab       Lab?    @relation(fields: [labId], references: [id], onDelete: SetNull)
-  issuedBy  String?
-  issueDate DateTime?
-  expiryDate DateTime
-  isActive  Boolean @default(true)
+  id              String    @id @default(uuid())
+  code            String    @unique
+  type            String // GMP | NABL | ISO 17025 | USFDA | OTHER (free text)
+  number          String?
+  labId           String? // optional link to a Lab
+  lab             Lab?      @relation(fields: [labId], references: [id], onDelete: SetNull)
+  issuedBy        String?
+  issueDate       DateTime?
+  expiryDate      DateTime
+  isActive        Boolean   @default(true)
   // Set by the expiry sweep when within 30 days / expired; cleared on renewal.
   expiryFlaggedAt DateTime?
 
-  isDeleted   Boolean   @default(false)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   @@index([labId])
   @@index([expiryDate])
@@ -2210,10 +2210,10 @@ model TestMethod {
   price       Float? // for test-request pricing
   isActive    Boolean @default(true)
 
-  isDeleted   Boolean   @default(false)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   parameters      SpecParameter[]
   testDefinitions TestDefinition[]
@@ -2238,12 +2238,12 @@ model Specification {
   isoStandardId String?
   effectiveDate DateTime?
 
-  isDeleted   Boolean   @default(false)
-  createdById String?
+  isDeleted    Boolean   @default(false)
+  createdById  String?
   approvedById String?
   approvedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   parameters   SpecParameter[]
   samples      Sample[]
@@ -2253,19 +2253,19 @@ model Specification {
 }
 
 model SpecParameter {
-  id              String  @id @default(uuid())
-  specificationId String
-  specification   Specification @relation(fields: [specificationId], references: [id], onDelete: Cascade)
-  name            String
-  unit            String?
-  minValue        Float?
-  maxValue        Float?
-  targetValue     Float?
-  textCriteria    String? // for qualitative limits (e.g. "Complies", "White powder")
-  methodId        String?
-  method          TestMethod? @relation(fields: [methodId], references: [id], onDelete: SetNull)
+  id               String        @id @default(uuid())
+  specificationId  String
+  specification    Specification @relation(fields: [specificationId], references: [id], onDelete: Cascade)
+  name             String
+  unit             String?
+  minValue         Float?
+  maxValue         Float?
+  targetValue      Float?
+  textCriteria     String? // for qualitative limits (e.g. "Complies", "White powder")
+  methodId         String?
+  method           TestMethod?   @relation(fields: [methodId], references: [id], onDelete: SetNull)
   pharmacopoeiaRef String?
-  position        Int     @default(0)
+  position         Int           @default(0)
 
   @@index([specificationId])
 }
@@ -2299,10 +2299,10 @@ model StorageLocation {
   location String?
   isActive Boolean @default(true)
 
-  isDeleted   Boolean   @default(false)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   samples             Sample[]
   aliquots            Aliquot[]
@@ -2312,37 +2312,37 @@ model StorageLocation {
 }
 
 model Sample {
-  id              String       @id @default(uuid())
-  sampleNumber    String       @unique
-  barcode         String       @unique
-  productName     String
-  batchNo         String?
-  sampleType      String? // Raw Material | Finished Product | In-Process | Stability
-  sourceSite      String?
-  specificationId String?
-  quantity        Float?
-  unit            String?
-  collectedAt     DateTime?
-  receivedAt      DateTime?
-  status          SampleStatus @default(REGISTERED)
-  labId           String?
+  id                String       @id @default(uuid())
+  sampleNumber      String       @unique
+  barcode           String       @unique
+  productName       String
+  batchNo           String?
+  sampleType        String? // Raw Material | Finished Product | In-Process | Stability
+  sourceSite        String?
+  specificationId   String?
+  quantity          Float?
+  unit              String?
+  collectedAt       DateTime?
+  receivedAt        DateTime?
+  status            SampleStatus @default(REGISTERED)
+  labId             String?
   currentLocationId String?
-  priority        String? // Low | Normal | High | Urgent
-  remarks         String?
+  priority          String? // Low | Normal | High | Urgent
+  remarks           String?
 
-  isDeleted   Boolean   @default(false)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   // LIMS 2.0 — login binds product + effective spec; disposition is e-signed
-  productId      String?
-  specVersionId  String?
-  reviewedById   String?
-  reviewedAt     DateTime?
-  disposition    String? // RELEASED | REJECTED
-  releasedById   String?
-  releasedAt     DateTime?
+  productId     String?
+  specVersionId String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  disposition   String? // RELEASED | REJECTED
+  releasedById  String?
+  releasedAt    DateTime?
 
   // ── relations (FKs to master data + 2.0 binds) ──
   specification   Specification?   @relation(fields: [specificationId], references: [id], onDelete: SetNull)
@@ -2362,9 +2362,9 @@ model Sample {
 }
 
 model CustodyEvent {
-  id             String        @id @default(uuid())
+  id             String           @id @default(uuid())
   sampleId       String
-  sample         Sample        @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  sample         Sample           @relation(fields: [sampleId], references: [id], onDelete: Cascade)
   action         CustodyAction
   fromLocationId String?
   fromLocation   StorageLocation? @relation("CustodyFrom", fields: [fromLocationId], references: [id], onDelete: SetNull)
@@ -2372,17 +2372,17 @@ model CustodyEvent {
   toLocation     StorageLocation? @relation("CustodyTo", fields: [toLocationId], references: [id], onDelete: SetNull)
   handlerName    String?
   handledById    String?
-  occurredAt     DateTime      @default(now())
+  occurredAt     DateTime         @default(now())
   remarks        String?
-  createdAt      DateTime      @default(now())
+  createdAt      DateTime         @default(now())
 
   @@index([sampleId])
 }
 
 model Aliquot {
-  id                String    @id @default(uuid())
+  id                String           @id @default(uuid())
   sampleId          String
-  sample            Sample    @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  sample            Sample           @relation(fields: [sampleId], references: [id], onDelete: Cascade)
   code              String
   storageLocationId String?
   storageLocation   StorageLocation? @relation(fields: [storageLocationId], references: [id], onDelete: SetNull)
@@ -2390,9 +2390,9 @@ model Aliquot {
   quantity          Float?
   unit              String?
   expiryAt          DateTime?
-  status            String    @default("STORED")
+  status            String           @default("STORED")
   createdById       String?
-  createdAt         DateTime  @default(now())
+  createdAt         DateTime         @default(now())
 
   @@unique([sampleId, code])
   @@index([sampleId])
@@ -2400,21 +2400,21 @@ model Aliquot {
 
 // ─────────────────────────── LIMS 2.0 — L0 Master Data ───────────────────────────
 model Product {
-  id String @id @default(uuid())
-  code String @unique
-  name String
-  grade String?
-  dosageForm String?
-  strength String?
-  category String?
-  markets String? // comma-separated market list
+  id             String     @id @default(uuid())
+  code           String     @unique
+  name           String
+  grade          String?
+  dosageForm     String?
+  strength       String?
+  category       String?
+  markets        String? // comma-separated market list
   defaultPanelId String? // LIMS 2.0 — auto-attached test panel at sample login
-  defaultPanel TestPanel? @relation(fields: [defaultPanelId], references: [id], onDelete: SetNull)
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
-  createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  defaultPanel   TestPanel? @relation(fields: [defaultPanelId], references: [id], onDelete: SetNull)
+  isActive       Boolean    @default(true)
+  isDeleted      Boolean    @default(false)
+  createdById    String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
 
   samples          Sample[]
   specVersions     SpecVersion[]
@@ -2422,94 +2422,94 @@ model Product {
 }
 
 model Analyte {
-  id String @id @default(uuid())
-  code String @unique
-  name String
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
   defaultUnit String?
-  dataType String @default("NUMERIC") // NUMERIC | TEXT | BOOLEAN
-  category String?
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
+  dataType    String   @default("NUMERIC") // NUMERIC | TEXT | BOOLEAN
+  category    String?
+  isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   testAnalytes TestAnalyte[]
   specLines    SpecLine[]
 }
 
 model UnitOfMeasure {
-  id String @id @default(uuid())
-  code String @unique
-  name String
-  symbol String?
-  kind String? // mass | volume | concentration | count | ratio
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  symbol    String?
+  kind      String? // mass | volume | concentration | count | ratio
+  isActive  Boolean  @default(true)
+  isDeleted Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model SamplingPoint {
-  id String @id @default(uuid())
-  code String @unique
-  name String
-  area String?
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  area        String?
   description String?
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
+  isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Customer {
-  id String @id @default(uuid())
-  code String @unique
-  name String
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
   contactName String?
-  email String?
-  country String?
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
+  email       String?
+  country     String?
+  isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   coas         Coa[]
   coaTemplates CoaTemplate[]
 }
 
 model Supplier {
-  id String @id @default(uuid())
-  code String @unique
-  name String
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
   contactName String?
-  email String?
-  country String?
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
+  email       String?
+  country     String?
+  isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
   createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 // ─────────────────────────── LIMS 2.0 — L1 Test Definitions & Spec Versions ───────────────────────────
 model TestDefinition {
-  id String @id @default(uuid())
-  code String @unique
-  name String
-  technique String?
-  methodId String?   // link to TestMethod
-  method TestMethod? @relation(fields: [methodId], references: [id], onDelete: SetNull)
-  version Int @default(1)
-  status String @default("DRAFT") // DRAFT | APPROVED | RETIRED
+  id          String          @id @default(uuid())
+  code        String          @unique
+  name        String
+  technique   String?
+  methodId    String? // link to TestMethod
+  method      TestMethod?     @relation(fields: [methodId], references: [id], onDelete: SetNull)
+  version     Int             @default(1)
+  status      String          @default("DRAFT") // DRAFT | APPROVED | RETIRED
   description String?
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
+  isActive    Boolean         @default(true)
+  isDeleted   Boolean         @default(false)
   createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
   analytes    TestAnalyte[]
   panelItems  TestPanelItem[]
   specLines   SpecLine[]
@@ -2517,66 +2517,68 @@ model TestDefinition {
 }
 
 model TestAnalyte {
-  id String @id @default(uuid())
+  id               String         @id @default(uuid())
   testDefinitionId String
-  testDefinition TestDefinition @relation(fields: [testDefinitionId], references: [id], onDelete: Cascade)
-  analyteId String?   // link to Analyte master
-  analyte Analyte? @relation(fields: [analyteId], references: [id], onDelete: SetNull)
-  name String         // denormalised label
-  unit String?
-  dataType String @default("NUMERIC") // NUMERIC | TEXT | BOOLEAN | TITRATION
-  decimals Int?
-  calculation String? // formula expression, e.g. (area/std_area)*std_conc
-  sequence Int @default(0)
-  createdAt DateTime @default(now())
+  testDefinition   TestDefinition @relation(fields: [testDefinitionId], references: [id], onDelete: Cascade)
+  analyteId        String? // link to Analyte master
+  analyte          Analyte?       @relation(fields: [analyteId], references: [id], onDelete: SetNull)
+  name             String // denormalised label
+  unit             String?
+  dataType         String         @default("NUMERIC") // NUMERIC | TEXT | BOOLEAN | TITRATION
+  decimals         Int?
+  calculation      String? // formula expression, e.g. (area/std_area)*std_conc
+  sequence         Int            @default(0)
+  createdAt        DateTime       @default(now())
+
   @@index([testDefinitionId])
 }
 
 model TestPanel {
-  id String @id @default(uuid())
-  code String @unique
-  name String
-  description String?
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
-  createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  items TestPanelItem[]
+  id                 String          @id @default(uuid())
+  code               String          @unique
+  name               String
+  description        String?
+  isActive           Boolean         @default(true)
+  isDeleted          Boolean         @default(false)
+  createdById        String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  items              TestPanelItem[]
   defaultForProducts Product[]
 }
 
 model TestPanelItem {
-  id String @id @default(uuid())
-  panelId String
-  panel TestPanel @relation(fields: [panelId], references: [id], onDelete: Cascade)
+  id               String         @id @default(uuid())
+  panelId          String
+  panel            TestPanel      @relation(fields: [panelId], references: [id], onDelete: Cascade)
   testDefinitionId String
-  testDefinition TestDefinition @relation(fields: [testDefinitionId], references: [id], onDelete: Cascade)
-  sequence Int @default(0)
+  testDefinition   TestDefinition @relation(fields: [testDefinitionId], references: [id], onDelete: Cascade)
+  sequence         Int            @default(0)
+
   @@index([panelId])
 }
 
 model SpecVersion {
-  id String @id @default(uuid())
-  code String @unique
-  specificationId String?  // link to existing Specification (optional)
-  specification Specification? @relation(fields: [specificationId], references: [id], onDelete: SetNull)
-  productId String?        // link to Product master
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  name String
-  stage String @default("RELEASE") // RELEASE | STABILITY | IN_PROCESS | RAW_MATERIAL
-  grade String?
-  market String?
-  version Int @default(1)
-  status String @default("DRAFT") // DRAFT | APPROVED | SUPERSEDED | RETIRED
-  pharmacopoeia String?
-  effectiveDate DateTime?
-  approvedAt DateTime?
-  approvedById String?
-  isDeleted Boolean @default(false)
-  createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String           @id @default(uuid())
+  code             String           @unique
+  specificationId  String? // link to existing Specification (optional)
+  specification    Specification?   @relation(fields: [specificationId], references: [id], onDelete: SetNull)
+  productId        String? // link to Product master
+  product          Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
+  name             String
+  stage            String           @default("RELEASE") // RELEASE | STABILITY | IN_PROCESS | RAW_MATERIAL
+  grade            String?
+  market           String?
+  version          Int              @default(1)
+  status           String           @default("DRAFT") // DRAFT | APPROVED | SUPERSEDED | RETIRED
+  pharmacopoeia    String?
+  effectiveDate    DateTime?
+  approvedAt       DateTime?
+  approvedById     String?
+  isDeleted        Boolean          @default(false)
+  createdById      String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
   lines            SpecLine[]
   samples          Sample[]
   sampleTests      SampleTest[]
@@ -2585,25 +2587,26 @@ model SpecVersion {
 }
 
 model SpecLine {
-  id String @id @default(uuid())
-  specVersionId String
-  specVersion SpecVersion @relation(fields: [specVersionId], references: [id], onDelete: Cascade)
-  analyteId String?
-  analyte Analyte? @relation(fields: [analyteId], references: [id], onDelete: SetNull)
+  id               String          @id @default(uuid())
+  specVersionId    String
+  specVersion      SpecVersion     @relation(fields: [specVersionId], references: [id], onDelete: Cascade)
+  analyteId        String?
+  analyte          Analyte?        @relation(fields: [analyteId], references: [id], onDelete: SetNull)
   testDefinitionId String?
-  testDefinition TestDefinition? @relation(fields: [testDefinitionId], references: [id], onDelete: SetNull)
-  name String
-  unit String?
-  minValue Float?
-  maxValue Float?
-  targetValue Float?
-  textCriteria String?
-  decimals Int?
-  sigFigs Int?
-  mandatory Boolean @default(true)
-  sequence Int @default(0)
-  createdAt DateTime @default(now())
-  results Result[]
+  testDefinition   TestDefinition? @relation(fields: [testDefinitionId], references: [id], onDelete: SetNull)
+  name             String
+  unit             String?
+  minValue         Float?
+  maxValue         Float?
+  targetValue      Float?
+  textCriteria     String?
+  decimals         Int?
+  sigFigs          Int?
+  mandatory        Boolean         @default(true)
+  sequence         Int             @default(0)
+  createdAt        DateTime        @default(now())
+  results          Result[]
+
   @@index([specVersionId])
 }
 
@@ -2611,32 +2614,33 @@ model SpecLine {
 // A test assigned to a sample (sample × test definition), bound to the spec
 // version effective at login. Carries analyst, instrument, worklist, review.
 model SampleTest {
-  id String @id @default(uuid())
-  sampleId String
-  sample Sample @relation(fields: [sampleId], references: [id], onDelete: Cascade)
-  testDefinitionId String
-  testDefinition TestDefinition @relation(fields: [testDefinitionId], references: [id], onDelete: Restrict)
-  testName String          // denormalised test definition name
-  specVersionId String?    // effective spec bound at assignment
-  specVersion SpecVersion? @relation(fields: [specVersionId], references: [id], onDelete: SetNull)
-  worklistId String?
-  worklist Worklist? @relation(fields: [worklistId], references: [id], onDelete: SetNull)
-  status String @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | REVIEWED | CANCELLED
-  overallResult String?    // PASS | FAIL | OOS
-  analystId String?
-  analystName String?
-  instrumentId String?      // link to Equipment
-  instrument Equipment? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
-  startedAt DateTime?
-  completedAt DateTime?
-  reviewStatus String @default("PENDING") // PENDING | APPROVED | REJECTED
-  reviewedById String?
-  reviewedAt DateTime?
-  createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  results Result[]
+  id                String             @id @default(uuid())
+  sampleId          String
+  sample            Sample             @relation(fields: [sampleId], references: [id], onDelete: Cascade)
+  testDefinitionId  String
+  testDefinition    TestDefinition     @relation(fields: [testDefinitionId], references: [id], onDelete: Restrict)
+  testName          String // denormalised test definition name
+  specVersionId     String? // effective spec bound at assignment
+  specVersion       SpecVersion?       @relation(fields: [specVersionId], references: [id], onDelete: SetNull)
+  worklistId        String?
+  worklist          Worklist?          @relation(fields: [worklistId], references: [id], onDelete: SetNull)
+  status            String             @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | REVIEWED | CANCELLED
+  overallResult     String? // PASS | FAIL | OOS
+  analystId         String?
+  analystName       String?
+  instrumentId      String? // link to Equipment
+  instrument        Equipment?         @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+  startedAt         DateTime?
+  completedAt       DateTime?
+  reviewStatus      String             @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewedById      String?
+  reviewedAt        DateTime?
+  createdById       String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  results           Result[]
   oosInvestigations OosInvestigation[]
+
   @@index([sampleId])
   @@index([worklistId])
   @@index([status])
@@ -2645,222 +2649,695 @@ model SampleTest {
 // One measured value per analyte within a SampleTest, auto-evaluated vs the
 // bound spec line into PASS / OOS / OOT.
 model Result {
-  id String @id @default(uuid())
-  sampleTestId String
-  sampleTest SampleTest @relation(fields: [sampleTestId], references: [id], onDelete: Cascade)
-  analyteName String
-  specLineId String?
-  specLine SpecLine? @relation(fields: [specLineId], references: [id], onDelete: SetNull)
-  unit String?
-  numericValue Float?
-  textValue String?
-  evaluation String @default("PENDING") // PENDING | PASS | OOS | OOT | NA
-  isOutOfSpec Boolean @default(false)
-  minValue Float?         // snapshot of the limit evaluated against
-  maxValue Float?
-  decimals Int?
-  calculation String?
-  instrumentId String?
-  instrument Equipment? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
-  enteredById String?
-  enteredAt DateTime @default(now())
-  createdAt DateTime @default(now())
+  id                String             @id @default(uuid())
+  sampleTestId      String
+  sampleTest        SampleTest         @relation(fields: [sampleTestId], references: [id], onDelete: Cascade)
+  analyteName       String
+  specLineId        String?
+  specLine          SpecLine?          @relation(fields: [specLineId], references: [id], onDelete: SetNull)
+  unit              String?
+  numericValue      Float?
+  textValue         String?
+  evaluation        String             @default("PENDING") // PENDING | PASS | OOS | OOT | NA
+  isOutOfSpec       Boolean            @default(false)
+  minValue          Float? // snapshot of the limit evaluated against
+  maxValue          Float?
+  decimals          Int?
+  calculation       String?
+  instrumentId      String?
+  instrument        Equipment?         @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+  enteredById       String?
+  enteredAt         DateTime           @default(now())
+  createdAt         DateTime           @default(now())
   oosInvestigations OosInvestigation[]
+
   @@index([sampleTestId])
 }
 
 // A batch/run grouping SampleTests for an analyst or instrument, with system
 // suitability capture.
 model Worklist {
-  id String @id @default(uuid())
-  code String @unique
-  name String
-  status String @default("OPEN") // OPEN | IN_PROGRESS | CLOSED
-  analystId String?
-  analystName String?
-  instrumentId String?
+  id                String       @id @default(uuid())
+  code              String       @unique
+  name              String
+  status            String       @default("OPEN") // OPEN | IN_PROGRESS | CLOSED
+  analystId         String?
+  analystName       String?
+  instrumentId      String?
   systemSuitability String? // free text / JSON
-  notes String?
-  isDeleted Boolean @default(false)
-  createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  tests SampleTest[]
+  notes             String?
+  isDeleted         Boolean      @default(false)
+  createdById       String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  tests             SampleTest[]
 }
 
 // Formal OOS/OOT investigation (Phase 1A lab → 1B → Phase 2) raised from an
 // out-of-spec result, optionally linked to a CAPA.
 model OosInvestigation {
-  id String @id @default(uuid())
-  code String @unique
-  sampleId String?
-  sample Sample? @relation(fields: [sampleId], references: [id], onDelete: SetNull)
-  sampleTestId String?
-  sampleTest SampleTest? @relation(fields: [sampleTestId], references: [id], onDelete: SetNull)
-  resultId String?
-  result Result? @relation(fields: [resultId], references: [id], onDelete: SetNull)
-  title String
-  phase String @default("PHASE_1A") // PHASE_1A | PHASE_1B | PHASE_2 | CLOSED
-  status String @default("OPEN")     // OPEN | IN_PROGRESS | CLOSED
-  classification String?             // LAB_ERROR | NON_LAB_ERROR | CONFIRMED_OOS | INVALIDATED
-  hypothesis String?
+  id                   String      @id @default(uuid())
+  code                 String      @unique
+  sampleId             String?
+  sample               Sample?     @relation(fields: [sampleId], references: [id], onDelete: SetNull)
+  sampleTestId         String?
+  sampleTest           SampleTest? @relation(fields: [sampleTestId], references: [id], onDelete: SetNull)
+  resultId             String?
+  result               Result?     @relation(fields: [resultId], references: [id], onDelete: SetNull)
+  title                String
+  phase                String      @default("PHASE_1A") // PHASE_1A | PHASE_1B | PHASE_2 | CLOSED
+  status               String      @default("OPEN") // OPEN | IN_PROGRESS | CLOSED
+  classification       String? // LAB_ERROR | NON_LAB_ERROR | CONFIRMED_OOS | INVALIDATED
+  hypothesis           String?
   investigationSummary String?
-  retestRequired Boolean @default(false)
-  resampleRequired Boolean @default(false)
-  conclusion String?
-  capaId String?                     // link to standalone CAPA record
-  capaTicketId String?               // CAPA workflow ticket raised from this OOS
-  capaTicketUniqueId String?         // human ticket id (e.g. CAPA-0001) for display/links
-  openedById String?
-  openedAt DateTime @default(now())
-  closedById String?
-  closedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  retestRequired       Boolean     @default(false)
+  resampleRequired     Boolean     @default(false)
+  conclusion           String?
+  capaId               String? // link to standalone CAPA record
+  capaTicketId         String? // CAPA workflow ticket raised from this OOS
+  capaTicketUniqueId   String? // human ticket id (e.g. CAPA-0001) for display/links
+  openedById           String?
+  openedAt             DateTime    @default(now())
+  closedById           String?
+  closedAt             DateTime?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
   @@index([sampleId])
   @@index([status])
 }
 
 // ─────────────────────────── LIMS 2.0 — M-LIMS-C  L6 QC (Levey-Jennings / Westgard) ───────────────────────────
 model QcMaterial {
-  id String @id @default(uuid())
-  code String @unique
-  name String
+  id          String      @id @default(uuid())
+  code        String      @unique
+  name        String
   analyteName String?
-  methodId String?
-  method TestMethod? @relation(fields: [methodId], references: [id], onDelete: SetNull)
-  lotNo String?
-  unit String?
-  targetMean Float?   // established mean for the control
-  targetSd Float?     // established standard deviation
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
+  methodId    String?
+  method      TestMethod? @relation(fields: [methodId], references: [id], onDelete: SetNull)
+  lotNo       String?
+  unit        String?
+  targetMean  Float? // established mean for the control
+  targetSd    Float? // established standard deviation
+  isActive    Boolean     @default(true)
+  isDeleted   Boolean     @default(false)
   createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  results QcResult[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  results     QcResult[]
 }
 
 model QcResult {
-  id String @id @default(uuid())
-  qcMaterialId String
-  qcMaterial QcMaterial @relation(fields: [qcMaterialId], references: [id], onDelete: Cascade)
-  value Float
-  measuredAt DateTime @default(now())
-  analystName String?
-  instrumentId String?
-  instrument Equipment? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
-  zScore Float?
-  status String @default("ACCEPT") // ACCEPT | WARN | REJECT
-  violatedRules String?            // comma-separated Westgard rules, e.g. "1-2s,2-2s"
-  remarks String?
-  createdById String?
-  createdAt DateTime @default(now())
+  id            String     @id @default(uuid())
+  qcMaterialId  String
+  qcMaterial    QcMaterial @relation(fields: [qcMaterialId], references: [id], onDelete: Cascade)
+  value         Float
+  measuredAt    DateTime   @default(now())
+  analystName   String?
+  instrumentId  String?
+  instrument    Equipment? @relation(fields: [instrumentId], references: [id], onDelete: SetNull)
+  zScore        Float?
+  status        String     @default("ACCEPT") // ACCEPT | WARN | REJECT
+  violatedRules String? // comma-separated Westgard rules, e.g. "1-2s,2-2s"
+  remarks       String?
+  createdById   String?
+  createdAt     DateTime   @default(now())
+
   @@index([qcMaterialId])
 }
 
 // ─────────────────────────── LIMS 2.0 — M-LIMS-C  L7 Stability (ICH Q1A) ───────────────────────────
 model StabilityStudy {
-  id String @id @default(uuid())
-  code String @unique
-  productId String?
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  productName String
-  batchNo String?
-  title String
-  specVersionId String?
-  specVersion SpecVersion? @relation(fields: [specVersionId], references: [id], onDelete: SetNull)
-  packaging String?
-  status String @default("DRAFT") // DRAFT | ACTIVE | COMPLETED | CANCELLED
-  startDate DateTime?
-  timepointsMonths String @default("0,3,6,9,12,18,24")
-  isDeleted Boolean @default(false)
-  createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  conditions StabilityCondition[]
-  pulls StabilityPull[]
+  id               String               @id @default(uuid())
+  code             String               @unique
+  productId        String?
+  product          Product?             @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName      String
+  batchNo          String?
+  title            String
+  specVersionId    String?
+  specVersion      SpecVersion?         @relation(fields: [specVersionId], references: [id], onDelete: SetNull)
+  packaging        String?
+  status           String               @default("DRAFT") // DRAFT | ACTIVE | COMPLETED | CANCELLED
+  startDate        DateTime?
+  timepointsMonths String               @default("0,3,6,9,12,18,24")
+  isDeleted        Boolean              @default(false)
+  createdById      String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  conditions       StabilityCondition[]
+  pulls            StabilityPull[]
 }
 
 model StabilityCondition {
-  id String @id @default(uuid())
-  studyId String
-  study StabilityStudy @relation(fields: [studyId], references: [id], onDelete: Cascade)
-  name String           // e.g. Long-term 25°C/60%RH
-  tempZone String?
+  id                String           @id @default(uuid())
+  studyId           String
+  study             StabilityStudy   @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  name              String // e.g. Long-term 25°C/60%RH
+  tempZone          String?
   storageLocationId String?
-  storageLocation StorageLocation? @relation(fields: [storageLocationId], references: [id], onDelete: SetNull)
-  orientation String?
-  createdAt DateTime @default(now())
-  pulls StabilityPull[]
+  storageLocation   StorageLocation? @relation(fields: [storageLocationId], references: [id], onDelete: SetNull)
+  orientation       String?
+  createdAt         DateTime         @default(now())
+  pulls             StabilityPull[]
+
   @@index([studyId])
 }
 
 model StabilityPull {
-  id String @id @default(uuid())
-  studyId String
-  study StabilityStudy @relation(fields: [studyId], references: [id], onDelete: Cascade)
-  conditionId String?
-  condition StabilityCondition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
-  conditionName String?
-  timepointLabel String  // e.g. 3M
+  id              String              @id @default(uuid())
+  studyId         String
+  study           StabilityStudy      @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  conditionId     String?
+  condition       StabilityCondition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
+  conditionName   String?
+  timepointLabel  String // e.g. 3M
   timepointMonths Int
-  scheduledDate DateTime
-  status String @default("SCHEDULED") // SCHEDULED | DUE | PULLED | TESTED | SKIPPED
-  sampleId String?       // sample generated when pulled
-  sample Sample? @relation(fields: [sampleId], references: [id], onDelete: SetNull)
-  pulledAt DateTime?
-  testedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  scheduledDate   DateTime
+  status          String              @default("SCHEDULED") // SCHEDULED | DUE | PULLED | TESTED | SKIPPED
+  sampleId        String? // sample generated when pulled
+  sample          Sample?             @relation(fields: [sampleId], references: [id], onDelete: SetNull)
+  pulledAt        DateTime?
+  testedAt        DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
   @@index([studyId])
   @@index([status])
 }
 
 // ─────────────────────────── LIMS 2.0 — M-LIMS-D  L8 Certificate of Analysis ───────────────────────────
 model CoaTemplate {
-  id String @id @default(uuid())
-  code String @unique
-  name String
-  title String?           // printed document title
-  headerHtml String?
-  footerHtml String?
-  sections String @default("description,results,conclusion,signatures") // ordered, comma-separated
-  customerId String?
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  isActive Boolean @default(true)
-  isDeleted Boolean @default(false)
+  id          String    @id @default(uuid())
+  code        String    @unique
+  name        String
+  title       String? // printed document title
+  headerHtml  String?
+  footerHtml  String?
+  sections    String    @default("description,results,conclusion,signatures") // ordered, comma-separated
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  isActive    Boolean   @default(true)
+  isDeleted   Boolean   @default(false)
   createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  coas Coa[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  coas        Coa[]
 }
 
 model Coa {
-  id String @id @default(uuid())
-  coaNumber String @unique
-  sampleId String?
-  sample Sample? @relation(fields: [sampleId], references: [id], onDelete: SetNull)
-  productName String
-  batchNo String?
+  id            String       @id @default(uuid())
+  coaNumber     String       @unique
+  sampleId      String?
+  sample        Sample?      @relation(fields: [sampleId], references: [id], onDelete: SetNull)
+  productName   String
+  batchNo       String?
   specVersionId String?
-  specVersion SpecVersion? @relation(fields: [specVersionId], references: [id], onDelete: SetNull)
-  templateId String?
-  template CoaTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  customerId String?
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  status String @default("DRAFT") // DRAFT | ISSUED | REVOKED
-  verifyToken String? @unique     // QR public-verification token (set at issue)
-  conclusion String?
-  resultsJson String?             // snapshot of tests/results at issue time
-  issuedById String?
-  issuedAt DateTime?
-  revokedById String?
-  revokedAt DateTime?
-  isDeleted Boolean @default(false)
-  createdById String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  specVersion   SpecVersion? @relation(fields: [specVersionId], references: [id], onDelete: SetNull)
+  templateId    String?
+  template      CoaTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  customerId    String?
+  customer      Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  status        String       @default("DRAFT") // DRAFT | ISSUED | REVOKED
+  verifyToken   String?      @unique // QR public-verification token (set at issue)
+  conclusion    String?
+  resultsJson   String? // snapshot of tests/results at issue time
+  issuedById    String?
+  issuedAt      DateTime?
+  revokedById   String?
+  revokedAt     DateTime?
+  isDeleted     Boolean      @default(false)
+  createdById   String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
   @@index([sampleId])
   @@index([status])
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LMS — Learning Management System
+// Courses built from video / PPT / slide / PDF / document / SCORM content,
+// structured into modules → lessons; examinations with auto- & manual grading;
+// enrollment by user / role / department / site / curriculum / matrix / self;
+// certificates, classroom sessions, and SCORM/xAPI tracking.
+//
+// Org/user refs (createdById, userId, departmentId, roleId, siteId, documentId)
+// are plain id columns (no FK) — same convention as the LIMS models — to keep
+// the module self-contained. Relations WITHIN the LMS use real Prisma relations.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum LmsCourseType {
+  DOC_ACK // read & acknowledge a controlled document/SOP (migrated TrainingItem)
+  ELEARNING // self-paced lessons + optional exam
+  CLASSROOM // instructor-led sessions with attendance
+  BLENDED // e-learning + classroom
+}
+
+enum LmsCourseStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  RETIRED
+}
+
+enum LmsContentKind {
+  VIDEO
+  PPT
+  SLIDE_DECK
+  PDF
+  IMAGE
+  SCORM
+  EXTERNAL_LINK
+  DOCUMENT_REF // embeds a controlled DMS Document
+  RICH_TEXT // inline HTML body, no asset file
+}
+
+enum LmsQuestionType {
+  SINGLE // single-choice MCQ
+  MULTI // multi-select MCQ
+  TRUE_FALSE
+  SHORT_TEXT // manually graded
+  LONG_TEXT // manually graded
+}
+
+enum LmsAttemptStatus {
+  IN_PROGRESS
+  SUBMITTED // awaiting manual grade (if any text questions)
+  GRADED
+}
+
+enum LmsEnrollmentStatus {
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  OVERDUE
+  WAIVED
+}
+
+enum LmsEnrollmentSource {
+  DIRECT // manually assigned to a user
+  ROLE // assigned to a role
+  DEPARTMENT
+  SITE
+  CURRICULUM
+  MATRIX // auto-assigned by a training-matrix rule
+  SELF // self-enrolled from the catalog
+}
+
+enum LmsMatrixTargetType {
+  ROLE
+  DEPARTMENT
+  SITE
+  JOB_FUNCTION
+}
+
+enum LmsMatrixRequiresType {
+  COURSE
+  CURRICULUM
+}
+
+enum LmsSessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum LmsAttendanceStatus {
+  REGISTERED
+  ATTENDED
+  ABSENT
+  EXCUSED
+}
+
+// ─────────────────────────── Authoring ───────────────────────────
+model LmsCourse {
+  id          String          @id @default(uuid())
+  code        String // shared across versions (e.g. CRS-2026-0001)
+  title       String
+  description String?
+  category    String?
+  type        LmsCourseType   @default(ELEARNING)
+  status      LmsCourseStatus @default(DRAFT)
+
+  // Versioning — published versions are immutable; new version → re-training.
+  version         Int     @default(1)
+  isLatestVersion Boolean @default(true)
+  parentCourseId  String? // first version of this course lineage
+
+  passingScore     Int? // % required on the final exam (null = no exam gate)
+  validityMonths   Int? // recert period; null = no expiry / no recurring retrain
+  estimatedMinutes Int?
+  effectiveDate    DateTime?
+
+  // DOC_ACK courses link a controlled document; ack auto-completes enrollment.
+  documentId String?
+
+  // Self-enrol catalog visibility.
+  isCatalogVisible Boolean @default(false)
+  allowSelfEnroll  Boolean @default(false)
+
+  ownerId       String?
+  isDeleted     Boolean   @default(false)
+  createdById   String?
+  publishedById String?
+  publishedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  modules           LmsCourseModule[]
+  assessments       LmsAssessment[]
+  enrollments       LmsEnrollment[]
+  certificates      LmsCertificate[]
+  curriculumLinks   LmsCurriculumCourse[]
+  classroomSessions LmsClassroomSession[]
+
+  @@unique([code, version])
+  @@index([status])
+  @@index([type])
+  @@index([isLatestVersion])
+  @@index([documentId])
+}
+
+model LmsCourseModule {
+  id          String    @id @default(uuid())
+  courseId    String
+  course      LmsCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  order       Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lessons     LmsLesson[]
+  assessments LmsAssessment[]
+
+  @@index([courseId])
+}
+
+model LmsLesson {
+  id          String          @id @default(uuid())
+  moduleId    String
+  module      LmsCourseModule @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  order       Int             @default(0)
+  contentType LmsContentKind  @default(VIDEO)
+
+  assetId     String?
+  asset       LmsContentAsset? @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  documentId  String? // when contentType = DOCUMENT_REF
+  bodyHtml    String? // when contentType = RICH_TEXT
+  externalUrl String? // when contentType = EXTERNAL_LINK
+
+  minViewSeconds Int? // gate completion (e.g. video must be ~watched)
+  isMandatory    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  progress LmsLessonProgress[]
+
+  @@index([moduleId])
+  @@index([assetId])
+}
+
+model LmsContentAsset {
+  id              String         @id @default(uuid())
+  kind            LmsContentKind
+  title           String?
+  fileKey         String? // storage key (video/ppt/slide/pdf/scorm package)
+  url             String? // external link, or resolved URL
+  mimeType        String?
+  sizeBytes       Int?
+  durationSeconds Int? // video/audio length
+  pageCount       Int? // pdf/slide pages
+  scormVersion    String? // "1.2" | "2004" when kind = SCORM
+  scormEntryPoint String? // launch href inside the package
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lessons LmsLesson[]
+
+  @@index([kind])
+}
+
+// ─────────────────────────── Assessment / Examination ───────────────────────────
+model LmsAssessment {
+  id               String           @id @default(uuid())
+  courseId         String? // course-level final exam
+  course           LmsCourse?       @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  moduleId         String? // module-level quiz
+  module           LmsCourseModule? @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title            String
+  description      String?
+  passingScore     Int              @default(70) // %
+  maxAttempts      Int              @default(3)
+  timeLimitMinutes Int?
+  shuffleQuestions Boolean          @default(false)
+  randomizeFrom    Int? // draw N questions from the pool (null = all, in order)
+  requireESign     Boolean          @default(true)
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions LmsQuestion[]
+  attempts  LmsAssessmentAttempt[]
+
+  @@index([courseId])
+  @@index([moduleId])
+}
+
+model LmsQuestion {
+  id           String          @id @default(uuid())
+  assessmentId String
+  assessment   LmsAssessment   @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  type         LmsQuestionType @default(SINGLE)
+  prompt       String
+  points       Int             @default(1)
+  order        Int             @default(0)
+  explanation  String? // shown after grading
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  options LmsQuestionOption[]
+  answers LmsAttemptAnswer[]
+
+  @@index([assessmentId])
+}
+
+model LmsQuestionOption {
+  id         String      @id @default(uuid())
+  questionId String
+  question   LmsQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  isCorrect  Boolean     @default(false)
+  order      Int         @default(0)
+
+  @@index([questionId])
+}
+
+model LmsAssessmentAttempt {
+  id           String           @id @default(uuid())
+  assessmentId String
+  assessment   LmsAssessment    @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  enrollmentId String?
+  enrollment   LmsEnrollment?   @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  userId       String
+  attemptNo    Int              @default(1)
+  status       LmsAttemptStatus @default(IN_PROGRESS)
+  score        Float? // percentage
+  passed       Boolean?
+  startedAt    DateTime         @default(now())
+  submittedAt  DateTime?
+  gradedAt     DateTime?
+  gradedById   String?
+  esignatureId String? // ESignature.id captured on submit
+
+  answers LmsAttemptAnswer[]
+
+  @@index([assessmentId, userId])
+  @@index([enrollmentId])
+}
+
+model LmsAttemptAnswer {
+  id                String               @id @default(uuid())
+  attemptId         String
+  attempt           LmsAssessmentAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  questionId        String
+  question          LmsQuestion          @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  selectedOptionIds String[] // option ids for SINGLE/MULTI/TRUE_FALSE
+  textAnswer        String? // SHORT_TEXT / LONG_TEXT
+  awardedPoints     Float?
+  isCorrect         Boolean?
+  gradedById        String? // manual grader for text answers
+
+  @@unique([attemptId, questionId])
+  @@index([questionId])
+}
+
+// ─────────────────────────── Enrollment / Progress / Completion ───────────────────────────
+model LmsEnrollment {
+  id            String              @id @default(uuid())
+  courseId      String
+  course        LmsCourse           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseVersion Int                 @default(1) // version assigned; new version → re-enroll
+  userId        String
+  status        LmsEnrollmentStatus @default(ASSIGNED)
+  source        LmsEnrollmentSource @default(DIRECT)
+  sourceRef     String? // matrix rule id / curriculum id that produced it
+  dueDate       DateTime?
+  assignedById  String?
+  assignedAt    DateTime            @default(now())
+  startedAt     DateTime?
+  completedAt   DateTime?
+  score         Float?
+  progressPct   Int                 @default(0)
+  esignatureId  String? // completion sign-off
+  waivedById    String?
+  waiverReason  String?
+
+  certificateId String?         @unique
+  certificate   LmsCertificate? @relation(fields: [certificateId], references: [id], onDelete: SetNull)
+
+  lessonProgress LmsLessonProgress[]
+  attempts       LmsAssessmentAttempt[]
+  attendance     LmsSessionAttendance[]
+
+  @@unique([courseId, userId, courseVersion])
+  @@index([userId, status])
+  @@index([courseId])
+  @@index([dueDate])
+}
+
+model LmsLessonProgress {
+  id            String        @id @default(uuid())
+  enrollmentId  String
+  enrollment    LmsEnrollment @relation(fields: [enrollmentId], references: [id], onDelete: Cascade)
+  lessonId      String
+  lesson        LmsLesson     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  secondsViewed Int           @default(0)
+  completed     Boolean       @default(false)
+  completedAt   DateTime?
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([enrollmentId, lessonId])
+  @@index([lessonId])
+}
+
+model LmsCertificate {
+  id          String    @id @default(uuid())
+  serial      String    @unique
+  courseId    String
+  course      LmsCourse @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  userId      String
+  issuedAt    DateTime  @default(now())
+  expiresAt   DateTime?
+  pdfKey      String?
+  verifyToken String?   @unique // public QR verification
+
+  enrollment LmsEnrollment?
+
+  @@index([userId])
+  @@index([courseId])
+}
+
+// ─────────────────────────── Curriculum / Learning paths ───────────────────────────
+model LmsCurriculum {
+  id          String  @id @default(uuid())
+  code        String  @unique
+  title       String
+  description String?
+  category    String?
+  isActive    Boolean @default(true)
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courses LmsCurriculumCourse[]
+
+  @@index([isActive])
+}
+
+model LmsCurriculumCourse {
+  id           String        @id @default(uuid())
+  curriculumId String
+  curriculum   LmsCurriculum @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  courseId     String
+  course       LmsCourse     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  order        Int           @default(0)
+  isMandatory  Boolean       @default(true)
+
+  @@unique([curriculumId, courseId])
+  @@index([courseId])
+}
+
+// ─────────────────────────── Training matrix (rule-based auto-assignment) ───────────────────────────
+model LmsTrainingMatrixRule {
+  id            String                @id @default(uuid())
+  targetType    LmsMatrixTargetType
+  targetId      String // role/department/site id, or job-function string key
+  requiresType  LmsMatrixRequiresType
+  requiresId    String // course or curriculum id
+  dueWithinDays Int? // due N days after assignment
+  recurring     Boolean               @default(false) // re-assign on validity expiry
+  isActive      Boolean               @default(true)
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([targetType, targetId])
+  @@index([requiresType, requiresId])
+  @@index([isActive])
+}
+
+// ─────────────────────────── Classroom / instructor-led sessions ───────────────────────────
+model LmsClassroomSession {
+  id           String           @id @default(uuid())
+  courseId     String
+  course       LmsCourse        @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title        String
+  instructorId String?
+  location     String?
+  startsAt     DateTime
+  endsAt       DateTime?
+  capacity     Int?
+  status       LmsSessionStatus @default(SCHEDULED)
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  attendance LmsSessionAttendance[]
+
+  @@index([courseId])
+  @@index([startsAt])
+}
+
+model LmsSessionAttendance {
+  id           String              @id @default(uuid())
+  sessionId    String
+  session      LmsClassroomSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId       String
+  enrollmentId String?
+  enrollment   LmsEnrollment?      @relation(fields: [enrollmentId], references: [id], onDelete: SetNull)
+  status       LmsAttendanceStatus @default(REGISTERED)
+  markedById   String?
+  markedAt     DateTime?
+
+  @@unique([sessionId, userId])
+  @@index([userId])
 }

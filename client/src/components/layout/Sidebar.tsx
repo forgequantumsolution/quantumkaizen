@@ -1,21 +1,52 @@
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard, Settings, ChevronLeft,
-  ChevronRight, Clock, ChevronDown,
+  LayoutDashboard,
+  Settings,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  ChevronDown,
   Palette,
-  AlertTriangle, FileWarning, ShieldAlert, Wrench,
-  GitBranch, Layers, FileText, Beaker, BookOpen,
-  Database, ClipboardList,
-  ClipboardCheck, PlayCircle, AlertOctagon,
-  GraduationCap, FlaskConical, Gauge, BadgeCheck, ScrollText, TestTubes, Snowflake,
-  Package, Atom, Ruler, MapPin, Users, Truck, Activity, Thermometer, Award, ShieldCheck, Settings2,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useUIStore } from '@/stores/uiStore';
-import { useRecentItemsStore } from '@/stores/recentItemsStore';
-import { useAuthStore } from '@/stores/authStore';
-import { useWorkflowTypes } from '@/lib/api/workflowLookups';
-import { useMemo, useState } from 'react';
+  AlertTriangle,
+  FileWarning,
+  ShieldAlert,
+  Wrench,
+  GitBranch,
+  Layers,
+  FileText,
+  Beaker,
+  BookOpen,
+  Database,
+  ClipboardList,
+  ClipboardCheck,
+  PlayCircle,
+  AlertOctagon,
+  GraduationCap,
+  FlaskConical,
+  Gauge,
+  BadgeCheck,
+  ScrollText,
+  TestTubes,
+  Snowflake,
+  Package,
+  Atom,
+  Ruler,
+  MapPin,
+  Users,
+  Truck,
+  Activity,
+  Thermometer,
+  Award,
+  ShieldCheck,
+  Settings2,
+  Compass,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useUIStore } from "@/stores/uiStore";
+import { useRecentItemsStore } from "@/stores/recentItemsStore";
+import { useAuthStore } from "@/stores/authStore";
+import { useWorkflowTypes } from "@/lib/api/workflowLookups";
+import { useMemo, useState } from "react";
 
 interface NavItem {
   label: string;
@@ -32,7 +63,11 @@ interface NavItem {
    * "Audit" points to /audit/register but should stay active on /audit/program). */
   activeForPrefixes?: string[];
 }
-interface NavSection { title: string; items: NavItem[]; collapsible?: boolean }
+interface NavSection {
+  title: string;
+  items: NavItem[];
+  collapsible?: boolean;
+}
 
 // Best-effort mapping from a workflow type's stored iconName (e.g. "file-text")
 // or its name (e.g. "CAPA") to a lucide icon. Anything unknown gets a sensible
@@ -58,7 +93,7 @@ const ICON_BY_KEY: Record<string, React.ElementType> = {
   document: FileText,
 };
 
-const normaliseKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+const normaliseKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
 const findFirstLeaf = (item: NavItem): NavItem | null => {
   if (!item.children?.length) return item.path ? item : null;
@@ -69,7 +104,10 @@ const findFirstLeaf = (item: NavItem): NavItem | null => {
   return null;
 };
 
-const pickIcon = (name: string, iconName: string | null | undefined): React.ElementType => {
+const pickIcon = (
+  name: string,
+  iconName: string | null | undefined
+): React.ElementType => {
   if (iconName) {
     const k = normaliseKey(iconName);
     if (ICON_BY_KEY[k]) return ICON_BY_KEY[k];
@@ -81,22 +119,22 @@ const pickIcon = (name: string, iconName: string | null | undefined): React.Elem
 // Design tokens — pulled from CSS custom properties (set by AppearanceProvider)
 // so the sidebar tracks the user's color preset. Section/inactive/hover stay
 // hardcoded because they're cosmetic neutrals that don't need theming.
-const BG           = 'var(--color-navy)';
-const ACTIVE_BG    = 'var(--color-navy-mid)';
-const ACCENT       = 'var(--color-gold)';
-const ACTIVE_CLR   = 'var(--color-gold)';
-const SECTION_CLR  = 'rgba(255,255,255,0.65)';
-const INACTIVE_CLR = '#FFFFFF';
-const DIVIDER      = 'rgba(255,255,255,0.06)';
-const HOVER_BG     = 'rgba(255,255,255,0.04)';
+const BG = "var(--color-navy)";
+const ACTIVE_BG = "var(--color-navy-mid)";
+const ACCENT = "var(--color-gold)";
+const ACTIVE_CLR = "var(--color-gold)";
+const SECTION_CLR = "rgba(255,255,255,0.65)";
+const INACTIVE_CLR = "#FFFFFF";
+const DIVIDER = "rgba(255,255,255,0.06)";
+const HOVER_BG = "rgba(255,255,255,0.04)";
 
 export default function Sidebar() {
-  const location    = useLocation();
-  const navigate    = useNavigate();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const recentItems = useRecentItemsStore();
-  const user        = useAuthStore(s => s.user);
-  const hasPermission = useAuthStore(s => s.hasPermission);
+  const user = useAuthStore((s) => s.user);
+  const hasPermission = useAuthStore((s) => s.hasPermission);
   const { data: workflowTypes } = useWorkflowTypes();
 
   const navigation = useMemo<NavSection[]>(() => {
@@ -106,23 +144,34 @@ export default function Sidebar() {
     // layout (Master / ISO Standards as tabs).
     const auditChildren: NavItem[] = [
       {
-        label: 'Audit',
-        path: '/audit/register',
+        label: "Audit",
+        path: "/audit/register",
         icon: ClipboardCheck,
-        permission: 'audit_register.read',
-        activeForPrefixes: ['/audit/register', '/audit/program', '/audit/non-conformance'],
+        permission: "audit_register.read",
+        activeForPrefixes: [
+          "/audit/register",
+          "/audit/program",
+          "/audit/non-conformance",
+        ],
       },
       {
-        label: 'Audit Master',
-        path: '/audit/master',
+        label: "Audit Master",
+        path: "/audit/master",
         icon: Database,
-        permission: 'audit_master.read',
-        activeForPrefixes: ['/audit/master', '/audit/iso-standards'],
+        permission: "audit_master.read",
+        activeForPrefixes: ["/audit/master", "/audit/iso-standards"],
       },
     ];
 
+    // The "Document Review" workflow type isn't surfaced as its own top-level
+    // module — it's grouped under the "Document Management System" entry next to
+    // the DMS document library, since both concern documents. Pull it out here so
+    // it can be nested below, and keep it out of the generic module list.
+    const isDocReview = (name: string) =>
+      /^document\s*review$/i.test(name.trim());
+
     const moduleItems: NavItem[] = (workflowTypes ?? [])
-      .filter((t) => !t.isDeleted)
+      .filter((t) => !t.isDeleted && !isDocReview(t.name))
       .map((t) => {
         const isAudit = /^audit$/i.test(t.name);
         return {
@@ -133,33 +182,124 @@ export default function Sidebar() {
           icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
           // Workflow-type modules surface ticket workspaces — gate on ticket.read.
           // Audit gates via its children (audit_register/master.read) instead.
-          permission: isAudit ? undefined : 'ticket.read',
+          permission: isAudit ? undefined : "ticket.read",
           children: isAudit ? auditChildren : undefined,
         };
       });
 
+    // Children of the "Document Management System" group: the DMS document
+    // library plus the "Document Review" workflow ticket workspace (if seeded).
+    const docReviewType = (workflowTypes ?? []).find(
+      (t) => !t.isDeleted && isDocReview(t.name)
+    );
+    const documentChildren: NavItem[] = [
+      ...(docReviewType
+        ? [
+            {
+              label: "Document Review",
+              path: `/modules/${docReviewType.id}`,
+              icon: ClipboardCheck,
+              permission: "ticket.read",
+            },
+          ]
+        : []),
+      {
+        label: "Documents",
+        path: "/dms",
+        icon: FileText,
+        permission: "document.read",
+      },
+    ];
+
     const sections: NavSection[] = [
       {
-        title: '',
+        title: "",
         items: [
-          { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-          { label: 'Documents', path: '/dms', icon: FileText, permission: 'document.read' },
-          { label: 'Training', path: '/training', icon: GraduationCap, permission: 'training.read' },
+          { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
+          {
+            // Groups the DMS document library with the "Document Review" workflow
+            // so the two document-centric areas live under one roof instead of
+            // appearing as two unrelated top-level entries.
+            label: "DMS ",
+            icon: FileText,
+            children: documentChildren,
+          },
+          {
+            // Learning Management System — learner area + authoring. "My Learning"
+            // keeps the existing training view; "Courses" is the new author studio.
+            label: "LMS",
+            icon: GraduationCap,
+            children: [
+              { label: "My Learning", path: "/lms/my", icon: GraduationCap, permission: "lms_my.read" },
+              { label: "Catalog", path: "/lms/catalog", icon: Compass, permission: "lms_my.read" },
+              { label: "Courses", path: "/lms/admin/courses", icon: BookOpen, permission: "lms_course.read" },
+              { label: "Curricula", path: "/lms/admin/curricula", icon: Layers, permission: "lms_enrollment.read" },
+              { label: "Assignments", path: "/lms/admin/assignments", icon: Users, permission: "lms_enrollment.assign" },
+              { label: "Training Matrix", path: "/lms/admin/matrix", icon: Database, permission: "lms_matrix.read" },
+              { label: "Grading", path: "/lms/admin/grading", icon: ClipboardCheck, permission: "lms_assessment.grade" },
+              { label: "Reports", path: "/lms/admin/reports", icon: Gauge, permission: "lms_report.read" },
+            ],
+          },
           {
             // Day-to-day LIMS operations; all set-up-once master data lives in
             // the single "Configuration" entry (LimsConfigLayout, grouped tabs).
-            label: 'LIMS',
+            label: "LIMS",
             icon: FlaskConical,
             children: [
-              { label: 'Dashboard', path: '/lims/dashboard', icon: LayoutDashboard, permission: 'lims_dashboard.read' },
-              { label: 'Samples', path: '/lims/samples', icon: TestTubes, permission: 'sample.read' },
-              { label: 'Worklists', path: '/lims/worklists', icon: ClipboardList, permission: 'worklist.read' },
-              { label: 'Quality Control', path: '/lims/qc', icon: Activity, permission: 'qc.read' },
-              { label: 'Stability', path: '/lims/stability', icon: Thermometer, permission: 'stability.read' },
-              { label: 'OOS Investigations', path: '/lims/oos', icon: AlertTriangle, permission: 'oos.read' },
-              { label: 'Certificates (CoA)', path: '/lims/coa', icon: Award, permission: 'coa.read' },
-              { label: 'Data Review', path: '/lims/data-review', icon: ShieldCheck, permission: 'data_review.read' },
-              { label: 'Configuration', path: '/lims/config', icon: Settings2, permission: 'lab.read' },
+              {
+                label: "Dashboard",
+                path: "/lims/dashboard",
+                icon: LayoutDashboard,
+                permission: "lims_dashboard.read",
+              },
+              {
+                label: "Samples",
+                path: "/lims/samples",
+                icon: TestTubes,
+                permission: "sample.read",
+              },
+              {
+                label: "Worklists",
+                path: "/lims/worklists",
+                icon: ClipboardList,
+                permission: "worklist.read",
+              },
+              {
+                label: "Quality Control",
+                path: "/lims/qc",
+                icon: Activity,
+                permission: "qc.read",
+              },
+              {
+                label: "Stability",
+                path: "/lims/stability",
+                icon: Thermometer,
+                permission: "stability.read",
+              },
+              {
+                label: "OOS Investigations",
+                path: "/lims/oos",
+                icon: AlertTriangle,
+                permission: "oos.read",
+              },
+              {
+                label: "Certificates (CoA)",
+                path: "/lims/coa",
+                icon: Award,
+                permission: "coa.read",
+              },
+              {
+                label: "Data Review",
+                path: "/lims/data-review",
+                icon: ShieldCheck,
+                permission: "data_review.read",
+              },
+              {
+                label: "Configuration",
+                path: "/lims/config",
+                icon: Settings2,
+                permission: "lab.read",
+              },
             ],
           },
         ],
@@ -167,20 +307,30 @@ export default function Sidebar() {
     ];
 
     if (moduleItems.length > 0) {
-      sections.push({ title: '', items: moduleItems });
+      sections.push({ title: "", items: moduleItems });
     }
 
     sections.push({
-      title: '',
+      title: "",
       items: [
         {
-          label: 'Configuration',
+          label: "Configuration",
           icon: Settings,
           children: [
-            { label: 'Workflows',   path: '/settings?section=workflows', icon: GitBranch, permission: 'workflow.read' },
-            { label: 'Forms',       path: '/settings?section=forms',     icon: ClipboardList, permission: 'form.read' },
-            { label: 'Master Data', path: '/settings',                   icon: Database },
-            { label: 'Appearance',  path: '/appearance',                 icon: Palette },
+            {
+              label: "Workflows",
+              path: "/settings?section=workflows",
+              icon: GitBranch,
+              permission: "workflow.read",
+            },
+            {
+              label: "Forms",
+              path: "/settings?section=forms",
+              icon: ClipboardList,
+              permission: "form.read",
+            },
+            { label: "Master Data", path: "/settings", icon: Database },
+            { label: "Appearance", path: "/appearance", icon: Palette },
           ],
         },
       ],
@@ -205,15 +355,19 @@ export default function Sidebar() {
       .filter((s) => s.items.length > 0);
   }, [workflowTypes, hasPermission]);
 
-  const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({});
+  const [sectionsCollapsed, setSectionsCollapsed] = useState<
+    Record<string, boolean>
+  >({});
   const toggleSection = (title: string) =>
-    setSectionsCollapsed(prev => ({ ...prev, [title]: !prev[title] }));
+    setSectionsCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
 
   // Per-item expand state, keyed by label since parents may have no path.
   // All parents start collapsed; user opens what they need.
-  const [itemsExpanded, setItemsExpanded] = useState<Record<string, boolean>>({});
+  const [itemsExpanded, setItemsExpanded] = useState<Record<string, boolean>>(
+    {}
+  );
   const toggleItem = (label: string) =>
-    setItemsExpanded(prev => ({ ...prev, [label]: !prev[label] }));
+    setItemsExpanded((prev) => ({ ...prev, [label]: !prev[label] }));
 
   // Match by pathname AND query string so /settings?tab=users highlights the
   // right child instead of every Configuration child at once.
@@ -226,8 +380,8 @@ export default function Sidebar() {
       if (item.path === currentUrl) return true;
       // Loose match for items without query params (e.g. /workflows/123).
       if (
-        !item.path.includes('?') &&
-        item.path !== '/dashboard' &&
+        !item.path.includes("?") &&
+        item.path !== "/dashboard" &&
         location.pathname.startsWith(item.path)
       ) {
         return true;
@@ -236,7 +390,13 @@ export default function Sidebar() {
     return !!item.children?.some(isItemActive);
   };
 
-  const initials = user?.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) ?? 'QK';
+  const initials =
+    user?.name
+      ?.split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2) ?? "QK";
 
   // ─── Recursive item renderer (handles leaf links + expandable parents) ───
   const renderNavItem = (item: NavItem, depth: number): React.ReactNode => {
@@ -260,17 +420,26 @@ export default function Sidebar() {
             title={item.label}
             onClick={() => firstLeaf?.path && navigate(firstLeaf.path)}
             style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              width: '36px', height: '36px', marginLeft: 'auto', marginRight: 'auto',
-              borderRadius: '6px',
-              backgroundColor: isActive ? ACTIVE_BG : 'transparent',
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "36px",
+              height: "36px",
+              marginLeft: "auto",
+              marginRight: "auto",
+              borderRadius: "6px",
+              backgroundColor: isActive ? ACTIVE_BG : "transparent",
               color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
-              border: 'none', cursor: 'pointer',
-              transition: 'background-color 100ms, color 100ms',
+              border: "none",
+              cursor: "pointer",
+              transition: "background-color 100ms, color 100ms",
             }}
           >
-            <Icon size={17} strokeWidth={isActive ? 2 : 1.5}
-              style={{ color: isActive ? ACCENT : 'inherit' }} />
+            <Icon
+              size={17}
+              strokeWidth={isActive ? 2 : 1.5}
+              style={{ color: isActive ? ACCENT : "inherit" }}
+            />
           </button>
         );
       }
@@ -281,48 +450,66 @@ export default function Sidebar() {
             type="button"
             onClick={() => toggleItem(item.label)}
             style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              padding: '9px 12px 9px 10px',
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "9px 12px 9px 10px",
               paddingLeft: `${10 + indent}px`,
-              width: '100%',
-              borderRadius: '6px',
-              borderLeft: isActive ? '3px solid ' + ACCENT : '3px solid transparent',
-              backgroundColor: isActive ? ACTIVE_BG : 'transparent',
+              width: "100%",
+              borderRadius: "6px",
+              borderLeft: isActive
+                ? "3px solid " + ACCENT
+                : "3px solid transparent",
+              backgroundColor: isActive ? ACTIVE_BG : "transparent",
               color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
-              border: 'none', cursor: 'pointer', textAlign: 'left',
-              transition: 'background-color 100ms, color 100ms',
+              border: "none",
+              cursor: "pointer",
+              textAlign: "left",
+              transition: "background-color 100ms, color 100ms",
             }}
-            onMouseEnter={e => {
+            onMouseEnter={(e) => {
               if (!isActive) {
-                (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG;
+                (e.currentTarget as HTMLElement).style.backgroundColor =
+                  HOVER_BG;
                 (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR;
               }
             }}
-            onMouseLeave={e => {
+            onMouseLeave={(e) => {
               if (!isActive) {
-                (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                (e.currentTarget as HTMLElement).style.backgroundColor =
+                  "transparent";
                 (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR;
               }
             }}
           >
-            <Icon size={depth === 0 ? 19 : 16} strokeWidth={isActive ? 2 : 1.5}
-              style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
-            <span style={{
-              flex: 1, fontSize: depth === 0 ? '17px' : '15px',
-              lineHeight: 1.2, whiteSpace: 'nowrap',
-            }}>{item.label}</span>
+            <Icon
+              size={depth === 0 ? 19 : 16}
+              strokeWidth={isActive ? 2 : 1.5}
+              style={{ color: isActive ? ACCENT : "inherit", flexShrink: 0 }}
+            />
+            <span
+              style={{
+                flex: 1,
+                fontSize: depth === 0 ? "17px" : "15px",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {item.label}
+            </span>
             <ChevronDown
               size={13}
               style={{
-                color: SECTION_CLR, flexShrink: 0,
-                transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
-                transition: 'transform 150ms',
+                color: SECTION_CLR,
+                flexShrink: 0,
+                transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
+                transition: "transform 150ms",
               }}
             />
           </button>
           {expanded && (
             <div className="mt-0.5 space-y-px">
-              {item.children!.map(child => renderNavItem(child, depth + 1))}
+              {item.children!.map((child) => renderNavItem(child, depth + 1))}
             </div>
           )}
         </div>
@@ -337,45 +524,56 @@ export default function Sidebar() {
         to={item.path}
         title={sidebarCollapsed ? item.label : undefined}
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: sidebarCollapsed ? 0 : '10px',
-          padding: sidebarCollapsed ? 0 : '9px 12px 9px 10px',
+          display: "flex",
+          alignItems: "center",
+          gap: sidebarCollapsed ? 0 : "10px",
+          padding: sidebarCollapsed ? 0 : "9px 12px 9px 10px",
           paddingLeft: sidebarCollapsed ? 0 : `${10 + indent}px`,
-          width: sidebarCollapsed ? '36px' : '100%',
-          height: sidebarCollapsed ? '36px' : undefined,
-          justifyContent: sidebarCollapsed ? 'center' : undefined,
-          marginLeft: sidebarCollapsed ? 'auto' : undefined,
-          marginRight: sidebarCollapsed ? 'auto' : undefined,
-          borderRadius: '6px',
+          width: sidebarCollapsed ? "36px" : "100%",
+          height: sidebarCollapsed ? "36px" : undefined,
+          justifyContent: sidebarCollapsed ? "center" : undefined,
+          marginLeft: sidebarCollapsed ? "auto" : undefined,
+          marginRight: sidebarCollapsed ? "auto" : undefined,
+          borderRadius: "6px",
           borderLeft: !sidebarCollapsed
-            ? isActive ? '3px solid ' + ACCENT : '3px solid transparent'
+            ? isActive
+              ? "3px solid " + ACCENT
+              : "3px solid transparent"
             : undefined,
-          backgroundColor: isActive ? ACTIVE_BG : 'transparent',
+          backgroundColor: isActive ? ACTIVE_BG : "transparent",
           color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
-          textDecoration: 'none',
-          transition: 'background-color 100ms, color 100ms',
+          textDecoration: "none",
+          transition: "background-color 100ms, color 100ms",
         }}
-        onMouseEnter={e => {
+        onMouseEnter={(e) => {
           if (!isActive) {
             (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG;
             (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR;
           }
         }}
-        onMouseLeave={e => {
+        onMouseLeave={(e) => {
           if (!isActive) {
-            (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+            (e.currentTarget as HTMLElement).style.backgroundColor =
+              "transparent";
             (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR;
           }
         }}
       >
-        <Icon size={depth === 0 ? 19 : 16} strokeWidth={isActive ? 2 : 1.5}
-          style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
+        <Icon
+          size={depth === 0 ? 19 : 16}
+          strokeWidth={isActive ? 2 : 1.5}
+          style={{ color: isActive ? ACCENT : "inherit", flexShrink: 0 }}
+        />
         {!sidebarCollapsed && (
-          <span style={{
-            fontSize: depth === 0 ? '17px' : '15px',
-            lineHeight: 1.2, whiteSpace: 'nowrap',
-          }}>{item.label}</span>
+          <span
+            style={{
+              fontSize: depth === 0 ? "17px" : "15px",
+              lineHeight: 1.2,
+              whiteSpace: "nowrap",
+            }}
+          >
+            {item.label}
+          </span>
         )}
       </NavLink>
     );
@@ -383,20 +581,31 @@ export default function Sidebar() {
 
   return (
     <aside
-      style={{ backgroundColor: BG, borderRight: '1px solid ' + DIVIDER }}
+      style={{ backgroundColor: BG, borderRight: "1px solid " + DIVIDER }}
       className={cn(
-        'fixed left-0 top-0 h-screen flex flex-col z-40',
-        'transition-[width] duration-250 ease-in-out',
-        sidebarCollapsed ? 'w-[56px]' : 'w-[256px]',
+        "fixed left-0 top-0 h-screen flex flex-col z-40",
+        "transition-[width] duration-250 ease-in-out",
+        sidebarCollapsed ? "w-[56px]" : "w-[256px]"
       )}
     >
       {/* Brand */}
       <div
-        style={{ borderBottom: '1px solid ' + DIVIDER }}
-        className={cn('flex items-center h-14 shrink-0', sidebarCollapsed ? 'justify-center px-3' : 'gap-3 px-4')}
+        style={{ borderBottom: "1px solid " + DIVIDER }}
+        className={cn(
+          "flex items-center h-14 shrink-0",
+          sidebarCollapsed ? "justify-center px-3" : "gap-3 px-4"
+        )}
       >
-        <div style={{ backgroundColor: ACCENT }} className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0">
-          <span style={{ color: '#0D0E17' }} className="font-black text-sm tracking-tight">Q</span>
+        <div
+          style={{ backgroundColor: ACCENT }}
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+        >
+          <span
+            style={{ color: "#0D0E17" }}
+            className="font-black text-sm tracking-tight"
+          >
+            Q
+          </span>
         </div>
         {!sidebarCollapsed && (
           <div className="overflow-hidden">
@@ -408,38 +617,79 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto py-3 scrollbar-none" style={{ scrollbarWidth: 'none' }}>
-        {navigation.map(section => {
-          const isCollapsed = !!(section.collapsible && sectionsCollapsed[section.title]);
-          const hasActive   = section.items.some(isItemActive);
+      <nav
+        className="flex-1 overflow-y-auto py-3 scrollbar-none"
+        style={{ scrollbarWidth: "none" }}
+      >
+        {navigation.map((section) => {
+          const isCollapsed = !!(
+            section.collapsible && sectionsCollapsed[section.title]
+          );
+          const hasActive = section.items.some(isItemActive);
 
           const hasHeader = !!section.title;
           return (
-            <div key={section.title || `untitled-${navigation.indexOf(section)}`} className="mb-1">
+            <div
+              key={section.title || `untitled-${navigation.indexOf(section)}`}
+              className="mb-1"
+            >
               {!sidebarCollapsed && hasHeader && (
                 <button
-                  onClick={() => section.collapsible && toggleSection(section.title)}
-                  className={cn('w-full flex items-center justify-between px-4 py-1 mb-0.5 rounded', section.collapsible && 'cursor-pointer')}
-                  onMouseEnter={e => { if (section.collapsible) (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
+                  onClick={() =>
+                    section.collapsible && toggleSection(section.title)
+                  }
+                  className={cn(
+                    "w-full flex items-center justify-between px-4 py-1 mb-0.5 rounded",
+                    section.collapsible && "cursor-pointer"
+                  )}
+                  onMouseEnter={(e) => {
+                    if (section.collapsible)
+                      (e.currentTarget as HTMLElement).style.backgroundColor =
+                        HOVER_BG;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor =
+                      "transparent";
+                  }}
                 >
-                  <span style={{ color: hasActive ? ACCENT : SECTION_CLR, fontSize: '12.5px', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                  <span
+                    style={{
+                      color: hasActive ? ACCENT : SECTION_CLR,
+                      fontSize: "12.5px",
+                      letterSpacing: "0.14em",
+                      textTransform: "uppercase",
+                    }}
+                  >
                     {section.title}
                   </span>
                   {section.collapsible && (
-                    <ChevronDown size={13} style={{ color: SECTION_CLR }}
-                      className={cn('transition-transform duration-150', isCollapsed ? '-rotate-90' : 'rotate-0')} />
+                    <ChevronDown
+                      size={13}
+                      style={{ color: SECTION_CLR }}
+                      className={cn(
+                        "transition-transform duration-150",
+                        isCollapsed ? "-rotate-90" : "rotate-0"
+                      )}
+                    />
                   )}
                 </button>
               )}
 
               {sidebarCollapsed && navigation.indexOf(section) > 0 && (
-                <div style={{ background: DIVIDER }} className="mx-3 my-1.5 h-px" />
+                <div
+                  style={{ background: DIVIDER }}
+                  className="mx-3 my-1.5 h-px"
+                />
               )}
 
               {!isCollapsed && (
-                <div className={cn('space-y-px', sidebarCollapsed ? 'px-1.5' : 'px-2')}>
-                  {section.items.map(item => renderNavItem(item, 0))}
+                <div
+                  className={cn(
+                    "space-y-px",
+                    sidebarCollapsed ? "px-1.5" : "px-2"
+                  )}
+                >
+                  {section.items.map((item) => renderNavItem(item, 0))}
                 </div>
               )}
             </div>
@@ -448,28 +698,72 @@ export default function Sidebar() {
 
         {/* Recent items */}
         {!sidebarCollapsed && recentItems.items.length > 0 && (
-          <div style={{ borderTop: '1px solid ' + DIVIDER }} className="mt-2 px-2 pt-3">
+          <div
+            style={{ borderTop: "1px solid " + DIVIDER }}
+            className="mt-2 px-2 pt-3"
+          >
             <div className="flex items-center justify-between mb-1.5 px-2">
-              <span style={{ color: SECTION_CLR, fontSize: '11px', fontWeight: 600, letterSpacing: '0.10em', textTransform: 'uppercase' }}
-                className="flex items-center gap-1.5">
+              <span
+                style={{
+                  color: SECTION_CLR,
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  letterSpacing: "0.10em",
+                  textTransform: "uppercase",
+                }}
+                className="flex items-center gap-1.5"
+              >
                 <Clock size={11} /> Recent
               </span>
-              <button onClick={recentItems.clearItems}
-                style={{ color: SECTION_CLR, fontSize: '11px', background: 'none', border: 'none', cursor: 'pointer' }}>Clear</button>
+              <button
+                onClick={recentItems.clearItems}
+                style={{
+                  color: SECTION_CLR,
+                  fontSize: "11px",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                Clear
+              </button>
             </div>
             <div className="space-y-px">
-              {recentItems.items.slice(0, 4).map(item => (
+              {recentItems.items.slice(0, 4).map((item) => (
                 <button
                   key={item.path}
                   onClick={() => navigate(item.path)}
-                  style={{ color: INACTIVE_CLR, width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', borderRadius: '4px' }}
+                  style={{
+                    color: INACTIVE_CLR,
+                    width: "100%",
+                    background: "transparent",
+                    border: "none",
+                    cursor: "pointer",
+                    borderRadius: "4px",
+                  }}
                   className="flex items-center gap-2 px-2.5 py-1.5 text-left transition-colors"
-                  onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG; (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR; }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor =
+                      HOVER_BG;
+                    (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR;
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.backgroundColor =
+                      "transparent";
+                    (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR;
+                  }}
                 >
-                  <div style={{ background: ACCENT }} className="w-1 h-1 rounded-full shrink-0" />
+                  <div
+                    style={{ background: ACCENT }}
+                    className="w-1 h-1 rounded-full shrink-0"
+                  />
                   <span className="text-sm truncate flex-1">{item.label}</span>
-                  <span style={{ color: SECTION_CLR }} className="text-[11px] shrink-0 font-mono">{item.type}</span>
+                  <span
+                    style={{ color: SECTION_CLR }}
+                    className="text-[11px] shrink-0 font-mono"
+                  >
+                    {item.type}
+                  </span>
                 </button>
               ))}
             </div>
@@ -479,30 +773,69 @@ export default function Sidebar() {
 
       {/* User identity */}
       {!sidebarCollapsed && (
-        <div style={{ borderTop: '1px solid ' + DIVIDER }} className="px-3 py-2.5 flex items-center gap-2.5 shrink-0">
-          <div style={{ backgroundColor: 'rgba(201,168,76,0.15)', border: '1px solid rgba(201,168,76,0.25)' }}
-            className="w-8 h-8 rounded flex items-center justify-center shrink-0">
-            <span style={{ color: ACCENT }} className="text-[11px] font-bold">{initials}</span>
+        <div
+          style={{ borderTop: "1px solid " + DIVIDER }}
+          className="px-3 py-2.5 flex items-center gap-2.5 shrink-0"
+        >
+          <div
+            style={{
+              backgroundColor: "rgba(201,168,76,0.15)",
+              border: "1px solid rgba(201,168,76,0.25)",
+            }}
+            className="w-8 h-8 rounded flex items-center justify-center shrink-0"
+          >
+            <span style={{ color: ACCENT }} className="text-[11px] font-bold">
+              {initials}
+            </span>
           </div>
           <div className="min-w-0 flex-1">
-            <p style={{ color: ACTIVE_CLR }} className="text-[15px] truncate leading-tight">{user?.name ?? '—'}</p>
-            <p style={{ color: SECTION_CLR }} className="text-[12px] truncate leading-tight mt-1 tracking-wide">
-              {user?.role?.replace(/_/g, ' ') ?? 'Unknown Role'}
+            <p
+              style={{ color: ACTIVE_CLR }}
+              className="text-[15px] truncate leading-tight"
+            >
+              {user?.name ?? "—"}
+            </p>
+            <p
+              style={{ color: SECTION_CLR }}
+              className="text-[12px] truncate leading-tight mt-1 tracking-wide"
+            >
+              {user?.role?.replace(/_/g, " ") ?? "Unknown Role"}
             </p>
           </div>
         </div>
       )}
 
       {/* Collapse toggle */}
-      <div style={{ borderTop: '1px solid ' + DIVIDER }} className="shrink-0">
+      <div style={{ borderTop: "1px solid " + DIVIDER }} className="shrink-0">
         <button
           onClick={toggleSidebar}
-          title={sidebarCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-          style={{ color: SECTION_CLR, width: '100%', background: 'transparent', border: 'none', cursor: 'pointer', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG; (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; (e.currentTarget as HTMLElement).style.color = SECTION_CLR; }}
+          title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}
+          style={{
+            color: SECTION_CLR,
+            width: "100%",
+            background: "transparent",
+            border: "none",
+            cursor: "pointer",
+            height: "36px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG;
+            (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR;
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.backgroundColor =
+              "transparent";
+            (e.currentTarget as HTMLElement).style.color = SECTION_CLR;
+          }}
         >
-          {sidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          {sidebarCollapsed ? (
+            <ChevronRight size={14} />
+          ) : (
+            <ChevronLeft size={14} />
+          )}
         </button>
       </div>
     </aside>

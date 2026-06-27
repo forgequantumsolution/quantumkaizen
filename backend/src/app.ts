@@ -19,6 +19,8 @@ import formSubmissionRoutes from './modules/dynamic-form/submission.routes';
 import auditRoutes from './modules/audit/audit.routes';
 import dmsRoutes from './modules/dms/dms.routes';
 import trainingRoutes from './modules/training/training.routes';
+import lmsRoutes from './modules/lms/lms.routes';
+import lmsPublicRoutes from './modules/lms/lms.public.routes';
 import limsRoutes from './modules/lims/lims.routes';
 import sampleRoutes from './modules/sample/sample.routes';
 import limsMasterRoutes from './modules/lims-master/lims-master.routes';
@@ -74,6 +76,7 @@ export const buildApp = () => {
   );
 
   app.use('/api/public/coa', coaPublicRoutes); // LIMS 2.0 — public CoA QR verify (no auth) — must precede the '/api' catch-all
+  app.use('/api/public/lms', lmsPublicRoutes); // LMS — public certificate QR verify (no auth) — must precede the '/api' catch-all
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/departments', departmentRoutes);
@@ -89,6 +92,7 @@ export const buildApp = () => {
   app.use('/api', auditRoutes); // ISO standards + audit schedules
   app.use('/api/dms', dmsRoutes); // controlled document management
   app.use('/api/training', trainingRoutes); // training & competency
+  app.use('/api/lms', lmsRoutes); // LMS — learning management (courses, content)
   app.use('/api/lims', limsRoutes); // LIMS — lab registry (+ more)
   app.use('/api/samples', sampleRoutes); // LIMS — sample lifecycle
   app.use('/api/lims-master', limsMasterRoutes); // LIMS 2.0 — master data

@@ -34,6 +34,20 @@ import DocumentEditorPage from '@/features/dms/DocumentEditorPage';
 import DocumentDetailPage from '@/features/dms/DocumentDetailPage';
 import TrainingListPage from '@/features/training/TrainingListPage';
 import TrainingDetailPage from '@/features/training/TrainingDetailPage';
+import CourseListPage from '@/features/lms/CourseListPage';
+import CourseBuilderPage from '@/features/lms/CourseBuilderPage';
+import MyLearningPage from '@/features/lms/MyLearningPage';
+import CatalogPage from '@/features/lms/CatalogPage';
+import CoursePlayerPage from '@/features/lms/CoursePlayerPage';
+import ExamBuilderPage from '@/features/lms/ExamBuilderPage';
+import ExamPlayerPage from '@/features/lms/ExamPlayerPage';
+import GradingPage from '@/features/lms/GradingPage';
+import AssignmentsPage from '@/features/lms/AssignmentsPage';
+import CurriculaPage from '@/features/lms/CurriculaPage';
+import TrainingMatrixPage from '@/features/lms/TrainingMatrixPage';
+import CertificatePage from '@/features/lms/CertificatePage';
+import ReportsPage from '@/features/lms/ReportsPage';
+import CertificateVerifyPage from '@/features/lms/CertificateVerifyPage';
 import LabRegistryPage from '@/features/lims/LabRegistryPage';
 import EquipmentListPage from '@/features/lims/EquipmentListPage';
 import EquipmentDetailPage from '@/features/lims/EquipmentDetailPage';
@@ -92,6 +106,8 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       {/* Public CoA QR verification — no auth */}
       <Route path="/verify/coa/:token" element={<CoaVerifyPage />} />
+      {/* Public LMS certificate QR verification — no auth */}
+      <Route path="/verify/certificate/:token" element={<CertificateVerifyPage />} />
 
       {/* Protected */}
       <Route element={<ProtectedRoute />}>
@@ -122,6 +138,21 @@ export default function App() {
           {/* Training & Competency */}
           <Route path="/training" element={<TrainingListPage />} />
           <Route path="/training/:id" element={<TrainingDetailPage />} />
+
+          {/* LMS — Learning Management System */}
+          <Route path="/lms/my" element={<MyLearningPage />} />
+          <Route path="/lms/catalog" element={<CatalogPage />} />
+          <Route path="/lms/learn/:id" element={<CoursePlayerPage />} />
+          <Route path="/lms/learn/:id/exam" element={<ExamPlayerPage />} />
+          <Route path="/lms/admin/courses" element={<CourseListPage />} />
+          <Route path="/lms/admin/courses/:id" element={<CourseBuilderPage />} />
+          <Route path="/lms/admin/courses/:id/exam" element={<ExamBuilderPage />} />
+          <Route path="/lms/admin/grading" element={<GradingPage />} />
+          <Route path="/lms/admin/assignments" element={<AssignmentsPage />} />
+          <Route path="/lms/admin/curricula" element={<CurriculaPage />} />
+          <Route path="/lms/admin/matrix" element={<TrainingMatrixPage />} />
+          <Route path="/lms/admin/reports" element={<ReportsPage />} />
+          <Route path="/lms/certificate/:id" element={<CertificatePage />} />
 
           {/* LIMS — operational (day-to-day) */}
           <Route path="/lims/samples" element={<SampleListPage />} />

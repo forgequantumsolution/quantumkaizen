@@ -13,6 +13,7 @@ import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound } from '../../lib/httpError';
 import { writeTrail, recordSignature } from '../audit/compliance.service';
 import { completeForDocument } from '../training/training.service';
+import { completeDocAckForDocument } from '../lms/lms-learn.service';
 import type {
   ApproveInput,
   AssignReadersInput,
@@ -473,8 +474,10 @@ export const acknowledgeRead = async (id: string, userId: string) => {
     { entityType: 'Document', entityId: id, action: 'UPDATE', field: 'read_acknowledged', newValue: versionId },
     userId,
   );
-  // Close the loop: auto-complete any training tied to this document.
+  // Close the loop: auto-complete any training / LMS DOC_ACK course tied to this
+  // document (legacy training items + new LMS enrollments).
   await completeForDocument(id, userId).catch(() => undefined);
+  await completeDocAckForDocument(id, userId).catch(() => undefined);
   return listReceipts(id, userId);
 };
 
