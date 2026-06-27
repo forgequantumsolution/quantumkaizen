@@ -25,6 +25,7 @@ export interface Investigation {
   conclusion: string | null;
   capa_id: string | null;
   capa?: { id: string; capa_number: string; status: string } | null;
+  capa_ticket?: { id: string; unique_id: string | null } | null;
   opened_at: string;
   closed_at: string | null;
   created_at: string;
@@ -40,6 +41,7 @@ export interface CreateCapaFromOosBody {
 export interface CreateCapaFromOosResponse {
   investigation: Investigation;
   capa: { id: string; capa_number: string };
+  capa_ticket: { id: string; unique_id: string | null } | null;
 }
 
 export interface OpenInvestigationBody {

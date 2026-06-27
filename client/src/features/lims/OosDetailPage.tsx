@@ -149,7 +149,17 @@ export default function OosDetailPage() {
           <Field label="Resample required" value={inv.resample_required ? 'Yes' : 'No'} />
           <Field label="Closed" value={inv.closed_at ? new Date(inv.closed_at).toLocaleString() : '—'} />
           <div>
-            <div className="text-[11px] text-gray-500 uppercase tracking-wide">Linked CAPA</div>
+            <div className="text-[11px] text-gray-500 uppercase tracking-wide">CAPA Workflow Ticket</div>
+            {inv.capa_ticket ? (
+              <Link to={`/tickets/${inv.capa_ticket.id}`} className="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 mt-0.5">
+                {inv.capa_ticket.unique_id ?? 'View ticket'} <ExternalLink size={12} />
+              </Link>
+            ) : (
+              <div className="text-sm text-gray-400 mt-0.5">— none</div>
+            )}
+          </div>
+          <div>
+            <div className="text-[11px] text-gray-500 uppercase tracking-wide">CAPA Record</div>
             {inv.capa ? (
               <Link to={`/audit/capa/${inv.capa.id}`} className="text-sm text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 mt-0.5">
                 {inv.capa.capa_number} <span className="text-[10px] text-gray-400">({inv.capa.status})</span> <ExternalLink size={12} />
@@ -220,7 +230,11 @@ function RaiseCapaModal({ open, onClose, id, defaultTitle }: { open: boolean; on
   const submit = async () => {
     try {
       const res = await mut.mutateAsync({ title: title.trim() || undefined, type, due_date: due ? due.toISOString() : null });
-      message.success(`Raised ${res.capa.capa_number} and linked it to this investigation`);
+      message.success(
+        res.capa_ticket
+          ? `Raised ${res.capa.capa_number} + CAPA workflow ticket ${res.capa_ticket.unique_id ?? ''} and linked them`
+          : `Raised ${res.capa.capa_number} (CAPA workflow ticket not raised — see logs)`,
+      );
       onClose();
     } catch (e) { message.error(extractErr(e)); }
   };

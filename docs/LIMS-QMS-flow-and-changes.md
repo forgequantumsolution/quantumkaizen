@@ -239,6 +239,32 @@ never reachable before (no CAPAs existed until the OOS→CAPA bridge created one
 - `client/src/features/audit/CapaDetailPage.tsx` — `const c = data` (not `data?.data`).
 Verified: the CAPA detail page loads with the pipeline, tabs, and the OOS back-reference.
 
+### 3.6c OOS → CAPA now also raises a CAPA *workflow ticket* (2026-06-27)
+
+The app has **two** CAPA representations: the standalone `Capa` record (`/audit/capa`)
+and the **CAPA workflow** (tickets on the `CAPA` WorkflowType — the team's canonical
+system). The OOS bridge originally created only the record, so it didn't appear in
+the CAPA workflow. Per decision, it now creates **both** and links both to the OOS.
+
+- **Schema**: `OosInvestigation.capaTicketId` + `capaTicketUniqueId` added. Applied
+  to the live DB via `prisma db execute` (additive SQL) — **not** `migrate dev`/`db
+  push`, because the live DB has drift (extra `Lms*` tables not in `schema.prisma`,
+  which `db push` would have dropped). ⚠️ A tracked migration is still needed before
+  a prod `migrate deploy`, and the `Lms*` drift should be reconciled separately.
+- `backend/src/modules/oos/oos.service.ts` — `createCapaForInvestigation()` now, after
+  creating the `Capa` record, resolves the **ACTIVE** CAPA workflow (`findActiveCapaWorkflow`)
+  and raises a ticket via the workflow engine (`raiseTicket`), carrying OOS + CAPA-record
+  context in `customFields`; stores the ticket link on the OOS. Best-effort: a missing /
+  non-ACTIVE CAPA workflow logs and leaves just the record. `getInvestigation` enriches
+  with `capa_ticket { id, unique_id }`.
+- `client/src/lib/api/oos.ts` — `capa_ticket` on `Investigation` + create response.
+- `client/src/features/lims/OosDetailPage.tsx` — shows both **CAPA Workflow Ticket**
+  (→ `/tickets/:id`) and **CAPA Record** (→ `/audit/capa/:id`); success toast names both.
+
+Verified: `POST /oos/:id/capa` created CAPA-2026-0006 **and** ticket **CAP-FQS-006**
+on the CAPA workflow; the ticket appears in the tickets list; OOS detail shows both
+links. `tsc` clean both sides.
+
 ### 3.7 Docs added
 - `docs/LIMS-flow-verification-and-fixes.md` — original gap analysis + applied-fix log.
 - `docs/LIMS-QMS-flow-and-changes.md` — this file.

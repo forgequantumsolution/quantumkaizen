@@ -8,6 +8,7 @@ import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
 import { writeTrail, recordSignature } from '../audit/compliance.service';
 import { createCapa } from '../audit/capa.service';
+import { raiseTicket as engineRaiseTicket } from '../workflow/engine/orchestrator';
 import type { OpenInvestigationInput, UpdateInvestigationInput, AdvancePhaseInput, CloseInvestigationInput, CreateCapaFromOosInput, ListInvestigationQuery } from './oos.schema';
 
 const PHASES = ['PHASE_1A', 'PHASE_1B', 'PHASE_2', 'CLOSED'];
@@ -55,20 +56,36 @@ const get = async (id: string) => {
   return o;
 };
 
-// Enrich with the linked QMS CAPA's number/status (soft cross-module read) so the
-// LIMS UI can show a label + link without the client making a second call.
+// Enrich with the linked QMS CAPA's number/status + the CAPA workflow ticket (soft
+// cross-module reads) so the LIMS UI can show labels + links in one call.
 const withCapa = async (o: Prisma.OosInvestigationGetPayload<object>) => {
   const base = serialize(o);
-  if (!o.capaId) return { ...base, capa: null };
-  const capa = await prisma.capa.findUnique({ where: { id: o.capaId }, select: { id: true, capaNumber: true, status: true } });
-  return { ...base, capa: capa ? { id: capa.id, capa_number: capa.capaNumber, status: capa.status } : null };
+  const capa = o.capaId
+    ? await prisma.capa.findUnique({ where: { id: o.capaId }, select: { id: true, capaNumber: true, status: true } })
+    : null;
+  return {
+    ...base,
+    capa: capa ? { id: capa.id, capa_number: capa.capaNumber, status: capa.status } : null,
+    capa_ticket: o.capaTicketId ? { id: o.capaTicketId, unique_id: o.capaTicketUniqueId } : null,
+  };
 };
 
 export const getInvestigation = async (id: string) => withCapa(await get(id));
 
+// Resolve the active CAPA workflow (latest version of WorkflowType "CAPA").
+const findActiveCapaWorkflow = async () =>
+  prisma.workflow.findFirst({
+    where: { type: { name: 'CAPA' }, isLatestVersion: true, isDeleted: false, workflowStatus: 'ACTIVE' },
+    orderBy: { version: 'desc' },
+    select: { id: true },
+  });
+
 /**
- * Raise a QMS CAPA from this OOS investigation and link it (sets `capaId`). The
- * LIMS → QMS bridge: a confirmed lab failure becomes a tracked corrective action.
+ * LIMS → QMS bridge. From an OOS investigation, raise BOTH:
+ *  - a standalone CAPA record (audit module), and
+ *  - a ticket on the CAPA workflow (so it appears in the team's CAPA workflow),
+ * linking both back to the investigation. The workflow ticket is best-effort:
+ * a missing / non-ACTIVE CAPA workflow must not block CAPA creation.
  */
 export const createCapaForInvestigation = async (
   id: string,
@@ -89,15 +106,55 @@ export const createCapaForInvestigation = async (
     userId,
   );
 
+  // Also raise a CAPA workflow ticket so it shows in the team's CAPA workflow.
+  let ticket: { ticketId: string; uniqueId: string } | null = null;
+  try {
+    const wf = await findActiveCapaWorkflow();
+    if (!wf) throw new Error('no ACTIVE CAPA workflow found');
+    if (!userId) throw new Error('no actor to raise the CAPA ticket');
+    const t = await engineRaiseTicket(
+      {
+        workflowId: wf.id,
+        title: input.title ?? `CAPA — ${o.title}`,
+        description: `Raised from OOS investigation ${o.code}. Linked CAPA record ${capa.capa_number}.`,
+        dueDate: input.due_date ?? null,
+        customFields: {
+          oos_investigation_id: o.id,
+          oos_code: o.code,
+          capa_record_id: capa.id,
+          capa_record_number: capa.capa_number,
+          sample_id: o.sampleId,
+        },
+      },
+      { id: userId },
+    );
+    ticket = { ticketId: t.ticketId, uniqueId: t.uniqueId };
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[oos] CAPA record ${capa.capa_number} created but workflow ticket was not raised:`,
+      e instanceof Error ? e.message : e,
+    );
+  }
+
   const updated = await prisma.oosInvestigation.update({
     where: { id },
-    data: { capaId: capa.id, status: o.status === 'OPEN' ? 'IN_PROGRESS' : o.status },
+    data: {
+      capaId: capa.id,
+      capaTicketId: ticket?.ticketId ?? null,
+      capaTicketUniqueId: ticket?.uniqueId ?? null,
+      status: o.status === 'OPEN' ? 'IN_PROGRESS' : o.status,
+    },
   });
   await writeTrail(
-    { entityType: 'OosInvestigation', entityId: id, action: 'UPDATE', field: 'capaId', newValue: capa.capa_number },
+    { entityType: 'OosInvestigation', entityId: id, action: 'UPDATE', field: 'capaId', newValue: `${capa.capa_number}${ticket ? ` / ${ticket.uniqueId}` : ''}` },
     userId,
   );
-  return { investigation: await withCapa(updated), capa: { id: capa.id, capa_number: capa.capa_number } };
+  return {
+    investigation: await withCapa(updated),
+    capa: { id: capa.id, capa_number: capa.capa_number },
+    capa_ticket: ticket ? { id: ticket.ticketId, unique_id: ticket.uniqueId } : null,
+  };
 };
 
 export const updateInvestigation = async (id: string, input: UpdateInvestigationInput, userId?: string) => {

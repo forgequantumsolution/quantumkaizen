@@ -2708,7 +2708,9 @@ model OosInvestigation {
   retestRequired Boolean @default(false)
   resampleRequired Boolean @default(false)
   conclusion String?
-  capaId String?                     // link to CAPA
+  capaId String?                     // link to standalone CAPA record
+  capaTicketId String?               // CAPA workflow ticket raised from this OOS
+  capaTicketUniqueId String?         // human ticket id (e.g. CAPA-0001) for display/links
   openedById String?
   openedAt DateTime @default(now())
   closedById String?
