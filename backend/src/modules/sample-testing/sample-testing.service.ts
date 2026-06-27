@@ -12,7 +12,7 @@ import { BadRequest, NotFound } from '../../lib/httpError';
 import { writeTrail, recordSignature } from '../audit/compliance.service';
 import { openInvestigation } from '../oos/oos.service';
 import type {
-  AssignTestsInput, EnterResultsInput, ReviewTestInput, DisposeSampleInput,
+  AssignTestsInput, EnterResultsInput, ReviewTestInput, DisposeSampleInput, StartTestInput,
   WorklistUpsertInput, ListSampleTestQuery, ListWorklistQuery,
 } from './sample-testing.schema';
 
@@ -104,7 +104,15 @@ const productDefaultPanel = async (productId: string | null) => {
 };
 
 // ── serialization ────────────────────────────────────────────────────────────
-type STRow = Prisma.SampleTestGetPayload<{ include: { results: true } }>;
+// Pull the test definition's method/technique + the assigned instrument so the
+// analyst worksheet can show what the test is and how to run it (not just a grid).
+const testInclude = {
+  results: true,
+  testDefinition: { select: { technique: true, description: true, method: { select: { name: true, sopRef: true } } } },
+  instrument: { select: { code: true, name: true } },
+} satisfies Prisma.SampleTestInclude;
+type STRow = Prisma.SampleTestGetPayload<{ include: typeof testInclude }>;
+
 const serializeResult = (r: STRow['results'][number]) => ({
   id: r.id, analyte_name: r.analyteName, unit: r.unit, numeric_value: r.numericValue, text_value: r.textValue,
   evaluation: r.evaluation, is_out_of_spec: r.isOutOfSpec, min_value: r.minValue, max_value: r.maxValue,
@@ -115,11 +123,17 @@ const serializeTest = (t: STRow, extra: Record<string, unknown> = {}) => ({
   spec_version_id: t.specVersionId, worklist_id: t.worklistId, status: t.status, overall_result: t.overallResult,
   analyst_name: t.analystName, instrument_id: t.instrumentId, started_at: t.startedAt, completed_at: t.completedAt,
   review_status: t.reviewStatus, reviewed_by_id: t.reviewedById, reviewed_at: t.reviewedAt,
+  // method / execution context
+  technique: t.testDefinition?.technique ?? null,
+  method_name: t.testDefinition?.method?.name ?? null,
+  sop_ref: t.testDefinition?.method?.sopRef ?? null,
+  guidance: t.testDefinition?.description ?? null,
+  instrument_name: t.instrument ? `${t.instrument.code} — ${t.instrument.name}` : null,
   results: t.results.map(serializeResult), created_at: t.createdAt, ...extra,
 });
 
 export const getSampleTest = async (id: string) => {
-  const t = await prisma.sampleTest.findUnique({ where: { id }, include: { results: true } });
+  const t = await prisma.sampleTest.findUnique({ where: { id }, include: testInclude });
   if (!t) throw NotFound('Sample test not found');
   return serializeTest(t);
 };
@@ -130,13 +144,32 @@ export const listSampleTests = async (q: ListSampleTestQuery) => {
   if (q.worklist_id) where.worklistId = q.worklist_id;
   if (q.status) where.status = q.status;
   if (q.review_status) where.reviewStatus = q.review_status;
-  const rows = await prisma.sampleTest.findMany({ where, include: { results: true }, orderBy: { createdAt: 'desc' }, take: q.page_size ?? 200 });
+  const rows = await prisma.sampleTest.findMany({ where, include: testInclude, orderBy: { createdAt: 'desc' }, take: q.page_size ?? 200 });
   return { data: rows.map((t) => serializeTest(t)) };
 };
 
 export const getTestsForSample = async (sampleId: string) => {
-  const rows = await prisma.sampleTest.findMany({ where: { sampleId }, include: { results: true }, orderBy: { createdAt: 'asc' } });
+  const rows = await prisma.sampleTest.findMany({ where: { sampleId }, include: testInclude, orderBy: { createdAt: 'asc' } });
   return { data: rows.map((t) => serializeTest(t)) };
+};
+
+// ── L3: start a test (PENDING → IN_PROGRESS) — explicit "run" step ───────────
+export const startTest = async (sampleTestId: string, input: StartTestInput, userId?: string) => {
+  const test = await prisma.sampleTest.findUnique({ where: { id: sampleTestId } });
+  if (!test) throw NotFound('Sample test not found');
+  if (test.status !== 'PENDING') throw BadRequest('Test has already been started');
+  await prisma.sampleTest.update({
+    where: { id: sampleTestId },
+    data: {
+      status: 'IN_PROGRESS',
+      startedAt: new Date(),
+      analystId: userId ?? test.analystId,
+      analystName: input.analyst_name ?? test.analystName,
+      instrumentId: input.instrument_id ?? test.instrumentId,
+    },
+  });
+  await writeTrail({ entityType: 'SampleTest', entityId: sampleTestId, action: 'TRANSITION', field: 'status', oldValue: 'PENDING', newValue: 'IN_PROGRESS' }, userId);
+  return getSampleTest(sampleTestId);
 };
 
 // ── L3: result entry + auto evaluation ───────────────────────────────────────
@@ -238,7 +271,7 @@ export const listWorklists = async (q: ListWorklistQuery) => {
 export const getWorklist = async (id: string) => {
   const w = await prisma.worklist.findFirst({ where: { id, isDeleted: false } });
   if (!w) throw NotFound('Worklist not found');
-  const tests = await prisma.sampleTest.findMany({ where: { worklistId: id }, include: { results: true } });
+  const tests = await prisma.sampleTest.findMany({ where: { worklistId: id }, include: testInclude });
   const sampleIds = [...new Set(tests.map((t) => t.sampleId))];
   const samples = sampleIds.length ? await prisma.sample.findMany({ where: { id: { in: sampleIds } }, select: { id: true, sampleNumber: true, productName: true } }) : [];
   const sm = new Map(samples.map((s) => [s.id, s]));

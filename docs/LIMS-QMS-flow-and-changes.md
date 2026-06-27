@@ -195,7 +195,51 @@ transaction window against the remote DB (HTTP 500 "Transaction already closed")
   from the OOS), clickable **Linked CAPA** chip → `/audit/capa/:id`, and the close
   modal's free-text CAPA id replaced with a **picker of existing CAPAs**.
 
-### 3.6 Docs added
+### 3.6 Analyst worksheet — make test execution self-explanatory (2026-06-27)
+
+Feedback: after assigning, the grid just asked for values with no context ("where
+do the tests run?"). A LIMS records analyst-measured values (it doesn't generate
+them), but the UI didn't say so. Added four things:
+
+**Backend**
+- `backend/src/modules/sample-testing/sample-testing.service.ts` — test serializer
+  now includes `technique`, `method_name`, `sop_ref`, `guidance`, `instrument_name`
+  (from the linked Test Definition / Method / instrument); shared `testInclude` used
+  by all read paths. New `startTest()` (PENDING → IN_PROGRESS, stamps analyst +
+  startedAt; 400 if already started).
+- `sample-testing.schema.ts` / `.controller.ts` / `.routes.ts` — `StartTestSchema` +
+  `POST /api/testing/tests/:id/start` (perm `result.enter`).
+
+**Frontend**
+- `client/src/lib/api/testing.ts` — method fields on `SampleTest`; `useStartTest`;
+  `acceptanceText()` (criteria in words) and `previewEvaluation()` (live PASS/OOS).
+- `client/src/features/lims/SampleTestsPanel.tsx`:
+  1. **Method context** per card — technique · method (SOP) · instrument, plus a
+     guidance/hint line and an **Acceptance** column in words ("95 – 105 %").
+  2. **Start Test** step — a PENDING test shows "Start Test"; the result grid is
+     locked until started, with a "Not started…" hint.
+  3. **Import CSV** — fill the grid from an `Analyte,Value` file (instrument-style
+     import); values land as unsaved edits to review then Save.
+  4. **Live OOS preview** — as you type, an out-of-range value turns the input red
+     with "⚠ Out of spec — will raise an investigation" and a dashed "OOS ?" badge,
+     before you even save.
+
+Verified (API + Playwright): method context/SOP render, Start transitions
+PENDING→IN_PROGRESS (re-start → 400), Import CSV + Save buttons appear, and typing
+`130` against a 95–105 limit shows the live OOS preview. `tsc` clean both sides.
+
+### 3.6b Bug fix — CAPA detail page stuck loading (pre-existing)
+
+Clicking the linked-CAPA chip opened `/audit/capa/:id`, which hung on a spinner.
+Cause: `GET /api/audit/capas/:id` returns the **bare** CAPA object, but `useCapa`
+was typed `{ data: Capa }` and `CapaDetailPage` read `const c = data?.data` →
+always `undefined` → `isLoading || !c` stays true forever. The page was simply
+never reachable before (no CAPAs existed until the OOS→CAPA bridge created one).
+- `client/src/lib/api/audit.ts` — `useCapa` now typed `useQuery<Capa>`.
+- `client/src/features/audit/CapaDetailPage.tsx` — `const c = data` (not `data?.data`).
+Verified: the CAPA detail page loads with the pipeline, tabs, and the OOS back-reference.
+
+### 3.7 Docs added
 - `docs/LIMS-flow-verification-and-fixes.md` — original gap analysis + applied-fix log.
 - `docs/LIMS-QMS-flow-and-changes.md` — this file.
 

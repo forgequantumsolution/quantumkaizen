@@ -1066,8 +1066,9 @@ export const useCapas = (q: ListCapaQuery = {}) =>
     queryFn: () => api.get('/audit/capas', { params: q }).then((r) => r.data),
   });
 
+// The detail endpoint returns the bare CAPA object (not a { data } envelope).
 export const useCapa = (id: string | undefined) =>
-  useQuery<{ data: Capa }>({
+  useQuery<Capa>({
     queryKey: auditKeys.capa(id ?? ''),
     queryFn: () => api.get(`/audit/capas/${id}`).then((r) => r.data),
     enabled: !!id,

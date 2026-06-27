@@ -40,7 +40,7 @@ export default function CapaDetailPage() {
   const { id } = useParams<{ id: string }>();
   const nav = useNavigate();
   const { data, isLoading } = useCapa(id);
-  const c = data?.data;
+  const c = data;
   const canUpdate = useHasPermission('capa.update');
   const statusMut = useUpdateCapaStatus();
 

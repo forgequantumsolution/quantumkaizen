@@ -26,6 +26,11 @@ export const EnterResultsSchema = z.object({
   })).min(1),
 });
 
+export const StartTestSchema = z.object({
+  analyst_name: z.string().optional().nullable(),
+  instrument_id: z.string().optional().nullable(),
+});
+
 export const ReviewTestSchema = z.object({
   decision: z.enum(['APPROVED', 'REJECTED']),
   remarks: z.string().optional().nullable(),
@@ -55,6 +60,7 @@ export const WorklistUpsertSchema = z.object({
 
 export type AssignTestsInput = z.infer<typeof AssignTestsSchema>;
 export type ListSampleTestQuery = z.infer<typeof ListSampleTestQuerySchema>;
+export type StartTestInput = z.infer<typeof StartTestSchema>;
 export type EnterResultsInput = z.infer<typeof EnterResultsSchema>;
 export type ReviewTestInput = z.infer<typeof ReviewTestSchema>;
 export type DisposeSampleInput = z.infer<typeof DisposeSampleSchema>;

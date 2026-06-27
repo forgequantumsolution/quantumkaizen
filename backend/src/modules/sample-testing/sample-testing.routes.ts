@@ -4,7 +4,7 @@
 import { Router } from 'express';
 import * as ctrl from './sample-testing.controller';
 import {
-  AssignTestsSchema, EnterResultsSchema, ReviewTestSchema, DisposeSampleSchema,
+  AssignTestsSchema, EnterResultsSchema, ReviewTestSchema, DisposeSampleSchema, StartTestSchema,
   WorklistUpsertSchema, ListSampleTestQuerySchema, ListWorklistQuerySchema, IdParamSchema,
 } from './sample-testing.schema';
 import { validate } from '../../middleware/validate';
@@ -25,6 +25,7 @@ router.post('/worklists/:id/close', requirePermission('worklist.update'), valida
 // Sample tests
 router.get('/tests', requirePermission('result.read'), validate(ListSampleTestQuerySchema, 'query'), asyncHandler(ctrl.listTests));
 router.get('/tests/:id', requirePermission('result.read'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.getTest));
+router.post('/tests/:id/start', requirePermission('result.enter'), validate(IdParamSchema, 'params'), validate(StartTestSchema), asyncHandler(ctrl.startTest));
 router.post('/tests/:id/results', requirePermission('result.enter'), validate(IdParamSchema, 'params'), validate(EnterResultsSchema), asyncHandler(ctrl.enterResults));
 router.post('/tests/:id/review', requirePermission('result.review'), validate(IdParamSchema, 'params'), validate(ReviewTestSchema), asyncHandler(ctrl.reviewTest));
 router.delete('/tests/:id/worklist', requirePermission('worklist.update'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.removeTestFromWorklist));

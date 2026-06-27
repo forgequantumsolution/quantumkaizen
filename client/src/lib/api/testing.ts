@@ -42,6 +42,12 @@ export interface SampleTest {
   review_status: ReviewStatus;
   reviewed_by_id: string | null;
   reviewed_at: string | null;
+  // method / execution context
+  technique: string | null;
+  method_name: string | null;
+  sop_ref: string | null;
+  guidance: string | null;
+  instrument_name: string | null;
   results: Result[];
   created_at: string;
   sample_number?: string;
@@ -71,6 +77,11 @@ export interface AssignTestsBody {
 export interface AssignTestsResponse {
   assigned: number;
   spec_version: { id: string; code: string; name: string } | null;
+}
+
+export interface StartTestBody {
+  analyst_name?: string | null;
+  instrument_id?: string | null;
 }
 
 export interface EnterResultsBody {
@@ -136,6 +147,18 @@ export const useAssignTests = (sampleId: string) => {
     mutationFn: (b) => api.post(`/testing/samples/${sampleId}/assign`, b).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: keys.testsForSample(sampleId) });
+      qc.invalidateQueries({ queryKey: keys.all });
+    },
+  });
+};
+
+export const useStartTest = (testId: string) => {
+  const qc = useQueryClient();
+  return useMutation<SampleTest, unknown, StartTestBody>({
+    mutationFn: (b) => api.post(`/testing/tests/${testId}/start`, b).then((r) => r.data),
+    onSuccess: (t) => {
+      qc.invalidateQueries({ queryKey: keys.test(testId) });
+      qc.invalidateQueries({ queryKey: keys.testsForSample(t.sample_id) });
       qc.invalidateQueries({ queryKey: keys.all });
     },
   });
@@ -277,6 +300,25 @@ export function specLimitLabel(r: Pick<Result, 'min_value' | 'max_value'>): stri
   if (r.max_value != null) return `≤ ${r.max_value}`;
   if (r.min_value != null) return `≥ ${r.min_value}`;
   return '—';
+}
+
+// Acceptance criteria in words (with unit), for the analyst worksheet.
+export function acceptanceText(r: Pick<Result, 'min_value' | 'max_value' | 'unit'>): string {
+  const u = r.unit ? ` ${r.unit}` : '';
+  if (r.min_value != null && r.max_value != null) return `${r.min_value} – ${r.max_value}${u}`;
+  if (r.max_value != null) return `≤ ${r.max_value}${u}`;
+  if (r.min_value != null) return `≥ ${r.min_value}${u}`;
+  return 'Qualitative (no numeric limit)';
+}
+
+// Live PASS/OOS preview as the analyst types, before saving.
+export function previewEvaluation(
+  r: Pick<Result, 'min_value' | 'max_value'>,
+  value: number | null | undefined,
+): 'PASS' | 'OOS' | null {
+  if (value == null || (r.min_value == null && r.max_value == null)) return null;
+  const oos = (r.min_value != null && value < r.min_value) || (r.max_value != null && value > r.max_value);
+  return oos ? 'OOS' : 'PASS';
 }
 
 export const OVERALL_RESULT_BADGE: Record<OverallResult, string> = {
