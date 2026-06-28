@@ -18,6 +18,8 @@ import {
   Circle,
   ChevronDown,
   ChevronUp,
+  Lock,
+  Users,
 } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import {
@@ -70,15 +72,52 @@ export default function RequiredFormsCard({ ticketId }: Props) {
       </div>
       <div className="space-y-1.5">
         {data.bindings.map((b) => {
+          // ── No read access → locked row (still shown so a blocking required
+          //    form is never invisible, but no content/actions). ──────────────
+          if (!b.canRead) {
+            return (
+              <div
+                key={b.id}
+                className="rounded border border-gray-100 flex items-center gap-2 p-2 opacity-80"
+              >
+                <Lock size={14} className="text-gray-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm text-gray-600 truncate">
+                    {b.form.title}
+                    {b.isRequired && (
+                      <span className="ml-1.5 text-[10px] px-1 rounded bg-amber-50 text-amber-700">
+                        required
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-gray-400">No access</div>
+                </div>
+              </div>
+            );
+          }
+
           const pill = statusPill(b);
           const PillIcon = pill.Icon;
           const isSubmitted = b.latestSubmission?.status === 'SUBMITTED';
-          const cta = isSubmitted
-            ? 'View'
-            : b.latestSubmission?.status === 'IN_PROGRESS'
-              ? 'Resume'
-              : 'Fill';
+          const isEach = b.fillMode === 'EACH';
           const isOpen = openId === b.id;
+
+          // EACH → the gate is per-person; "do I still owe a copy?" drives Fill.
+          const owesCopy = isEach
+            ? b.canFill && !b.eachProgress?.submittedByMe
+            : b.canFill && !isSubmitted;
+          const resumable =
+            !isEach && b.canFill && b.latestSubmission?.status === 'IN_PROGRESS';
+          const canViewInline = isSubmitted && !!b.latestSubmission?.id;
+
+          const goFill = (resume: boolean) => {
+            const params = new URLSearchParams({ ticketId, bindingId: b.id });
+            // Only resume a draft in ANYONE mode; EACH always starts a fresh copy.
+            if (resume && b.latestSubmission?.id) {
+              params.set('submissionId', b.latestSubmission.id);
+            }
+            navigate(`/forms/${b.formId}/fill?${params.toString()}`);
+          };
 
           return (
             <div
@@ -94,11 +133,23 @@ export default function RequiredFormsCard({ ticketId }: Props) {
                         required
                       </span>
                     )}
+                    {!b.canFill && (
+                      <span className="ml-1.5 text-[10px] px-1 rounded bg-gray-100 text-gray-500">
+                        view only
+                      </span>
+                    )}
                   </div>
-                  <div className="text-[11px] text-gray-500">
-                    {b.latestSubmission?.submittedAt
-                      ? `Submitted ${new Date(b.latestSubmission.submittedAt).toLocaleString()}`
-                      : 'No submission yet'}
+                  <div className="text-[11px] text-gray-500 flex items-center gap-2">
+                    {isEach && b.eachProgress ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Users size={10} />
+                        {b.eachProgress.submittedCount} of {b.eachProgress.expectedCount} submitted
+                      </span>
+                    ) : b.latestSubmission?.submittedAt ? (
+                      `Submitted ${new Date(b.latestSubmission.submittedAt).toLocaleString()}`
+                    ) : (
+                      'No submission yet'
+                    )}
                   </div>
                 </div>
                 <span
@@ -107,41 +158,31 @@ export default function RequiredFormsCard({ ticketId }: Props) {
                   <PillIcon size={10} />
                   {pill.label}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    if (isSubmitted && b.latestSubmission?.id) {
-                      // Toggle inline read-only view instead of navigating away
-                      setOpenId(isOpen ? null : b.id);
-                      return;
-                    }
-                    const params = new URLSearchParams({
-                      ticketId,
-                      bindingId: b.id,
-                    });
-                    if (b.latestSubmission?.id) {
-                      params.set('submissionId', b.latestSubmission.id);
-                    }
-                    navigate(`/forms/${b.formId}/fill?${params.toString()}`);
-                  }}
-                >
-                  {isSubmitted && isOpen ? (
-                    <>
-                      <ChevronUp size={12} />
-                      <span className="ml-1">Hide</span>
-                    </>
-                  ) : isSubmitted ? (
-                    <>
-                      <ChevronDown size={12} />
-                      <span className="ml-1">{cta}</span>
-                    </>
-                  ) : (
-                    cta
-                  )}
-                </Button>
+
+                {/* Fill / Resume — only when the user still owes a copy. */}
+                {owesCopy && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => goFill(resumable)}
+                  >
+                    {resumable ? 'Resume' : isEach ? 'Fill your copy' : 'Fill'}
+                  </Button>
+                )}
+
+                {/* View — inline read-only of the latest submitted copy. */}
+                {canViewInline && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setOpenId(isOpen ? null : b.id)}
+                  >
+                    {isOpen ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                    <span className="ml-1">{isOpen ? 'Hide' : 'View'}</span>
+                  </Button>
+                )}
               </div>
-              {isOpen && isSubmitted && b.latestSubmission?.id && (
+              {isOpen && canViewInline && b.latestSubmission?.id && (
                 <InlineSubmissionViewer
                   formId={b.formId}
                   submissionId={b.latestSubmission.id}

@@ -15,6 +15,11 @@
  * allowed to be any version of the logical form (Q3 sign-off).
  */
 import type { Prisma } from '@prisma/client';
+import {
+  bindingAccessSelect,
+  expectedSubmitterIds,
+  isLegacyOpen,
+} from '../../stage-form/stage-form.access';
 
 type Tx = Prisma.TransactionClient;
 
@@ -22,6 +27,11 @@ export interface UnsatisfiedFormBinding {
   bindingId: string;
   formId: string;
   title: string;
+  /** How the form is satisfied — drives the "N of M" message for EACH mode. */
+  mode: 'ANYONE' | 'EACH';
+  /** EACH mode only: how many copies are expected / already submitted. */
+  expectedCount?: number;
+  submittedCount?: number;
 }
 
 export const findUnsatisfiedRequiredForms = async (
@@ -40,6 +50,7 @@ export const findUnsatisfiedRequiredForms = async (
       id: true,
       formId: true,
       form: { select: { title: true } },
+      ...bindingAccessSelect,
     },
   });
   if (bindings.length === 0) return [];
@@ -54,24 +65,65 @@ export const findUnsatisfiedRequiredForms = async (
   });
   const since = activeTracking?.enteredAt ?? new Date(0);
 
-  const submittedFormIds = await tx.formSubmission
-    .findMany({
-      where: {
-        ticketId,
-        stageId,
-        status: 'SUBMITTED',
-        submittedAt: { gte: since },
-        formId: { in: bindings.map((b) => b.formId) },
-      },
-      select: { formId: true },
-    })
-    .then((rows) => new Set(rows.map((r) => r.formId)));
+  const submissions = await tx.formSubmission.findMany({
+    where: {
+      ticketId,
+      stageId,
+      status: 'SUBMITTED',
+      submittedAt: { gte: since },
+      formId: { in: bindings.map((b) => b.formId) },
+    },
+    select: { formId: true, submittedById: true },
+  });
+  // Forms with ≥1 submitted copy this visit, and per-form distinct submitters.
+  const anySubmitted = new Set<string>();
+  const submittersByForm = new Map<string, Set<string>>();
+  for (const s of submissions) {
+    anySubmitted.add(s.formId);
+    if (!s.submittedById) continue;
+    let set = submittersByForm.get(s.formId);
+    if (!set) submittersByForm.set(s.formId, (set = new Set()));
+    set.add(s.submittedById);
+  }
 
-  return bindings
-    .filter((b) => !submittedFormIds.has(b.formId))
-    .map((b) => ({
-      bindingId: b.id,
-      formId: b.formId,
-      title: b.form.title,
-    }));
+  const out: UnsatisfiedFormBinding[] = [];
+  for (const b of bindings) {
+    const access = {
+      fillMode: b.fillMode,
+      allowedFillRoles: b.allowedFillRoles,
+      allowedFillUsers: b.allowedFillUsers,
+      allowedViewRoles: b.allowedViewRoles,
+      allowedViewUsers: b.allowedViewUsers,
+    };
+
+    if (b.fillMode === 'EACH' && !isLegacyOpen(access)) {
+      // EACH: every expected person owes their own copy. Expected set is
+      // computed from CURRENT role membership, so departed members drop out.
+      const expected = await expectedSubmitterIds(tx, access);
+      if (expected.length === 0) continue; // nobody to collect from → satisfied
+      const submitters = submittersByForm.get(b.formId) ?? new Set<string>();
+      const submittedCount = expected.filter((id) => submitters.has(id)).length;
+      if (submittedCount < expected.length) {
+        out.push({
+          bindingId: b.id,
+          formId: b.formId,
+          title: b.form.title,
+          mode: 'EACH',
+          expectedCount: expected.length,
+          submittedCount,
+        });
+      }
+    } else {
+      // ANYONE / legacy-open: one submitted copy this visit satisfies it.
+      if (!anySubmitted.has(b.formId)) {
+        out.push({
+          bindingId: b.id,
+          formId: b.formId,
+          title: b.form.title,
+          mode: b.fillMode,
+        });
+      }
+    }
+  }
+  return out;
 };

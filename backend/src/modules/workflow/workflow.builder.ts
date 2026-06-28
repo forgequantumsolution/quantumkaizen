@@ -114,7 +114,15 @@ export const buildWorkflowGraph = async (
   // we resolve them to action UUIDs via this map populated alongside action
   // row creation.
   const actionIdByRef = new Map<string, string>(); // `${stageId}:${type}:${index}` → actionId
-  const formBindingRows: Prisma.StageFormBindingCreateManyInput[] = [];
+  // Form bindings carry M2M access lists (fill/view roles+users) which
+  // createMany can't connect, so we defer to per-row `create` after the bulk
+  // stage insert — same pattern as approval policies below.
+  type PendingFormBinding = {
+    stageId: string;
+    stageLabel: string;
+    data: import('./workflow.schema').EmbeddedFormBinding;
+  };
+  const pendingFormBindings: PendingFormBinding[] = [];
   // SLA + thresholds + responsible/notify M2M are inserted per-stage after the
   // bulk create because the policy id needs to exist before threshold inserts.
   type PendingSla = {
@@ -209,18 +217,15 @@ export const buildWorkflowGraph = async (
 
     // ── Phase 3.5+ embedded policy intent ────────────────────────────────
     // Form bindings — one StageFormBinding row per entry, keyed by formId.
-    const embeddedForms = (node.data.formBindings ?? []) as Array<{
-      formId: string;
-      isRequired?: boolean;
-      position?: number;
-    }>;
+    // Access lists (fill/view roles+users) are connected during per-row
+    // materialisation after the bulk stage insert (see below).
+    const embeddedForms = (node.data.formBindings ??
+      []) as import('./workflow.schema').EmbeddedFormBinding[];
     for (const fb of embeddedForms) {
-      formBindingRows.push({
-        workflowId,
+      pendingFormBindings.push({
         stageId,
-        formId: fb.formId,
-        isRequired: fb.isRequired ?? true,
-        position: fb.position ?? 0,
+        stageLabel: node.data.label,
+        data: fb,
       });
     }
 
@@ -343,9 +348,80 @@ export const buildWorkflowGraph = async (
   }
 
   // ─── Phase 3.5+ embedded-policy materialisation ─────────────────────────
-  // Forms — bulk create.
-  if (formBindingRows.length > 0) {
-    await tx.stageFormBinding.createMany({ data: formBindingRows });
+  // Forms — per-row create so we can connect the fill/view access lists.
+  // A role/user referenced in an access list may have been deleted between
+  // authoring and publish; a Prisma `connect` to a missing id would abort the
+  // whole transaction, so we resolve all referenced ids up front, drop the
+  // missing ones, and surface a warning (mirrors the stale approval-ref path).
+  if (pendingFormBindings.length > 0) {
+    const allRoleIds = new Set<string>();
+    const allUserIds = new Set<string>();
+    for (const { data } of pendingFormBindings) {
+      for (const id of [...(data.fillRoleIds ?? []), ...(data.viewRoleIds ?? [])])
+        allRoleIds.add(id);
+      for (const id of [...(data.fillUserIds ?? []), ...(data.viewUserIds ?? [])])
+        allUserIds.add(id);
+    }
+    const [existingRoles, existingUsers] = await Promise.all([
+      allRoleIds.size > 0
+        ? tx.role.findMany({ where: { id: { in: [...allRoleIds] } }, select: { id: true } })
+        : Promise.resolve([] as { id: string }[]),
+      allUserIds.size > 0
+        ? tx.user.findMany({ where: { id: { in: [...allUserIds] } }, select: { id: true } })
+        : Promise.resolve([] as { id: string }[]),
+    ]);
+    const validRoleIds = new Set(existingRoles.map((r) => r.id));
+    const validUserIds = new Set(existingUsers.map((u) => u.id));
+
+    for (const { stageId, stageLabel, data } of pendingFormBindings) {
+      const pruneRoles = (ids: string[] | undefined, kind: string) => {
+        const kept = (ids ?? []).filter((id) => validRoleIds.has(id));
+        const dropped = (ids ?? []).length - kept.length;
+        if (dropped > 0)
+          warnings.push(
+            `Form '${data.formId}' on stage '${stageLabel}': ${dropped} missing ${kind} role(s) skipped`,
+          );
+        return kept;
+      };
+      const pruneUsers = (ids: string[] | undefined, kind: string) => {
+        const kept = (ids ?? []).filter((id) => validUserIds.has(id));
+        const dropped = (ids ?? []).length - kept.length;
+        if (dropped > 0)
+          warnings.push(
+            `Form '${data.formId}' on stage '${stageLabel}': ${dropped} missing ${kind} user(s) skipped`,
+          );
+        return kept;
+      };
+
+      const fillRoleIds = pruneRoles(data.fillRoleIds, 'fill');
+      const fillUserIds = pruneUsers(data.fillUserIds, 'fill');
+      const viewRoleIds = pruneRoles(data.viewRoleIds, 'view');
+      const viewUserIds = pruneUsers(data.viewUserIds, 'view');
+
+      if (fillRoleIds.length === 0 && fillUserIds.length === 0) {
+        warnings.push(
+          `Form '${data.formId}' on stage '${stageLabel}': no valid fill audience — anyone will be able to read & fill it`,
+        );
+      }
+
+      const connect = (ids: string[]) =>
+        ids.length > 0 ? { connect: ids.map((id) => ({ id })) } : undefined;
+
+      await tx.stageFormBinding.create({
+        data: {
+          workflowId,
+          stageId,
+          formId: data.formId,
+          isRequired: data.isRequired ?? true,
+          position: data.position ?? 0,
+          fillMode: data.fillMode ?? 'ANYONE',
+          allowedFillRoles: connect(fillRoleIds),
+          allowedFillUsers: connect(fillUserIds),
+          allowedViewRoles: connect(viewRoleIds),
+          allowedViewUsers: connect(viewUserIds),
+        },
+      });
+    }
   }
 
   // SLA policies — one per stage; thresholds linked via FK so we create the

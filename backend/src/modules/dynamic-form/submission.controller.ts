@@ -22,7 +22,7 @@ export const list = async (req: Request, res: Response) => {
 };
 
 export const get = async (req: Request, res: Response) => {
-  const data = await service.get(req.params.id as string);
+  const data = await service.get(req.params.id as string, req.user?.userId);
   ok(res, data);
 };
 

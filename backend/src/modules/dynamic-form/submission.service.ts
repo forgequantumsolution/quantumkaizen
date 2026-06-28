@@ -2,6 +2,10 @@ import { FormSubmissionStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound } from '../../lib/httpError';
 import { validateSubmission } from './submission.validate';
+import {
+  assertCanReadForm,
+  bindingAccessSelect,
+} from '../stage-form/stage-form.access';
 
 const json = (v: unknown): Prisma.InputJsonValue | typeof Prisma.JsonNull =>
   v === null || v === undefined ? Prisma.JsonNull : (v as Prisma.InputJsonValue);
@@ -101,13 +105,25 @@ export const list = async (q: ListSubmissionsQuery) => {
   return { items, total, page: q.page, page_size: q.page_size };
 };
 
-export const get = async (id: string) => {
+export const get = async (id: string, userId?: string) => {
   const sub = await prisma.formSubmission.findUnique({
     where: { id },
-    include: baseInclude,
+    include: {
+      ...baseInclude,
+      // Workflow-bound submissions carry a binding whose access lists gate
+      // who may read them. Standalone submissions (no binding) are unchanged.
+      binding: { select: bindingAccessSelect },
+    },
   });
   if (!sub) throw NotFound('Submission not found');
-  return sub;
+
+  if (sub.binding && userId) {
+    await assertCanReadForm(prisma, sub.binding, userId);
+  }
+
+  // Don't leak the binding's access lists in the response shape.
+  const { binding: _binding, ...rest } = sub;
+  return rest;
 };
 
 export const updateStatus = async (id: string, input: UpdateSubmissionStatusInput) => {

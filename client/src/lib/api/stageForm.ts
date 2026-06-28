@@ -40,7 +40,20 @@ export interface StageFormBinding {
   };
 }
 
+export type FormFillMode = 'ANYONE' | 'EACH';
+
 export interface TicketStageFormBinding extends StageFormBinding {
+  fillMode: FormFillMode;
+  /** Whether the current user may view this form. False → render locked. */
+  canRead: boolean;
+  /** Whether the current user may fill this form. */
+  canFill: boolean;
+  /** EACH mode only: per-person copy progress for the current stage visit. */
+  eachProgress: {
+    expectedCount: number;
+    submittedCount: number;
+    submittedByMe: boolean;
+  } | null;
   latestSubmission: {
     id: string;
     formId: string;

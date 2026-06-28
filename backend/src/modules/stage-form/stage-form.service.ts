@@ -20,6 +20,13 @@ import type {
   ListBindingsQuery,
   UpdateStageFormBindingInput,
 } from './stage-form.schema';
+import {
+  assertCanFillForm,
+  bindingAccessSelect,
+  canFillForm,
+  canReadForm,
+  loadActor,
+} from './stage-form.access';
 
 // ─── Selects ───────────────────────────────────────────────────────────────
 
@@ -156,7 +163,7 @@ export const softDeleteBinding = async (id: string) => {
  * the most recent submission for that (ticket, stage, formId) tuple. Empty
  * list means the current stage has no form requirements at all.
  */
-export const listForTicket = async (ticketId: string) => {
+export const listForTicket = async (ticketId: string, userId: string) => {
   const ticket = await prisma.ticket.findUnique({
     where: { id: ticketId },
     select: {
@@ -184,8 +191,30 @@ export const listForTicket = async (ticketId: string) => {
       isActive: true,
     },
     orderBy: [{ position: 'asc' }, { createdAt: 'asc' }],
-    select: bindingSelect,
+    select: { ...bindingSelect, ...bindingAccessSelect },
   });
+
+  const actor = await loadActor(prisma, userId);
+
+  // Batch-resolve fill-role members for EACH-mode bindings (one query). A user
+  // has a single roleId, so we map roleId → member ids and expand per binding.
+  const eachRoleIds = new Set<string>();
+  for (const b of bindings) {
+    if (b.fillMode === 'EACH') for (const r of b.allowedFillRoles) eachRoleIds.add(r.id);
+  }
+  const roleMembers = new Map<string, string[]>();
+  if (eachRoleIds.size > 0) {
+    const members = await prisma.user.findMany({
+      where: { roleId: { in: [...eachRoleIds] }, isActive: true },
+      select: { id: true, roleId: true },
+    });
+    for (const m of members) {
+      if (!m.roleId) continue;
+      const list = roleMembers.get(m.roleId);
+      if (list) list.push(m.id);
+      else roleMembers.set(m.roleId, [m.id]);
+    }
+  }
 
   // Scope submissions to the CURRENT visit of each stage. After a RETURN the
   // ticket re-enters with a fresh tracking row; submissions from a prior visit
@@ -232,6 +261,9 @@ export const listForTicket = async (ticketId: string) => {
   type SubmissionRow = (typeof submissions)[number];
   type SubmissionOut = Omit<SubmissionRow, 'createdAt'>;
   const submissionByKey = new Map<string, SubmissionOut>();
+  // Distinct SUBMITTED submitters per (stageId, formId) within the current
+  // visit — drives EACH-mode progress ("3 of 5 submitted").
+  const submittedByKey = new Map<string, Set<string>>();
   for (const s of submissions) {
     if (!s.stageId) continue;
     const since = enteredByStage.get(s.stageId);
@@ -241,13 +273,66 @@ export const listForTicket = async (ticketId: string) => {
       const { createdAt: _omit, ...rest } = s;
       submissionByKey.set(key, rest);
     }
+    if (s.status === 'SUBMITTED' && s.submittedBy) {
+      let set = submittedByKey.get(key);
+      if (!set) submittedByKey.set(key, (set = new Set()));
+      set.add(s.submittedBy.id);
+    }
   }
 
   return {
-    bindings: bindings.map((b) => ({
-      ...b,
-      latestSubmission: submissionByKey.get(`${b.stageId}:${b.formId}`) ?? null,
-    })),
+    bindings: bindings.map((b) => {
+      const {
+        allowedFillRoles,
+        allowedFillUsers,
+        allowedViewRoles,
+        allowedViewUsers,
+        ...rest
+      } = b;
+      const access = {
+        fillMode: b.fillMode,
+        allowedFillRoles,
+        allowedFillUsers,
+        allowedViewRoles,
+        allowedViewUsers,
+      };
+      const canRead = canReadForm(access, actor);
+      const canFill = canFillForm(access, actor);
+      const key = `${b.stageId}:${b.formId}`;
+
+      // EACH mode: expand fill roles → members, union named fill users, and
+      // count how many have submitted their own copy this visit.
+      let eachProgress: {
+        expectedCount: number;
+        submittedCount: number;
+        submittedByMe: boolean;
+      } | null = null;
+      if (b.fillMode === 'EACH') {
+        const expected = new Set(allowedFillUsers.map((u) => u.id));
+        for (const r of allowedFillRoles)
+          for (const uid of roleMembers.get(r.id) ?? []) expected.add(uid);
+        const submitted = submittedByKey.get(key) ?? new Set<string>();
+        let submittedCount = 0;
+        for (const id of expected) if (submitted.has(id)) submittedCount++;
+        eachProgress = {
+          expectedCount: expected.size,
+          submittedCount,
+          submittedByMe: submitted.has(userId),
+        };
+      }
+
+      return {
+        ...rest,
+        fillMode: b.fillMode,
+        canRead,
+        canFill,
+        eachProgress,
+        // Never leak content/status to users without read access.
+        latestSubmission: canRead
+          ? submissionByKey.get(key) ?? null
+          : null,
+      };
+    }),
   };
 };
 
@@ -294,6 +379,7 @@ export const createWorkflowSubmission = async (
       isDeleted: true,
       isActive: true,
       workflowId: true,
+      ...bindingAccessSelect,
     },
   });
   if (!binding || binding.isDeleted || !binding.isActive) {
@@ -307,6 +393,10 @@ export const createWorkflowSubmission = async (
       'This form binding is not active on the ticket’s current stage',
     );
   }
+
+  // Per-form fill gate: only the fill group may submit (view-only users and
+  // users in neither list are rejected). Applies to drafts and submissions.
+  await assertCanFillForm(prisma, binding, submittedById);
 
   // Pick the flow that owns the binding's stage, so we stamp the right flow.
   const flow = ticket.flows.find((f) =>

@@ -58,10 +58,10 @@ model User {
   docsUploaded           TicketDoc[]           @relation("TicketDocUploadedBy")
   stageTrackingPerformed TicketStageTracking[] @relation("TicketStageTrackingPerformedBy")
 
-  formsCreated     Form[]           @relation("FormCreatedBy")
-  formDraftsSaved  FormDraft[]      @relation("FormDraftSavedBy")
-  formSubmissions  FormSubmission[] @relation("FormSubmissionSubmittedBy")
-  auditSchedules   AuditSchedule[]  @relation("AuditScheduleCreatedBy")
+  formsCreated    Form[]           @relation("FormCreatedBy")
+  formDraftsSaved FormDraft[]      @relation("FormDraftSavedBy")
+  formSubmissions FormSubmission[] @relation("FormSubmissionSubmittedBy")
+  auditSchedules  AuditSchedule[]  @relation("AuditScheduleCreatedBy")
 
   // Phase 3 — Approvals + SLA
   approverOnPolicies      ApprovalPolicy[] @relation("ApprovalPolicyApproverUsers")
@@ -74,6 +74,10 @@ model User {
 
   // Phase 3.5 — stage form bindings
   stageFormBindingsCreated StageFormBinding[] @relation("StageFormBindingCreatedBy")
+
+  // Per-form access control — who may fill / view a form attached to a stage.
+  formBindingsFill StageFormBinding[] @relation("FormBindingFillUsers")
+  formBindingsView StageFormBinding[] @relation("FormBindingViewUsers")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -120,6 +124,10 @@ model Role {
   users       User[]
 
   stageActions WorkflowStageAction[] @relation("StageActionAllowedRoles")
+
+  // Per-form access control — who may fill / view a form attached to a stage.
+  formBindingsFill StageFormBinding[] @relation("FormBindingFillRoles")
+  formBindingsView StageFormBinding[] @relation("FormBindingViewRoles")
 
   // Phase 3 — Approvals + SLA
   approverOnPolicies      ApprovalPolicy[] @relation("ApprovalPolicyApproverRoles")
@@ -359,8 +367,8 @@ model Workflow {
   childTriggers ChildWorkflowTrigger[] @relation("WorkflowChildTriggers")
 
   // Phase 3 — Approvals + SLA escalation
-  approvalPolicies ApprovalPolicy[] @relation("WorkflowApprovalPolicies")
-  usedAsSlaEscalation SlaPolicy[]   @relation("WorkflowAsSlaEscalation")
+  approvalPolicies    ApprovalPolicy[] @relation("WorkflowApprovalPolicies")
+  usedAsSlaEscalation SlaPolicy[]      @relation("WorkflowAsSlaEscalation")
 
   // Phase 3.5 — stage form bindings owned by this workflow
   stageFormBindings StageFormBinding[] @relation("WorkflowStageFormBindings")
@@ -751,6 +759,22 @@ model StageFormBinding {
   isRequired Boolean @default(true)
   position   Int     @default(0)
 
+  // Per-form access control. `fillMode` decides how the form is satisfied:
+  //   ANYONE → one shared copy, any member of the fill group completes it.
+  //   EACH   → one copy per person (fill roles expanded to their members,
+  //            plus named fill users); the stage stays blocked until everyone
+  //            has submitted their own copy.
+  // An empty fill group (no roles AND no users) is treated as "legacy open"
+  // by the engine — everyone may read & fill, ANYONE semantics — so bindings
+  // created before this feature keep working. The "≥1 fill role" rule is
+  // enforced in the builder UI for new/edited bindings, not at the DB level.
+  fillMode FormFillMode @default(ANYONE)
+
+  allowedFillRoles Role[] @relation("FormBindingFillRoles")
+  allowedFillUsers User[] @relation("FormBindingFillUsers")
+  allowedViewRoles Role[] @relation("FormBindingViewRoles")
+  allowedViewUsers User[] @relation("FormBindingViewUsers")
+
   isActive  Boolean @default(true)
   isDeleted Boolean @default(false)
 
@@ -764,6 +788,11 @@ model StageFormBinding {
   @@unique([stageId, formId])
   @@index([workflowId, stageId])
   @@index([formId])
+}
+
+enum FormFillMode {
+  ANYONE
+  EACH
 }
 
 // =====================================================================
@@ -794,12 +823,12 @@ enum FormSubmissionStatus {
 model FieldType {
   id          String  @id @default(uuid())
   name        String  @unique // machine name e.g. "text", "select"
-  label       String  // display name
+  label       String // display name
   description String?
   dataType    String? // primitive: string|number|boolean|date|json|file
   isSystem    Boolean @default(false)
   isActive    Boolean @default(true)
-  config      Json?   // default validation/options blob
+  config      Json? // default validation/options blob
 
   fields FormField[]
 
@@ -824,7 +853,7 @@ model FormType {
 // templateKey so the FE can list `all_versions`.
 model Form {
   id          String     @id @default(uuid())
-  templateKey String     // groups versions of the same logical form
+  templateKey String // groups versions of the same logical form
   title       String
   description String?
   version     Int        @default(1)
@@ -837,9 +866,9 @@ model Form {
   formType   FormType? @relation(fields: [formTypeId], references: [id], onDelete: SetNull)
 
   // Optional PDCA / audit context
-  location    String?
-  mainProcess String?
-  criteria    String?
+  location     String?
+  mainProcess  String?
+  criteria     String?
   pdcaApproved Boolean @default(false)
 
   workflowName String?
@@ -865,11 +894,11 @@ model Form {
 }
 
 model FormSection {
-  id          String  @id @default(uuid())
-  sectionId   String  // FE-side identifier
-  name        String
-  position    Int     @default(0)
-  dependency  Json?   // conditional visibility rules
+  id         String @id @default(uuid())
+  sectionId  String // FE-side identifier
+  name       String
+  position   Int    @default(0)
+  dependency Json? // conditional visibility rules
 
   formId String
   form   Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
@@ -883,17 +912,17 @@ model FormSection {
 }
 
 model FormField {
-  id        String @id @default(uuid())
-  fieldId   String // FE-side identifier used in submission payloads
-  name      String // unique within section, used as JSON key
-  label     String
-  position  Int    @default(0)
-  width     String @default("100") // 25/33/50/66/75/100 grid
-  required  Boolean @default(false)
+  id       String  @id @default(uuid())
+  fieldId  String // FE-side identifier used in submission payloads
+  name     String // unique within section, used as JSON key
+  label    String
+  position Int     @default(0)
+  width    String  @default("100") // 25/33/50/66/75/100 grid
+  required Boolean @default(false)
 
   // Field type — by id (preferred) or by name string for legacy/built-in
-  typeId String?
-  type   FieldType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
+  typeId   String?
+  type     FieldType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
   typeName String?
 
   defaultValue Json?
@@ -902,8 +931,8 @@ model FormField {
   dependency   Json? // conditional visibility
 
   // Dynamic / API-driven options
-  dynamic      Boolean @default(false)
-  endpoint     String?
+  dynamic  Boolean @default(false)
+  endpoint String?
 
   // Auto-generate from API
   autoGenerate         Boolean @default(false)
@@ -927,13 +956,13 @@ model FormField {
 
 // Single freeform draft snapshot per form (overwritten on every save).
 model FormDraft {
-  id        String @id @default(uuid())
-  formId    String @unique
-  form      Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  id     String @id @default(uuid())
+  formId String @unique
+  form   Form   @relation(fields: [formId], references: [id], onDelete: Cascade)
 
-  draftData    Json
-  formDetails  Json
-  versionId    String?
+  draftData   Json
+  formDetails Json
+  versionId   String?
 
   savedById String?
   savedBy   User?   @relation("FormDraftSavedBy", fields: [savedById], references: [id], onDelete: SetNull)
@@ -950,22 +979,22 @@ model FormSubmission {
   versionId String
 
   status    FormSubmissionStatus @default(IN_PROGRESS)
-  responses Json   // { sectionName: { fieldName: value } }
-  meta      Json?  // arbitrary attachments / context
+  responses Json // { sectionName: { fieldName: value } }
+  meta      Json? // arbitrary attachments / context
 
   submittedById String?
-  submittedBy   User?   @relation("FormSubmissionSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
+  submittedBy   User?     @relation("FormSubmissionSubmittedBy", fields: [submittedById], references: [id], onDelete: SetNull)
   submittedAt   DateTime?
 
   // Phase 3.5 — workflow-bound submissions. All nullable so standalone fills
   // continue to work. Populated by the workflow-scoped POST endpoint at
   // /api/tickets/:id/forms/:formId/submissions.
-  ticketId String?
-  ticket   Ticket? @relation("TicketFormSubmissions", fields: [ticketId], references: [id], onDelete: SetNull)
-  stageId  String?
-  stage    WorkflowStage? @relation("StageFormSubmissions", fields: [stageId], references: [id], onDelete: SetNull)
-  flowId   String?
-  flow     TicketFlow?    @relation("TicketFlowFormSubmissions", fields: [flowId], references: [id], onDelete: SetNull)
+  ticketId  String?
+  ticket    Ticket?           @relation("TicketFormSubmissions", fields: [ticketId], references: [id], onDelete: SetNull)
+  stageId   String?
+  stage     WorkflowStage?    @relation("StageFormSubmissions", fields: [stageId], references: [id], onDelete: SetNull)
+  flowId    String?
+  flow      TicketFlow?       @relation("TicketFlowFormSubmissions", fields: [flowId], references: [id], onDelete: SetNull)
   bindingId String?
   binding   StageFormBinding? @relation("FormSubmissionBinding", fields: [bindingId], references: [id], onDelete: SetNull)
 
@@ -983,10 +1012,10 @@ model FormSubmission {
 // =====================================================================
 
 model IsoStandard {
-  id        String  @id @default(uuid())
-  name      String  @unique
-  remarks   String?
-  isActive  Boolean @default(true)
+  id       String  @id @default(uuid())
+  name     String  @unique
+  remarks  String?
+  isActive Boolean @default(true)
 
   clauses IsoClause[]
 
@@ -995,10 +1024,10 @@ model IsoStandard {
 }
 
 model IsoClause {
-  id            String @id @default(uuid())
-  clauseNumber  String
-  clauseTitle   String
-  position      Int    @default(0)
+  id           String @id @default(uuid())
+  clauseNumber String
+  clauseTitle  String
+  position     Int    @default(0)
 
   standardId String
   standard   IsoStandard @relation(fields: [standardId], references: [id], onDelete: Cascade)
@@ -1028,23 +1057,23 @@ model IsoSubClause {
 }
 
 model AuditSchedule {
-  id              String   @id @default(uuid())
-  title           String
-  plant           String?
-  description     String?
-  auditDate       DateTime
+  id                String    @id @default(uuid())
+  title             String
+  plant             String?
+  description       String?
+  auditDate         DateTime
   previousAuditDate DateTime?
-  financialYear   String?
-  auditMethod     String?
-  isActive        Boolean  @default(true)
+  financialYear     String?
+  auditMethod       String?
+  isActive          Boolean   @default(true)
 
   // Free-form arrays of {id, name} kept as JSON to avoid coupling to other modules
-  locations   Json?
+  locations     Json?
   mainProcesses Json?
-  subProcesses Json?
-  criteria    Json?
-  departments Json?
-  focusAreas  Json?
+  subProcesses  Json?
+  criteria      Json?
+  departments   Json?
+  focusAreas    Json?
 
   createdById String?
   createdBy   User?   @relation("AuditScheduleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -1123,22 +1152,22 @@ enum ExtensionStatus {
 // ─── Approvals (3 tables) ──────────────────────────────────────────────────
 
 model ApprovalPolicy {
-  id         String   @id @default(uuid())
+  id         String              @id @default(uuid())
   workflowId String
-  workflow   Workflow @relation("WorkflowApprovalPolicies", fields: [workflowId], references: [id], onDelete: Cascade)
+  workflow   Workflow            @relation("WorkflowApprovalPolicies", fields: [workflowId], references: [id], onDelete: Cascade)
   stageId    String
-  stage      WorkflowStage @relation("StageApprovalPolicies", fields: [stageId], references: [id], onDelete: Cascade)
+  stage      WorkflowStage       @relation("StageApprovalPolicies", fields: [stageId], references: [id], onDelete: Cascade)
   actionId   String
   action     WorkflowStageAction @relation("ActionApprovalPolicies", fields: [actionId], references: [id], onDelete: Cascade)
 
   mode                   ApprovalMode
-  requiredCount          Int     @default(1)
+  requiredCount          Int          @default(1)
   // `strictRoleMatch=true` means "approver's role must be exactly in approverRoles"
   // (ignore role hierarchy). Default false = honor hierarchy (head-of-dept can
   // approve for an underling's role).
-  strictRoleMatch        Boolean @default(false)
-  allowSelfApproval      Boolean @default(false)
-  requireUniqueApprovers Boolean @default(true)
+  strictRoleMatch        Boolean      @default(false)
+  allowSelfApproval      Boolean      @default(false)
+  requireUniqueApprovers Boolean      @default(true)
   // For mode=SEQUENTIAL — ordered list of `{ order, role_id | user_id, label }`.
   approvalSequence       Json?
   approvalSlaHours       Int?
@@ -1161,20 +1190,20 @@ model ApprovalPolicy {
 }
 
 model ApprovalInstance {
-  id                 String         @id @default(uuid())
+  id                 String               @id @default(uuid())
   ticketId           String
-  ticket             Ticket         @relation("TicketApprovalInstances", fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket             Ticket               @relation("TicketApprovalInstances", fields: [ticketId], references: [id], onDelete: Cascade)
   policyId           String
-  policy             ApprovalPolicy @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  policy             ApprovalPolicy       @relation(fields: [policyId], references: [id], onDelete: Restrict)
   triggeringActionId String?
   triggeringAction   WorkflowStageAction? @relation("ActionTriggeringInstances", fields: [triggeringActionId], references: [id], onDelete: SetNull)
 
-  status      ApprovalInstanceStatus @default(PENDING)
-  startedAt   DateTime               @default(now())
-  completedAt DateTime?
-  deadlineAt  DateTime?
+  status               ApprovalInstanceStatus @default(PENDING)
+  startedAt            DateTime               @default(now())
+  completedAt          DateTime?
+  deadlineAt           DateTime?
   // For SEQUENTIAL mode: which step in the approval_sequence we're waiting on.
-  currentSequenceOrder Int @default(1)
+  currentSequenceOrder Int                    @default(1)
 
   // When status=INVALIDATED — captures who/why so audit can explain why an
   // in-flight instance was voided (typically because the underlying policy
@@ -1241,15 +1270,15 @@ model BusinessCalendar {
 }
 
 model SlaPolicy {
-  id            String         @id @default(uuid())
-  parentStageId String         @unique
-  parentStage   WorkflowStage  @relation("StageSlaPolicy", fields: [parentStageId], references: [id], onDelete: Cascade)
+  id            String        @id @default(uuid())
+  parentStageId String        @unique
+  parentStage   WorkflowStage @relation("StageSlaPolicy", fields: [parentStageId], references: [id], onDelete: Cascade)
 
   duration                Int
   calendarId              String?
   calendar                BusinessCalendar? @relation(fields: [calendarId], references: [id], onDelete: SetNull)
-  pauseOnHold             Boolean @default(true)
-  pauseOnExtensionPending Boolean @default(false)
+  pauseOnHold             Boolean           @default(true)
+  pauseOnExtensionPending Boolean           @default(false)
 
   // Escalation workflow that gets spawned as a CHILD ticket when the parent
   // ticket enters this stage. The threshold cron only ever advances that
@@ -1367,8 +1396,8 @@ model SlaTimerEvent {
   triggeredById String?
   triggeredBy   User?   @relation("SlaTimerEventTriggeredBy", fields: [triggeredById], references: [id], onDelete: SetNull)
 
-  eventData   Json?
-  occurredAt  DateTime      @default(now())
+  eventData  Json?
+  occurredAt DateTime @default(now())
 
   createdAt DateTime @default(now())
 
