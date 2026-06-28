@@ -958,7 +958,7 @@ Each phase is "done" when:
 | `WORKFLOW_PHASE_3_PLAN.md` | TBD — written before Phase 3 starts |
 | `WORKFLOW_PHASE_4_PLAN.md` | TBD |
 | `WORKFLOW_PHASE_5_PLAN.md` | TBD |
-| `../workflow-changes.md` | Running changelog of every code change made (root-level) |
+| `workflow/workflow-changes.md` | Running changelog of every code change made |
 
 The master plan stays at the level of "what each phase covers". Detailed schema, request/response shapes, and implementation algorithms go in the per-phase doc.
 
