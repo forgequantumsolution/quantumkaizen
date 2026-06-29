@@ -17,6 +17,22 @@ import ticketRoutes from './modules/ticket/ticket.routes';
 import dynamicFormRoutes from './modules/dynamic-form/dynamic-form.routes';
 import formSubmissionRoutes from './modules/dynamic-form/submission.routes';
 import auditRoutes from './modules/audit/audit.routes';
+import dmsRoutes from './modules/dms/dms.routes';
+import trainingRoutes from './modules/training/training.routes';
+import lmsRoutes from './modules/lms/lms.routes';
+import lmsPublicRoutes from './modules/lms/lms.public.routes';
+import limsRoutes from './modules/lims/lims.routes';
+import sampleRoutes from './modules/sample/sample.routes';
+import limsMasterRoutes from './modules/lims-master/lims-master.routes';
+import testDefinitionRoutes from './modules/test-definition/test-definition.routes';
+import specVersionRoutes from './modules/spec-version/spec-version.routes';
+import sampleTestingRoutes from './modules/sample-testing/sample-testing.routes';
+import oosRoutes from './modules/oos/oos.routes';
+import qcRoutes from './modules/qc/qc.routes';
+import stabilityRoutes from './modules/stability/stability.routes';
+import coaRoutes from './modules/coa/coa.routes';
+import coaPublicRoutes from './modules/coa/coa.public.routes';
+import limsAnalyticsRoutes from './modules/lims-analytics/lims-analytics.routes';
 import {
   workflowScopedPolicyRouter as approvalWorkflowScopedRouter,
   policyRouter as approvalPolicyRouter,
@@ -47,7 +63,7 @@ export const buildApp = () => {
 
   app.use(helmet());
   app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '15mb' })); // raised for DMS inline document uploads
   app.use(express.urlencoded({ extended: true }));
   if (env.NODE_ENV !== 'test') app.use(morgan('dev'));
 
@@ -59,6 +75,8 @@ export const buildApp = () => {
     })
   );
 
+  app.use('/api/public/coa', coaPublicRoutes); // LIMS 2.0 — public CoA QR verify (no auth) — must precede the '/api' catch-all
+  app.use('/api/public/lms', lmsPublicRoutes); // LMS — public certificate QR verify (no auth) — must precede the '/api' catch-all
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/departments', departmentRoutes);
@@ -72,6 +90,20 @@ export const buildApp = () => {
   app.use('/api/forms', dynamicFormRoutes);
   app.use('/api/form-submissions', formSubmissionRoutes);
   app.use('/api', auditRoutes); // ISO standards + audit schedules
+  app.use('/api/dms', dmsRoutes); // controlled document management
+  app.use('/api/training', trainingRoutes); // training & competency
+  app.use('/api/lms', lmsRoutes); // LMS — learning management (courses, content)
+  app.use('/api/lims', limsRoutes); // LIMS — lab registry (+ more)
+  app.use('/api/samples', sampleRoutes); // LIMS — sample lifecycle
+  app.use('/api/lims-master', limsMasterRoutes); // LIMS 2.0 — master data
+  app.use('/api/test-definitions', testDefinitionRoutes); // LIMS 2.0 — test defs + panels
+  app.use('/api/spec-versions', specVersionRoutes); // LIMS 2.0 — versioned specs
+  app.use('/api/testing', sampleTestingRoutes); // LIMS 2.0 — tests, worklists, results, disposition
+  app.use('/api/oos', oosRoutes); // LIMS 2.0 — OOS/OOT investigations
+  app.use('/api/qc', qcRoutes); // LIMS 2.0 — QC (Levey-Jennings / Westgard)
+  app.use('/api/stability', stabilityRoutes); // LIMS 2.0 — stability (ICH Q1A)
+  app.use('/api/coa', coaRoutes); // LIMS 2.0 — certificate of analysis
+  app.use('/api/lims-analytics', limsAnalyticsRoutes); // LIMS 2.0 — dashboard, TAT, workload, data-review
 
   // Phase 3 — Approval module. Mounted as four routers so we don't have to
   // collide path-namespaces with the existing workflow + ticket routers.

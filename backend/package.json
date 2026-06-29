@@ -20,7 +20,9 @@
     "worker": "tsx src/jobs/worker.ts",
     "worker:dev": "tsx watch src/jobs/worker.ts",
     "test:unit": "vitest run --dir ../tests/unit",
-    "test:unit:watch": "vitest --dir ../tests/unit"
+    "test:unit:watch": "vitest --dir ../tests/unit",
+    "db:seed:lims": "tsx prisma/seed-lims-data.ts",
+    "db:seed:lms": "tsx prisma/seed-lms-data.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

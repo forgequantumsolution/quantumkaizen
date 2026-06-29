@@ -197,6 +197,17 @@ const USERS = [
     roleName: 'AUDITOR',
   },
   {
+    // LIMS — dedicated reviewer so the second-person data review (analyst ≠ reviewer)
+    // can be demonstrated end-to-end.
+    email: 'reviewer@forgequantum.com',
+    employeeId: 'EMP-007',
+    firstName: 'Meera',
+    lastName: 'Nair',
+    designation: 'QC Reviewer',
+    departmentCode: 'QC',
+    roleName: 'QUALITY_ENGINEER',
+  },
+  {
     email: 'doc@forgequantum.com',
     employeeId: 'EMP-005',
     firstName: 'Anita',
