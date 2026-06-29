@@ -35,6 +35,18 @@ interface Props {
   stageStatuses: WorkflowStageStatus[];
 }
 
+/** Compact "RoleA, UserB, +2" summary for a form binding's access list. */
+const summariseAccess = (
+  roles: { id: string; name: string }[] | undefined,
+  users: { id: string; name: string }[] | undefined,
+  emptyLabel = 'Everyone',
+): string => {
+  const names = [...(roles ?? []), ...(users ?? [])].map((r) => r.name);
+  if (names.length === 0) return emptyLabel;
+  const shown = names.slice(0, 2).join(', ');
+  return names.length > 2 ? `${shown}, +${names.length - 2}` : shown;
+};
+
 export default function StageInspector({
   workflowId,
   data,
@@ -43,6 +55,8 @@ export default function StageInspector({
 }: Props) {
   const [slaOpen, setSlaOpen] = useState(false);
   const [formBindingOpen, setFormBindingOpen] = useState(false);
+  // null → attaching a new form; number → editing the binding at that index.
+  const [formEditIndex, setFormEditIndex] = useState<number | null>(null);
   const [approvalEditFor, setApprovalEditFor] = useState<
     {
       actionType: 'primary' | 'secondary';
@@ -363,7 +377,10 @@ export default function StageInspector({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setFormBindingOpen(true)}
+            onClick={() => {
+              setFormEditIndex(null);
+              setFormBindingOpen(true);
+            }}
           >
             <Plus size={12} />
             <span className="ml-1 text-xs">Attach form</span>
@@ -395,7 +412,23 @@ export default function StageInspector({
                     {' · position '}
                     {b.position}
                   </div>
+                  <div className="text-[11px] text-gray-500 truncate">
+                    {`Fill: ${summariseAccess(b.fillRoleLabels, b.fillUserLabels)} · ${
+                      (b.fillMode ?? 'ANYONE') === 'EACH' ? 'Each one' : 'Anyone'
+                    } · View: ${summariseAccess(b.viewRoleLabels, b.viewUserLabels, 'Fillers only')}`}
+                  </div>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label="edit form binding"
+                  onClick={() => {
+                    setFormEditIndex(idx);
+                    setFormBindingOpen(true);
+                  }}
+                >
+                  <Pencil size={14} className="text-gray-500" />
+                </Button>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -429,7 +462,15 @@ export default function StageInspector({
         onClose={() => setFormBindingOpen(false)}
         stageName={data.label}
         existing={formBindings}
-        onAdd={(b) => update('formBindings', [...formBindings, b])}
+        editIndex={formEditIndex}
+        onSave={(b, editIndex) =>
+          update(
+            'formBindings',
+            editIndex == null
+              ? [...formBindings, b]
+              : formBindings.map((existing, i) => (i === editIndex ? b : existing)),
+          )
+        }
       />
 
       {approvalEditFor && (

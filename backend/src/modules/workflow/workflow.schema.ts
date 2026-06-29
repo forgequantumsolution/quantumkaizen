@@ -24,6 +24,15 @@ const EmbeddedFormBindingSchema = z.object({
   formId: z.string().uuid(),
   isRequired: z.boolean().default(true),
   position: z.number().int().min(0).max(1000).default(0),
+  // Per-form access control. NOTE: fill*Ids are intentionally NOT .min(1) —
+  // kept permissive so pre-feature workflows (empty fill group = legacy-open)
+  // still validate on re-publish. The "≥1 fill role" rule is enforced in the
+  // builder UI for new/edited bindings only. See the access-control plan §2/§4.
+  fillMode: z.enum(['ANYONE', 'EACH']).default('ANYONE'),
+  fillRoleIds: z.array(z.string().uuid()).max(200).default([]),
+  fillUserIds: z.array(z.string().uuid()).max(200).default([]),
+  viewRoleIds: z.array(z.string().uuid()).max(200).default([]),
+  viewUserIds: z.array(z.string().uuid()).max(200).default([]),
 });
 
 const EmbeddedSlaThresholdSchema = z.object({

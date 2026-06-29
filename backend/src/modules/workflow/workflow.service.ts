@@ -123,6 +123,13 @@ const workflowDetailSelect = {
           // inspector can render "{title} (v{n})" without a separate
           // round-trip. Form is a Restrict FK so this row always exists.
           form: { select: { title: true, version: true } },
+          // Per-form access control — round-trip so editing + re-publishing
+          // preserves the audience instead of wiping it.
+          fillMode: true,
+          allowedFillRoles: { select: { id: true, name: true } },
+          allowedFillUsers: { select: { id: true, name: true } },
+          allowedViewRoles: { select: { id: true, name: true } },
+          allowedViewUsers: { select: { id: true, name: true } },
         },
       },
     },
@@ -241,6 +248,16 @@ const toFlowJson = (wf: WorkflowDetail) => {
         position: fb.position,
         formTitle: fb.form.title,
         formVersion: fb.form.version,
+        // Per-form access control — ids drive editing, labels drive display.
+        fillMode: fb.fillMode,
+        fillRoleIds: fb.allowedFillRoles.map((r) => r.id),
+        fillUserIds: fb.allowedFillUsers.map((u) => u.id),
+        viewRoleIds: fb.allowedViewRoles.map((r) => r.id),
+        viewUserIds: fb.allowedViewUsers.map((u) => u.id),
+        fillRoleLabels: fb.allowedFillRoles.map((r) => ({ id: r.id, name: r.name })),
+        fillUserLabels: fb.allowedFillUsers.map((u) => ({ id: u.id, name: u.name })),
+        viewRoleLabels: fb.allowedViewRoles.map((r) => ({ id: r.id, name: r.name })),
+        viewUserLabels: fb.allowedViewUsers.map((u) => ({ id: u.id, name: u.name })),
       })),
       sla: stage.slaPolicy
         ? {

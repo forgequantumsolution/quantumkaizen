@@ -53,7 +53,12 @@ export const remove = async (req: Request, res: Response) => {
 };
 
 export const listForTicket = async (req: Request, res: Response) => {
-  res.json(await service.listForTicket(req.params.id as string));
+  const userId = actorId(req);
+  if (!userId) {
+    res.status(401).json({ error: { message: 'Authentication required' } });
+    return;
+  }
+  res.json(await service.listForTicket(req.params.id as string, userId));
 };
 
 export const listSubmittedForms = async (req: Request, res: Response) => {

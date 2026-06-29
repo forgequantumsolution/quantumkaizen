@@ -23,6 +23,14 @@ export interface NodeAction {
 // The backend materialises them into real ApprovalPolicy / SlaPolicy /
 // StageFormBinding rows on Publish — see workflow.builder.ts.
 
+export type FormFillMode = 'ANYONE' | 'EACH';
+
+/** Lightweight {id,name} pair denormalised onto a binding for display. */
+export interface FormAccessRef {
+  id: string;
+  name: string;
+}
+
 export interface EmbeddedFormBinding {
   formId: string;
   isRequired: boolean;
@@ -33,6 +41,26 @@ export interface EmbeddedFormBinding {
   // backwards-compat with canvas state saved before this field existed.
   formTitle?: string;
   formVersion?: number;
+
+  // ── Per-form access control ──────────────────────────────────────────────
+  // ANYONE → one shared copy; EACH → one copy per person in the fill group.
+  // Defaults to 'ANYONE'. Optional for back-compat with canvas state saved
+  // before access control existed (treated as legacy-open by the engine).
+  fillMode?: FormFillMode;
+  // Who may FILL. The builder UI requires ≥1 fill role for new/edited
+  // bindings; an empty fill group on an OLD binding means "legacy open".
+  fillRoleIds?: string[];
+  fillUserIds?: string[];
+  // Who may VIEW only (see the form + responses, never fill).
+  viewRoleIds?: string[];
+  viewUserIds?: string[];
+  // Denormalised labels so the inspector can render names without a lookup,
+  // mirroring formTitle. Populated by the picker on attach and toFlowJson on
+  // load. Never persisted to the DB (stripped at materialisation).
+  fillRoleLabels?: FormAccessRef[];
+  fillUserLabels?: FormAccessRef[];
+  viewRoleLabels?: FormAccessRef[];
+  viewUserLabels?: FormAccessRef[];
 }
 
 export interface EmbeddedSlaThreshold {
