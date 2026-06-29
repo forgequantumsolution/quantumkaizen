@@ -69,6 +69,21 @@ export interface TicketStageFormsResponse {
   bindings: TicketStageFormBinding[];
 }
 
+export interface SubmittedFormHistoryItem {
+  id: string;
+  formId: string;
+  formTitle: string;
+  stageId: string | null;
+  stageName: string | null;
+  status: FormSubmissionStatus;
+  submittedAt: string | null;
+  submittedBy: UserRef | null;
+}
+
+export interface TicketFormHistoryResponse {
+  submissions: SubmittedFormHistoryItem[];
+}
+
 export interface CreateStageFormBindingBody {
   stageId: string;
   formId: string;
@@ -110,6 +125,8 @@ export const stageFormKeys = {
     ['stage-forms', 'workflow', workflowId, { stageId: stageId ?? null }] as const,
   binding: (id: string) => ['stage-forms', 'binding', id] as const,
   ticket: (ticketId: string) => ['stage-forms', 'ticket', ticketId] as const,
+  ticketHistory: (ticketId: string) =>
+    ['stage-forms', 'ticket', ticketId, 'history'] as const,
 };
 
 // ─── Hooks ───────────────────────────────────────────────────────────────────
@@ -177,6 +194,19 @@ export const useTicketStageForms = (ticketId: string | undefined) =>
   useQuery<TicketStageFormsResponse>({
     queryKey: stageFormKeys.ticket(ticketId ?? ''),
     queryFn: () => api.get(`/tickets/${ticketId}/stage-forms`).then((r) => r.data),
+    enabled: !!ticketId,
+  });
+
+/**
+ * Read-only history of every submitted form/checklist across all stages the
+ * ticket has passed through. Powers the "Submitted Forms" view that keeps
+ * filled forms visible after a stage is left or the ticket completes.
+ */
+export const useTicketFormHistory = (ticketId: string | undefined) =>
+  useQuery<TicketFormHistoryResponse>({
+    queryKey: stageFormKeys.ticketHistory(ticketId ?? ''),
+    queryFn: () =>
+      api.get(`/tickets/${ticketId}/form-submissions`).then((r) => r.data),
     enabled: !!ticketId,
   });
 

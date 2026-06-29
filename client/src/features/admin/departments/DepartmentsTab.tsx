@@ -1,6 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Formik, Form, type FormikHelpers } from 'formik';
-import * as Yup from 'yup';
 import {
   Button as AntButton,
   Modal as AntModal,
@@ -9,11 +7,11 @@ import {
   Switch as AntSwitch,
   Table as AntTable,
   Tag as AntTag,
-  Form as AntForm,
   Empty,
   type TableColumnsType,
 } from 'antd';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { AppForm } from '@/components/ui';
 import {
   useDepartments,
   useCreateDepartment,
@@ -41,17 +39,6 @@ const emptyValues: FormValues = {
   costCenter: '',
   isActive: true,
 };
-
-const validationSchema = Yup.object({
-  code: Yup.string()
-    .matches(/^[A-Z0-9_-]{2,16}$/, 'Code must be 2–16 chars: A-Z, 0-9, _, -')
-    .required('Code is required'),
-  name: Yup.string().min(1).max(120).required('Name is required'),
-  description: Yup.string().max(500).nullable(),
-  parentId: Yup.string().nullable(),
-  costCenter: Yup.string().max(40).nullable(),
-  isActive: Yup.boolean().required(),
-});
 
 const buildPayload = (values: FormValues): CreateDepartmentInput => ({
   code: values.code.trim().toUpperCase(),
@@ -106,6 +93,8 @@ export default function DepartmentsTab() {
   const [confirmDelete, setConfirmDelete] = useState<Department | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  const [form] = AppForm.useForm<FormValues>();
+
   const initialValues = useMemo<FormValues>(() => {
     if (!editing) return emptyValues;
     return {
@@ -117,6 +106,11 @@ export default function DepartmentsTab() {
       isActive: editing.isActive,
     };
   }, [editing]);
+
+  // Seed the form whenever the modal opens or the editing target changes.
+  useEffect(() => {
+    if (showForm) form.setFieldsValue(initialValues);
+  }, [showForm, initialValues, form]);
 
   const openCreate = () => {
     setEditing(null);
@@ -133,12 +127,10 @@ export default function DepartmentsTab() {
   const closeForm = () => {
     setShowForm(false);
     setFormError(null);
+    form.resetFields();
   };
 
-  const handleSubmit = async (
-    values: FormValues,
-    helpers: FormikHelpers<FormValues>,
-  ) => {
+  const handleFinish = async (values: FormValues) => {
     setFormError(null);
     const payload = buildPayload(values);
     try {
@@ -147,8 +139,6 @@ export default function DepartmentsTab() {
       closeForm();
     } catch (err) {
       setFormError(extractApiError(err));
-    } finally {
-      helpers.setSubmitting(false);
     }
   };
 
@@ -253,6 +243,12 @@ export default function DepartmentsTab() {
     },
   ];
 
+  const parentOptions = allDepartments
+    .filter((d) => !editing || d.id !== editing.id)
+    .map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }));
+
+  const isSaving = create.isPending || update.isPending;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-4">
@@ -312,123 +308,89 @@ export default function DepartmentsTab() {
       </div>
 
       {/* Create/Edit Modal */}
-      <Formik<FormValues>
-        enableReinitialize
-        initialValues={initialValues}
-        validationSchema={validationSchema}
-        onSubmit={handleSubmit}
+      <AntModal
+        title={editing ? `Edit Department · ${editing.code}` : 'Add Department'}
+        open={showForm}
+        onCancel={closeForm}
+        width={680}
+        destroyOnClose
+        footer={[
+          <AntButton key="cancel" onClick={closeForm}>
+            Cancel
+          </AntButton>,
+          <AntButton
+            key="ok"
+            type="primary"
+            loading={isSaving}
+            onClick={() => form.submit()}
+          >
+            {editing ? 'Save Changes' : 'Create Department'}
+          </AntButton>,
+        ]}
       >
-        {({ values, errors, touched, setFieldValue, handleSubmit, isSubmitting, resetForm }) => {
-          const parentOptions = allDepartments
-            .filter((d) => !editing || d.id !== editing.id)
-            .map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }));
-
-          return (
-            <AntModal
-              title={editing ? `Edit Department · ${editing.code}` : 'Add Department'}
-              open={showForm}
-              onCancel={() => {
-                resetForm();
-                closeForm();
-              }}
-              width={680}
-              destroyOnClose
-              footer={[
-                <AntButton
-                  key="cancel"
-                  onClick={() => {
-                    resetForm();
-                    closeForm();
-                  }}
-                >
-                  Cancel
-                </AntButton>,
-                <AntButton
-                  key="ok"
-                  type="primary"
-                  loading={isSubmitting}
-                  onClick={() => handleSubmit()}
-                >
-                  {editing ? 'Save Changes' : 'Create Department'}
-                </AntButton>,
+        <AppForm<FormValues>
+          form={form}
+          initialValues={initialValues}
+          onFinish={handleFinish}
+        >
+          {formError && (
+            <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+              {formError}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-x-4">
+            <AppForm.Item
+              label="Code"
+              name="code"
+              normalize={(v: string) => (v ?? '').toUpperCase()}
+              help="2–16 chars: A-Z, 0-9, _ or -"
+              rules={[
+                { required: true, message: 'Code is required' },
+                {
+                  pattern: /^[A-Z0-9_-]{2,16}$/,
+                  message: 'Code must be 2–16 chars: A-Z, 0-9, _, -',
+                },
               ]}
             >
-              <AntForm layout="vertical" component={false}>
-              <Form>
-                {formError && (
-                  <div className="mb-4 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
-                    {formError}
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-x-4">
-                  <AntForm.Item
-                    label="Code"
-                    required
-                    validateStatus={touched.code && errors.code ? 'error' : ''}
-                    help={touched.code && errors.code ? errors.code : '2–16 chars: A-Z, 0-9, _ or -'}
-                  >
-                    <AntInput
-                      value={values.code}
-                      onChange={(e) => setFieldValue('code', e.target.value.toUpperCase())}
-                      placeholder="QA, MFG, ENG…"
-                      disabled={!!editing}
-                      maxLength={16}
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item
-                    label="Name"
-                    required
-                    validateStatus={touched.name && errors.name ? 'error' : ''}
-                    help={touched.name && errors.name}
-                  >
-                    <AntInput
-                      value={values.name}
-                      onChange={(e) => setFieldValue('name', e.target.value)}
-                      placeholder="Quality Assurance"
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item label="Description" className="col-span-2">
-                    <AntInput.TextArea
-                      value={values.description}
-                      onChange={(e) => setFieldValue('description', e.target.value)}
-                      rows={2}
-                      placeholder="What does this department do?"
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item label="Parent Department">
-                    <AntSelect
-                      value={values.parentId || undefined}
-                      onChange={(v) => setFieldValue('parentId', v ?? '')}
-                      placeholder="None (top-level)"
-                      allowClear
-                      options={parentOptions}
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item label="Cost Center">
-                    <AntInput
-                      value={values.costCenter}
-                      onChange={(e) => setFieldValue('costCenter', e.target.value)}
-                      placeholder="CC-1001"
-                    />
-                  </AntForm.Item>
-                  <AntForm.Item label="Active" className="col-span-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-gray-500 mb-0">
-                        Inactive departments stay in the database but are hidden from default lists.
-                      </p>
-                      <AntSwitch
-                        checked={values.isActive}
-                        onChange={(v) => setFieldValue('isActive', v)}
-                      />
-                    </div>
-                  </AntForm.Item>
-                </div>
-              </Form>
-              </AntForm>
-            </AntModal>
-          );
-        }}
-      </Formik>
+              <AntInput placeholder="QA, MFG, ENG…" disabled={!!editing} maxLength={16} />
+            </AppForm.Item>
+            <AppForm.Item
+              label="Name"
+              name="name"
+              rules={[
+                { required: true, message: 'Name is required' },
+                { max: 120, message: 'At most 120 characters' },
+              ]}
+            >
+              <AntInput placeholder="Quality Assurance" />
+            </AppForm.Item>
+            <AppForm.Item label="Description" name="description" className="col-span-2">
+              <AntInput.TextArea rows={2} placeholder="What does this department do?" />
+            </AppForm.Item>
+            <AppForm.Item label="Parent Department" name="parentId">
+              <AntSelect
+                placeholder="None (top-level)"
+                allowClear
+                options={parentOptions}
+              />
+            </AppForm.Item>
+            <AppForm.Item label="Cost Center" name="costCenter">
+              <AntInput placeholder="CC-1001" />
+            </AppForm.Item>
+            <div className="col-span-2 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-0">Active</p>
+                <p className="text-xs text-gray-500 mb-0">
+                  Inactive departments stay in the database but are hidden from default lists.
+                </p>
+              </div>
+              <AppForm.Item name="isActive" valuePropName="checked" className="!mb-0">
+                <AntSwitch />
+              </AppForm.Item>
+            </div>
+          </div>
+        </AppForm>
+      </AntModal>
 
       {/* Delete confirmation */}
       <AntModal

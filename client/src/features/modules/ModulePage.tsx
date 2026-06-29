@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { App } from 'antd';
 import {
@@ -25,6 +25,7 @@ import {
   History,
   X,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Card,
   Button,
@@ -32,7 +33,9 @@ import {
   Spinner,
   Input,
   Select,
+  KpiCard,
 } from '@/components/ui';
+import type { KpiAccent } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn, formatDate, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
@@ -75,17 +78,15 @@ const DEFAULT_VISIBLE = new Set(COLUMN_CONFIG.map((c) => c.id));
 const KPI_DEFS: Array<{
   id: KpiId;
   label: string;
-  icon: React.ElementType;
-  color: string;
-  bg: string;
-  ring: string;
+  icon: LucideIcon;
+  accent: KpiAccent;
 }> = [
-  { id: 'mine',        label: 'My PR',            icon: FileText,       color: 'text-blue-600',    bg: 'bg-blue-50',    ring: 'ring-blue-300' },
-  { id: 'department',  label: 'My Department PR', icon: Users,          color: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-300' },
-  { id: 'createdByMe', label: 'Created By Me',    icon: UserIcon,       color: 'text-slate-600',   bg: 'bg-slate-100',  ring: 'ring-slate-300' },
-  { id: 'all',         label: 'All PR',           icon: ListIcon,       color: 'text-amber-600',   bg: 'bg-amber-50',   ring: 'ring-amber-300' },
-  { id: 'pending',     label: 'Pending',          icon: Clock,          color: 'text-orange-500',  bg: 'bg-orange-50',  ring: 'ring-orange-300' },
-  { id: 'saved',       label: 'Saved PR',         icon: Bookmark,       color: 'text-rose-500',    bg: 'bg-rose-50',    ring: 'ring-rose-300' },
+  { id: 'mine',        label: 'My PR',            icon: FileText, accent: 'blue'    },
+  { id: 'department',  label: 'My Department PR', icon: Users,    accent: 'emerald' },
+  { id: 'createdByMe', label: 'Created By Me',    icon: UserIcon, accent: 'slate'   },
+  { id: 'all',         label: 'All PR',           icon: ListIcon, accent: 'amber'   },
+  { id: 'pending',     label: 'Pending',          icon: Clock,    accent: 'orange'  },
+  { id: 'saved',       label: 'Saved PR',         icon: Bookmark, accent: 'rose'    },
 ];
 
 function useDebounced<T>(value: T, ms = 250) {
@@ -104,8 +105,22 @@ const relativeDays = (iso: string): string => {
   return `${days} days`;
 };
 
-export default function ModulePage() {
-  const { typeId = '' } = useParams<{ typeId: string }>();
+interface ModulePageProps {
+  /** Override the workflow type id (when not taken from the URL :typeId param). */
+  typeId?: string;
+  /** Embedded mode — render inside another layout (e.g. the Audit module tabs):
+   *  no PageContainer, no title, no Dashboard/Workspace sub-tabs; locked to the
+   *  workspace ticket list. */
+  embedded?: boolean;
+}
+
+export default function ModulePage({
+  typeId: propTypeId,
+  embedded = false,
+}: ModulePageProps = {}) {
+  const params = useParams<{ typeId: string }>();
+  const typeId = propTypeId ?? params.typeId ?? '';
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const hasPermission = useAuthStore((s) => s.hasPermission);
@@ -121,7 +136,11 @@ export default function ModulePage() {
     [types, typeId],
   );
 
-  const [tab, setTab] = useState<Tab>('dashboard');
+  // Allow deep-linking straight to the workspace (e.g. the Audit module's
+  // "My Workspace" tab links here with ?tab=workspace).
+  const initialTab: Tab =
+    embedded || searchParams.get('tab') === 'workspace' ? 'workspace' : 'dashboard';
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [activeKpi, setActiveKpi] = useState<KpiId | null>(null);
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounced(searchInput, 250);
@@ -132,14 +151,16 @@ export default function ModulePage() {
   const [workflowFilterId, setWorkflowFilterId] = useState<string>('');
   const [createOpen, setCreateOpen] = useState(false);
 
-  // Reset state when switching modules
+  // Reset state when switching modules — honoring a ?tab= deep-link.
   useEffect(() => {
-    setTab('dashboard');
+    setTab(
+      embedded || searchParams.get('tab') === 'workspace' ? 'workspace' : 'dashboard',
+    );
     setActiveKpi(null);
     setSearchInput('');
     setPriorityId('');
     setWorkflowFilterId('');
-  }, [typeId]);
+  }, [typeId, searchParams, embedded]);
 
   // Single fetch for the module — KPIs and table are derived from this.
   // Backend caps pageSize at 200; KPI counts beyond that will under-report.
@@ -303,13 +324,46 @@ export default function ModulePage() {
   const codePrefix = workflowType?.codePrefix;
   const hasFilter = !!priorityId || !!workflowFilterId;
 
-  return (
-    <PageContainer>
+  // Download + Customize Columns — shown on its own row on the full page, but
+  // tucked to the right of the header row when embedded (Audit My Workspace).
+  const tableToolbar = (
+    <>
+      <Button variant="outline" size="sm" onClick={handleDownload}>
+        <Download size={14} />
+        <span className="ml-1.5">Download</span>
+      </Button>
+      <div className="relative">
+        <Button variant="outline" size="sm" onClick={() => setColumnsOpen((v) => !v)}>
+          <Settings2 size={14} />
+          <span className="ml-1.5">Customize Columns</span>
+        </Button>
+        {columnsOpen && (
+          <ColumnsPopover
+            visible={visibleCols}
+            onToggle={(id) => {
+              setVisibleCols((s) => {
+                const next = new Set(s);
+                if (next.has(id)) next.delete(id);
+                else next.add(id);
+                return next;
+              });
+            }}
+            onClose={() => setColumnsOpen(false)}
+          />
+        )}
+      </div>
+    </>
+  );
+
+  const body = (
+    <>
       {/* ── Top header (title + search + filter + buttons) ──────────────── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-          {moduleName}
-        </h1>
+        {!embedded && (
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
+            {moduleName}
+          </h1>
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative w-64">
             <Search
@@ -336,27 +390,31 @@ export default function ModulePage() {
               </span>
             )}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate('/dashboard')}
-          >
-            <LayoutDashboard size={14} />
-            <span className="ml-1.5">View Dashboard</span>
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => {
-              setTab('dashboard');
-              setActiveKpi(null);
-              setSearchInput('');
-            }}
-          >
-            <History size={14} />
-            <span className="ml-1.5">Recent {moduleName} Details</span>
-          </Button>
-          {canCreate && (
+          {!embedded && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/dashboard')}
+            >
+              <LayoutDashboard size={14} />
+              <span className="ml-1.5">View Dashboard</span>
+            </Button>
+          )}
+          {!embedded && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setTab('dashboard');
+                setActiveKpi(null);
+                setSearchInput('');
+              }}
+            >
+              <History size={14} />
+              <span className="ml-1.5">Recent {moduleName} Details</span>
+            </Button>
+          )}
+          {!embedded && canCreate && (
             <Button
               variant="primary"
               size="sm"
@@ -373,28 +431,35 @@ export default function ModulePage() {
             </Button>
           )}
         </div>
+
+        {/* Embedded: keep the table toolbar on the same row, pushed right. */}
+        {embedded && (tab === 'workspace' || activeKpi) && (
+          <div className="flex items-center gap-2 flex-wrap ml-auto">{tableToolbar}</div>
+        )}
       </div>
 
       {/* ── Sub-tabs ────────────────────────────────────────────────────── */}
-      <div className="mt-3 border-b border-gray-200 flex items-center gap-1">
-        <TabButton
-          active={tab === 'dashboard'}
-          onClick={() => setTab('dashboard')}
-          icon={<LayoutDashboard size={14} />}
-          label="Dashboard"
-        />
-        <TabButton
-          active={tab === 'workspace'}
-          onClick={() => setTab('workspace')}
-          icon={<Briefcase size={14} />}
-          label="My Workspace"
-        />
-        {codePrefix && (
-          <span className="ml-auto text-[11px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mb-1.5">
-            {codePrefix}
-          </span>
-        )}
-      </div>
+      {!embedded && (
+        <div className="mt-3 border-b border-gray-200 flex items-center gap-1">
+          <TabButton
+            active={tab === 'dashboard'}
+            onClick={() => setTab('dashboard')}
+            icon={<LayoutDashboard size={14} />}
+            label="Dashboard"
+          />
+          <TabButton
+            active={tab === 'workspace'}
+            onClick={() => setTab('workspace')}
+            icon={<Briefcase size={14} />}
+            label="My Workspace"
+          />
+          {codePrefix && (
+            <span className="ml-auto text-[11px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mb-1.5">
+              {codePrefix}
+            </span>
+          )}
+        </div>
+      )}
 
       {tab === 'dashboard' && (
         <>
@@ -403,9 +468,11 @@ export default function ModulePage() {
             {KPI_DEFS.map((k) => (
               <KpiCard
                 key={k.id}
-                kpi={k}
-                count={kpiCounts[k.id]}
-                active={activeKpi === k.id}
+                label={k.label}
+                value={kpiCounts[k.id]}
+                icon={k.icon}
+                accent={k.accent}
+                selected={activeKpi === k.id}
                 onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
               />
             ))}
@@ -420,37 +487,11 @@ export default function ModulePage() {
         </>
       )}
 
-      {/* ── Toolbar (Download + Customize Columns only) ─────────────────── */}
-      {(tab === 'workspace' || activeKpi) && (
+      {/* ── Toolbar (Download + Customize Columns) — own row on the full page;
+           embedded mode renders these in the header row above instead. ──── */}
+      {!embedded && (tab === 'workspace' || activeKpi) && (
         <div className="mt-4 flex items-center justify-end gap-2 flex-wrap">
-          <Button variant="outline" size="sm" onClick={handleDownload}>
-            <Download size={14} />
-            <span className="ml-1.5">Download</span>
-          </Button>
-          <div className="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setColumnsOpen((v) => !v)}
-            >
-              <Settings2 size={14} />
-              <span className="ml-1.5">Customize Columns</span>
-            </Button>
-            {columnsOpen && (
-              <ColumnsPopover
-                visible={visibleCols}
-                onToggle={(id) => {
-                  setVisibleCols((s) => {
-                    const next = new Set(s);
-                    if (next.has(id)) next.delete(id);
-                    else next.add(id);
-                    return next;
-                  });
-                }}
-                onClose={() => setColumnsOpen(false)}
-              />
-            )}
-          </div>
+          {tableToolbar}
         </div>
       )}
 
@@ -575,8 +616,12 @@ export default function ModulePage() {
         onClose={() => setCreateOpen(false)}
         workflowTypeId={typeId}
       />
-    </PageContainer>
+    </>
   );
+
+  // Embedded (e.g. inside the Audit module tabs) skips its own PageContainer so
+  // it nests under the host layout cleanly.
+  return embedded ? body : <PageContainer>{body}</PageContainer>;
 }
 
 /* ── Helper components ───────────────────────────────────────────────── */
@@ -602,41 +647,6 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
     >
       {icon}
       {label}
-    </button>
-  );
-}
-
-interface KpiCardProps {
-  kpi: (typeof KPI_DEFS)[number];
-  count: number;
-  active: boolean;
-  onClick: () => void;
-}
-
-function KpiCard({ kpi, count, active, onClick }: KpiCardProps) {
-  const Icon = kpi.icon;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'group flex items-center justify-between gap-3 px-4 py-3 rounded-xl border bg-white text-left shadow-sm transition-all',
-        active
-          ? `ring-2 ${kpi.ring} border-transparent`
-          : 'border-gray-200 hover:border-gray-300 hover:shadow',
-      )}
-    >
-      <div className="min-w-0">
-        <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide truncate">
-          {kpi.label}
-        </div>
-        <div className={cn('text-2xl font-bold mt-0.5', kpi.color)}>
-          {count}
-        </div>
-      </div>
-      <div className={cn('w-10 h-10 rounded-full flex items-center justify-center shrink-0', kpi.bg, kpi.color)}>
-        <Icon size={18} />
-      </div>
     </button>
   );
 }

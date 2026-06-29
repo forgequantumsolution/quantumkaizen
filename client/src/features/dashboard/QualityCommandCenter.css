@@ -1,0 +1,318 @@
+/* Quality Command Center — scoped under .qcc */
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap");
+
+.qcc {
+  --bg: #eef0f3;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+  --ink: #16202e;
+  --ink-2: #4a566a;
+  --ink-3: #8a97a8;
+  --line: #e6e9ee;
+  --line-2: #eef1f5;
+
+  --brand: #b97f17;
+  --brand-2: #d8a23a;
+  --brand-soft: #fbf2dd;
+
+  --good: #15a34a;
+  --good-soft: #e6f6ec;
+  --warn: #e08a1e;
+  --warn-soft: #fcf1df;
+  --bad: #d6342c;
+  --bad-soft: #fceceb;
+  --info: #2f6fed;
+  --info-soft: #e8f0fe;
+  --neutral: #5d6b7e;
+  --neutral-soft: #eef1f4;
+
+  --radius: 16px;
+  --radius-sm: 11px;
+  --shadow: 0 1px 2px rgba(18, 28, 42, 0.04), 0 6px 22px -10px rgba(18, 28, 42, 0.1);
+  --shadow-hover: 0 2px 6px rgba(18, 28, 42, 0.06), 0 16px 34px -14px rgba(18, 28, 42, 0.18);
+
+  font-family: "IBM Plex Sans", sans-serif;
+  background:
+    radial-gradient(1200px 500px at 80% -10%, rgba(185, 127, 23, 0.06), transparent 60%),
+    var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.45;
+  padding-bottom: 64px;
+  min-height: 100vh;
+}
+
+.qcc * { box-sizing: border-box; }
+.qcc .num { font-family: "IBM Plex Mono", monospace; font-feature-settings: "tnum"; }
+.qcc .wrap { margin: 0 auto; padding: 0 28px; }
+
+/* ---------- Header ---------- */
+.qcc .top {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: saturate(180%) blur(14px);
+  -webkit-backdrop-filter: saturate(180%) blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+.qcc .top-inner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 28px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+  row-gap: 12px;
+}
+.qcc .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+.qcc .logo {
+  width: 42px; height: 42px; border-radius: 12px; flex: none;
+  background: linear-gradient(150deg, #1d2836, #0c121b);
+  display: grid; place-items: center; position: relative; overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+.qcc .logo::after {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(40px 40px at 78% 18%, rgba(216, 162, 58, 0.55), transparent);
+}
+.qcc .logo svg { position: relative; z-index: 1; }
+.qcc .brand h1 { font-family: "Sora", sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -0.2px; line-height: 1.1; margin: 0; }
+.qcc .brand .crumb { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.qcc .crumb .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-3); opacity: 0.6; }
+.qcc .crumb b { color: var(--ink-2); font-weight: 600; }
+.qcc .spacer { flex: 1; }
+.qcc .updated { font-size: 11.5px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.qcc .live { width: 7px; height: 7px; border-radius: 50%; background: var(--good); box-shadow: 0 0 0 0 rgba(21, 163, 74, 0.5); animation: qcc-pulse 2.2s infinite; }
+@keyframes qcc-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(21, 163, 74, 0.45); }
+  70%  { box-shadow: 0 0 0 7px rgba(21, 163, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(21, 163, 74, 0); }
+}
+.qcc .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; padding: 3px; }
+.qcc .seg button {
+  font-family: "IBM Plex Sans", sans-serif; font-size: 12.5px; font-weight: 600; color: var(--ink-2);
+  border: none; background: transparent; padding: 6px 13px; border-radius: 8px; cursor: pointer; transition: 0.18s;
+}
+.qcc .seg button.active { background: var(--ink); color: #fff; box-shadow: 0 2px 8px -2px rgba(18, 28, 42, 0.4); }
+.qcc .btn-primary {
+  font-family: "IBM Plex Sans", sans-serif; font-size: 12.5px; font-weight: 600; color: #fff; cursor: pointer;
+  background: linear-gradient(160deg, var(--brand-2), var(--brand));
+  border: none; padding: 8px 14px; border-radius: 10px; display: inline-flex; align-items: center; gap: 7px;
+  box-shadow: 0 4px 14px -4px rgba(185, 127, 23, 0.55); transition: 0.18s;
+  height: 36px;
+}
+.qcc .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 20px -6px rgba(185, 127, 23, 0.6); }
+
+/* Quick-action toolbar inside top header */
+.qcc .qa-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  padding: 4px;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+.qcc .qa-btn {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: transparent;
+  border: none;
+  padding: 7px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: 0.14s;
+  height: 32px;
+  white-space: nowrap;
+}
+.qcc .qa-btn:hover {
+  background: var(--surface);
+  color: var(--brand);
+  box-shadow: 0 1px 3px rgba(18, 28, 42, 0.06);
+}
+.qcc .qa-btn svg { color: var(--ink-3); transition: color 0.14s; }
+.qcc .qa-btn:hover svg { color: var(--brand); }
+
+/* ---------- Alert ---------- */
+.qcc .alert {
+  display: flex; align-items: center; gap: 14px; margin-top: 24px;
+  background: linear-gradient(90deg, var(--bad-soft), #fff 75%);
+  border: 1px solid #f4cfcd; border-left: 4px solid var(--bad);
+  border-radius: var(--radius-sm); padding: 14px 18px;
+  animation: qcc-fadeUp 0.5s both;
+}
+.qcc .alert .ic {
+  width: 34px; height: 34px; border-radius: 9px; background: #fff;
+  display: grid; place-items: center; flex: none; box-shadow: var(--shadow);
+}
+.qcc .alert b { color: var(--bad); font-weight: 700; }
+.qcc .alert span { color: var(--ink-2); font-size: 13.5px; }
+.qcc .alert .ghost {
+  margin-left: auto; font-size: 12.5px; font-weight: 600; color: var(--bad);
+  border: 1px solid #f0c4c1; background: #fff; padding: 7px 13px; border-radius: 9px;
+  cursor: pointer; white-space: nowrap;
+}
+
+/* ---------- Section headers ---------- */
+.qcc .sec-head { display: flex; align-items: center; gap: 10px; margin: 34px 2px 14px; }
+.qcc .sec-head .bar { width: 4px; height: 18px; border-radius: 3px; background: var(--brand); }
+.qcc .sec-head h2 { font-family: "Sora", sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ink-2); margin: 0; }
+.qcc .sec-head .tag { margin-left: auto; font-size: 11px; color: var(--ink-3); font-weight: 500; letter-spacing: 0.3px; }
+
+/* ---------- Grid + Cards ---------- */
+.qcc .grid { display: grid; gap: 18px; }
+.qcc .g4 { grid-template-columns: repeat(4, 1fr); }
+.qcc .g3 { grid-template-columns: repeat(3, 1fr); }
+.qcc .g2 { grid-template-columns: repeat(2, 1fr); }
+
+.qcc .card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 18px 18px 16px; box-shadow: var(--shadow); transition: 0.2s; position: relative; overflow: hidden;
+  animation: qcc-fadeUp 0.55s both;
+}
+.qcc .card:hover { box-shadow: var(--shadow-hover); border-color: #dde2e9; }
+.qcc .card-h { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.qcc .card-h h3 { font-family: "Sora", sans-serif; font-size: 14.5px; font-weight: 600; letter-spacing: -0.2px; color: var(--ink); margin: 0; }
+.qcc .card-h .sub { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+.qcc .chip { font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 7px; white-space: nowrap; font-family: "IBM Plex Mono", monospace; }
+.qcc .chip.good    { background: var(--good-soft);    color: var(--good); }
+.qcc .chip.warn    { background: var(--warn-soft);    color: var(--warn); }
+.qcc .chip.bad     { background: var(--bad-soft);     color: var(--bad); }
+.qcc .chip.neutral { background: var(--neutral-soft); color: var(--neutral); }
+
+.qcc .chart-box { position: relative; width: 100%; margin-top: 8px; }
+.qcc .h-sm { height: 200px; }
+.qcc .h-md { height: 240px; }
+.qcc .h-lg { height: 280px; }
+
+/* ---------- KPI hero cards ---------- */
+.qcc .kpi { padding: 18px; }
+.qcc .kpi .top { display: flex; align-items: center; justify-content: space-between; }
+.qcc .kpi .label { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--ink-3); }
+.qcc .kpi .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+.qcc .kpi .val { font-family: "Sora", sans-serif; font-size: 34px; font-weight: 800; letter-spacing: -1.4px; margin-top: 12px; line-height: 1; }
+.qcc .kpi .meta { display: flex; align-items: center; gap: 8px; margin-top: 11px; font-size: 11.5px; color: var(--ink-3); }
+.qcc .delta {
+  font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 11.5px;
+  display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px; border-radius: 6px;
+}
+.qcc .delta.up        { background: var(--good-soft); color: var(--good); }
+.qcc .delta.down      { background: var(--bad-soft);  color: var(--bad); }
+.qcc .delta.down.good { background: var(--good-soft); color: var(--good); }
+.qcc .spark { height: 30px; margin-top: 12px; }
+.qcc .progress { height: 6px; border-radius: 6px; background: var(--line-2); margin-top: 14px; overflow: hidden; }
+.qcc .progress i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--brand-2), var(--brand)); }
+
+/* ---------- Snapshot chips ---------- */
+.qcc .snap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.qcc .stat {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 15px 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 6px;
+  position: relative; overflow: hidden; transition: 0.18s; animation: qcc-fadeUp 0.55s both;
+}
+.qcc .stat:hover { transform: translateY(-2px); box-shadow: var(--shadow-hover); }
+.qcc .stat .accent { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+.qcc .stat .lab { font-size: 10.5px; font-weight: 700; letter-spacing: 0.7px; text-transform: uppercase; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.qcc .stat .lab svg { opacity: 0.75; }
+.qcc .stat .v { font-family: "Sora", sans-serif; font-size: 27px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+.qcc .stat .foot { font-size: 11px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+
+/* ---------- Load more button (lives in section header) ---------- */
+.qcc .load-more {
+  margin-left: auto;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: var(--shadow);
+  transition: 0.16s;
+}
+.qcc .load-more:hover {
+  border-color: var(--brand-2);
+  color: var(--brand);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-hover);
+}
+
+/* ---------- Audit log table ---------- */
+.qcc .tbl { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.qcc .tbl thead th {
+  text-align: left; font-size: 10.5px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--ink-3); padding: 10px 14px; border-bottom: 1px solid var(--line);
+}
+.qcc .tbl tbody td { padding: 13px 14px; border-bottom: 1px solid var(--line-2); font-size: 13px; color: var(--ink-2); vertical-align: middle; }
+.qcc .tbl tbody tr:last-child td { border-bottom: none; }
+.qcc .tbl tbody tr { transition: 0.12s; }
+.qcc .tbl tbody tr:hover { background: var(--surface-2); }
+.qcc .act { font-size: 10.5px; font-weight: 700; letter-spacing: 0.5px; padding: 4px 9px; border-radius: 6px; }
+.qcc .act.create  { background: var(--good-soft);    color: var(--good); }
+.qcc .act.approve { background: var(--info-soft);    color: var(--info); }
+.qcc .act.close   { background: var(--neutral-soft); color: var(--neutral); }
+.qcc .act.update  { background: var(--warn-soft);    color: var(--warn); }
+.qcc .act.publish { background: var(--brand-soft);   color: var(--brand); }
+.qcc .rec { display: inline-flex; align-items: center; gap: 9px; }
+.qcc .rec .ty { font-size: 11px; color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.qcc .code { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 500; background: var(--brand-soft); color: var(--brand); padding: 3px 8px; border-radius: 6px; }
+.qcc .user { display: inline-flex; align-items: center; gap: 9px; }
+.qcc .ava { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 700; color: #fff; font-family: "Sora", sans-serif; }
+.qcc .ts { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--ink-3); }
+.qcc .link { font-size: 12.5px; font-weight: 600; color: var(--brand); cursor: pointer; display: inline-flex; align-items: center; gap: 5px; background: none; border: none; }
+
+/* ---------- Actions bar ---------- */
+.qcc .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+.qcc .actions button {
+  font-family: "IBM Plex Sans", sans-serif; font-size: 13px; font-weight: 600; color: var(--ink-2); cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); padding: 11px 16px; border-radius: 11px;
+  display: inline-flex; align-items: center; gap: 9px; transition: 0.16s; box-shadow: var(--shadow);
+}
+.qcc .actions button:hover { border-color: var(--brand-2); color: var(--ink); transform: translateY(-1px); }
+.qcc .actions button:first-child {
+  background: linear-gradient(160deg, var(--brand-2), var(--brand));
+  color: #fff; border: none;
+}
+
+@keyframes qcc-fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.qcc .d1 { animation-delay: 0.04s; }
+.qcc .d2 { animation-delay: 0.08s; }
+.qcc .d3 { animation-delay: 0.12s; }
+.qcc .d4 { animation-delay: 0.16s; }
+.qcc .d5 { animation-delay: 0.20s; }
+.qcc .d6 { animation-delay: 0.24s; }
+.qcc .d7 { animation-delay: 0.28s; }
+.qcc .d8 { animation-delay: 0.32s; }
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1080px) {
+  .qcc .g4 { grid-template-columns: repeat(2, 1fr); }
+  .qcc .g3 { grid-template-columns: 1fr; }
+  .qcc .snap { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 1240px) {
+  .qcc .qa-btn span { display: none; }
+  .qcc .qa-btn { padding: 7px 9px; }
+}
+@media (max-width: 640px) {
+  .qcc .wrap, .qcc .top-inner { padding-left: 16px; padding-right: 16px; }
+  .qcc .g4, .qcc .g2 { grid-template-columns: 1fr; }
+  .qcc .snap { grid-template-columns: 1fr 1fr; }
+  .qcc .updated, .qcc .seg { display: none; }
+  .qcc .brand h1 { font-size: 15px; }
+}

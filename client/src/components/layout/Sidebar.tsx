@@ -6,6 +6,7 @@ import {
   AlertTriangle, FileWarning, ShieldAlert, Wrench,
   GitBranch, Layers, FileText, Beaker, BookOpen,
   Database, ClipboardList,
+  ClipboardCheck, PlayCircle, AlertOctagon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/uiStore';
@@ -20,6 +21,14 @@ interface NavItem {
   path?: string;
   icon: React.ElementType;
   children?: NavItem[];
+  /** Permission key that gates this item (see lib/navAccess.ts). When set and
+   * the user lacks it, the item is hidden. Parents with children stay visible
+   * only while at least one child survives gating. */
+  permission?: string;
+  /** Extra pathname prefixes that should also mark this item active — useful
+   * for entries that land on one route but share a layout with siblings (e.g.
+   * "Audit" points to /audit/register but should stay active on /audit/program). */
+  activeForPrefixes?: string[];
 }
 interface NavSection { title: string; items: NavItem[]; collapsible?: boolean }
 
@@ -74,8 +83,8 @@ const BG           = 'var(--color-navy)';
 const ACTIVE_BG    = 'var(--color-navy-mid)';
 const ACCENT       = 'var(--color-gold)';
 const ACTIVE_CLR   = 'var(--color-gold)';
-const SECTION_CLR  = '#4A4A6A';
-const INACTIVE_CLR = '#7A7A9A';
+const SECTION_CLR  = 'rgba(255,255,255,0.65)';
+const INACTIVE_CLR = '#FFFFFF';
 const DIVIDER      = 'rgba(255,255,255,0.06)';
 const HOVER_BG     = 'rgba(255,255,255,0.04)';
 
@@ -85,26 +94,57 @@ export default function Sidebar() {
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
   const recentItems = useRecentItemsStore();
   const user        = useAuthStore(s => s.user);
+  const hasPermission = useAuthStore(s => s.hasPermission);
   const { data: workflowTypes } = useWorkflowTypes();
 
   const navigation = useMemo<NavSection[]>(() => {
+    // Audit child pages — attached under the dynamic "Audit" workflow type when
+    // present. Only two entries: "Audit" lands on the operations layout (Register
+    // / Program / Non-Conformance as tabs); "Audit Master" lands on the config
+    // layout (Master / ISO Standards as tabs).
+    const auditChildren: NavItem[] = [
+      {
+        label: 'Audit',
+        path: '/audit/register',
+        icon: ClipboardCheck,
+        permission: 'audit_register.read',
+        activeForPrefixes: ['/audit/register', '/audit/program', '/audit/non-conformance'],
+      },
+      {
+        label: 'Audit Master',
+        path: '/audit/master',
+        icon: Database,
+        permission: 'audit_master.read',
+        activeForPrefixes: ['/audit/master', '/audit/iso-standards'],
+      },
+    ];
+
     const moduleItems: NavItem[] = (workflowTypes ?? [])
       .filter((t) => !t.isDeleted)
-      .map((t) => ({
-        label: t.name,
-        path: `/modules/${t.id}`,
-        icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
-      }));
+      .map((t) => {
+        const isAudit = /^audit$/i.test(t.name);
+        return {
+          label: t.name,
+          // For Audit, omit the leaf path so the parent acts purely as an expandable
+          // group; first child becomes the navigation target in collapsed mode.
+          path: isAudit ? undefined : `/modules/${t.id}`,
+          icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
+          // Workflow-type modules surface ticket workspaces — gate on ticket.read.
+          // Audit gates via its children (audit_register/master.read) instead.
+          permission: isAudit ? undefined : 'ticket.read',
+          children: isAudit ? auditChildren : undefined,
+        };
+      });
 
     const sections: NavSection[] = [
       {
-        title: 'Overview',
+        title: '',
         items: [{ label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard }],
       },
     ];
 
     if (moduleItems.length > 0) {
-      sections.push({ title: 'Modules', items: moduleItems, collapsible: true });
+      sections.push({ title: '', items: moduleItems });
     }
 
     sections.push({
@@ -114,29 +154,41 @@ export default function Sidebar() {
           label: 'Configuration',
           icon: Settings,
           children: [
-            { label: 'Workflows',   path: '/settings?section=workflows', icon: GitBranch },
-            { label: 'Forms',       path: '/settings?section=forms',     icon: ClipboardList },
-            { label: 'Master Data', path: '/settings',                  icon: Database },
+            { label: 'Workflows',   path: '/settings?section=workflows', icon: GitBranch, permission: 'workflow.read' },
+            { label: 'Forms',       path: '/settings?section=forms',     icon: ClipboardList, permission: 'form.read' },
+            { label: 'Master Data', path: '/settings',                   icon: Database },
             { label: 'Appearance',  path: '/appearance',                 icon: Palette },
           ],
         },
       ],
     });
 
-    return sections;
-  }, [workflowTypes]);
+    // Gate by permission: drop items the user can't access, and any parent whose
+    // children all got dropped. SUPER_ADMIN holds every key, so it's unaffected.
+    const gate = (items: NavItem[]): NavItem[] =>
+      items
+        .map((it) => {
+          const children = it.children ? gate(it.children) : undefined;
+          return { ...it, children };
+        })
+        .filter((it) => {
+          if (it.children && it.children.length === 0 && !it.path) return false;
+          if (it.permission && !hasPermission(it.permission)) return false;
+          return true;
+        });
+
+    return sections
+      .map((s) => ({ ...s, items: gate(s.items) }))
+      .filter((s) => s.items.length > 0);
+  }, [workflowTypes, hasPermission]);
 
   const [sectionsCollapsed, setSectionsCollapsed] = useState<Record<string, boolean>>({});
   const toggleSection = (title: string) =>
     setSectionsCollapsed(prev => ({ ...prev, [title]: !prev[title] }));
 
   // Per-item expand state, keyed by label since parents may have no path.
-  // Configuration + Master Data default to expanded so users see the children
-  // immediately on /settings.
-  const [itemsExpanded, setItemsExpanded] = useState<Record<string, boolean>>({
-    Configuration: true,
-    'Master Data': true,
-  });
+  // All parents start collapsed; user opens what they need.
+  const [itemsExpanded, setItemsExpanded] = useState<Record<string, boolean>>({});
   const toggleItem = (label: string) =>
     setItemsExpanded(prev => ({ ...prev, [label]: !prev[label] }));
 
@@ -144,6 +196,9 @@ export default function Sidebar() {
   // right child instead of every Configuration child at once.
   const currentUrl = location.pathname + location.search;
   const isItemActive = (item: NavItem): boolean => {
+    if (item.activeForPrefixes?.some((p) => location.pathname.startsWith(p))) {
+      return true;
+    }
     if (item.path) {
       if (item.path === currentUrl) return true;
       // Loose match for items without query params (e.g. /workflows/123).
@@ -227,11 +282,11 @@ export default function Sidebar() {
               }
             }}
           >
-            <Icon size={depth === 0 ? 17 : 15} strokeWidth={isActive ? 2 : 1.5}
+            <Icon size={depth === 0 ? 19 : 16} strokeWidth={isActive ? 2 : 1.5}
               style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
             <span style={{
-              flex: 1, fontSize: depth === 0 ? '15px' : '13px',
-              fontWeight: isActive ? 500 : 400, lineHeight: 1.15, whiteSpace: 'nowrap',
+              flex: 1, fontSize: depth === 0 ? '17px' : '15px',
+              lineHeight: 1.2, whiteSpace: 'nowrap',
             }}>{item.label}</span>
             <ChevronDown
               size={13}
@@ -291,12 +346,12 @@ export default function Sidebar() {
           }
         }}
       >
-        <Icon size={depth === 0 ? 17 : 15} strokeWidth={isActive ? 2 : 1.5}
+        <Icon size={depth === 0 ? 19 : 16} strokeWidth={isActive ? 2 : 1.5}
           style={{ color: isActive ? ACCENT : 'inherit', flexShrink: 0 }} />
         {!sidebarCollapsed && (
           <span style={{
-            fontSize: depth === 0 ? '15px' : '13px',
-            fontWeight: isActive ? 500 : 400, lineHeight: 1.15, whiteSpace: 'nowrap',
+            fontSize: depth === 0 ? '17px' : '15px',
+            lineHeight: 1.2, whiteSpace: 'nowrap',
           }}>{item.label}</span>
         )}
       </NavLink>
@@ -322,10 +377,9 @@ export default function Sidebar() {
         </div>
         {!sidebarCollapsed && (
           <div className="overflow-hidden">
-            <p className="text-white font-bold text-sm leading-none tracking-tight">
+            <p className="text-white text-base leading-none tracking-tight">
               Quantum <span style={{ color: ACCENT }}>Kaizen</span>
             </p>
-            <p style={{ color: SECTION_CLR }} className="text-[9px] tracking-[0.15em] mt-0.5 uppercase font-medium">QMS Platform</p>
           </div>
         )}
       </div>
@@ -346,7 +400,7 @@ export default function Sidebar() {
                   onMouseEnter={e => { if (section.collapsible) (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG; }}
                   onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
                 >
-                  <span style={{ color: hasActive ? ACCENT : SECTION_CLR, fontSize: '11px', fontWeight: 600, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
+                  <span style={{ color: hasActive ? ACCENT : SECTION_CLR, fontSize: '12.5px', letterSpacing: '0.14em', textTransform: 'uppercase' }}>
                     {section.title}
                   </span>
                   {section.collapsible && (
@@ -408,8 +462,8 @@ export default function Sidebar() {
             <span style={{ color: ACCENT }} className="text-[11px] font-bold">{initials}</span>
           </div>
           <div className="min-w-0 flex-1">
-            <p style={{ color: ACTIVE_CLR }} className="text-[14px] font-medium truncate leading-tight">{user?.name ?? '—'}</p>
-            <p style={{ color: SECTION_CLR }} className="text-[11px] truncate leading-tight mt-0.5">
+            <p style={{ color: ACTIVE_CLR }} className="text-[15px] truncate leading-tight">{user?.name ?? '—'}</p>
+            <p style={{ color: SECTION_CLR }} className="text-[12px] truncate leading-tight mt-1 tracking-wide">
               {user?.role?.replace(/_/g, ' ') ?? 'Unknown Role'}
             </p>
           </div>

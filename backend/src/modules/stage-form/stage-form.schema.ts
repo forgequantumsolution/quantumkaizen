@@ -49,7 +49,11 @@ export const UpdateStageFormBindingSchema = z
  * context — `bindingId` is the binding row that triggered this fill.
  */
 export const CreateWorkflowSubmissionSchema = z.object({
-  bindingId: z.string().uuid(),
+  // A real StageFormBinding UUID, or a synthetic audit-checklist binding id of
+  // the form `audit:<stageId>:<formId>` (see stage-form.service.ts). The audit
+  // register's selected checklists are surfaced as per-ticket virtual bindings,
+  // so this can't be a strict UUID.
+  bindingId: z.string().min(1),
   status: z.enum(['IN_PROGRESS', 'SUBMITTED']).default('SUBMITTED'),
   responses: z.record(z.unknown()),
   meta: z.record(z.unknown()).optional(),

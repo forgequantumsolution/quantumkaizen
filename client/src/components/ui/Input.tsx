@@ -1,23 +1,29 @@
-import { forwardRef, InputHTMLAttributes } from 'react';
+// Thin wrapper around AntD Input that preserves the project's label / error /
+// helperText API. AntD Input's onChange already passes a synthetic event, so
+// existing `onChange={(e) => set(e.target.value)}` call sites compile unchanged.
+import { forwardRef } from 'react';
+import { Input as AntInput, type InputProps as AntInputProps, type InputRef } from 'antd';
 import { cn } from '@/lib/utils';
 
-interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends Omit<AntInputProps, 'status'> {
   label?: string;
   error?: string;
   helperText?: string;
 }
 
-const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, helperText, className, ...props }, ref) => (
+const Input = forwardRef<InputRef, InputProps>(
+  ({ label, error, helperText, className, required, ...props }, ref) => (
     <div className="w-full">
       {label && (
-        <label className={cn('label', props.required && 'label-required')}>
+        <label className={cn('label', required && 'label-required')}>
           {label}
         </label>
       )}
-      <input
+      <AntInput
         ref={ref}
-        className={cn('input-base', error && 'input-error', className)}
+        status={error ? 'error' : undefined}
+        required={required}
+        className={className}
         {...props}
       />
       {error && (
@@ -27,7 +33,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <p className="mt-1.5 text-xs text-gray-500">{helperText}</p>
       )}
     </div>
-  )
+  ),
 );
 
 Input.displayName = 'Input';

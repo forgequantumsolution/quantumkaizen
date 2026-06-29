@@ -54,9 +54,9 @@ export default function StageFormSection({ ticketId }: Props) {
 
   return (
     <Card noPadding className="overflow-hidden">
-      {/* Form-binding chip selector + Print */}
-      <div className="px-4 pt-4 pb-3 flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
+      {/* Compact header row: chips + progress + meta + print, all on one line */}
+      <div className="px-3 py-2 flex items-center gap-3 flex-wrap border-b border-gray-100">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
           {bindings.map((b, idx) => (
             <BindingChip
               key={b.id}
@@ -67,49 +67,45 @@ export default function StageFormSection({ ticketId }: Props) {
             />
           ))}
         </div>
+
+        <div className="flex items-center gap-2 ml-auto min-w-[200px] flex-1 max-w-[360px]">
+          <div className="flex-1 h-1.5 rounded-full bg-gray-100 overflow-hidden">
+            <div
+              className="h-full bg-emerald-500 transition-all"
+              style={{ width: `${overallPct}%` }}
+            />
+          </div>
+          <span className="text-[11px] font-semibold text-gray-700 whitespace-nowrap">
+            {doneBindings}/{totalBindings} · {overallPct}%
+          </span>
+        </div>
+
         <Button
           variant="outline"
           size="sm"
           onClick={() => window.print()}
           title="Print this view"
         >
-          <Printer size={14} />
-          <span className="ml-1.5">Print</span>
+          <Printer size={13} />
+          <span className="ml-1">Print</span>
         </Button>
       </div>
 
-      {/* Section progress */}
-      <div className="px-4 pb-3">
-        <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1.5">
-          <span>
-            <span className="font-semibold text-gray-700">
-              {doneBindings} of {totalBindings}
-            </span>{' '}
-            section{totalBindings === 1 ? '' : 's'} completed
-          </span>
-          <span className="font-semibold text-gray-700">{overallPct}%</span>
+      {/* Submitted meta — only when read-only */}
+      {isActiveSubmitted && (
+        <div className="px-3 py-1.5 bg-emerald-50/40 text-[11px] text-gray-600 flex items-center gap-2 border-b border-gray-100">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+          <span>Read-only · submitted responses</span>
+          {active.latestSubmission?.submittedAt && (
+            <span className="text-gray-400">
+              · {new Date(active.latestSubmission.submittedAt).toLocaleString()}
+            </span>
+          )}
         </div>
-        <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-          <div
-            className="h-full bg-emerald-500 transition-all"
-            style={{ width: `${overallPct}%` }}
-          />
-        </div>
-      </div>
+      )}
 
       {/* Active form */}
-      <div className="border-t border-gray-100 bg-gray-50/40 px-4 py-4">
-        {isActiveSubmitted && (
-          <div className="mb-3 text-[11px] text-gray-500 flex items-center gap-2">
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Read-only view of submitted responses
-            {active.latestSubmission?.submittedAt && (
-              <span className="text-gray-400">
-                · submitted {new Date(active.latestSubmission.submittedAt).toLocaleString()}
-              </span>
-            )}
-          </div>
-        )}
+      <div className="px-3 py-3 bg-gray-50/30">
         <FormFillEmbed
           key={`${active.id}::${active.latestSubmission?.id ?? 'new'}::${
             isActiveSubmitted ? 'ro' : 'rw'
@@ -151,11 +147,11 @@ function BindingChip({ binding, index, active, onClick }: BindingChipProps) {
     <button
       type="button"
       onClick={onClick}
-      className={`inline-flex items-center gap-2 max-w-[260px] px-3 py-1.5 rounded-full border text-sm font-medium transition-colors ${baseCls} ${ringCls}`}
+      className={`inline-flex items-center gap-1.5 max-w-[220px] px-2.5 py-1 rounded-full border text-xs font-medium transition-colors ${baseCls} ${ringCls}`}
       title={binding.form.title}
     >
       <span
-        className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-[11px] font-semibold ${
+        className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-semibold ${
           submitted
             ? 'bg-emerald-500 text-white'
             : inProgress
@@ -163,10 +159,10 @@ function BindingChip({ binding, index, active, onClick }: BindingChipProps) {
               : 'bg-blue-500 text-white'
         }`}
       >
-        {submitted ? <CheckCircle2 size={12} /> : <span>{index}</span>}
+        {submitted ? <CheckCircle2 size={10} /> : <span>{index}</span>}
       </span>
       <span className="truncate flex items-center gap-1">
-        {!submitted && !inProgress && <ClipboardList size={12} className="text-blue-500" />}
+        {!submitted && !inProgress && <ClipboardList size={11} className="text-blue-500" />}
         {binding.form.title}
       </span>
     </button>

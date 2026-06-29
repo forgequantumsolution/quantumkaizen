@@ -1,0 +1,114 @@
+# Quantum Kaizen — standalone production compose
+# Runs side-by-side with the existing deployment on this VPS.
+# Accessed by IP+port (no domain, no SSL):
+#   - Frontend: http://<VPS_IP>:8080
+#   - API:      http://<VPS_IP>:4000
+#
+# Lives at /var/www/qk-v2/ on the VPS. Run with:
+#   IMAGE_TAG=<git-sha> docker compose -f docker-compose.prod.yml up -d
+# Or use ./deploy.sh which handles pull + migrate + roll.
+
+name: quantum-kaizen
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qk-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    # No host port — reachable only inside qk-net. Avoids collision with the
+    # bare-metal Postgres already running on :5432 on this VPS.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qk-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: qk-redis
+    restart: unless-stopped
+    # No host port — only the worker container talks to it inside qk-net.
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - qk-net
+
+  api:
+    image: ${BACKEND_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: qk-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+    # Bound to all interfaces — direct API access at http://<VPS_IP>:4000
+    ports:
+      - '4000:4000'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:4000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - qk-net
+
+  worker:
+    image: ${BACKEND_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: qk-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+    command: ['node', 'dist/jobs/worker.js']
+    networks:
+      - qk-net
+
+  frontend:
+    image: ${FRONTEND_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: qk-frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    # Frontend nginx proxies /api/* and /socket.io/* and /health to qk-api:4000
+    # so the JS uses relative URLs — no IP is baked into the bundle.
+    ports:
+      - '8080:80'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - qk-net
+
+networks:
+  qk-net:
+    driver: bridge
+
+volumes:
+  pgdata:

@@ -81,6 +81,15 @@ ticketScopedFormsRouter.get(
   asyncHandler(ctrl.listForTicket),
 );
 
+// Read-only history of every submitted form/checklist across all stages —
+// keeps filled forms viewable after the ticket leaves a stage or completes.
+ticketScopedFormsRouter.get(
+  '/:id/form-submissions',
+  requirePermission('ticket.read'),
+  validate(TicketIdParamSchema, 'params'),
+  asyncHandler(ctrl.listSubmittedForms),
+);
+
 // ─── /api/tickets/:id/forms/:formId/submissions — workflow-bound POST ──────
 
 export const ticketScopedSubmissionRouter = Router({ mergeParams: true });
