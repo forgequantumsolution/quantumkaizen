@@ -31,6 +31,59 @@ export interface NavModuleAccess {
 
 export const NAV_ACCESS: NavModuleAccess[] = [
   {
+    key: 'dms',
+    label: 'Documents (DMS)',
+    description: 'Controlled document management — SOPs, policies, protocols.',
+    tabs: [
+      { key: 'dms.documents', label: 'Documents', permission: 'document.read' },
+    ],
+  },
+  {
+    key: 'training',
+    label: 'Training & Competency',
+    description: 'Assign training and track read-and-understood completion.',
+    tabs: [
+      { key: 'training.module', label: 'Training', permission: 'training.read' },
+    ],
+  },
+  {
+    key: 'lims',
+    label: 'LIMS — Operations',
+    description: 'Day-to-day lab operations — samples, testing, QC, stability, CoA.',
+    tabs: [
+      { key: 'lims.dashboard', label: 'LIMS Dashboard', permission: 'lims_dashboard.read' },
+      { key: 'lims.samples', label: 'Samples', permission: 'sample.read' },
+      { key: 'lims.worklists', label: 'Worklists', permission: 'worklist.read' },
+      { key: 'lims.qc', label: 'Quality Control', permission: 'qc.read' },
+      { key: 'lims.stability', label: 'Stability', permission: 'stability.read' },
+      { key: 'lims.oos', label: 'OOS Investigations', permission: 'oos.read' },
+      { key: 'lims.coa', label: 'Certificates (CoA)', permission: 'coa.read' },
+      { key: 'lims.dataReview', label: 'Data Review', permission: 'data_review.read' },
+    ],
+  },
+  {
+    key: 'lims-config',
+    label: 'LIMS — Configuration',
+    description: 'Set-up-once master data: labs, equipment, catalog, test library.',
+    tabs: [
+      { key: 'lims.labs', label: 'Lab Registry', permission: 'lab.read' },
+      { key: 'lims.equipment', label: 'Equipment', permission: 'equipment.read' },
+      { key: 'lims.storage', label: 'Storage Locations', permission: 'storage.read' },
+      { key: 'lims.certifications', label: 'Certifications', permission: 'certification.read' },
+      { key: 'lims.products', label: 'Products', permission: 'product.read' },
+      { key: 'lims.analytes', label: 'Analytes', permission: 'analyte.read' },
+      { key: 'lims.units', label: 'Units of Measure', permission: 'unit.read' },
+      { key: 'lims.samplingPoints', label: 'Sampling Points', permission: 'sampling_point.read' },
+      { key: 'lims.customers', label: 'Customers', permission: 'customer.read' },
+      { key: 'lims.suppliers', label: 'Suppliers', permission: 'supplier.read' },
+      { key: 'lims.methods', label: 'Test Methods', permission: 'method.read' },
+      { key: 'lims.tests', label: 'Test Definitions', permission: 'test_definition.read' },
+      { key: 'lims.panels', label: 'Test Panels', permission: 'test_panel.read' },
+      { key: 'lims.specifications', label: 'Specifications', permission: 'specification.read' },
+      { key: 'lims.specVersions', label: 'Spec Versions', permission: 'spec_version.read' },
+    ],
+  },
+  {
     key: 'audit',
     label: 'Audit',
     description: 'Audit operations — planning, execution, findings and CAPA.',
