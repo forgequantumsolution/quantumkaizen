@@ -1569,30 +1569,30 @@ model AuditMaster {
 // A recurrence rule that auto-spawns DRAFT AuditRegisters from a master on a
 // cadence. A background sweep (jobs/sweeps/spawnDueAudits) advances nextRunAt.
 model AuditScheduleRule {
-  id            String         @id @default(uuid())
-  name          String
-  auditMasterId String
-  auditMaster   AuditMaster    @relation(fields: [auditMasterId], references: [id], onDelete: Cascade)
-  frequency     AuditFrequency
-  anchorDate    DateTime
-  leadTimeDays  Int            @default(14) // create the register N days before the planned date
-  plant         String?
+  id               String         @id @default(uuid())
+  name             String
+  auditMasterId    String
+  auditMaster      AuditMaster    @relation(fields: [auditMasterId], references: [id], onDelete: Cascade)
+  frequency        AuditFrequency
+  anchorDate       DateTime
+  leadTimeDays     Int            @default(14) // create the register N days before the planned date
+  plant            String?
   // Optional workflow the spawned audit follows. When set, the schedule sweep
   // raises a workflow ticket (carrying the stage checklist + progress) and
   // links it on the generated AuditRegister.
-  workflowId    String?
+  workflowId       String?
   // Optional checklist form selected at schedule time. Copied onto each
   // generated audit's checklistFormId so it's the checklist used when the
   // audit is performed.
-  checklistFormId String?
+  checklistFormId  String?
   // Stored as plain columns (no FK) to keep this migration self-contained.
   defaultAuditorId String?
-  isActive         Boolean   @default(true)
+  isActive         Boolean        @default(true)
   lastSpawnedAt    DateTime?
   nextRunAt        DateTime
   createdById      String?
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   @@index([isActive, nextRunAt])
   @@index([auditMasterId])
@@ -1657,7 +1657,7 @@ model AuditRegister {
   focusAreas    Json?
 
   // Audit team members — JSON snapshot of [{ id, name }].
-  teamMembers Json?
+  teamMembers          Json?
   // Per-checklist member assignments — [{ checklist_form_id, checklist_title, members: [{ id, name }] }].
   checklistAssignments Json?
 
