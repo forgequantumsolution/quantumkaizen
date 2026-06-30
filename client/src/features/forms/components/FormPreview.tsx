@@ -21,7 +21,18 @@ interface Props {
 type Errors = Record<string, Record<string, string>>;
 
 export default function FormPreview({ title, description, sections, device = 'desktop' }: Props) {
-  const [responses, setResponses] = useState<Record<string, Record<string, unknown>>>({});
+  // Seed once from each field's default value (e.g. a table's default rows).
+  const [responses, setResponses] = useState<Record<string, Record<string, unknown>>>(() => {
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const sec of sections) {
+      for (const f of sec.fields) {
+        if (f.value !== undefined && f.value !== null) {
+          out[sec.section_name] = { ...(out[sec.section_name] ?? {}), [f.name]: f.value };
+        }
+      }
+    }
+    return out;
+  });
   const [errors, setErrors] = useState<Errors>({});
   const [submittedOk, setSubmittedOk] = useState(false);
 
@@ -131,6 +142,7 @@ export default function FormPreview({ title, description, sections, device = 'de
                                 field={f}
                                 value={responses[sec.section_name]?.[f.name]}
                                 onChange={(v) => setFieldValue(sec.section_name, f.name, v)}
+                                protectDefaultRows
                               />
                               {helpText && !err && (
                                 <p className="mt-1 text-[11px] text-slate-500 leading-snug">{helpText}</p>

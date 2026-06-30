@@ -446,3 +446,43 @@ html.dark {
 .dms-doc .ProseMirror .selectedCell:after { content: ''; position: absolute; inset: 0; background: rgba(37,99,235,0.12); pointer-events: none; }
 .dms-doc .ProseMirror .column-resize-handle { position: absolute; right: -2px; top: 0; bottom: 0; width: 4px; background: #2563eb; pointer-events: none; }
 .dms-doc .ProseMirror table p { margin: 0; }
+
+/* ── Submitted forms (read-only) ──
+   Render Ant Design's disabled controls crisply so a submitted form reads like
+   the filled form (clear values), not a greyed-out/blurred shell. Applied via
+   the `.form-readonly` wrapper around each field on submitted/history views. */
+.form-readonly .ant-input-disabled,
+.form-readonly .ant-input[disabled],
+.form-readonly .ant-input-number-disabled,
+.form-readonly .ant-input-affix-wrapper-disabled,
+.form-readonly .ant-picker-disabled,
+.form-readonly .ant-select-disabled .ant-select-selector {
+  background-color: #fff !important;
+  border-color: #e5e7eb !important;
+  cursor: default !important;
+}
+.form-readonly .ant-input-disabled,
+.form-readonly .ant-input[disabled],
+.form-readonly .ant-input-number-input,
+.form-readonly .ant-picker-disabled input,
+.form-readonly .ant-select-disabled .ant-select-selection-item,
+.form-readonly .ant-radio-wrapper-disabled span,
+.form-readonly .ant-checkbox-wrapper-disabled span {
+  color: rgba(15, 23, 42, 0.88) !important;
+  -webkit-text-fill-color: rgba(15, 23, 42, 0.88) !important;
+}
+/* Keep checked radio/checkbox visually filled (not faded) when disabled. */
+.form-readonly .ant-radio-disabled.ant-radio-checked .ant-radio-inner,
+.form-readonly .ant-checkbox-disabled.ant-checkbox-checked .ant-checkbox-inner {
+  background-color: #6366f1 !important;
+  border-color: #6366f1 !important;
+  opacity: 1 !important;
+}
+.form-readonly .ant-radio-disabled.ant-radio-checked .ant-radio-inner::after { background-color: #fff !important; }
+.form-readonly .ant-checkbox-disabled.ant-checkbox-checked .ant-checkbox-inner::after { border-color: #fff !important; }
+.form-readonly .ant-radio-disabled .ant-radio-inner,
+.form-readonly .ant-checkbox-disabled .ant-checkbox-inner { opacity: 1 !important; }
+.form-readonly .ant-switch-disabled { opacity: 1 !important; }
+/* Mute only the dropdown/calendar affordance arrows, not the values. */
+.form-readonly .ant-select-disabled .ant-select-arrow,
+.form-readonly .ant-picker-disabled .ant-picker-suffix { opacity: 0.45; }

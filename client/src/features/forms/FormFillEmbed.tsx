@@ -77,8 +77,22 @@ export default function FormFillEmbed({
 
   useEffect(() => {
     if (!submissionId) {
+      // Wait for the form to load so we can seed each field's default value
+      // (e.g. a table field's pre-filled default rows) before first render.
+      if (!detail) return;
       if (hydratedFor !== `${formId}::none`) {
-        setResponses({});
+        const defaults: Record<string, Record<string, unknown>> = {};
+        for (const sec of sections) {
+          for (const f of sec.fields) {
+            if (f.value !== undefined && f.value !== null) {
+              defaults[sec.section_name] = {
+                ...(defaults[sec.section_name] ?? {}),
+                [f.name]: f.value,
+              };
+            }
+          }
+        }
+        setResponses(defaults);
         setHydratedFor(`${formId}::none`);
       }
       return;
@@ -91,7 +105,7 @@ export default function FormFillEmbed({
     >;
     setResponses(data);
     setHydratedFor(`${formId}::${submissionId}`);
-  }, [existing, submissionId, formId, hydratedFor]);
+  }, [existing, submissionId, formId, hydratedFor, detail, sections]);
 
   // Tolerate stale dependency rules whose `sectionName` points at a section
   // that was later renamed in the builder. Field names are random-suffixed so
@@ -254,12 +268,13 @@ export default function FormFillEmbed({
                       {f.label}
                       {f.required && <span className="text-rose-500 ml-0.5">*</span>}
                     </label>
-                    <div className={readOnly ? 'pointer-events-none opacity-90' : ''}>
+                    <div className={readOnly ? 'pointer-events-none form-readonly' : ''}>
                       <FieldRenderer
                         field={f}
                         value={responses[sec.section_name]?.[f.name]}
                         onChange={(v) => setFieldValue(sec.section_name, f.name, v)}
                         disabled={readOnly}
+                        protectDefaultRows
                       />
                     </div>
                     {helpText && !err && (
