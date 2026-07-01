@@ -13,7 +13,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import {
   useFieldTypes, useFormDetail, useSaveDraft, useSaveFormFields,
 } from './hooks';
-import { fieldUsesOptions } from './fieldCatalog';
+import { fieldUsesOptions, fieldIsTable } from './fieldCatalog';
 import SectionTabsBar from './components/SectionTabsBar';
 import SectionPanel from './components/SectionPanel';
 import FieldTable from './components/FieldTable';
@@ -152,6 +152,19 @@ export default function FormBuilderPage() {
         ? [
             { label: 'Option 1', value: 'option_1' },
             { label: 'Option 2', value: 'option_2' },
+          ]
+        : undefined,
+      // Seed table fields with one column so the preview renders a real table
+      // (with the Add-row control) immediately; more columns via Settings.
+      fields: fieldIsTable(type.name)
+        ? [
+            {
+              field_id: `c_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              name: 'column_1',
+              label: 'Column 1',
+              type: 'text',
+              required: false,
+            },
           ]
         : undefined,
     };

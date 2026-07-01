@@ -5,7 +5,7 @@ import { useState } from 'react';
 import {
   ChevronDown, ChevronUp, Copy, GripVertical, Settings, Trash2, Eye, ListChecks,
 } from 'lucide-react';
-import { FIELD_CATALOG } from '../fieldCatalog';
+import { FIELD_CATALOG, fieldIsTable } from '../fieldCatalog';
 import { isRuleConfigured, summariseRule } from '../lib/dependency';
 import type { FormFieldDef } from '../types';
 import FieldRenderer from '../FieldRenderer';
@@ -34,6 +34,11 @@ export default function FieldBlock({
   field, index, total, parents, onChange, onMoveUp, onMoveDown, onDuplicate, onRemove, hidden,
 }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const isTable = fieldIsTable(field.type);
+  // For non-table fields the inline preview is just an ephemeral sandbox. For
+  // tables we bind it to `field.value` so rows entered here are saved as the
+  // table's default rows (pre-filled when users open the form).
+  const [previewValue, setPreviewValue] = useState<unknown>(undefined);
   const meta = FIELD_CATALOG[field.type ?? ''];
   const Icon = meta?.icon;
   const validationCount = countValidations(field);
@@ -151,9 +156,13 @@ export default function FieldBlock({
         </div>
       </div>
 
-      {/* Live preview of how the field will render */}
+      {/* Live, interactive preview of how the field will render */}
       <div className={'px-4 pb-4 -mt-1 ' + (hidden ? 'opacity-40' : '')}>
-        <FieldRenderer field={field} value={undefined} onChange={() => {}} disabled />
+        <FieldRenderer
+          field={field}
+          value={isTable ? field.value : previewValue}
+          onChange={isTable ? (v) => onChange({ value: v }) : setPreviewValue}
+        />
         {(field as { helpText?: string }).helpText && (
           <p className="mt-1 text-[11px] text-slate-500">
             {(field as { helpText?: string }).helpText}

@@ -267,6 +267,8 @@ export const auditKeys = {
   program: (id: string) => ['audit', 'programs', id] as const,
   findings: (q: ListFindingQuery = {}) => ['audit', 'findings', q] as const,
   ncs: (q: ListNcQuery = {}) => ['audit', 'non-conformances', q] as const,
+  complianceResults: (q: Record<string, string> = {}) =>
+    ['audit', 'compliance-results', q] as const,
   capas: (q: ListCapaQuery = {}) => ['audit', 'capas', q] as const,
   capa: (id: string) => ['audit', 'capas', id] as const,
   actionItems: (q: ListActionItemQuery = {}) => ['audit', 'action-items', q] as const,
@@ -664,6 +666,31 @@ export const useNonConformances = (q: ListNcQuery = {}) =>
     queryKey: auditKeys.ncs(q),
     queryFn: () =>
       api.get('/audit/non-conformances', { params: q }).then((r) => r.data),
+  });
+
+// Every checklist compliance disposition from closed audit tickets — powers the
+// read-only "All Results" view on the Non-Conformance tab.
+export type ComplianceResult =
+  | 'COMPLIANT'
+  | 'NON_CONFORMANCE'
+  | 'OBSERVATION'
+  | 'NOT_APPLICABLE';
+
+export interface ComplianceResultRow {
+  id: string;
+  result: ComplianceResult;
+  label: string;
+  section: string;
+  ticket_id: string;
+  audit: { register_id: string; program_id: string; title: string; register_number: string };
+  nc: { id: string; nc_number: string; status: NonConformanceStatus } | null;
+}
+
+export const useComplianceResults = (q: Record<string, string> = {}) =>
+  useQuery<{ data: ComplianceResultRow[] }>({
+    queryKey: auditKeys.complianceResults(q),
+    queryFn: () =>
+      api.get('/audit/compliance-results', { params: q }).then((r) => r.data),
   });
 
 export const usePromoteFindingToNc = () => {

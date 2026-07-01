@@ -120,7 +120,7 @@ export default function InlineSubmissionViewer({ formId, submissionId }: Props) 
                       {f.required && <span className="text-rose-400 ml-0.5">*</span>}
                     </label>
                     {hasValue ? (
-                      <div className="pointer-events-none">
+                      <div className="pointer-events-none form-readonly">
                         <FieldRenderer
                           field={f}
                           value={value}

@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { Tabs } from 'antd';
 import { fieldIsTable, fieldUsesOptions } from '../fieldCatalog';
+import FieldRenderer from '../FieldRenderer';
 import OptionsEditor from './OptionsEditor';
 import TableColumnsEditor from './TableColumnsEditor';
 import ValidationEditor from './ValidationEditor';
@@ -45,10 +46,28 @@ export default function FieldBlockSettings({ field, onChange, parents }: Props) 
           label: t.label,
           children:
             t.key === 'columns' && isTable ? (
-              <TableColumnsEditor
-                columns={field.fields ?? []}
-                onChange={(cols) => onChange({ fields: cols })}
-              />
+              <div className="space-y-4">
+                <TableColumnsEditor
+                  columns={field.fields ?? []}
+                  onChange={(cols) => onChange({ fields: cols })}
+                />
+                {(field.fields?.length ?? 0) > 0 && (
+                  <div className="border-t border-slate-200 pt-3">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1">
+                      Rows — values pre-filled when users open the form
+                    </p>
+                    <p className="text-[11px] text-slate-400 mb-2 leading-relaxed">
+                      Add rows below and fill each cell. These appear by default;
+                      users can still add or remove rows when filling the form.
+                    </p>
+                    <FieldRenderer
+                      field={field}
+                      value={field.value}
+                      onChange={(v) => onChange({ value: v })}
+                    />
+                  </div>
+                )}
+              </div>
             )
             : t.key === 'options' && supportsOptions ? (
               <OptionsEditor

@@ -5,6 +5,7 @@ import {
   Type, Hash, AlignLeft, Lock, CheckSquare, Circle, ChevronDown, List,
   Calendar, CalendarRange, Clock, Clock4, Upload, Image as ImageIcon,
   ToggleLeft, SlidersHorizontal, Minus, Palette, PenLine, FileText, Table,
+  ShieldCheck,
 } from 'lucide-react';
 
 export type FieldGroup = 'basic' | 'choice' | 'datetime' | 'media' | 'advanced';
@@ -23,6 +24,9 @@ export const FIELD_CATALOG: Record<
   radio:       { icon: Circle,          group: 'choice',   defaultLabel: 'Radio Group' },
   select:      { icon: ChevronDown,     group: 'choice',   defaultLabel: 'Dropdown' },
   switch:      { icon: ToggleLeft,      group: 'choice',   defaultLabel: 'Toggle' },
+  // Audit checklist disposition — fixed vocabulary, aggregated into the
+  // Non-Conformance tab when the audit ticket closes (see audit-compliance-sync).
+  compliance:  { icon: ShieldCheck,     group: 'choice',   defaultLabel: 'Compliance Result' },
 
   date:        { icon: Calendar,        group: 'datetime', defaultLabel: 'Date' },
   date_range:  { icon: CalendarRange,   group: 'datetime', defaultLabel: 'Date Range' },
@@ -53,3 +57,21 @@ export const fieldUsesOptions = (typeName: string | null | undefined) =>
 
 export const fieldIsTable = (typeName: string | null | undefined) =>
   typeName === 'table';
+
+export const fieldIsCompliance = (typeName: string | null | undefined) =>
+  typeName === 'compliance';
+
+// Fixed audit disposition vocabulary. `value` is what gets stored in the
+// submission JSON (kept stable — the backend matches on these exact strings);
+// `label`/`color` are display-only. NON_CONFORMANCE / OBSERVATION are the two
+// that roll up into the Non-Conformance tab on ticket close.
+export const COMPLIANCE_OPTIONS: {
+  value: 'COMPLIANT' | 'NON_CONFORMANCE' | 'OBSERVATION' | 'NOT_APPLICABLE';
+  label: string;
+  color: string;
+}[] = [
+  { value: 'COMPLIANT', label: 'Compliant', color: '#16a34a' },
+  { value: 'NON_CONFORMANCE', label: 'Non-Conformance', color: '#dc2626' },
+  { value: 'OBSERVATION', label: 'Observation', color: '#d97706' },
+  { value: 'NOT_APPLICABLE', label: 'N/A', color: '#64748b' },
+];

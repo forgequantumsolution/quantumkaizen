@@ -10,12 +10,17 @@ import type { FormFieldDef } from '../types';
 
 const COLUMN_TYPES = [
   { value: 'text',     label: 'Text' },
+  { value: 'textarea', label: 'Text Area' },
   { value: 'number',   label: 'Number' },
   { value: 'date',     label: 'Date' },
   { value: 'time',     label: 'Time' },
   { value: 'select',   label: 'Dropdown' },
+  { value: 'radio',    label: 'Radio' },
   { value: 'checkbox', label: 'Checkbox' },
   { value: 'switch',   label: 'Switch' },
+  { value: 'password', label: 'Password' },
+  { value: 'color',    label: 'Color' },
+  { value: 'file',     label: 'File / Upload' },
 ];
 
 const slug = (s: string) =>
@@ -158,7 +163,7 @@ export default function TableColumnsEditor({ columns, onChange }: Props) {
             </div>
 
             {usesOptions && (
-              <div className="bg-white border border-slate-200 rounded-md p-2">
+              <div className="bg-white border border-slate-200 rounded-md p-2 space-y-2">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400 mb-1.5">
                   Options for this column
                 </p>
@@ -166,6 +171,24 @@ export default function TableColumnsEditor({ columns, onChange }: Props) {
                   value={col.options ?? []}
                   onChange={(opts) => update(idx, { options: opts })}
                 />
+                {col.type === 'select' && (
+                  <label className="flex items-center gap-2 pt-1 text-[12px] text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-indigo-600"
+                      checked={!!(col.validation as { allowCustom?: boolean } | undefined)?.allowCustom}
+                      onChange={(e) =>
+                        update(idx, {
+                          validation: {
+                            ...((col.validation as Record<string, unknown>) ?? {}),
+                            allowCustom: e.target.checked,
+                          },
+                        })
+                      }
+                    />
+                    Let users add their own value (not just pick from the list)
+                  </label>
+                )}
               </div>
             )}
           </div>

@@ -41,6 +41,7 @@ const FIELD_TYPES = [
   { name: 'signature',   label: 'Signature',        dataType: 'string'  },
   { name: 'richtext',    label: 'Rich Text',        dataType: 'string'  },
   { name: 'table',       label: 'Table / Grid',     dataType: 'json'    },
+  { name: 'compliance',  label: 'Compliance Result', dataType: 'string' },
 ];
 
 const ROLES = [

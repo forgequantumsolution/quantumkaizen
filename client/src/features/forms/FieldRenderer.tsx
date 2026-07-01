@@ -2,16 +2,16 @@
 // the builder canvas (disabled preview) and the fill page (interactive). All
 // state goes through `value` / `onChange` so the parent owns the data — antd's
 // Dayjs objects are converted to strings on the way out.
-import { useId } from 'react';
+import { useId, type ChangeEvent } from 'react';
 import {
   Input, InputNumber, Select, DatePicker, TimePicker, Checkbox, Radio, Switch,
-  Slider, ColorPicker, Button, Table as AntTable,
+  Slider, ColorPicker, Button, Table as AntTable, AutoComplete,
 } from 'antd';
 import {
-  Plus, Trash2, PenLine,
+  Plus, Trash2, PenLine, Upload as UploadIcon, X, FileText,
 } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
-import { fieldIsTable } from './fieldCatalog';
+import { fieldIsTable, COMPLIANCE_OPTIONS } from './fieldCatalog';
 import type { FormFieldDef, FieldOption } from './types';
 import FileUploadField, { type UploadedFileMeta } from './components/FileUploadField';
 
@@ -24,12 +24,72 @@ interface Props {
   value: unknown;
   onChange: (v: unknown) => void;
   disabled?: boolean;
+  /**
+   * When true (fill/preview context), the table's predefined default rows
+   * (field.value) are locked — no delete button. Only rows the user adds on
+   * top can be removed. Off in the builder, where defaults are managed freely.
+   */
+  protectDefaultRows?: boolean;
 }
 
 const dateValue = (v: unknown): Dayjs | null => {
   if (!v) return null;
   const d = dayjs(v as string);
   return d.isValid() ? d : null;
+};
+
+// Compact file upload for a table cell — an "Upload" button when empty, the
+// chosen file name with a remove control once picked. Stores metadata only,
+// mirroring FileUploadField so submissions round-trip the same shape.
+const TableFileCell = ({
+  value, onChange, disabled,
+}: {
+  value: UploadedFileMeta | null | undefined;
+  onChange: (v: UploadedFileMeta | null) => void;
+  disabled?: boolean;
+}) => {
+  const inputId = useId();
+  const onPicked = (e: ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) onChange({ name: f.name, size: f.size, type: f.type, uid: `${f.name}-${f.size}-${f.lastModified}` });
+    e.target.value = '';
+  };
+  if (value) {
+    return (
+      <div className="flex items-center gap-1.5 min-w-0">
+        <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+        <span className="truncate text-xs text-slate-700 max-w-[140px]" title={value.name}>
+          {value.name}
+        </span>
+        {!disabled && (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            className="shrink-0 text-slate-400 hover:text-rose-600"
+            aria-label="Remove file"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <>
+      <label
+        htmlFor={inputId}
+        className={
+          'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ' +
+          (disabled
+            ? 'cursor-not-allowed border-slate-200 text-slate-300'
+            : 'cursor-pointer border-slate-300 text-slate-600 hover:bg-slate-50')
+        }
+      >
+        <UploadIcon className="h-3.5 w-3.5" /> Upload
+      </label>
+      <input id={inputId} type="file" className="hidden" onChange={onPicked} disabled={disabled} />
+    </>
+  );
 };
 
 // Cell renderer for a single column of a table field. Mirrors the main field
@@ -73,7 +133,26 @@ const renderCell = (
           className="!w-full"
         />
       );
-    case 'select':
+    case 'select': {
+      // When the column allows custom values, use a creatable AutoComplete so
+      // the user can pick a predefined option OR type their own value.
+      const allowCustom = !!(col.validation as { allowCustom?: boolean } | undefined)?.allowCustom;
+      if (allowCustom) {
+        return (
+          <AutoComplete
+            size="small"
+            value={(cellValue as string | undefined) ?? undefined}
+            onChange={(v) => onChange(v)}
+            disabled={disabled}
+            allowClear
+            options={opts.map((o) => ({ value: String(o.label ?? o.value) }))}
+            filterOption={(input, option) =>
+              String(option?.value ?? '').toLowerCase().includes(input.toLowerCase())}
+            placeholder="Select or type"
+            className="!w-full"
+          />
+        );
+      }
       return (
         <Select
           size="small"
@@ -85,11 +164,39 @@ const renderCell = (
           className="!w-full"
         />
       );
+    }
+    case 'radio':
+      return (
+        <Radio.Group
+          size="small"
+          value={cellValue as string | number | undefined}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          options={opts.map((o) => ({ value: o.value, label: o.label }))}
+        />
+      );
     case 'checkbox':
       return (
         <Checkbox
           checked={!!cellValue}
           onChange={(e) => onChange(e.target.checked)}
+          disabled={disabled}
+        />
+      );
+    case 'password':
+      return (
+        <Password
+          size="small"
+          value={String(cellValue ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+        />
+      );
+    case 'color':
+      return (
+        <ColorPicker
+          value={(cellValue as string) ?? '#6366f1'}
+          onChange={(_, css) => onChange(css)}
           disabled={disabled}
         />
       );
@@ -100,6 +207,24 @@ const renderCell = (
           checked={!!cellValue}
           onChange={(v) => onChange(v)}
           disabled={disabled}
+        />
+      );
+    case 'file':
+      return (
+        <TableFileCell
+          value={cellValue as UploadedFileMeta | null | undefined}
+          onChange={(v) => onChange(v)}
+          disabled={disabled}
+        />
+      );
+    case 'textarea':
+      return (
+        <TextArea
+          size="small"
+          value={String(cellValue ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          disabled={disabled}
+          autoSize={{ minRows: 1, maxRows: 4 }}
         />
       );
     case 'text':
@@ -115,7 +240,7 @@ const renderCell = (
   }
 };
 
-export default function FieldRenderer({ field, value, onChange, disabled }: Props) {
+export default function FieldRenderer({ field, value, onChange, disabled, protectDefaultRows }: Props) {
   const id = useId();
   const type = field.type ?? '';
   const placeholder = (field as { placeholder?: string }).placeholder;
@@ -128,6 +253,11 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
   if (fieldIsTable(type)) {
     const cols = field.fields ?? [];
     const rows = (Array.isArray(value) ? (value as Record<string, unknown>[]) : []);
+    // Number of leading rows that are predefined defaults and therefore locked
+    // from deletion in fill/preview. In the builder this is 0 (manage freely).
+    const lockedRows = protectDefaultRows && Array.isArray(field.value)
+      ? Math.min(field.value.length, rows.length)
+      : 0;
     const update = (rIdx: number, key: string, v: unknown) => {
       const next = [...rows];
       next[rIdx] = { ...(next[rIdx] ?? {}), [key]: v };
@@ -157,16 +287,17 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
         title: '',
         key: '__actions',
         width: 50,
-        render: (_: unknown, _row: Record<string, unknown>, rIdx: number) => (
-          <Button
-            type="text"
-            size="small"
-            danger
-            disabled={disabled}
-            icon={<Trash2 className="h-3.5 w-3.5" />}
-            onClick={() => onChange(rows.filter((_, i) => i !== rIdx))}
-          />
-        ),
+        render: (_: unknown, _row: Record<string, unknown>, rIdx: number) =>
+          rIdx < lockedRows ? null : (
+            <Button
+              type="text"
+              size="small"
+              danger
+              disabled={disabled}
+              icon={<Trash2 className="h-3.5 w-3.5" />}
+              onClick={() => onChange(rows.filter((_, i) => i !== rIdx))}
+            />
+          ),
       },
     ];
     return (
@@ -180,16 +311,18 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
           locale={{ emptyText: 'No rows yet' }}
         />
         <Button
-          type="dashed"
+          type="primary"
           block
-          size="small"
-          className="!mt-2"
-          icon={<Plus className="h-3.5 w-3.5" />}
+          className="!mt-2 !h-10 !font-medium"
+          icon={<Plus className="h-4 w-4" />}
           disabled={disabled}
           onClick={() => onChange([...rows, {}])}
         >
-          Add row
+          Add Row
         </Button>
+        <div className="mt-1.5 text-right text-xs text-slate-500">
+          Total rows: {rows.length}
+        </div>
       </div>
     );
   }
@@ -366,6 +499,34 @@ export default function FieldRenderer({ field, value, onChange, disabled }: Prop
         />
       );
     }
+
+    case 'compliance':
+      // Fixed audit disposition vocabulary — colour-coded so Non-Conformance
+      // stands out. Options are hardcoded (not field.options) so the values
+      // stay in lockstep with the backend aggregation.
+      return (
+        <Select
+          id={id}
+          value={(value as string | undefined) ?? undefined}
+          onChange={(v) => onChange(v)}
+          placeholder={placeholder ?? 'Select disposition'}
+          disabled={disabled}
+          allowClear
+          className="!w-full"
+          options={COMPLIANCE_OPTIONS.map((o) => ({
+            value: o.value,
+            label: (
+              <span className="inline-flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: o.color }}
+                />
+                {o.label}
+              </span>
+            ),
+          }))}
+        />
+      );
 
     case 'select':
       return (
