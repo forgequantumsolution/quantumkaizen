@@ -38,6 +38,10 @@ export const deleteCapa = async (req: Request, res: Response) => {
   await service.deleteCapa(req.params.id as string);
   success(res, 'CAPA deleted');
 };
+export const attachCapaWorkflow = async (req: Request, res: Response) => {
+  const data = await service.attachCapaWorkflow(req.params.id as string, req.user?.userId);
+  success(res, 'CAPA attached to workflow', data);
+};
 
 // ── Action Items ──
 export const listActionItems = async (req: Request, res: Response) => {

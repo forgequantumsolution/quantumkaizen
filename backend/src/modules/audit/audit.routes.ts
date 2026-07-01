@@ -138,6 +138,7 @@ router.get('/audit/capas/:id', requirePermission('capa.read'), validate(IdParamS
 router.post('/audit/capas', requirePermission('capa.create'), validate(CapaCreateSchema), asyncHandler(capaCtrl.createCapa));
 router.put('/audit/capas/:id', requirePermission('capa.update'), validate(IdParamSchema, 'params'), validate(CapaUpdateSchema), asyncHandler(capaCtrl.updateCapa));
 router.patch('/audit/capas/:id/status', requirePermission('capa.update'), validate(IdParamSchema, 'params'), validate(UpdateCapaStatusSchema), asyncHandler(capaCtrl.updateCapaStatus));
+router.post('/audit/capas/:id/workflow', requirePermission('capa.update'), validate(IdParamSchema, 'params'), asyncHandler(capaCtrl.attachCapaWorkflow));
 router.delete('/audit/capas/:id', requirePermission('capa.delete'), validate(IdParamSchema, 'params'), asyncHandler(capaCtrl.deleteCapa));
 
 // ── Action Items ──

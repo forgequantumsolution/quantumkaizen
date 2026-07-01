@@ -351,6 +351,8 @@ export const CapaUpdateSchema = z.object({
   due_date: z.string().optional().nullable(),
   effectiveness_check: z.string().max(4000).optional().nullable(),
   effectiveness_due: z.string().optional().nullable(),
+  // Structured 30/60/90-day effectiveness check-ins (see Capa.effectivenessData).
+  effectiveness_data: z.unknown().optional().nullable(),
 });
 
 export const UpdateCapaStatusSchema = z.object({
