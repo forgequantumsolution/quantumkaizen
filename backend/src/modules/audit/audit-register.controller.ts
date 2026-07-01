@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import * as service from './audit-register.service';
+import { listAuditComplianceResults } from './audit-compliance-sync.service';
 import { success } from '../dynamic-form/dynamic-form.response';
 import type {
   AuditMasterUpsertInput,
@@ -175,4 +176,8 @@ export const raiseCapa = async (req: Request, res: Response) => {
 export const updateNcStatus = async (req: Request, res: Response) => {
   const data = await service.updateNcStatus(req.params.id as string, req.body as UpdateNcStatusInput);
   success(res, 'Non-conformance updated', data);
+};
+export const listComplianceResults = async (req: Request, res: Response) => {
+  const { register_id, program_id } = req.query as { register_id?: string; program_id?: string };
+  res.json(await listAuditComplianceResults({ register_id, program_id }));
 };

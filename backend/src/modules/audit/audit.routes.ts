@@ -127,6 +127,8 @@ router.delete('/audit/findings/:id', requirePermission('audit_finding.delete'), 
 // ── Non-Conformance ──
 router.post('/audit/findings/:findingId/promote-nc', requirePermission('non_conformance.create'), validate(PromoteFindingToNcSchema), asyncHandler(registerCtrl.promoteToNc));
 router.get('/audit/non-conformances', requirePermission('non_conformance.read'), validate(ListNcQuerySchema, 'query'), asyncHandler(registerCtrl.listNcs));
+// All checklist compliance dispositions (Compliant / Observation / NC / N-A) from closed audit tickets — read-only view for the NC tab.
+router.get('/audit/compliance-results', requirePermission('non_conformance.read'), asyncHandler(registerCtrl.listComplianceResults));
 router.post('/audit/non-conformances/:id/raise-capa', requirePermission('non_conformance.update'), validate(IdParamSchema, 'params'), validate(RaiseCapaSchema), asyncHandler(registerCtrl.raiseCapa));
 router.patch('/audit/non-conformances/:id/status', requirePermission('non_conformance.update'), validate(IdParamSchema, 'params'), validate(UpdateNcStatusSchema), asyncHandler(registerCtrl.updateNcStatus));
 

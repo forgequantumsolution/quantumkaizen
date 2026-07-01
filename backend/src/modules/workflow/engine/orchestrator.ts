@@ -16,6 +16,7 @@ import * as approvalLayer from './approval.layer';
 import { findUnsatisfiedRequiredForms } from './form.layer';
 import { onTicketHeld, onTicketResumed } from './sla.handler';
 import { resolveLatestVersion } from '../workflow.versioning';
+import { syncTicketComplianceFindings } from '../../audit/audit-compliance-sync.service';
 import type {
   ActorContext,
   PerformActionPayload,
@@ -290,7 +291,7 @@ export const performAction = async (
   actor: ActorContext,
   payload: PerformActionPayloadWithApproval = {}
 ): Promise<PerformActionResult> => {
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction<PerformActionResult>(async (tx) => {
     // Lock the ticket row to serialise concurrent transitions
     await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${ticketId} FOR UPDATE`;
 
@@ -491,6 +492,19 @@ export const performAction = async (
 
     return result;
   }, TX_OPTIONS);
+
+  // Post-commit, best-effort: when an audit ticket completes, roll its checklist
+  // compliance dispositions up into Findings / Non-Conformances. Never let this
+  // failing break the (already-committed) transition.
+  if (result.isCompleted) {
+    try {
+      await syncTicketComplianceFindings(ticketId);
+    } catch (err) {
+      console.error('[audit] compliance sync failed for ticket', ticketId, err);
+    }
+  }
+
+  return result;
 };
 
 // ─── action behaviors ───────────────────────────────────────────────────────
