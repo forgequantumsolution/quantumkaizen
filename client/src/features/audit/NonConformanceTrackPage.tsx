@@ -1,17 +1,40 @@
 import { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button, Input, Modal, Select, Spin, Table, message } from 'antd';
 import {
   useNonConformances,
+  useComplianceResults,
   useCreateCapa,
   useUpdateNcStatus,
   type FindingSeverity,
   type NonConformance,
   type NonConformanceStatus,
+  type ComplianceResult,
+  type ComplianceResultRow,
   type CapaType,
 } from '@/lib/api/audit';
+import { COMPLIANCE_OPTIONS } from '@/features/forms/fieldCatalog';
 import { useHasPermission } from '@/stores/authStore';
 import { FindingSeverityBadge, NcStatusBadge } from './auditStatusBadge';
+
+const COMPLIANCE_META: Record<ComplianceResult, { label: string; color: string }> =
+  Object.fromEntries(
+    COMPLIANCE_OPTIONS.map((o) => [o.value, { label: o.label, color: o.color }]),
+  ) as Record<ComplianceResult, { label: string; color: string }>;
+
+function DispositionBadge({ result }: { result: ComplianceResult }) {
+  const meta = COMPLIANCE_META[result];
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
+      style={{ backgroundColor: `${meta.color}1a`, color: meta.color }}
+    >
+      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
+      {meta.label}
+    </span>
+  );
+}
 
 type TrackMode = 'department' | 'severity' | 'status' | 'auditor';
 
@@ -32,6 +55,8 @@ const NC_STATUSES: NonConformanceStatus[] = [
 ];
 
 export default function NonConformanceTrackPage() {
+  const qc = useQueryClient();
+  const [view, setView] = useState<'nc' | 'all'>('nc');
   const [trackMode, setTrackMode] = useState<TrackMode>('department');
   const [statusFilter, setStatusFilter] = useState<NonConformanceStatus | 'ALL'>(
     'ALL',
@@ -48,6 +73,10 @@ export default function NonConformanceTrackPage() {
     severity: severityFilter === 'ALL' ? undefined : severityFilter,
   });
   const rows = data?.data ?? [];
+
+  // Read-only view of every checklist disposition from closed audit tickets.
+  const { data: crData, isLoading: crLoading } = useComplianceResults();
+  const complianceRows = crData?.data ?? [];
 
   // Group rows by the active track dimension
   const groups = useMemo(() => {
@@ -76,6 +105,7 @@ export default function NonConformanceTrackPage() {
   const handleStatusChange = async (id: string, status: NonConformanceStatus) => {
     try {
       await updateStatus.mutateAsync({ id, status });
+      qc.invalidateQueries({ queryKey: ['audit', 'compliance-results'] });
       message.success(`Status set to ${status}`);
     } catch (err) {
       message.error(extractErr(err));
@@ -88,11 +118,43 @@ export default function NonConformanceTrackPage() {
         <div>
           <h2 className="text-base font-semibold text-gray-900">Non-Conformance</h2>
           <p className="text-xs text-gray-500">
-            Findings promoted to non-conformances — track and close via CAPA.
+            {view === 'nc'
+              ? 'Findings promoted to non-conformances — track and close via CAPA.'
+              : 'Every checklist disposition from closed audits. Only non-conformances are actionable.'}
           </p>
+        </div>
+        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+          {(
+            [
+              { key: 'nc', label: 'Non-Conformances' },
+              { key: 'all', label: 'All Compliance Results' },
+            ] as const
+          ).map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setView(v.key)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                view === v.key
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
         </div>
       </div>
 
+      {view === 'all' ? (
+        <ComplianceResultsView
+          rows={complianceRows}
+          loading={crLoading}
+          canUpdate={canUpdate}
+          statuses={NC_STATUSES}
+          onStatusChange={handleStatusChange}
+        />
+      ) : (
+      <>
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
         <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
           {TRACKS.map((t) => (
@@ -263,12 +325,115 @@ export default function NonConformanceTrackPage() {
           ))}
         </div>
       )}
+      </>
+      )}
 
       <RaiseCapaModal
         nc={capaTarget}
         onClose={() => setCapaTarget(null)}
       />
     </>
+  );
+}
+
+/* ─── All compliance results: read-only, NC rows actionable via status ─── */
+
+function ComplianceResultsView({
+  rows,
+  loading,
+  canUpdate,
+  statuses,
+  onStatusChange,
+}: {
+  rows: ComplianceResultRow[];
+  loading: boolean;
+  canUpdate: boolean;
+  statuses: NonConformanceStatus[];
+  onStatusChange: (id: string, status: NonConformanceStatus) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-32">
+        <Spin />
+      </div>
+    );
+  }
+  if (rows.length === 0) {
+    return (
+      <div className="py-24 text-center text-sm text-gray-400">
+        No compliance results yet. They appear here once an audit ticket with a
+        marked checklist is closed.
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <Table<ComplianceResultRow>
+        size="small"
+        rowKey="id"
+        dataSource={rows}
+        pagination={{ pageSize: 20, hideOnSinglePage: true }}
+        columns={[
+          {
+            title: 'Disposition',
+            dataIndex: 'result',
+            width: 150,
+            render: (v: ComplianceResult) => <DispositionBadge result={v} />,
+          },
+          {
+            title: 'Checklist Item',
+            render: (_: unknown, r) => (
+              <div className="min-w-0">
+                <div className="text-sm text-gray-900 truncate">{r.label}</div>
+                <div className="text-[11px] text-gray-400 truncate">{r.section}</div>
+              </div>
+            ),
+          },
+          {
+            title: 'Audit',
+            width: 200,
+            render: (_: unknown, r) => (
+              <Link
+                to={`/audit/program/${r.audit.program_id}`}
+                className="text-sm text-blue-600 hover:underline"
+              >
+                {r.audit.title}
+              </Link>
+            ),
+          },
+          {
+            title: 'NC #',
+            width: 130,
+            render: (_: unknown, r) =>
+              r.nc ? (
+                <span className="font-mono text-emerald-700">{r.nc.nc_number}</span>
+              ) : (
+                <span className="text-xs text-gray-400">—</span>
+              ),
+          },
+          {
+            title: 'Action',
+            width: 150,
+            render: (_: unknown, r) =>
+              r.nc ? (
+                canUpdate ? (
+                  <Select
+                    size="small"
+                    value={r.nc.status}
+                    onChange={(v) => onStatusChange(r.nc!.id, v)}
+                    options={statuses.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
+                    style={{ width: '100%' }}
+                  />
+                ) : (
+                  <NcStatusBadge status={r.nc.status} />
+                )
+              ) : (
+                <span className="text-xs text-gray-400">No action</span>
+              ),
+          },
+        ]}
+      />
+    </div>
   );
 }
 

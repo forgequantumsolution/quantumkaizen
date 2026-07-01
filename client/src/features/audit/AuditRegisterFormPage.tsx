@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Button, DatePicker, Input, Select, Spin, message } from 'antd';
+import { AutoComplete, Button, DatePicker, Input, Select, Spin, message } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
@@ -20,6 +20,27 @@ import {
 } from '@/lib/api/audit';
 import { useAdminUsers } from '@/features/admin/users/hooks';
 import { useWorkflows } from '@/lib/api/workflow';
+import { fyLabel } from '@/stores/fiscalYearStore';
+import { useFiscalYearStore } from '@/stores/fiscalYearStore';
+
+// Audit method is a fixed vocabulary — a dropdown prevents free-text typos that
+// break downstream reporting/filtering.
+const AUDIT_METHOD_OPTIONS = [
+  { value: 'On-site', label: 'On-site' },
+  { value: 'Remote', label: 'Remote' },
+  { value: 'Hybrid', label: 'Hybrid' },
+];
+
+// Financial year is a two-year range (e.g. "FY 25-26"), so a plain calendar
+// doesn't fit — offer a dropdown of FY options so users pick instead of typing.
+// Computed from today's year so the list never goes stale. Ordered current-first,
+// then previous years descending, with one upcoming year for forward planning.
+const FY_OPTIONS = (() => {
+  const current = dayjs().year();
+  const years: number[] = [];
+  for (let y = current + 1; y >= current - 6; y--) years.push(y); // next → current → past
+  return years.map((y) => ({ value: fyLabel(y), label: fyLabel(y) }));
+})();
 
 interface DraftState {
   title: string;
@@ -65,7 +86,15 @@ export default function AuditRegisterFormPage() {
   const { data: regData, isLoading: loadingReg } = useAuditRegister(id);
   const register = isEdit ? regData?.data ?? null : null;
 
-  const [draft, setDraft] = useState<DraftState>(() => initialDraft(register));
+  // A new register defaults its Financial Year to the year selected in the
+  // top-bar fiscal-year selector, keeping the whole app on one FY.
+  const globalFiscalYear = useFiscalYearStore((s) => s.year);
+
+  const [draft, setDraft] = useState<DraftState>(() => {
+    const d = initialDraft(register);
+    if (!isEdit && !d.financial_year) d.financial_year = fyLabel(globalFiscalYear);
+    return d;
+  });
   const [hydrated, setHydrated] = useState(!isEdit);
 
   useEffect(() => {
@@ -247,7 +276,8 @@ export default function AuditRegisterFormPage() {
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+      {/* Sticky header so Cancel / Create stay reachable while scrolling a long form. */}
+      <div className="sticky top-0 z-10 -mx-4 md:-mx-6 px-4 md:px-6 py-3 mb-6 bg-gray-50/80 backdrop-blur border-b border-gray-200 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 min-w-0">
           <Link
             to={backTo}
@@ -273,213 +303,271 @@ export default function AuditRegisterFormPage() {
         </div>
       </div>
 
-      {/* Master first — it auto-fills the rest. */}
-      <div className="w-full grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4">
-        <Field label="Audit Master (template) *" className="md:col-span-2 xl:col-span-3">
-          <Select
-            value={draft.audit_master_id ?? undefined}
-            onChange={(v) => onMasterChange(v ?? null)}
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder="Select an audit master — fields below auto-fill"
-            options={masters.map((m) => ({
-              value: m.id,
-              label: m.code ? `${m.code} — ${m.name}` : m.name,
-            }))}
-            className="w-full"
-          />
-        </Field>
+      <div className="w-full space-y-5">
+        {/* Master first — it auto-fills the rest. */}
+        <Section
+          title="Template"
+          description="Pick a master template — the title, type, ISO standard and checklists auto-fill from it."
+        >
+          <div className="grid grid-cols-1 gap-x-6 gap-y-4">
+            <Field label="Audit Master (template) *">
+              <Select
+                value={draft.audit_master_id ?? undefined}
+                onChange={(v) => onMasterChange(v ?? null)}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select an audit master — fields below auto-fill"
+                options={masters.map((m) => ({
+                  value: m.id,
+                  label: m.code ? `${m.code} — ${m.name}` : m.name,
+                }))}
+                className="w-full"
+              />
+            </Field>
 
-        <Field label="Title *" className="md:col-span-2 xl:col-span-3">
-          <Input
-            value={draft.title}
-            onChange={(e) => update('title', e.target.value)}
-            placeholder="Q1 FY26 Internal Process Audit"
-          />
-        </Field>
-
-        <Field label="Audit Type *">
-          <Select
-            value={draft.audit_type || undefined}
-            onChange={(v) => update('audit_type', v ?? '')}
-            showSearch
-            optionFilterProp="label"
-            placeholder="Select an audit type"
-            options={auditTypes.map((t) => ({ value: t.name, label: t.name }))}
-            className="w-full"
-          />
-        </Field>
-        <Field label="Audit Date *">
-          <DatePicker
-            value={draft.planned_date ?? undefined}
-            onChange={(d) => update('planned_date', d ?? null)}
-            className="w-full"
-          />
-        </Field>
-        <Field label="Financial Year *">
-          <Input
-            value={draft.financial_year}
-            onChange={(e) => update('financial_year', e.target.value)}
-            placeholder="FY 25-26"
-          />
-        </Field>
-
-        <Field label="Plant / Site *">
-          <Input value={draft.plant} onChange={(e) => update('plant', e.target.value)} />
-        </Field>
-        <Field label="Audit Method *">
-          <Input
-            value={draft.audit_method}
-            onChange={(e) => update('audit_method', e.target.value)}
-            placeholder="On-site / Remote / Hybrid"
-          />
-        </Field>
-        <Field label="ISO Standard *">
-          <Select
-            value={draft.iso_standard_id ?? undefined}
-            onChange={(v) => update('iso_standard_id', v ?? null)}
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder="Select an ISO standard"
-            options={isoStandards.map((s) => ({ value: s.id, label: s.name }))}
-            className="w-full"
-          />
-        </Field>
-
-        <Field label="Focus Areas *" className="md:col-span-2 xl:col-span-1">
-          <Select
-            mode="multiple"
-            value={draft.focus_areas.map((f) => String(f.id))}
-            onChange={(ids: string[]) =>
-              update(
-                'focus_areas',
-                ids.map((fid) => {
-                  const m = focusAreaOptions.find((o) => o.id === fid);
-                  return { id: fid, name: m?.name ?? fid };
-                }),
-              )
-            }
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder="Select focus areas"
-            options={focusAreaOptions.map((f) => ({ value: f.id, label: f.name }))}
-            className="w-full"
-          />
-        </Field>
-
-        <Field label="Lead Auditor *">
-          <Select
-            value={draft.auditor_id ?? undefined}
-            onChange={(v) => update('auditor_id', v ?? null)}
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder="Select lead auditor (fixed)"
-            options={users.map((u) => ({ value: u.id, label: u.name }))}
-            className="w-full"
-          />
-        </Field>
-        <Field label="Approver *">
-          <Select
-            value={draft.approver_id ?? undefined}
-            onChange={(v) => update('approver_id', v ?? null)}
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder="Select approver"
-            options={users.map((u) => ({ value: u.id, label: u.name }))}
-            className="w-full"
-          />
-        </Field>
-        <Field label="Audit Workflow">
-          <Select
-            value={draft.workflow_id ?? undefined}
-            onChange={(v) => update('workflow_id', v ?? null)}
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder="Follow a workflow (optional)"
-            options={activeWorkflows.map((w) => ({ value: w.id, label: w.name }))}
-            className="w-full"
-          />
-          <p className="text-[11px] text-gray-400 mt-1">
-            On approval, the audit starts on this workflow — fill each stage's
-            checklist on the workflow ticket.
-          </p>
-        </Field>
-        <Field label="Audit Team Members *">
-          <Select
-            mode="multiple"
-            value={draft.team_members.map((m) => String(m.id))}
-            onChange={onTeamChange}
-            allowClear
-            showSearch
-            optionFilterProp="label"
-            placeholder="Select audit team members"
-            options={users.map((u) => ({ value: u.id, label: u.name }))}
-            className="w-full"
-          />
-        </Field>
-      </div>
-
-      {/* Checklist → team member assignment (from the selected master). */}
-      <div className="mt-6">
-        <h3 className="text-sm font-semibold text-gray-900 mb-1">Checklist Assignments *</h3>
-        <p className="text-xs text-gray-500 mb-3">
-          Assign one or more team members to each checklist from the selected master. The
-          Lead Auditor oversees all of them.
-        </p>
-        {draft.checklist_assignments.length === 0 ? (
-          <div className="text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center">
-            {draft.audit_master_id
-              ? 'The selected master has no checklists configured.'
-              : 'Select an Audit Master above to load its checklists.'}
+            <Field label="Title *">
+              <Input
+                value={draft.title}
+                onChange={(e) => update('title', e.target.value)}
+                placeholder="Q1 FY26 Internal Process Audit"
+              />
+            </Field>
           </div>
-        ) : (
-          <div className="space-y-3 max-w-4xl">
-            {draft.checklist_assignments.map((a) => (
-              <div
-                key={a.checklist_form_id}
-                className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3 items-center"
-              >
-                <div className="text-sm font-medium text-gray-800 truncate">
-                  {a.checklist_title}
+        </Section>
+
+        <Section
+          title="Audit details"
+          description="When, where and against which standard this audit runs."
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4">
+            <Field label="Audit Type *">
+              <Select
+                value={draft.audit_type || undefined}
+                onChange={(v) => update('audit_type', v ?? '')}
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select an audit type"
+                options={auditTypes.map((t) => ({ value: t.name, label: t.name }))}
+                className="w-full"
+              />
+            </Field>
+            <Field label="Audit Date *">
+              <DatePicker
+                value={draft.planned_date ?? undefined}
+                onChange={(d) => update('planned_date', d ?? null)}
+                format="DD MMM YYYY"
+                inputReadOnly
+                allowClear
+                placeholder="Pick a date"
+                className="w-full"
+              />
+            </Field>
+            <Field label="Financial Year *">
+              {/* AutoComplete = pick from the list OR type any FY (e.g. FY 29-30)
+                  so there's never a dead end beyond the generated range. */}
+              <AutoComplete
+                value={draft.financial_year || undefined}
+                onChange={(v) => update('financial_year', v ?? '')}
+                allowClear
+                options={FY_OPTIONS}
+                filterOption={(input, option) =>
+                  (option?.value ?? '').toUpperCase().includes(input.toUpperCase())
+                }
+                placeholder="Select or type e.g. FY 26-27"
+                className="w-full"
+              />
+            </Field>
+
+            <Field label="Plant / Site *">
+              <Input
+                value={draft.plant}
+                onChange={(e) => update('plant', e.target.value)}
+                placeholder="e.g. Unit-2, Hyderabad"
+              />
+            </Field>
+            <Field label="Audit Method *">
+              <Select
+                value={draft.audit_method || undefined}
+                onChange={(v) => update('audit_method', v ?? '')}
+                allowClear
+                placeholder="Select audit method"
+                options={AUDIT_METHOD_OPTIONS}
+                className="w-full"
+              />
+            </Field>
+            <Field label="ISO Standard *">
+              <Select
+                value={draft.iso_standard_id ?? undefined}
+                onChange={(v) => update('iso_standard_id', v ?? null)}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select an ISO standard"
+                options={isoStandards.map((s) => ({ value: s.id, label: s.name }))}
+                className="w-full"
+              />
+            </Field>
+
+            <Field label="Focus Areas *" className="md:col-span-2 xl:col-span-3">
+              <Select
+                mode="multiple"
+                value={draft.focus_areas.map((f) => String(f.id))}
+                onChange={(ids: string[]) =>
+                  update(
+                    'focus_areas',
+                    ids.map((fid) => {
+                      const m = focusAreaOptions.find((o) => o.id === fid);
+                      return { id: fid, name: m?.name ?? fid };
+                    }),
+                  )
+                }
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select focus areas"
+                options={focusAreaOptions.map((f) => ({ value: f.id, label: f.name }))}
+                className="w-full"
+              />
+            </Field>
+          </div>
+        </Section>
+
+        <Section
+          title="Team & roles"
+          description="The Lead Auditor owns the audit; the Approver signs off; team members run the checklists."
+        >
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-4">
+            <Field label="Lead Auditor *">
+              <Select
+                value={draft.auditor_id ?? undefined}
+                onChange={(v) => update('auditor_id', v ?? null)}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select lead auditor (fixed)"
+                options={users.map((u) => ({ value: u.id, label: u.name }))}
+                className="w-full"
+              />
+            </Field>
+            <Field label="Approver *">
+              <Select
+                value={draft.approver_id ?? undefined}
+                onChange={(v) => update('approver_id', v ?? null)}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select approver"
+                options={users.map((u) => ({ value: u.id, label: u.name }))}
+                className="w-full"
+              />
+            </Field>
+            <Field label="Audit Workflow">
+              <Select
+                value={draft.workflow_id ?? undefined}
+                onChange={(v) => update('workflow_id', v ?? null)}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Follow a workflow (optional)"
+                options={activeWorkflows.map((w) => ({ value: w.id, label: w.name }))}
+                className="w-full"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                On approval, the audit starts on this workflow — fill each stage's
+                checklist on the workflow ticket.
+              </p>
+            </Field>
+            <Field label="Audit Team Members *" className="md:col-span-2 xl:col-span-3">
+              <Select
+                mode="multiple"
+                value={draft.team_members.map((m) => String(m.id))}
+                onChange={onTeamChange}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                placeholder="Select audit team members"
+                options={users.map((u) => ({ value: u.id, label: u.name }))}
+                className="w-full"
+              />
+            </Field>
+          </div>
+        </Section>
+
+        {/* Checklist → team member assignment (from the selected master). */}
+        <Section
+          title="Checklist Assignments *"
+          description="Assign one or more team members to each checklist from the selected master. The Lead Auditor oversees all of them."
+        >
+          {draft.checklist_assignments.length === 0 ? (
+            <div className="text-sm text-gray-400 border border-dashed border-gray-200 rounded-lg px-4 py-6 text-center">
+              {draft.audit_master_id
+                ? 'The selected master has no checklists configured.'
+                : 'Select an Audit Master above to load its checklists.'}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {draft.checklist_assignments.map((a) => (
+                <div
+                  key={a.checklist_form_id}
+                  className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-3 md:items-center rounded-lg bg-gray-50 border border-gray-100 px-3 py-2.5"
+                >
+                  <div className="text-sm font-medium text-gray-800 truncate">
+                    {a.checklist_title}
+                  </div>
+                  <Select
+                    mode="multiple"
+                    value={a.members.map((m) => String(m.id))}
+                    onChange={(ids: string[]) => setAssignmentMembers(a.checklist_form_id, ids)}
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder={
+                      draft.team_members.length
+                        ? 'Assign team members'
+                        : 'Select team members first'
+                    }
+                    options={teamMemberOptions}
+                    className="w-full"
+                  />
                 </div>
-                <Select
-                  mode="multiple"
-                  value={a.members.map((m) => String(m.id))}
-                  onChange={(ids: string[]) => setAssignmentMembers(a.checklist_form_id, ids)}
-                  allowClear
-                  showSearch
-                  optionFilterProp="label"
-                  placeholder={
-                    draft.team_members.length
-                      ? 'Assign team members'
-                      : 'Select team members first'
-                  }
-                  options={teamMemberOptions}
-                  className="w-full"
-                />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </Section>
 
-      <div className="mt-6 max-w-4xl">
-        <Field label="Description *">
-          <Input.TextArea
-            value={draft.description}
-            onChange={(e) => update('description', e.target.value)}
-            rows={3}
-            placeholder="Scope, objectives, special notes…"
-          />
-        </Field>
+        <Section title="Description">
+          <Field label="Description *">
+            <Input.TextArea
+              value={draft.description}
+              onChange={(e) => update('description', e.target.value)}
+              rows={3}
+              placeholder="Scope, objectives, special notes…"
+            />
+          </Field>
+        </Section>
       </div>
     </PageContainer>
+  );
+}
+
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 md:p-6">
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+        {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -492,9 +580,14 @@ function Field({
   children: React.ReactNode;
   className?: string;
 }) {
+  const required = label.trim().endsWith('*');
+  const text = required ? label.replace(/\s*\*$/, '') : label;
   return (
     <div className={className}>
-      <label className="block text-[11px] font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-700 mb-1.5">
+        {text}
+        {required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
       {children}
     </div>
   );

@@ -11,7 +11,7 @@ import {
   Plus, Trash2, PenLine, Upload as UploadIcon, X, FileText,
 } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
-import { fieldIsTable } from './fieldCatalog';
+import { fieldIsTable, COMPLIANCE_OPTIONS } from './fieldCatalog';
 import type { FormFieldDef, FieldOption } from './types';
 import FileUploadField, { type UploadedFileMeta } from './components/FileUploadField';
 
@@ -499,6 +499,34 @@ export default function FieldRenderer({ field, value, onChange, disabled, protec
         />
       );
     }
+
+    case 'compliance':
+      // Fixed audit disposition vocabulary — colour-coded so Non-Conformance
+      // stands out. Options are hardcoded (not field.options) so the values
+      // stay in lockstep with the backend aggregation.
+      return (
+        <Select
+          id={id}
+          value={(value as string | undefined) ?? undefined}
+          onChange={(v) => onChange(v)}
+          placeholder={placeholder ?? 'Select disposition'}
+          disabled={disabled}
+          allowClear
+          className="!w-full"
+          options={COMPLIANCE_OPTIONS.map((o) => ({
+            value: o.value,
+            label: (
+              <span className="inline-flex items-center gap-2">
+                <span
+                  className="inline-block h-2.5 w-2.5 rounded-full"
+                  style={{ backgroundColor: o.color }}
+                />
+                {o.label}
+              </span>
+            ),
+          }))}
+        />
+      );
 
     case 'select':
       return (
