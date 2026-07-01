@@ -770,18 +770,47 @@ async function main() {
       ],
     );
 
+    // Per-form access control. Each binding restricts who may FILL and who may
+    // VIEW the form:
+    //   fillMode ANYONE → one shared copy, any member of the fill group fills it.
+    //   fillMode EACH    → one copy per fill-group member; the stage stays
+    //                      blocked until everyone has submitted their own copy.
+    // An empty fill group is treated as "legacy open" (everyone may fill/view)
+    // by the engine, so we seed explicit groups here to exercise the flow.
+    type BindingAccess = {
+      fillMode?: 'ANYONE' | 'EACH';
+      fillRoles?: string[]; // role names → resolved via roleByName
+      fillUsers?: string[]; // user emails (User.email is unique)
+      viewRoles?: string[];
+      viewUsers?: string[];
+    };
+    const roleConnect = (names: string[] = []) =>
+      names
+        .map((n) => roleByName.get(n))
+        .filter((id): id is string => Boolean(id))
+        .map((id) => ({ id }));
+    const userConnect = (emails: string[] = []) => emails.map((email) => ({ email }));
+
     // Bind forms to their stages. Use upsert-style behavior so a re-seed
     // un-deletes soft-deleted bindings left over from test runs (the
     // @@unique([stage, form]) constraint covers both isDeleted=true and =false
-    // rows, so plain `create` would conflict).
+    // rows, so plain `create` would conflict). Access groups are refreshed on
+    // every re-seed via `set` so the binding always reflects the seeded policy.
     const upsertBinding = async (
       stageId: string,
       formId: string,
       isRequired: boolean,
+      access: BindingAccess = {},
     ) => {
+      const fillMode = access.fillMode ?? 'ANYONE';
+      const fillRoles = roleConnect(access.fillRoles);
+      const fillUsers = userConnect(access.fillUsers);
+      const viewRoles = roleConnect(access.viewRoles);
+      const viewUsers = userConnect(access.viewUsers);
+
       const existing = await prisma.stageFormBinding.findUnique({
         where: { stageId_formId: { stageId, formId } },
-        select: { id: true, isDeleted: true, isActive: true, isRequired: true },
+        select: { id: true },
       });
       if (!existing) {
         await prisma.stageFormBinding.create({
@@ -791,33 +820,153 @@ async function main() {
             formId,
             isRequired,
             position: 0,
+            fillMode,
+            allowedFillRoles: { connect: fillRoles },
+            allowedFillUsers: { connect: fillUsers },
+            allowedViewRoles: { connect: viewRoles },
+            allowedViewUsers: { connect: viewUsers },
           },
         });
-      } else if (
-        existing.isDeleted ||
-        !existing.isActive ||
-        existing.isRequired !== isRequired
-      ) {
+      } else {
         await prisma.stageFormBinding.update({
           where: { id: existing.id },
           data: {
             isDeleted: false,
             isActive: true,
             isRequired,
+            fillMode,
+            allowedFillRoles: { set: fillRoles },
+            allowedFillUsers: { set: fillUsers },
+            allowedViewRoles: { set: viewRoles },
+            allowedViewUsers: { set: viewUsers },
           },
         });
       }
     };
 
     if (submitStageForForms) {
-      await upsertBinding(submitStageForForms.id, submissionFormId, false);
+      // Submission Confirmation — filled by the document controller who submits;
+      // visible to QA/management/audit for context. Optional (doesn't block).
+      await upsertBinding(submitStageForForms.id, submissionFormId, false, {
+        fillMode: 'ANYONE',
+        fillRoles: ['DOCUMENT_CONTROLLER'],
+        viewRoles: ['QMS_ADMIN', 'QUALITY_ENGINEER', 'AUDITOR'],
+      });
     }
     if (reviewStageForForms) {
-      await upsertBinding(reviewStageForForms.id, reviewFormId, true);
+      // Document Review Checklist — filled by the reviewing quality engineer;
+      // visible to management/doc-control/audit. Required (blocks the Approve
+      // transition until submitted).
+      await upsertBinding(reviewStageForForms.id, reviewFormId, true, {
+        fillMode: 'ANYONE',
+        fillRoles: ['QUALITY_ENGINEER'],
+        viewRoles: ['QMS_ADMIN', 'DOCUMENT_CONTROLLER', 'AUDITOR'],
+      });
     }
     console.log(`    sample forms: 2 (Submission Confirmation, Document Review Checklist)`);
-    console.log(`    sample bindings: Submit (optional) + Review (required)`);
+    console.log(`    sample bindings: Submit (optional, fill=DocControl) + Review (required, fill=QE)`);
   }
+
+  // ── Phase 3.6 — dependency-rule fixture (e2e: verify-dep-rule[-ticket]) ──
+  // A CAPA-style RCA form whose "5 Why Analysis" field is shown only when
+  // "Root Cause Analysis Required" = Yes (field-level dependency rule).
+  // Seeded with a FIXED id because the standalone fill spec navigates to it
+  // directly (/forms/<id>/fill); the RCA workflow below binds it to an initial
+  // stage so a raised ticket renders it inline (the ticket spec path).
+  console.log('🌱  Seeding dependency-rule fixture (RCA 5-Whys form + workflow)...');
+  const RCA_FORM_ID = 'c318dadd-7375-4606-9c99-d3cb2cd719a3';
+  const selectTypeF = await prisma.fieldType.findUnique({ where: { name: 'select' } });
+  const textareaTypeF = await prisma.fieldType.findUnique({ where: { name: 'textarea' } });
+
+  const existingRcaForm = await prisma.form.findUnique({ where: { id: RCA_FORM_ID }, select: { id: true } });
+  if (!existingRcaForm) {
+    const rcaForm = await prisma.form.create({
+      data: {
+        id: RCA_FORM_ID,
+        templateKey: 'rca-5whys',
+        title: 'Root Cause Analysis',
+        description: 'CAPA RCA form — the analysis table is revealed only when root cause analysis is required.',
+        version: 1,
+        versionId: 'rca-5whys-v1',
+        status: 'PUBLISHED',
+      },
+      select: { id: true },
+    });
+    const sec = await prisma.formSection.create({
+      data: { formId: rcaForm.id, sectionId: 'sec-rca', name: 'Root Cause Analysis', position: 0 },
+      select: { id: true },
+    });
+    // Controlling dropdown — Yes/No.
+    await prisma.formField.create({
+      data: {
+        sectionId: sec.id,
+        fieldId: 'fld-rca-required',
+        name: 'rootCauseRequired',
+        label: 'Root Cause Analysis Required',
+        position: 0,
+        width: '50',
+        required: true,
+        typeId: selectTypeF?.id ?? null,
+        typeName: 'select',
+        options: [{ label: 'Yes', value: 'Yes' }, { label: 'No', value: 'No' }] as unknown as Prisma.InputJsonValue,
+      },
+    });
+    // Dependent 5-Why table — shown only when the dropdown above equals "Yes".
+    await prisma.formField.create({
+      data: {
+        sectionId: sec.id,
+        fieldId: 'fld-5why',
+        name: 'fiveWhyAnalysis',
+        label: '5 Why Analysis',
+        position: 1,
+        width: '100',
+        required: false,
+        typeId: textareaTypeF?.id ?? null,
+        typeName: 'textarea',
+        dependency: {
+          enabled: true,
+          mode: 'show',
+          combinator: 'and',
+          conditions: [
+            { sectionName: 'Root Cause Analysis', fieldName: 'rootCauseRequired', operator: 'equals', value: 'Yes' },
+          ],
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  // RCA workflow whose INITIAL stage carries the fixture form, so a freshly
+  // raised ticket sits on it and renders the form inline. Idempotent by name.
+  if (approveStatus) {
+    const existingRcaWf = await prisma.workflow.findFirst({ where: { name: 'Root Cause Analysis Demo v1' } });
+    if (!existingRcaWf) {
+      await prisma.$transaction(async (tx) => {
+        const wf = await tx.workflow.create({
+          data: {
+            name: 'Root Cause Analysis Demo v1',
+            typeId: docType.id,
+            status: 'APPROVED',
+            workflowStatus: 'ACTIVE',
+            createdById: adminUser?.id ?? null,
+          },
+        });
+        const rca = await tx.workflowStage.create({
+          data: { workflowId: wf.id, name: 'Root Cause Analysis', canonicalId: 'rca-analyse', isInitialStage: true, stageType: 'STAGE' },
+        });
+        const done = await tx.workflowStage.create({
+          data: { workflowId: wf.id, name: 'Done', canonicalId: 'rca-done', stageType: 'STAGE' },
+        });
+        await tx.workflowStageAction.create({ data: { workflowStageId: rca.id, workflowActionId: approveStatus.id, isPrimary: true } });
+        await tx.workflowStageAction.create({ data: { workflowStageId: done.id, workflowActionId: approveStatus.id, isPrimary: true } });
+        await tx.workflowTransition.create({ data: { workflowId: wf.id, fromStageId: rca.id, toStageId: done.id, branchOrder: 0 } });
+        // Legacy-open binding (no fill/view groups) so any user can fill it.
+        await tx.stageFormBinding.create({
+          data: { workflowId: wf.id, stageId: rca.id, formId: RCA_FORM_ID, isRequired: false, position: 0, fillMode: 'ANYONE' },
+        });
+      }, { timeout: 30_000, maxWait: 5_000 });
+    }
+  }
+  console.log('    fixture: RCA form (c318dadd…) + "Root Cause Analysis Demo v1" workflow');
 
   console.log(`\n    All seeded users login with password:  ${SEED_PASSWORD}`);
 }
