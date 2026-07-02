@@ -13,6 +13,7 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "db:seed:capa": "tsx prisma/seed-capa-workflow.ts",
     "db:seed:audit": "tsx prisma/seed-audit-master.ts",
     "db:seed:audit-data": "tsx prisma/seed-audit-data.ts",
     "sla:sweep": "tsx src/jobs/run-once.ts",
