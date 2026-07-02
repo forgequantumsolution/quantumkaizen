@@ -1000,3 +1000,39 @@ Finishes the partially-built Part 11 UI affordances (§8). Working tree only; no
 ### Not done in Phase B
 
 - E-sig parity in the CAPA/DMS ad-hoc signers; global aggregate audit-log page; session-timeout countdown + last-login display. Phase C (notification badges + real global search + full nav reorder + persona nav — need backend) and Phase D (8 missing modules — roadmap). See the plan doc.
+
+---
+
+## UI/UX Manual (FQS-QK-UIUX-003) — Phase C1: sidebar notification badges
+
+The manual's highest-impact/demo item (§4, U-01: "CAPA: 5 open"-style badges, benchmarked against Veeva/MasterControl). First data-backed feature — adds a real backend counts endpoint + frontend badges. Working tree only; nothing committed. (The rest of Phase C — real global search, full 12-module reorder, persona nav — not started.)
+
+### Backend — new `GET /api/nav-counts` endpoint (read-only aggregation, no schema change)
+
+New module `backend/src/modules/nav-counts/` (service + controller + routes), mirroring the `lims-analytics` pattern; registered in `backend/src/app.ts` at `/api/nav-counts` (auth-only, no extra permission — counts are non-sensitive aggregates of what the user can already navigate to). Returns:
+```json
+{ "workflowTypes": { "<typeId>": <openTickets> }, "oos": <n>, "capa": <n> }
+```
+- **workflowTypes** — open tickets grouped by workflow type. Open work lives on `TicketFlow.isCompleted = false` (Ticket has no status/type column), and the type is two hops away, so: `groupBy(TicketFlow, workflowId)` where not-completed and `ticket.isDeleted = false`, then map `workflowId → Workflow.typeId` and sum.
+- **oos** — `OosInvestigation` where `status != 'CLOSED'`.
+- **capa** — `Capa` where `status notIn (CLOSED, CANCELLED)` (via the `CapaStatus` enum).
+
+### Frontend — badges in the sidebar
+
+- **`client/src/lib/api/navCounts.ts`** (new) — `useNavCounts()` react-query hook (`staleTime 60s`, `refetchInterval 120s`, refetch on focus) — badges are ambient, never block.
+- **`client/src/components/layout/Sidebar.tsx`** — `NavItem` gains `count?`; a module-level `NavBadge` (amber pill on the dark sidebar, hidden at zero, `99+` cap); a `badgeCount(item)` helper that rolls descendant counts up to parents so a collapsed group still surfaces attention. Counts are attached in the nav memo: each DB workflow module gets `navCounts.workflowTypes[t.id]`; the LIMS→OOS child gets `navCounts.oos`. Badges render on both parent rows (before the chevron) and leaf rows (right-aligned), expanded sidebar only.
+- Also fixed a latent inconsistency found here: an earlier font-size edit (A6) only matched the **parent** label span (indentation differed), leaving **leaf** labels at 17px. Brought leaves in line at 15px/14px so Dashboard/CAPA-Management match the parent rows.
+
+### Verification
+
+- Backend `npx tsc --noEmit` — exit 0. Client `npx tsc --noEmit` + `vite build` — clean.
+- **Live endpoint test** — ran a throwaway backend instance on `:4001` (same DB; the running `:4000` predates the new route) and hit `GET /api/nav-counts` with a real admin token → `200` in ~42ms, returning real data: `{"workflowTypes":{"…":23,"…":17},"oos":0,"capa":21}`. Prisma logs confirm the three intended queries.
+- **Badge UI test (Playwright, real login + mocked counts for determinism)** — `tests/ui/nav-badges.spec.ts` + `.config.ts`. 2/2 pass: with `oos:7`, the **LIMS parent** rolls up and shows `7`, and expanding LIMS shows the **OOS leaf** `7`; with all-zero counts, no badge renders.
+
+### ⚠ Operational note
+
+The running `:4000` backend did **not** hot-reload the new route (it 404s `/api/nav-counts` while existing routes work). **It needs a restart** (`npm run dev:backend`) to serve the endpoint. Until then the frontend's nav-counts call 404s and badges simply don't render — graceful, no crash.
+
+### Not done in Phase C
+
+- C2 real global search (needs a backend `/api/search`), C3 full 12-module reorder (blocked on Deviations/Change Control/Calibration/Vendor existing as modules), C4 persona nav. Phase D (8 missing modules) remains a roadmap.

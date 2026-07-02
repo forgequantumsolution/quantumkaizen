@@ -50,6 +50,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useRecentItemsStore } from "@/stores/recentItemsStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useWorkflowTypes } from "@/lib/api/workflowLookups";
+import { useNavCounts } from "@/lib/api/navCounts";
 import { useMemo, useState } from "react";
 
 interface NavItem {
@@ -66,6 +67,9 @@ interface NavItem {
    * for entries that land on one route but share a layout with siblings (e.g.
    * "Audit" points to /audit/register but should stay active on /audit/program). */
   activeForPrefixes?: string[];
+  /** Pending-action count for the notification badge (FQS-QK-UIUX-003 §4).
+   * Leaves carry their own count; parents show the sum of descendants. */
+  count?: number;
 }
 interface NavSection {
   title: string;
@@ -111,6 +115,13 @@ const findFirstLeaf = (item: NavItem): NavItem | null => {
   }
   return null;
 };
+
+// Badge count for an item: leaves use their own count; parents roll up the sum
+// of descendants so a collapsed group still surfaces what needs attention.
+const badgeCount = (item: NavItem): number =>
+  item.children?.length
+    ? item.children.reduce((sum, c) => sum + badgeCount(c), 0)
+    : item.count ?? 0;
 
 const pickIcon = (
   name: string,
@@ -165,6 +176,33 @@ const INACTIVE_CLR = "#FFFFFF";
 const DIVIDER = "rgba(255,255,255,0.06)";
 const HOVER_BG = "rgba(255,255,255,0.04)";
 
+// Notification count pill (FQS-QK-UIUX-003 §4/U-01). Amber on the dark sidebar
+// so it reads without the alarm of solid red; renders nothing at zero.
+function NavBadge({ n }: { n: number }) {
+  if (!n) return null;
+  return (
+    <span
+      style={{
+        backgroundColor: ACCENT,
+        color: "#0D0E17",
+        fontSize: "10px",
+        fontWeight: 700,
+        lineHeight: 1,
+        minWidth: "17px",
+        height: "16px",
+        padding: "0 5px",
+        borderRadius: "999px",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
+    >
+      {n > 99 ? "99+" : n}
+    </span>
+  );
+}
+
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -173,6 +211,7 @@ export default function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const { data: workflowTypes } = useWorkflowTypes();
+  const { data: navCounts } = useNavCounts();
 
   const navigation = useMemo<NavSection[]>(() => {
     // Audit child pages — attached under the dynamic "Audit" workflow type when
@@ -223,6 +262,7 @@ export default function Sidebar() {
           // Audit gates via its children (audit_register/master.read) instead.
           permission: isAudit ? undefined : "ticket.read",
           children: isAudit ? auditChildren : undefined,
+          count: navCounts?.workflowTypes?.[t.id],
         };
         return { item, group: groupForModule(t.name) };
       });
@@ -298,7 +338,7 @@ export default function Sidebar() {
         { label: "Worklists", path: "/lims/worklists", icon: ClipboardList, permission: "worklist.read" },
         { label: "Quality Control", path: "/lims/qc", icon: Microscope, permission: "qc.read" },
         { label: "Stability", path: "/lims/stability", icon: Thermometer, permission: "stability.read" },
-        { label: "OOS / OOT Investigations", path: "/lims/oos", icon: AlertTriangle, permission: "oos.read" },
+        { label: "OOS / OOT Investigations", path: "/lims/oos", icon: AlertTriangle, permission: "oos.read", count: navCounts?.oos },
         { label: "CoA Management", path: "/lims/coa", icon: Award, permission: "coa.read" },
         { label: "Data Review", path: "/lims/data-review", icon: ShieldCheck, permission: "data_review.read" },
         { label: "Configuration", path: "/lims/config", icon: Settings2, permission: "lab.read" },
@@ -343,7 +383,7 @@ export default function Sidebar() {
     return sections
       .map((s) => ({ ...s, items: gate(s.items) }))
       .filter((s) => s.items.length > 0);
-  }, [workflowTypes, hasPermission]);
+  }, [workflowTypes, hasPermission, navCounts]);
 
   const [sectionsCollapsed, setSectionsCollapsed] = useState<
     Record<string, boolean>
@@ -487,6 +527,7 @@ export default function Sidebar() {
             >
               {item.label}
             </span>
+            <NavBadge n={badgeCount(item)} />
             <ChevronDown
               size={13}
               style={{
@@ -555,15 +596,20 @@ export default function Sidebar() {
           style={{ color: isActive ? ACCENT : "inherit", flexShrink: 0 }}
         />
         {!sidebarCollapsed && (
-          <span
-            style={{
-              fontSize: depth === 0 ? "17px" : "15px",
-              lineHeight: 1.2,
-              whiteSpace: "nowrap",
-            }}
-          >
-            {item.label}
-          </span>
+          <>
+            <span
+              style={{
+                fontSize: depth === 0 ? "15px" : "14px",
+                lineHeight: 1.2,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {item.label}
+            </span>
+            <span style={{ marginLeft: "auto" }}>
+              <NavBadge n={badgeCount(item)} />
+            </span>
+          </>
         )}
       </NavLink>
     );
