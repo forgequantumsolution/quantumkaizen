@@ -1,19 +1,38 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, ClipboardList, BarChart3, Network, Ticket, X } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Search, X, TestTube, RefreshCw, FileText, Ticket, AlertTriangle, Award,
+  type LucideIcon,
+} from 'lucide-react';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-// Static page index for the global search palette. Replace with a real API
-// call once you have one (GET /api/search?q=...).
-const SEARCH_INDEX = [
-  { id: 'PAGE-dashboard', type: 'Page', title: 'Dashboard',  subtitle: 'Main overview',          path: '/dashboard',  icon: BarChart3 },
-  { id: 'PAGE-forms',     type: 'Page', title: 'Forms',      subtitle: 'Dynamic form builder',   path: '/forms',      icon: ClipboardList },
-  { id: 'PAGE-workflows', type: 'Page', title: 'Workflows',  subtitle: 'Process workflows',      path: '/workflows',  icon: Network },
-  { id: 'PAGE-tickets',   type: 'Page', title: 'Tickets',    subtitle: 'Open tickets',           path: '/tickets',    icon: Ticket },
-];
+// Cross-module search hits from GET /api/search?q= (FQS-QK-UIUX-003 §4).
+interface SearchHit {
+  type: 'Sample' | 'CAPA' | 'Document' | 'Ticket' | 'OOS' | 'CoA';
+  id: string;
+  title: string;
+  subtitle: string;
+  path: string;
+}
 
-const TYPE_COLORS: Record<string, string> = {
-  Page: 'bg-gray-100 text-gray-600',
+const TYPE_ICON: Record<SearchHit['type'], LucideIcon> = {
+  Sample: TestTube,
+  CAPA: RefreshCw,
+  Document: FileText,
+  Ticket: Ticket,
+  OOS: AlertTriangle,
+  CoA: Award,
+};
+
+const TYPE_COLORS: Record<SearchHit['type'], string> = {
+  Sample: 'bg-blue-50 text-blue-600',
+  CAPA: 'bg-amber-50 text-amber-700',
+  Document: 'bg-gray-100 text-gray-600',
+  Ticket: 'bg-indigo-50 text-indigo-600',
+  OOS: 'bg-red-50 text-red-600',
+  CoA: 'bg-emerald-50 text-emerald-700',
 };
 
 interface GlobalSearchProps {
@@ -23,18 +42,26 @@ interface GlobalSearchProps {
 export default function GlobalSearch({ onClose }: GlobalSearchProps) {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
+  const [debouncedQ, setDebouncedQ] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const results = query.trim().length < 1
-    ? SEARCH_INDEX.slice(0, 8)
-    : SEARCH_INDEX.filter(item =>
-        item.title.toLowerCase().includes(query.toLowerCase()) ||
-        item.type.toLowerCase().includes(query.toLowerCase()) ||
-        item.subtitle.toLowerCase().includes(query.toLowerCase()) ||
-        item.id.toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 10);
+  // Debounce typing before hitting the API.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(query.trim()), 200);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const { data, isFetching } = useQuery({
+    queryKey: ['global-search', debouncedQ],
+    queryFn: async () =>
+      (await api.get('/search', { params: { q: debouncedQ } })).data.results as SearchHit[],
+    enabled: debouncedQ.length >= 2,
+    staleTime: 30_000,
+  });
+
+  const results = debouncedQ.length >= 2 ? data ?? [] : [];
 
   useEffect(() => {
     setSelectedIdx(0);
@@ -70,6 +97,8 @@ export default function GlobalSearch({ onClose }: GlobalSearchProps) {
     el?.scrollIntoView({ block: 'nearest' });
   }, [selectedIdx]);
 
+  const tooShort = debouncedQ.length < 2;
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh]">
       {/* Backdrop */}
@@ -84,7 +113,7 @@ export default function GlobalSearch({ onClose }: GlobalSearchProps) {
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder="Search records, documents, modules..."
+            placeholder="Search samples, CAPAs, documents, tickets, OOS, CoAs…"
             className="flex-1 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
           />
           {query && (
@@ -99,45 +128,48 @@ export default function GlobalSearch({ onClose }: GlobalSearchProps) {
 
         {/* Results */}
         <div ref={listRef} className="overflow-y-auto max-h-80 py-2">
-          {results.length === 0 ? (
+          {tooShort ? (
             <div className="py-8 text-center">
-              <p className="text-sm text-gray-400">No results for "{query}"</p>
+              <p className="text-sm text-gray-400">Type at least 2 characters to search records</p>
+            </div>
+          ) : isFetching && results.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-gray-400">Searching…</p>
+            </div>
+          ) : results.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-gray-400">No results for "{debouncedQ}"</p>
             </div>
           ) : (
-            <>
-              {!query && (
-                <p className="px-4 py-1 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Recent & Suggested</p>
-              )}
-              {results.map((item, idx) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    data-idx={idx}
-                    onClick={() => handleSelect(item.path)}
-                    onMouseEnter={() => setSelectedIdx(idx)}
-                    className={cn(
-                      'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100',
-                      idx === selectedIdx ? 'bg-slate-900/5' : 'hover:bg-gray-50'
-                    )}
-                  >
-                    <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', TYPE_COLORS[item.type] ?? 'bg-gray-100 text-gray-500')}>
-                      <Icon size={13} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{item.title}</p>
-                      <p className="text-xs text-gray-400 truncate">{item.subtitle}</p>
-                    </div>
-                    <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0', TYPE_COLORS[item.type] ?? 'bg-gray-100 text-gray-500')}>
-                      {item.type}
-                    </span>
-                    {idx === selectedIdx && (
-                      <kbd className="text-[10px] text-gray-300 font-mono border border-gray-200 rounded px-1.5 py-0.5">↵</kbd>
-                    )}
-                  </button>
-                );
-              })}
-            </>
+            results.map((item, idx) => {
+              const Icon = TYPE_ICON[item.type];
+              return (
+                <button
+                  key={`${item.type}-${item.id}`}
+                  data-idx={idx}
+                  onClick={() => handleSelect(item.path)}
+                  onMouseEnter={() => setSelectedIdx(idx)}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-100',
+                    idx === selectedIdx ? 'bg-slate-900/5' : 'hover:bg-gray-50'
+                  )}
+                >
+                  <div className={cn('w-7 h-7 rounded-lg flex items-center justify-center shrink-0', TYPE_COLORS[item.type])}>
+                    <Icon size={13} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate font-mono">{item.title}</p>
+                    <p className="text-xs text-gray-400 truncate">{item.subtitle}</p>
+                  </div>
+                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0', TYPE_COLORS[item.type])}>
+                    {item.type}
+                  </span>
+                  {idx === selectedIdx && (
+                    <kbd className="text-[10px] text-gray-300 font-mono border border-gray-200 rounded px-1.5 py-0.5">↵</kbd>
+                  )}
+                </button>
+              );
+            })
           )}
         </div>
 

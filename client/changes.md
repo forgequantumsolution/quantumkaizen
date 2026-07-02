@@ -1036,3 +1036,39 @@ The running `:4000` backend did **not** hot-reload the new route (it 404s `/api/
 ### Not done in Phase C
 
 - C2 real global search (needs a backend `/api/search`), C3 full 12-module reorder (blocked on Deviations/Change Control/Calibration/Vendor existing as modules), C4 persona nav. Phase D (8 missing modules) remains a roadmap.
+
+---
+
+## UI/UX Manual (FQS-QK-UIUX-003) — Phase C2: real global search
+
+Replaces the 4-item static ⌘K palette (which only linked to Dashboard/Forms/Workflows/Tickets) with a real cross-module search — the manual's §4 use case: "find a sample by lot number, CAPA by ID, or SOP by document number… essential during inspections." Working tree only; nothing committed.
+
+### Backend — new `GET /api/search?q=` endpoint (read-only)
+
+New module `backend/src/modules/search/` (service + controller + routes), registered in `backend/src/app.ts` at `/api/search` (auth-only). Runs six `findMany` in parallel (case-insensitive `contains`, `take 5` each) across the entities an analyst/inspector looks up by reference:
+- **Sample** — `sampleNumber` / `barcode` / `batchNo` / `productName` (soft-delete filtered) → `/lims/samples/:id`
+- **Capa** — `capaNumber` / `title` / `description` → `/audit/capa/:id`
+- **Document** (DMS) — `docNumber` / `title` / `description` (soft-delete) → `/dms/:id`
+- **Ticket** — `uniqueId` / `title` / `description` (soft-delete) → `/tickets/:id`
+- **OosInvestigation** — `code` / `title` → `/lims/oos/:id`
+- **Coa** — `coaNumber` / `productName` / `batchNo` (soft-delete) → `/lims/coa/:id`
+
+Each hit is normalised to `{ type, id, title, subtitle, path }`. Min query length 2. **Known limitation** (documented in the service): results are auth-gated but not yet scoped to per-entity read permissions — a follow-up.
+
+### Frontend — wire the palette to the API
+
+`client/src/components/shared/GlobalSearch.tsx` rewritten to fetch from the endpoint instead of the static `SEARCH_INDEX`: a debounced (200ms) `useQuery(['global-search', q])` enabled at ≥2 chars, a per-type icon/colour map (Sample/CAPA/Document/Ticket/OOS/CoA), monospace titles (they're reference codes), and loading / too-short / empty states. The existing palette shell — ⌘K open, ↑↓ navigation, ↵ open, Esc close — is preserved.
+
+### Verification
+
+- Backend + client `npx tsc --noEmit` — exit 0.
+- **Live endpoint test** — throwaway backend on `:4001` (same DB; killed cleanly by port afterwards), `GET /api/search?q=capa` → real CAPA hits with correct `{type,title,subtitle,path}` (e.g. `CAPA-2026-0007 → /audit/capa/<id>`). `q=sample` → 0 (no samples seeded — correct).
+- **Palette UI test (Playwright, real login + mocked results)** — `tests/ui/search.spec.ts` + `.config.ts`. 2/2 pass: typing "capa" renders the returned CAPA + Sample hits and clicking navigates to `/audit/capa/<id>`; a 1-char query shows "Type at least 2 characters…" and fires **no** API call.
+
+### ⚠ Operational note
+
+Same as C1: the running `:4000` backend has `nav-counts` (from the earlier restart) but **404s `/api/search`** — its watcher isn't reloading new module files. **Restart it** (`npm run dev:backend`) to serve search. Until then the palette shows "No results" (the 404 yields an empty list — graceful, no crash).
+
+### Not done in Phase C
+
+- C3 full 12-module reorder (blocked on Deviations/Change Control/Calibration/Vendor existing as first-class modules), C4 persona nav, and per-entity permission scoping of search. Phase D (8 missing modules) remains a roadmap.
