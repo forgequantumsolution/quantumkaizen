@@ -10,6 +10,7 @@
  */
 import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, FileText } from 'lucide-react';
+import { ReadOnlyBanner } from '@/components/ui/ReadOnlyBanner';
 import { Card } from '@/components/ui';
 import {
   useTicketFormHistory,
@@ -137,6 +138,9 @@ export default function TicketFormHistory({
       )}
 
       <div className="border-t border-gray-100 bg-gray-50/40 px-4 py-4">
+        <div className="mb-3">
+          <ReadOnlyBanner />
+        </div>
         <div className="mb-3 text-[11px] text-gray-500 flex items-center gap-2 flex-wrap">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
           Read-only · {active.formTitle}

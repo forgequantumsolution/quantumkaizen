@@ -947,6 +947,10 @@ The sidebar previously rendered three untitled sections (hardcoded block → DB 
 
 `Sidebar.tsx` — a static `🛡 GMP · 21 CFR 11 · EU Annex 11` chip in the sidebar footer (expanded only), using the gold accent token — reassures QA/inspectors that data-integrity controls are active.
 
+### A6 — Nav label sizing (follow-up)
+
+The top-level nav labels rendered at **17px**, which crowded long labels ("Training & Qualification", "CAPA Management") against the expand chevron and read oversized. Reduced to **15px** top-level / **14px** children in `Sidebar.tsx` (`renderNavItem`), keeping the parent > child hierarchy and moving toward the typography manual's nav-label spec (13–14px web). Verified by screenshot — long labels now sit comfortably on one line.
+
 ### Verification
 
 - `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
@@ -961,3 +965,38 @@ The sidebar previously rendered three untitled sections (hardcoded block → DB 
 ### Not done in Phase A
 
 - Phase B (e-sig name/date/meaning button, read-only banner, audit-log link), Phase C (notification badges + real global search + full nav reorder + persona nav — need backend), Phase D (8 missing modules — roadmap). See the plan doc.
+
+---
+
+## UI/UX Manual (FQS-QK-UIUX-003) — Phase B: 21 CFR Part 11 UI polish
+
+Finishes the partially-built Part 11 UI affordances (§8). Working tree only; nothing committed.
+
+### B1 — E-signature modal completion (§8)
+
+`client/src/components/shared/ESignatureModal.tsx` — 21 CFR Part 11 requires the signer's **printed name**, **date/time**, and **meaning** all visible at the point of signing. The modal already had the meaning dropdown; added the missing two and fixed the button:
+- Imported `useAuthStore`; added a signer row to the context panel — `Signer: <user.name>` + a `new Date().toLocaleString()` stamp (display-only operator confirmation; the authoritative signing time stays server-set).
+- Confirm button `Apply Signature → Sign as {meaning}` (e.g. "Sign as Approved", "Sign as Reviewed") so it reflects the signature meaning rather than a generic verb.
+- **Deferred:** the two ad-hoc AntD signing UIs (`features/audit/CapaDetailPage.tsx`, `features/dms/DocumentDetailPage.tsx`) still lack name/date parity and aren't consolidated onto the shared modal — a follow-up (kept out of this pass to limit churn/risk).
+
+### B2 — "Approved — Read Only" banner (§8)
+
+- New `client/src/components/ui/ReadOnlyBanner.tsx` — lock icon + "Record Approved — Read Only", styled with the new `state.closed` token.
+- Applied to the primary submitted-GMP-record surface: `features/tickets/detail/TicketFormHistory.tsx` (above the existing subtle "Read-only · …" caption). The `.form-readonly` plumbing already existed; this adds the prominent lock affordance the manual asks for. Ready to drop into the DMS effective-doc and closed-CAPA views next.
+
+### B3 — Fix the dead "Audit Log" link (§8)
+
+`client/src/components/layout/Header.tsx` — the notification dropdown's footer button navigated to `/dashboard` and was mislabeled "View all in Audit Log" (no `/audit-log` route exists).
+- Relabeled to **"View all notifications →"** and repointed to open the full `NotificationPanel`.
+- **Correctness fix caught during review:** the header bell's own `onClick` already calls `togglePanel()`, so calling `togglePanel()` again from the footer would have *closed* the panel. Added a deterministic `openPanel()` action to `stores/notificationStore.ts` (`set({ isOpen: true })`) and used it in the footer, so the link always opens the panel regardless of prior state.
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
+- **Bundle-string check** on the built JS confirms all three shipped and the dead label is gone: `Sign as ` ✓, `Signer:` ✓, `Record Approved — Read Only` ✓, `View all notifications` ✓, `View all in Audit Log` → **0 occurrences**.
+- **Playwright UI check (real login)** — `tests/ui/notif-link.spec.ts` + `.config.ts` (Vite dev server → backend :4000). 1/1 pass: from `/lims/samples`, open the bell dropdown → the footer reads "View all notifications" (old label absent) → clicking it opens the `NotificationPanel` (`<h2>Notifications</h2>`) and stays on `/lims/samples` (no dead jump to `/dashboard`).
+- B1 (e-sig) and B2 (banner) render inside flows that need specific data/interaction (LMS exam/course signing; a completed ticket's submitted forms), so they were verified by tsc + build + bundle-string presence + code review rather than a driven e2e.
+
+### Not done in Phase B
+
+- E-sig parity in the CAPA/DMS ad-hoc signers; global aggregate audit-log page; session-timeout countdown + last-login display. Phase C (notification badges + real global search + full nav reorder + persona nav — need backend) and Phase D (8 missing modules — roadmap). See the plan doc.

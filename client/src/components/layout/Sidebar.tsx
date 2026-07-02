@@ -480,7 +480,7 @@ export default function Sidebar() {
             <span
               style={{
                 flex: 1,
-                fontSize: depth === 0 ? "17px" : "15px",
+                fontSize: depth === 0 ? "15px" : "14px",
                 lineHeight: 1.2,
                 whiteSpace: "nowrap",
               }}
