@@ -5,7 +5,7 @@ import { presets, type PresetKey, defaultColors } from '@/components/theme/prese
 export type Mode = 'light' | 'dark' | 'system';
 export type Density = 'compact' | 'comfortable' | 'spacious';
 export type SansFamily = 'outfit' | 'inter' | 'system';
-export type MonoFamily = 'dm-mono' | 'jetbrains' | 'system';
+export type MonoFamily = 'roboto-mono' | 'dm-mono' | 'jetbrains' | 'system';
 export type HeadingWeight = 600 | 700 | 800;
 
 /**
@@ -90,8 +90,8 @@ export const defaultFontSizes: AppearanceFontSizes = {
 export const defaultTypography: AppearanceTypography = {
   baseFontPx: 16,
   density: 'comfortable',
-  sansFamily: 'outfit',
-  monoFamily: 'dm-mono',
+  sansFamily: 'inter',
+  monoFamily: 'roboto-mono',
   headingWeight: 700,
   fontSizes: defaultFontSizes,
 };
@@ -155,7 +155,7 @@ export const useAppearanceStore = create<AppearanceState>()(
     }),
     {
       name: 'qk-appearance',
-      version: 2,                    // bump when persisted shape changes
+      version: 3,                    // bump when persisted shape changes
       partialize: (s) => ({
         mode: s.mode,
         preset: s.preset,
@@ -166,9 +166,12 @@ export const useAppearanceStore = create<AppearanceState>()(
       // v0/v1 → v2: typography.fontSizes was added. Older blobs lack the
       // field entirely, which crashed AppearanceProvider when it tried to
       // iterate fontSizes[key]. Backfill defaults for anything missing.
-      migrate: (persisted: unknown, _from) => {
+      // v2 → v3: Inter + Roboto Mono replaced Outfit + DM Mono as the product
+      // default (FQS-QK-UIUX-002). Force the swap ONLY for blobs still on the
+      // old defaults, so a user who deliberately chose 'system' keeps it.
+      migrate: (persisted: unknown, from) => {
         const p = (persisted ?? {}) as Partial<AppearanceConfig>;
-        return {
+        const base = {
           mode:   p.mode   ?? defaultConfig.mode,
           preset: p.preset ?? defaultConfig.preset,
           colors: { ...defaultColors, ...(p.colors ?? {}) },
@@ -181,6 +184,12 @@ export const useAppearanceStore = create<AppearanceState>()(
             },
           },
         } as AppearanceConfig;
+
+        if (from < 3) {
+          if (base.typography.sansFamily === 'outfit')  base.typography.sansFamily = 'inter';
+          if (base.typography.monoFamily === 'dm-mono') base.typography.monoFamily = 'roboto-mono';
+        }
+        return base;
       },
 
       // Belt-and-braces: even after migrate, if a persisted blob from a

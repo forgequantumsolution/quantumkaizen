@@ -70,7 +70,7 @@ export default function AppearancePage() {
     preset: store.preset ?? 'default',
     colors: store.colors ?? presetList[0].colors,
     typography: {
-      ...{ baseFontPx: 16, density: 'comfortable' as Density, sansFamily: 'outfit' as SansFamily, monoFamily: 'dm-mono' as MonoFamily, headingWeight: 700 as HeadingWeight, fontSizes: defaultFontSizes },
+      ...{ baseFontPx: 16, density: 'comfortable' as Density, sansFamily: 'inter' as SansFamily, monoFamily: 'roboto-mono' as MonoFamily, headingWeight: 700 as HeadingWeight, fontSizes: defaultFontSizes },
       ...(store.typography ?? {}),
       fontSizes: { ...defaultFontSizes, ...(store.typography?.fontSizes ?? {}) },
     },
@@ -123,8 +123,8 @@ export default function AppearancePage() {
       typography: {
         baseFontPx: 16,
         density: 'comfortable',
-        sansFamily: 'outfit',
-        monoFamily: 'dm-mono',
+        sansFamily: 'inter',
+        monoFamily: 'roboto-mono',
         headingWeight: 700,
         fontSizes: defaultFontSizes,
       },
@@ -490,15 +490,16 @@ function TypographyTab({ typography: t, patch }: TypographyTabProps) {
     patch({ fontSizes: defaultFontSizes });
 
   const sansOptions: { value: SansFamily; label: string }[] = [
-    { value: 'outfit', label: 'Outfit (default)' },
-    { value: 'inter',  label: 'Inter' },
+    { value: 'inter',  label: 'Inter (default)' },
+    { value: 'outfit', label: 'Outfit' },
     { value: 'system', label: 'System UI' },
   ];
 
   const monoOptions: { value: MonoFamily; label: string }[] = [
-    { value: 'dm-mono',   label: 'DM Mono (default)' },
-    { value: 'jetbrains', label: 'JetBrains Mono' },
-    { value: 'system',    label: 'System Monospace' },
+    { value: 'roboto-mono', label: 'Roboto Mono (default)' },
+    { value: 'dm-mono',     label: 'DM Mono' },
+    { value: 'jetbrains',   label: 'JetBrains Mono' },
+    { value: 'system',      label: 'System Monospace' },
   ];
 
   const weightOptions: HeadingWeight[] = [600, 700, 800];

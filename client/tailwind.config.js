@@ -166,8 +166,8 @@ export default {
       },
 
       fontFamily: {
-        sans: ['Outfit', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-        mono: ['DM Mono', 'IBM Plex Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        mono: ['Roboto Mono', 'DM Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
 
       // ── Typography scale ────────────────────────────────────────────────
