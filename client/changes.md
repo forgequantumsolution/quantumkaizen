@@ -915,3 +915,49 @@ Final pass: enforce the data typeface on GMP-critical values (§5) and the narra
 ### Phase 4 done — high-impact scope of FQS-QK-UIUX-002 complete
 
 Phases 1–4 (fonts, status text tokens + a11y, 14 label renames, mono/narrative enforcement) are implemented and tested. Still out of scope (future work, per the plan doc): floor `+2px` variant tokens (§9), print fonts Calibri/Georgia (§2/§7), and a full rename of the existing typography tokens to the manual's `display-module`/`nav-label`/… names.
+
+---
+
+## UI/UX Manual (FQS-QK-UIUX-003) — Phase A: sidebar groups, icons, status colour, shortcuts, compliance badge
+
+First tranche of the second manual (UI/UX). Design-system quick wins only — the low-risk items that a pharma evaluator notices first. Analysis + full 4-phase plan in `docs/uiux-manual-implementation-plan.md`. Working tree only; nothing committed. (Phases B–D — 21 CFR-UI polish, data-backed features, the 8 missing modules — not started.)
+
+### A1 — Sidebar group headers + GMP grouping (§2/§4)
+
+The sidebar previously rendered three untitled sections (hardcoded block → DB workflow block → Configuration); the group-header render path existed but was dead because every `NavSection.title` was empty. Restructured into the manual's **4 groups**:
+- **`client/src/components/layout/Sidebar.tsx`** — added a `MODULE_GROUP` map + `groupForModule()` that tags each DB-driven workflow module `"Quality System"` (CAPA/Deviation/Complaints/Change/Risk) or `"Compliance"` (Audit/Calibration), defaulting to Quality System. Extracted the hardcoded modules into consts (`dashboardItem`/`dmsItem`/`limsItem`/`trainingItem`/`configItem`) and assembled five titled sections: `""` (Dashboard, ungrouped) · **Lab Operations** (LIMS, DMS) · **Quality System** (`qualityItems`) · **Compliance** (`complianceItems`) · **Admin** (Training & Qualification, Configuration). Empty groups are dropped by the existing `items.length > 0` filter, so unseeded groups don't show. No render-code change needed — the header path was already there.
+- Scope note: the exact 12-item interleave (LIMS #2, Deviations #4, …) from §2 is **not** done — it's blocked on Deviations/Change Control/Calibration/Vendor Management existing as first-class modules (they're dynamic types / LIMS sub-pages today). This is the "achievable grouping"; full reorder is Phase C3.
+
+### A2 — Icon swaps (§3)
+
+`Sidebar.tsx` — imported `Microscope`, `Grid3x3`, `MessageSquareWarning`, `RefreshCw` and applied:
+- Quality Control `Activity → Microscope` · My Training `GraduationCap → Award` (de-duped from the parent's graduation cap) · Qualification Matrix `Database → Grid3x3`.
+- `ICON_BY_KEY`: CAPA `Wrench → RefreshCw` (corrective/preventive loop) · Audit `BookOpen → ClipboardCheck` (inspection checklist) · added `complaints`/`productcomplaints → MessageSquareWarning` (was falling back to the generic `Layers`).
+- Sample Management already used `TestTubes` ✓. Calibration N/A (not a top-level module).
+
+### A3 — 6th status colour (§5)
+
+`client/tailwind.config.js` — added `state.closed: '#5A6B7D'` (5.1:1 AA, neutral grey for inactive/archived/closed), completing the manual's 6-colour system on top of the five added for FQS-QK-UIUX-002 Phase 2.
+
+### A4 — Keyboard shortcuts (§4)
+
+`client/src/hooks/useKeyboardShortcuts.ts` — extended `ROUTE_MAP` with `g l → /lims/samples`, `g c → /audit/capa`, `g a → /audit/register` (the `g`-chord engine already existed).
+
+### A5 — Compliance-mode badge (§4/§8)
+
+`Sidebar.tsx` — a static `🛡 GMP · 21 CFR 11 · EU Annex 11` chip in the sidebar footer (expanded only), using the gold accent token — reassures QA/inspectors that data-integrity controls are active.
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
+- **Playwright UI check (real login)** — `tests/ui/nav-groups.spec.ts` + `.config.ts`, against the Vite dev server (proxies to backend :4000), logging in as `admin@forgequantum.com`. 4/4 pass:
+  1. Group headers **Lab Operations / Quality System / Admin** render.
+  2. LIMS + DMS in Lab Operations; Training & Qualification + Configuration in Admin.
+  3. Compliance badge `GMP · 21 CFR 11 · EU Annex 11` visible in the footer.
+  4. Pressing `g` then `l` navigates to `/lims/samples`.
+  - Run: `npx playwright test --config tests/ui/nav-groups.config.ts` (needs backend up + seeded).
+- Icon swaps: verified they compile/import and the affected items still render; exact glyph is a visual change (lucide SVGs aren't text-assertable).
+
+### Not done in Phase A
+
+- Phase B (e-sig name/date/meaning button, read-only banner, audit-log link), Phase C (notification badges + real global search + full nav reorder + persona nav — need backend), Phase D (8 missing modules — roadmap). See the plan doc.

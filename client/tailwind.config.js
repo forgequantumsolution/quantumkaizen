@@ -172,6 +172,7 @@ export default {
           approved:   '#1A6B3D', // 7.8:1  AAA — approved / pass / released
           progress:   '#1A5C9E', // 6.4:1  AA  — in progress / review
           quarantine: '#B84E00', // 6.6:1  AA  — quarantine / hold
+          closed:     '#5A6B7D', // 5.1:1  AA  — inactive / archived / closed
         },
       },
 

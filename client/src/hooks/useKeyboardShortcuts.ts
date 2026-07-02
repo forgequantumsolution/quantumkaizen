@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 
 const ROUTE_MAP: Record<string, string> = {
   'g d': '/dashboard',
+  'g l': '/lims/samples',   // LIMS (FQS-QK-UIUX-003 §4)
+  'g c': '/audit/capa',     // CAPA
+  'g a': '/audit/register', // Audit
   'g f': '/forms',
   'g w': '/workflows',
   'g t': '/tickets',

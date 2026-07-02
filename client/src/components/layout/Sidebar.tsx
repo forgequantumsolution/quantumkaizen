@@ -40,6 +40,10 @@ import {
   ShieldCheck,
   Settings2,
   Compass,
+  Microscope,
+  Grid3x3,
+  MessageSquareWarning,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/uiStore";
@@ -83,13 +87,17 @@ const ICON_BY_KEY: Record<string, React.ElementType> = {
   filetext: FileText,
   beaker: Beaker,
   bookopen: BookOpen,
-  // by canonical name
-  capa: Wrench,
+  // by canonical name — icon choices follow FQS-QK-UIUX-003 §3 (lab-specific,
+  // unique per module: CAPA = corrective/preventive loop, Audit = inspection
+  // checklist, Complaints = alert message).
+  capa: RefreshCw,
   deviation: FileWarning,
   change: GitBranch,
   changecontrol: GitBranch,
+  complaints: MessageSquareWarning,
+  productcomplaints: MessageSquareWarning,
   risk: ShieldAlert,
-  audit: BookOpen,
+  audit: ClipboardCheck,
   document: FileText,
 };
 
@@ -125,6 +133,25 @@ const WF_DISPLAY_NAME: Record<string, string> = {
   Deviation: "Deviations",
   Complaints: "Product Complaints",
 };
+
+// Which sidebar group each DB-driven workflow module belongs to
+// (FQS-QK-UIUX-003 §2/§4). Matched on the normalised workflow-type name;
+// unknown types default to "Quality System".
+type ModuleGroup = "Quality System" | "Compliance";
+const MODULE_GROUP: Record<string, ModuleGroup> = {
+  capa: "Quality System",
+  deviation: "Quality System",
+  deviations: "Quality System",
+  complaints: "Quality System",
+  productcomplaints: "Quality System",
+  change: "Quality System",
+  changecontrol: "Quality System",
+  risk: "Quality System",
+  audit: "Compliance",
+  calibration: "Compliance",
+};
+const groupForModule = (name: string): ModuleGroup =>
+  MODULE_GROUP[name.toLowerCase().replace(/[^a-z0-9]/g, "")] ?? "Quality System";
 
 // Design tokens — pulled from CSS custom properties (set by AppearanceProvider)
 // so the sidebar tracks the user's color preset. Section/inactive/hover stay
@@ -180,11 +207,13 @@ export default function Sidebar() {
     const isDocReview = (name: string) =>
       /^document\s*review$/i.test(name.trim());
 
-    const moduleItems: NavItem[] = (workflowTypes ?? [])
+    // DB-driven workflow modules, each tagged with its GMP sidebar group so the
+    // sections below can distribute them (FQS-QK-UIUX-003 §2).
+    const moduleEntries = (workflowTypes ?? [])
       .filter((t) => !t.isDeleted && !isDocReview(t.name))
       .map((t) => {
         const isAudit = /^audit$/i.test(t.name);
-        return {
+        const item: NavItem = {
           label: WF_DISPLAY_NAME[t.name] ?? t.name,
           // For Audit, omit the leaf path so the parent acts purely as an expandable
           // group; first child becomes the navigation target in collapsed mode.
@@ -195,7 +224,14 @@ export default function Sidebar() {
           permission: isAudit ? undefined : "ticket.read",
           children: isAudit ? auditChildren : undefined,
         };
+        return { item, group: groupForModule(t.name) };
       });
+    const qualityItems = moduleEntries
+      .filter((e) => e.group === "Quality System")
+      .map((e) => e.item);
+    const complianceItems = moduleEntries
+      .filter((e) => e.group === "Compliance")
+      .map((e) => e.item);
 
     // Children of the "Document Management System" group: the DMS document
     // library plus the "Document Review" workflow ticket workspace (if seeded).
@@ -221,131 +257,74 @@ export default function Sidebar() {
       },
     ];
 
-    const sections: NavSection[] = [
-      {
-        title: "",
-        items: [
-          { label: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-          {
-            // Groups the DMS document library with the "Document Review" workflow
-            // so the two document-centric areas live under one roof instead of
-            // appearing as two unrelated top-level entries.
-            label: "DMS ",
-            icon: FileText,
-            children: documentChildren,
-          },
-          {
-            // Training & Qualification (GMP term for the LMS) — learner area +
-            // authoring. "My Training" is the learner view; "Courses" is the
-            // author studio. Labels follow FQS-QK-UIUX-002 §6.
-            label: "Training & Qualification",
-            icon: GraduationCap,
-            children: [
-              { label: "My Training", path: "/lms/my", icon: GraduationCap, permission: "lms_my.read" },
-              { label: "Catalog", path: "/lms/catalog", icon: Compass, permission: "lms_my.read" },
-              { label: "Courses", path: "/lms/admin/courses", icon: BookOpen, permission: "lms_course.read" },
-              { label: "Training Programs", path: "/lms/admin/curricula", icon: Layers, permission: "lms_enrollment.read" },
-              { label: "Assignments", path: "/lms/admin/assignments", icon: Users, permission: "lms_enrollment.assign" },
-              { label: "Qualification Matrix", path: "/lms/admin/matrix", icon: Database, permission: "lms_matrix.read" },
-              { label: "Assessment Results", path: "/lms/admin/grading", icon: ClipboardCheck, permission: "lms_assessment.grade" },
-              { label: "Reports", path: "/lms/admin/reports", icon: Gauge, permission: "lms_report.read" },
-            ],
-          },
-          {
-            // Day-to-day LIMS operations; all set-up-once master data lives in
-            // the single "Configuration" entry (LimsConfigLayout, grouped tabs).
-            label: "LIMS",
-            icon: FlaskConical,
-            children: [
-              {
-                label: "Dashboard",
-                path: "/lims/dashboard",
-                icon: LayoutDashboard,
-                permission: "lims_dashboard.read",
-              },
-              {
-                label: "Sample Management",
-                path: "/lims/samples",
-                icon: TestTubes,
-                permission: "sample.read",
-              },
-              {
-                label: "Worklists",
-                path: "/lims/worklists",
-                icon: ClipboardList,
-                permission: "worklist.read",
-              },
-              {
-                label: "Quality Control",
-                path: "/lims/qc",
-                icon: Activity,
-                permission: "qc.read",
-              },
-              {
-                label: "Stability",
-                path: "/lims/stability",
-                icon: Thermometer,
-                permission: "stability.read",
-              },
-              {
-                label: "OOS / OOT Investigations",
-                path: "/lims/oos",
-                icon: AlertTriangle,
-                permission: "oos.read",
-              },
-              {
-                label: "CoA Management",
-                path: "/lims/coa",
-                icon: Award,
-                permission: "coa.read",
-              },
-              {
-                label: "Data Review",
-                path: "/lims/data-review",
-                icon: ShieldCheck,
-                permission: "data_review.read",
-              },
-              {
-                label: "Configuration",
-                path: "/lims/config",
-                icon: Settings2,
-                permission: "lab.read",
-              },
-            ],
-          },
-        ],
-      },
-    ];
-
-    if (moduleItems.length > 0) {
-      sections.push({ title: "", items: moduleItems });
-    }
-
-    sections.push({
-      title: "",
-      items: [
-        {
-          label: "Configuration",
-          icon: Settings,
-          children: [
-            {
-              label: "Workflows",
-              path: "/settings?section=workflows",
-              icon: GitBranch,
-              permission: "workflow.read",
-            },
-            {
-              label: "Forms",
-              path: "/settings?section=forms",
-              icon: ClipboardList,
-              permission: "form.read",
-            },
-            { label: "Master Data", path: "/settings", icon: Database },
-            { label: "Appearance", path: "/appearance", icon: Palette },
-          ],
-        },
+    // ── Hardcoded modules, placed into their GMP groups in `sections` below ──
+    const dashboardItem: NavItem = {
+      label: "Dashboard",
+      path: "/dashboard",
+      icon: LayoutDashboard,
+    };
+    // Groups the DMS document library with the "Document Review" workflow so the
+    // two document-centric areas live under one roof.
+    const dmsItem: NavItem = {
+      label: "DMS ",
+      icon: FileText,
+      children: documentChildren,
+    };
+    // Training & Qualification (GMP term for the LMS). "My Training" is the
+    // learner view; "Courses" is the author studio. Labels/icons follow
+    // FQS-QK-UIUX-002 §6 and FQS-QK-UIUX-003 §3.
+    const trainingItem: NavItem = {
+      label: "Training & Qualification",
+      icon: GraduationCap,
+      children: [
+        { label: "My Training", path: "/lms/my", icon: Award, permission: "lms_my.read" },
+        { label: "Catalog", path: "/lms/catalog", icon: Compass, permission: "lms_my.read" },
+        { label: "Courses", path: "/lms/admin/courses", icon: BookOpen, permission: "lms_course.read" },
+        { label: "Training Programs", path: "/lms/admin/curricula", icon: Layers, permission: "lms_enrollment.read" },
+        { label: "Assignments", path: "/lms/admin/assignments", icon: Users, permission: "lms_enrollment.assign" },
+        { label: "Qualification Matrix", path: "/lms/admin/matrix", icon: Grid3x3, permission: "lms_matrix.read" },
+        { label: "Assessment Results", path: "/lms/admin/grading", icon: ClipboardCheck, permission: "lms_assessment.grade" },
+        { label: "Reports", path: "/lms/admin/reports", icon: Gauge, permission: "lms_report.read" },
       ],
-    });
+    };
+    // Day-to-day LIMS operations; set-up-once master data lives under the single
+    // "Configuration" entry (LimsConfigLayout, grouped tabs).
+    const limsItem: NavItem = {
+      label: "LIMS",
+      icon: FlaskConical,
+      children: [
+        { label: "Dashboard", path: "/lims/dashboard", icon: LayoutDashboard, permission: "lims_dashboard.read" },
+        { label: "Sample Management", path: "/lims/samples", icon: TestTubes, permission: "sample.read" },
+        { label: "Worklists", path: "/lims/worklists", icon: ClipboardList, permission: "worklist.read" },
+        { label: "Quality Control", path: "/lims/qc", icon: Microscope, permission: "qc.read" },
+        { label: "Stability", path: "/lims/stability", icon: Thermometer, permission: "stability.read" },
+        { label: "OOS / OOT Investigations", path: "/lims/oos", icon: AlertTriangle, permission: "oos.read" },
+        { label: "CoA Management", path: "/lims/coa", icon: Award, permission: "coa.read" },
+        { label: "Data Review", path: "/lims/data-review", icon: ShieldCheck, permission: "data_review.read" },
+        { label: "Configuration", path: "/lims/config", icon: Settings2, permission: "lab.read" },
+      ],
+    };
+    const configItem: NavItem = {
+      label: "Configuration",
+      icon: Settings,
+      children: [
+        { label: "Workflows", path: "/settings?section=workflows", icon: GitBranch, permission: "workflow.read" },
+        { label: "Forms", path: "/settings?section=forms", icon: ClipboardList, permission: "form.read" },
+        { label: "Master Data", path: "/settings", icon: Database },
+        { label: "Appearance", path: "/appearance", icon: Palette },
+      ],
+    };
+
+    // Four GMP-aligned groups (FQS-QK-UIUX-003 §2/§4). Dashboard stays ungrouped
+    // at the top. Empty groups (e.g. no seeded workflow types) are dropped by the
+    // `items.length > 0` filter at the end of this memo.
+    const sections: NavSection[] = [
+      { title: "", items: [dashboardItem] },
+      { title: "Lab Operations", items: [limsItem, dmsItem] },
+      { title: "Quality System", items: qualityItems },
+      { title: "Compliance", items: complianceItems },
+      { title: "Admin", items: [trainingItem, configItem] },
+    ];
 
     // Gate by permission: drop items the user can't access, and any parent whose
     // children all got dropped. SUPER_ADMIN holds every key, so it's unaffected.
@@ -813,6 +792,20 @@ export default function Sidebar() {
               {user?.role?.replace(/_/g, " ") ?? "Unknown Role"}
             </p>
           </div>
+        </div>
+      )}
+
+      {/* Compliance-mode indicator (FQS-QK-UIUX-003 §4/§8) — reassures QA/
+          inspectors that GMP data-integrity controls are active. */}
+      {!sidebarCollapsed && (
+        <div
+          style={{ borderTop: "1px solid " + DIVIDER, color: ACCENT }}
+          className="px-3 py-2 flex items-center gap-1.5 shrink-0"
+        >
+          <ShieldCheck size={11} />
+          <span className="text-[10px] font-semibold tracking-wide">
+            GMP · 21 CFR 11 · EU Annex 11
+          </span>
         </div>
       )}
 
