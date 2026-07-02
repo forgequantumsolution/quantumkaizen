@@ -161,7 +161,7 @@ export default function AuditProgramExecutionPage() {
             <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">
               Summary
             </div>
-            <p className="text-sm text-gray-800 whitespace-pre-wrap">{p.summary}</p>
+            <p className="text-sm text-gray-800 whitespace-pre-wrap gmp-narrative">{p.summary}</p>
           </div>
         )}
         {p.register.checklist_form && p.status !== 'PLANNED' && (

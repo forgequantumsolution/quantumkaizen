@@ -57,7 +57,7 @@ export default function SampleListPage() {
         columns={[
           { title: 'Sample No.', dataIndex: 'sample_number', width: 150, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
           { title: 'Product', dataIndex: 'product_name', ellipsis: true },
-          { title: 'Batch', dataIndex: 'batch_no', width: 110, render: (v: string | null) => v ?? '—' },
+          { title: 'Batch', dataIndex: 'batch_no', width: 110, render: (v: string | null) => v ? <span className="font-mono">{v}</span> : '—' },
           { title: 'Type', dataIndex: 'sample_type', width: 130, render: (v: string | null) => v ?? '—' },
           { title: 'Aliquots', dataIndex: 'aliquot_count', width: 80 },
           {

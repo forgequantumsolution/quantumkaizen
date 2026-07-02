@@ -875,3 +875,43 @@ Chose the **sidebar display-name override map** over renaming seed `name`s. The 
 ### Not done in Phase 3
 
 - Phase 4 — min-size / line-height enforcement + mono audit on LIMS data fields. See the plan doc.
+
+---
+
+## Typography Manual (FQS-QK-UIUX-002) — Phase 4: mono data fields + narrative measure/line-height
+
+Final pass: enforce the data typeface on GMP-critical values (§5) and the narrative measure/line-height (§8). Audit-driven and deliberately targeted — the codebase already broadly complies, so this closes specific gaps rather than sweeping. Working tree only; nothing committed.
+
+### Audit results
+
+- **Mono on data (§5)** — already widely applied: `font-mono` appears 42× across 30 LIMS files (sample numbers, barcodes, codes, IDs). Gaps found and fixed were specific fields, not systemic.
+- **Min sizes (§3)** — the Session-5 rem rebase already puts body/data at 14px and nav at 13–17px (Sidebar spans render 15–17px). The remaining `text-[11px]`/`text-xxs` usages are **field labels and micro-meta** (uppercase caption labels, counts, badge chrome) — which the manual permits — not data/nav text. No mass resize done: it would be high-churn, low-safety-value, and risks regressions. Noted as a minor, acceptable deviation (field labels sit ~1px under the manual's 12–13px label floor).
+- **Colour-not-alone / sidebar contrast** — already handled in Phase 2.
+
+### Files modified — mono on GMP-critical values (§5)
+
+- **`client/src/features/lims/SampleListPage.tsx`** — Batch column now renders `<span className="font-mono">` (was plain text). Batch codes need 0/O·8/B·1/l disambiguation.
+- **`client/src/features/lims/SampleDetailPage.tsx`** — `Field` helper gained an optional `mono` prop (applies `font-mono` to the value); the **Batch** field now passes `mono`.
+- **`client/src/features/lims/SampleTestsPanel.tsx`** — the read-only analytical **result value** now renders `font-mono tabular` (was `text-gray-900` proportional), so numeric results align and disambiguate.
+
+### Files modified — narrative measure + line-height (§8)
+
+- **`client/src/index.css`** — new `.gmp-narrative` utility in the `@layer utilities` block: `line-height: 1.65; max-width: 70ch; text-align: left`. Caps GMP narrative text at a 65–75ch measure with ≥1.6 line height per §8 (wider lines slow reading / raise transcription error against printed records).
+- Applied `.gmp-narrative` to the GMP narratives the manual names:
+  - `lims/OosDetailPage.tsx` — OOS investigation **conclusion**.
+  - `audit/CapaDetailPage.tsx` — CAPA **description**.
+  - `audit/AuditProgramExecutionPage.tsx` — program **summary**.
+  - `audit/AuditReportPage.tsx` — audit register **description** + program **summary**.
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
+- CSS-emission check: `.gmp-narrative{line-height:1.65;max-width:70ch;text-align:left}` present in the bundle.
+- **Playwright UI check** — `tests/ui/narrative.spec.ts` + `.config.ts` (serves `client/dist` via `vite preview`). 2/2 pass:
+  1. `.gmp-narrative` → computed `line-height: 26.4px` (1.65×16), `max-width: 603.75px` (70ch resolved), `text-align: left`.
+  2. `.font-mono` → `font-family` resolves to `"Roboto Mono", …` (data typeface reaches data values).
+  - Run: `npx playwright test --config tests/ui/narrative.config.ts`.
+
+### Phase 4 done — high-impact scope of FQS-QK-UIUX-002 complete
+
+Phases 1–4 (fonts, status text tokens + a11y, 14 label renames, mono/narrative enforcement) are implemented and tested. Still out of scope (future work, per the plan doc): floor `+2px` variant tokens (§9), print fonts Calibri/Georgia (§2/§7), and a full rename of the existing typography tokens to the manual's `display-module`/`nav-label`/… names.

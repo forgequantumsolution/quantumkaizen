@@ -90,7 +90,7 @@ export default function AuditReportPage() {
             />
           </dl>
           {r.register.description && (
-            <p className="text-sm text-gray-700 mt-3 whitespace-pre-wrap">
+            <p className="text-sm text-gray-700 mt-3 whitespace-pre-wrap gmp-narrative">
               {r.register.description}
             </p>
           )}
@@ -127,7 +127,7 @@ export default function AuditReportPage() {
                 <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
                   Summary
                 </div>
-                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                <p className="text-sm text-gray-700 whitespace-pre-wrap gmp-narrative">
                   {r.program.summary}
                 </p>
               </div>

@@ -399,6 +399,11 @@ html.dark {
 
   .tabular { font-variant-numeric: tabular-nums; }
 
+  /* GMP narrative text — deviation / CAPA / OOS / audit descriptions.
+     Line height ≥1.6 and a 65–75ch measure per FQS-QK-UIUX-002 §8: wider lines
+     slow reading and raise transcription error risk against printed records. */
+  .gmp-narrative { line-height: 1.65; max-width: 70ch; text-align: left; }
+
   .line-clamp-2 {
     display: -webkit-box;
     -webkit-line-clamp: 2;

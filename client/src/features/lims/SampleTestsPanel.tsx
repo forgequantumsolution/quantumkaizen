@@ -194,7 +194,8 @@ function TestCard({ test, canEnter }: { test: SampleTest; canEnter: boolean }) {
             title: 'Result', width: 170,
             render: (_: unknown, r) => {
               if (!editable) {
-                return <span className="text-sm text-gray-900">{r.numeric_value ?? r.text_value ?? '—'}</span>;
+                // Analytical result value in the data typeface (FQS-QK-UIUX-002 §5).
+                return <span className="text-sm text-gray-900 font-mono tabular">{r.numeric_value ?? r.text_value ?? '—'}</span>;
               }
               if (isText(r)) {
                 const val = edits[r.id]?.text_value ?? r.text_value ?? '';
