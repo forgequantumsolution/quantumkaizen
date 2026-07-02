@@ -120,9 +120,13 @@ export default function CapaDetailPage() {
           </div>
           {tab === 'details' && <DetailsTab capa={c} canEdit={canEdit} />}
           {tab === 'forms' && hasWorkflow && <StageFormsPanel ticketId={c.workflow_ticket_id!} />}
-          {tab === 'rca' && <RootCauseTab capa={c} canEdit={canEdit} />}
+          {tab === 'rca' && (
+            <RootCauseTab capa={c} canEdit={canEdit && !hasWorkflow} mirrored={hasWorkflow} />
+          )}
           {tab === 'actions' && <ActionsTab capa={c} />}
-          {tab === 'effectiveness' && <EffectivenessTab capa={c} canEdit={canEdit} />}
+          {tab === 'effectiveness' && (
+            <EffectivenessTab capa={c} canEdit={canEdit && !hasWorkflow} mirrored={hasWorkflow} />
+          )}
           {tab === 'history' && <TrailTab capaId={c.id} />}
         </div>
         <CapaSidebar capa={c} />

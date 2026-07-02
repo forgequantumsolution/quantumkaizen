@@ -12,7 +12,15 @@ import Fishbone from './Fishbone';
 
 const splitLines = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
 
-export default function RootCauseTab({ capa, canEdit }: { capa: Capa; canEdit: boolean }) {
+export default function RootCauseTab({
+  capa,
+  canEdit,
+  mirrored = false,
+}: {
+  capa: Capa;
+  canEdit: boolean;
+  mirrored?: boolean;
+}) {
   const updateMut = useUpdateCapa(capa.id);
   const [rc, setRc] = useState<RootCauseData>(() => parseRootCauseData(capa.root_cause_data));
   // Free-text fields kept alongside the structured analysis.
@@ -47,6 +55,12 @@ export default function RootCauseTab({ capa, canEdit }: { capa: Capa; canEdit: b
 
   return (
     <div className="space-y-4">
+      {mirrored && (
+        <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-700">
+          Mirrored from the workflow&apos;s <span className="font-medium">Root Cause Analysis</span>{' '}
+          stage form — edit it under the <span className="font-medium">Stage Forms</span> tab.
+        </div>
+      )}
       {/* 5-Why */}
       <Card>
         <h3 className="text-sm font-semibold text-gray-900 mb-3">5-Why Analysis</h3>

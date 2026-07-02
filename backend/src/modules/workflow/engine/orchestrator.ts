@@ -17,6 +17,7 @@ import { findUnsatisfiedRequiredForms } from './form.layer';
 import { onTicketHeld, onTicketResumed } from './sla.handler';
 import { resolveLatestVersion } from '../workflow.versioning';
 import { syncTicketComplianceFindings } from '../../audit/audit-compliance-sync.service';
+import { syncCapaFromTicketId } from '../../audit/capa.service';
 import type {
   ActorContext,
   PerformActionPayload,
@@ -502,6 +503,16 @@ export const performAction = async (
     } catch (err) {
       console.error('[audit] compliance sync failed for ticket', ticketId, err);
     }
+  }
+
+  // Post-commit, best-effort: keep a CAPA driven by this ticket in step with the
+  // stage it just moved to (status mirror, implementedAt/closedAt, NC roll-up),
+  // so completing/advancing from the ticket side updates the CAPA + list views
+  // immediately — without waiting for the CAPA detail page to be opened.
+  try {
+    await syncCapaFromTicketId(ticketId);
+  } catch (err) {
+    console.error('[capa] status sync failed for ticket', ticketId, err);
   }
 
   return result;

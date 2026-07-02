@@ -15,7 +15,15 @@ const STATUS_STYLES: Record<CheckInStatus, string> = {
 };
 const OPTIONS: CheckInStatus[] = ['pending', 'pass', 'fail'];
 
-export default function EffectivenessTab({ capa, canEdit }: { capa: Capa; canEdit: boolean }) {
+export default function EffectivenessTab({
+  capa,
+  canEdit,
+  mirrored = false,
+}: {
+  capa: Capa;
+  canEdit: boolean;
+  mirrored?: boolean;
+}) {
   const updateMut = useUpdateCapa(capa.id);
   const [data, setData] = useState<EffectivenessData>(() =>
     parseEffectivenessData(capa.effectiveness_data),
@@ -45,6 +53,13 @@ export default function EffectivenessTab({ capa, canEdit }: { capa: Capa; canEdi
 
   return (
     <div className="space-y-4">
+      {mirrored && (
+        <div className="rounded-lg border border-blue-100 bg-blue-50/60 px-3 py-2 text-xs text-blue-700">
+          Mirrored from the workflow&apos;s{' '}
+          <span className="font-medium">Effectiveness Verification</span> stage form — edit it under
+          the <span className="font-medium">Stage Forms</span> tab.
+        </div>
+      )}
       <p className="text-sm text-gray-500">
         Verify that corrective actions remain effective over time. Each check-in assesses whether the
         root cause has been eliminated.

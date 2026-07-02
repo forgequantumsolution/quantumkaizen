@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import { CircleDot, Workflow as WorkflowIcon, CheckCircle2 } from 'lucide-react';
 import { Card, Button, Badge, Modal, Spinner } from '@/components/ui';
 import { useHasPermission } from '@/stores/authStore';
 import { useTicket } from '@/lib/api/ticket';
-import { useAttachCapaWorkflow, useUpdateCapaStatus, type Capa } from '@/lib/api/audit';
+import { useAttachCapaWorkflow, useUpdateCapaStatus, auditKeys, type Capa } from '@/lib/api/audit';
 import ActionBar from '@/features/tickets/detail/ActionBar';
 import TicketFlowCanvas from '@/features/tickets/detail/TicketFlowCanvas';
 import CapaEnumStepper, { CAPA_ENUM_FLOW } from './CapaEnumStepper';
@@ -24,6 +25,20 @@ export default function CapaWorkflowBand({ capa }: { capa: Capa }) {
   const statusMut = useUpdateCapaStatus();
   const canTransition = useHasPermission('ticket.transition');
   const canUpdate = useHasPermission('capa.update');
+  const qc = useQueryClient();
+
+  // The ticket transition hooks only invalidate ticket-side queries. But a
+  // transition also moves the CAPA's derived status/key-dates server-side
+  // (getCapa reconciles them). Refetch the CAPA whenever the linked ticket's
+  // flow position (or completion) changes, so the header/badge/sidebar don't
+  // lag behind the stage the forms are now on.
+  const flow0 = ticket?.flows?.[0];
+  const flowSig = flow0
+    ? `${flow0.isCompleted}|${flow0.currentStages.map((s) => s.id).sort().join(',')}`
+    : '';
+  useEffect(() => {
+    if (flowSig) qc.invalidateQueries({ queryKey: auditKeys.capa(capa.id) });
+  }, [flowSig, capa.id, qc]);
 
   const attach = async () => {
     try {

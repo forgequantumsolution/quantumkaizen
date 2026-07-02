@@ -169,6 +169,24 @@ const syncCapaStatusFromTicket = async (capa: {
   return true;
 };
 
+// Sync the CAPA linked to a given workflow ticket. Called by the workflow engine
+// after a transition so the CAPA's status mirror / closedAt / NC roll-up track
+// the ticket immediately — not only when the CAPA detail page is opened.
+// Best-effort and a no-op when no CAPA is bound to the ticket.
+export const syncCapaFromTicketId = async (ticketId: string): Promise<void> => {
+  const capa = await prisma.capa.findFirst({
+    where: { workflowTicketId: ticketId },
+    select: {
+      id: true,
+      status: true,
+      workflowTicketId: true,
+      implementedAt: true,
+      nonConformanceId: true,
+    },
+  });
+  if (capa) await syncCapaStatusFromTicket(capa);
+};
+
 // ────────────────────── CAPA ──────────────────────
 
 const capaInclude = {
@@ -241,6 +259,72 @@ export const listCapas = async (q: ListCapaQuery) => {
   return { data: items.map(serializeCapa) };
 };
 
+// Fishbone categories — kept in sync with the frontend capa/capaData.ts.
+const FISHBONE_CATEGORIES = ['Man', 'Machine', 'Material', 'Method', 'Measurement', 'Environment'];
+
+const flattenResponses = (responses: unknown): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (responses && typeof responses === 'object') {
+    for (const section of Object.values(responses as Record<string, unknown>)) {
+      if (section && typeof section === 'object') Object.assign(out, section as Record<string, unknown>);
+    }
+  }
+  return out;
+};
+const asStr = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
+// Mirror the submitted CAPA workflow forms (Root Cause Analysis + Effectiveness
+// Verification) into the structured shapes the bespoke tabs render, so a CAPA
+// driven through the workflow auto-fills its fishbone + 30/60/90 views without
+// double entry. Returns nulls when the relevant form hasn't been submitted.
+const deriveCapaFormData = async (
+  ticketId: string,
+): Promise<{ rootCauseData: unknown | null; effectivenessData: unknown | null }> => {
+  const subs = await prisma.formSubmission.findMany({
+    where: {
+      ticketId,
+      status: 'SUBMITTED',
+      form: { templateKey: { in: ['capa-rca', 'capa-effectiveness'] } },
+    },
+    orderBy: { submittedAt: 'desc' },
+    select: { responses: true, form: { select: { templateKey: true } } },
+  });
+  const rca = subs.find((s) => s.form.templateKey === 'capa-rca');
+  const eff = subs.find((s) => s.form.templateKey === 'capa-effectiveness');
+
+  let rootCauseData: unknown | null = null;
+  if (rca) {
+    const r = flattenResponses(rca.responses);
+    const fishbone: Record<string, string[]> = {};
+    for (const c of FISHBONE_CATEGORIES) fishbone[c] = [];
+    const category = asStr(r.rootCauseCategory);
+    const cause = asStr(r.confirmedRootCause).trim();
+    if (FISHBONE_CATEGORIES.includes(category) && cause) fishbone[category] = [cause];
+    rootCauseData = {
+      fiveWhys: [r.why1, r.why2, r.why3, r.why4, r.why5].map(asStr),
+      fishbone,
+      conclusion: asStr(r.confirmedRootCause),
+    };
+  }
+
+  let effectivenessData: unknown | null = null;
+  if (eff) {
+    const r = flattenResponses(eff.responses);
+    const norm = (v: unknown): 'pending' | 'pass' | 'fail' => {
+      const s = String(v ?? '').toLowerCase();
+      return s === 'pass' || s === 'fail' ? s : 'pending';
+    };
+    effectivenessData = {
+      checkIns: [
+        { day: 30, status: norm(r.check30), notes: asStr(r.verificationMethod) },
+        { day: 60, status: norm(r.check60), notes: '' },
+        { day: 90, status: norm(r.check90), notes: asStr(r.effectivenessConclusion) },
+      ],
+    };
+  }
+  return { rootCauseData, effectivenessData };
+};
+
 export const getCapa = async (id: string) => {
   let c = await prisma.capa.findUnique({ where: { id }, include: capaInclude });
   if (!c) throw NotFound('CAPA not found');
@@ -250,7 +334,15 @@ export const getCapa = async (id: string) => {
     c = await prisma.capa.findUnique({ where: { id }, include: capaInclude });
     if (!c) throw NotFound('CAPA not found');
   }
-  return serializeCapa(c);
+  const serialized = serializeCapa(c);
+  // Workflow-driven CAPAs mirror their Root Cause / Effectiveness stage forms
+  // into the bespoke tabs (rendered read-only on the client).
+  if (c.workflowTicketId) {
+    const derived = await deriveCapaFormData(c.workflowTicketId);
+    if (derived.rootCauseData) serialized.root_cause_data = derived.rootCauseData;
+    if (derived.effectivenessData) serialized.effectiveness_data = derived.effectivenessData;
+  }
+  return serialized;
 };
 
 export const createCapa = async (input: CapaCreateInput, userId?: string) => {
