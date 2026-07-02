@@ -1850,7 +1850,18 @@ model Capa {
   verifiedAt         DateTime?
   effectivenessCheck String?
   effectivenessDue   DateTime?
+  // Structured 30/60/90-day effectiveness check-ins:
+  // { checkIns: [{ day: 30|60|90, status: 'pending'|'pass'|'fail', notes }] }.
+  effectivenessData  Json?
   closedAt           DateTime?
+
+  // Workflow integration — when a CAPA is driven by the dynamic workflow engine
+  // a ticket is raised on it (mirrors AuditRegister's spawn-and-link pattern).
+  // These columns link the CAPA to that ticket so its stage progress + bound
+  // forms can be surfaced. Plain columns (no FK) — kept in sync by the service.
+  workflowId             String?
+  workflowTicketId       String?
+  workflowTicketUniqueId String?
 
   actionItems ActionItem[] @relation("ActionItemCapa")
 

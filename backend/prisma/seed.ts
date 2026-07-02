@@ -771,18 +771,47 @@ async function main() {
       ],
     );
 
+    // Per-form access control. Each binding restricts who may FILL and who may
+    // VIEW the form:
+    //   fillMode ANYONE → one shared copy, any member of the fill group fills it.
+    //   fillMode EACH    → one copy per fill-group member; the stage stays
+    //                      blocked until everyone has submitted their own copy.
+    // An empty fill group is treated as "legacy open" (everyone may fill/view)
+    // by the engine, so we seed explicit groups here to exercise the flow.
+    type BindingAccess = {
+      fillMode?: 'ANYONE' | 'EACH';
+      fillRoles?: string[]; // role names → resolved via roleByName
+      fillUsers?: string[]; // user emails (User.email is unique)
+      viewRoles?: string[];
+      viewUsers?: string[];
+    };
+    const roleConnect = (names: string[] = []) =>
+      names
+        .map((n) => roleByName.get(n))
+        .filter((id): id is string => Boolean(id))
+        .map((id) => ({ id }));
+    const userConnect = (emails: string[] = []) => emails.map((email) => ({ email }));
+
     // Bind forms to their stages. Use upsert-style behavior so a re-seed
     // un-deletes soft-deleted bindings left over from test runs (the
     // @@unique([stage, form]) constraint covers both isDeleted=true and =false
-    // rows, so plain `create` would conflict).
+    // rows, so plain `create` would conflict). Access groups are refreshed on
+    // every re-seed via `set` so the binding always reflects the seeded policy.
     const upsertBinding = async (
       stageId: string,
       formId: string,
       isRequired: boolean,
+      access: BindingAccess = {},
     ) => {
+      const fillMode = access.fillMode ?? 'ANYONE';
+      const fillRoles = roleConnect(access.fillRoles);
+      const fillUsers = userConnect(access.fillUsers);
+      const viewRoles = roleConnect(access.viewRoles);
+      const viewUsers = userConnect(access.viewUsers);
+
       const existing = await prisma.stageFormBinding.findUnique({
         where: { stageId_formId: { stageId, formId } },
-        select: { id: true, isDeleted: true, isActive: true, isRequired: true },
+        select: { id: true },
       });
       if (!existing) {
         await prisma.stageFormBinding.create({
@@ -792,33 +821,419 @@ async function main() {
             formId,
             isRequired,
             position: 0,
+            fillMode,
+            allowedFillRoles: { connect: fillRoles },
+            allowedFillUsers: { connect: fillUsers },
+            allowedViewRoles: { connect: viewRoles },
+            allowedViewUsers: { connect: viewUsers },
           },
         });
-      } else if (
-        existing.isDeleted ||
-        !existing.isActive ||
-        existing.isRequired !== isRequired
-      ) {
+      } else {
         await prisma.stageFormBinding.update({
           where: { id: existing.id },
           data: {
             isDeleted: false,
             isActive: true,
             isRequired,
+            fillMode,
+            allowedFillRoles: { set: fillRoles },
+            allowedFillUsers: { set: fillUsers },
+            allowedViewRoles: { set: viewRoles },
+            allowedViewUsers: { set: viewUsers },
           },
         });
       }
     };
 
     if (submitStageForForms) {
-      await upsertBinding(submitStageForForms.id, submissionFormId, false);
+      // Submission Confirmation — filled by the document controller who submits;
+      // visible to QA/management/audit for context. Optional (doesn't block).
+      await upsertBinding(submitStageForForms.id, submissionFormId, false, {
+        fillMode: 'ANYONE',
+        fillRoles: ['DOCUMENT_CONTROLLER'],
+        viewRoles: ['QMS_ADMIN', 'QUALITY_ENGINEER', 'AUDITOR'],
+      });
     }
     if (reviewStageForForms) {
-      await upsertBinding(reviewStageForForms.id, reviewFormId, true);
+      // Document Review Checklist — filled by the reviewing quality engineer;
+      // visible to management/doc-control/audit. Required (blocks the Approve
+      // transition until submitted).
+      await upsertBinding(reviewStageForForms.id, reviewFormId, true, {
+        fillMode: 'ANYONE',
+        fillRoles: ['QUALITY_ENGINEER'],
+        viewRoles: ['QMS_ADMIN', 'DOCUMENT_CONTROLLER', 'AUDITOR'],
+      });
     }
     console.log(`    sample forms: 2 (Submission Confirmation, Document Review Checklist)`);
-    console.log(`    sample bindings: Submit (optional) + Review (required)`);
+    console.log(`    sample bindings: Submit (optional, fill=DocControl) + Review (required, fill=QE)`);
   }
+
+  // ── Phase 3.6 — dependency-rule fixture (e2e: verify-dep-rule[-ticket]) ──
+  // A CAPA-style RCA form whose "5 Why Analysis" field is shown only when
+  // "Root Cause Analysis Required" = Yes (field-level dependency rule).
+  // Seeded with a FIXED id because the standalone fill spec navigates to it
+  // directly (/forms/<id>/fill); the RCA workflow below binds it to an initial
+  // stage so a raised ticket renders it inline (the ticket spec path).
+  console.log('🌱  Seeding dependency-rule fixture (RCA 5-Whys form + workflow)...');
+  const RCA_FORM_ID = 'c318dadd-7375-4606-9c99-d3cb2cd719a3';
+  const selectTypeF = await prisma.fieldType.findUnique({ where: { name: 'select' } });
+  const textareaTypeF = await prisma.fieldType.findUnique({ where: { name: 'textarea' } });
+
+  const existingRcaForm = await prisma.form.findUnique({ where: { id: RCA_FORM_ID }, select: { id: true } });
+  if (!existingRcaForm) {
+    const rcaForm = await prisma.form.create({
+      data: {
+        id: RCA_FORM_ID,
+        templateKey: 'rca-5whys',
+        title: 'Root Cause Analysis',
+        description: 'CAPA RCA form — the analysis table is revealed only when root cause analysis is required.',
+        version: 1,
+        versionId: 'rca-5whys-v1',
+        status: 'PUBLISHED',
+      },
+      select: { id: true },
+    });
+    const sec = await prisma.formSection.create({
+      data: { formId: rcaForm.id, sectionId: 'sec-rca', name: 'Root Cause Analysis', position: 0 },
+      select: { id: true },
+    });
+    // Controlling dropdown — Yes/No.
+    await prisma.formField.create({
+      data: {
+        sectionId: sec.id,
+        fieldId: 'fld-rca-required',
+        name: 'rootCauseRequired',
+        label: 'Root Cause Analysis Required',
+        position: 0,
+        width: '50',
+        required: true,
+        typeId: selectTypeF?.id ?? null,
+        typeName: 'select',
+        options: [{ label: 'Yes', value: 'Yes' }, { label: 'No', value: 'No' }] as unknown as Prisma.InputJsonValue,
+      },
+    });
+    // Dependent 5-Why table — shown only when the dropdown above equals "Yes".
+    await prisma.formField.create({
+      data: {
+        sectionId: sec.id,
+        fieldId: 'fld-5why',
+        name: 'fiveWhyAnalysis',
+        label: '5 Why Analysis',
+        position: 1,
+        width: '100',
+        required: false,
+        typeId: textareaTypeF?.id ?? null,
+        typeName: 'textarea',
+        dependency: {
+          enabled: true,
+          mode: 'show',
+          combinator: 'and',
+          conditions: [
+            { sectionName: 'Root Cause Analysis', fieldName: 'rootCauseRequired', operator: 'equals', value: 'Yes' },
+          ],
+        } as unknown as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  // RCA workflow whose INITIAL stage carries the fixture form, so a freshly
+  // raised ticket sits on it and renders the form inline. Idempotent by name.
+  if (approveStatus) {
+    const existingRcaWf = await prisma.workflow.findFirst({ where: { name: 'Root Cause Analysis Demo v1' } });
+    if (!existingRcaWf) {
+      await prisma.$transaction(async (tx) => {
+        const wf = await tx.workflow.create({
+          data: {
+            name: 'Root Cause Analysis Demo v1',
+            typeId: docType.id,
+            status: 'APPROVED',
+            workflowStatus: 'ACTIVE',
+            createdById: adminUser?.id ?? null,
+          },
+        });
+        const rca = await tx.workflowStage.create({
+          data: { workflowId: wf.id, name: 'Root Cause Analysis', canonicalId: 'rca-analyse', isInitialStage: true, stageType: 'STAGE' },
+        });
+        const done = await tx.workflowStage.create({
+          data: { workflowId: wf.id, name: 'Done', canonicalId: 'rca-done', stageType: 'STAGE' },
+        });
+        await tx.workflowStageAction.create({ data: { workflowStageId: rca.id, workflowActionId: approveStatus.id, isPrimary: true } });
+        await tx.workflowStageAction.create({ data: { workflowStageId: done.id, workflowActionId: approveStatus.id, isPrimary: true } });
+        await tx.workflowTransition.create({ data: { workflowId: wf.id, fromStageId: rca.id, toStageId: done.id, branchOrder: 0 } });
+        // Legacy-open binding (no fill/view groups) so any user can fill it.
+        await tx.stageFormBinding.create({
+          data: { workflowId: wf.id, stageId: rca.id, formId: RCA_FORM_ID, isRequired: false, position: 0, fillMode: 'ANYONE' },
+        });
+      }, { timeout: 30_000, maxWait: 5_000 });
+    }
+  }
+  console.log('    fixture: RCA form (c318dadd…) + "Root Cause Analysis Demo v1" workflow');
+
+  // ── CAPA workflow with proper per-stage forms ──────────────────────────
+  // A full corrective/preventive-action lifecycle, driven as a workflow ticket
+  // (mirrors the AuditRegister pattern: a first-class record spawns a workflow
+  // ticket and surfaces its stage progress). Six linear stages, each with a
+  // REQUIRED form bound so the stage blocks until it's filled. Stage
+  // canonicalIds line up with the CapaStatus enum (OPEN → INVESTIGATION → PLAN
+  // → IMPLEMENTATION → VERIFICATION → CLOSED) so a later stage→status sync is a
+  // straight map. Idempotent by workflow name + form templateKey.
+  console.log('🌱  Seeding CAPA workflow + per-stage forms...');
+  const capaType = await prisma.workflowType.upsert({
+    where: { name: 'CAPA' },
+    update: {},
+    create: {
+      name: 'CAPA',
+      codePrefix: 'CAPA',
+      iconConfig: { create: { iconName: 'shield-check' } },
+    },
+  });
+
+  const returnStatus = await prisma.workflowStageStatus.findUnique({ where: { name: 'Return' } });
+  const FT_TEXT = (await prisma.fieldType.findUnique({ where: { name: 'text' } }))?.id ?? null;
+  const FT_TEXTAREA = (await prisma.fieldType.findUnique({ where: { name: 'textarea' } }))?.id ?? null;
+  const FT_SELECT = (await prisma.fieldType.findUnique({ where: { name: 'select' } }))?.id ?? null;
+  const FT_DATE = (await prisma.fieldType.findUnique({ where: { name: 'date' } }))?.id ?? null;
+  const FT_SWITCH = (await prisma.fieldType.findUnique({ where: { name: 'switch' } }))?.id ?? null;
+
+  type CapaFieldSpec = {
+    fieldId: string;
+    name: string;
+    label: string;
+    typeId: string | null;
+    typeName: string;
+    required?: boolean;
+    width?: string;
+    options?: Array<{ label: string; value: string }>;
+  };
+
+  // Idempotent by templateKey — returns the existing form id on re-seed.
+  const upsertCapaForm = async (
+    templateKey: string,
+    title: string,
+    description: string,
+    sectionName: string,
+    fields: CapaFieldSpec[],
+  ): Promise<string> => {
+    const existing = await prisma.form.findFirst({
+      where: { templateKey, version: 1 },
+      select: { id: true },
+    });
+    if (existing) return existing.id;
+    const form = await prisma.form.create({
+      data: {
+        templateKey,
+        title,
+        description,
+        version: 1,
+        versionId: `${templateKey}-v1`,
+        status: 'PUBLISHED',
+        kind: 'FORM',
+        workflowType: 'CAPA',
+      },
+      select: { id: true },
+    });
+    const section = await prisma.formSection.create({
+      data: { formId: form.id, sectionId: `sec-${templateKey}`, name: sectionName, position: 0 },
+      select: { id: true },
+    });
+    for (const [i, f] of fields.entries()) {
+      await prisma.formField.create({
+        data: {
+          sectionId: section.id,
+          fieldId: f.fieldId,
+          name: f.name,
+          label: f.label,
+          position: i,
+          width: f.width ?? '100',
+          required: f.required ?? false,
+          typeId: f.typeId,
+          typeName: f.typeName,
+          options: f.options ? (f.options as unknown as Prisma.InputJsonValue) : undefined,
+        },
+      });
+    }
+    return form.id;
+  };
+
+  const sel = (opts: string[]) => opts.map((o) => ({ label: o, value: o }));
+
+  const capaInitiationFormId = await upsertCapaForm(
+    'capa-initiation',
+    'CAPA Initiation',
+    'Problem statement and classification captured when the CAPA is raised.',
+    'Initiation',
+    [
+      { fieldId: 'f-problem', name: 'problemStatement', label: 'Problem statement', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+      { fieldId: 'f-source', name: 'source', label: 'Source', typeId: FT_SELECT, typeName: 'select', required: true, width: '50', options: sel(['Non-Conformance', 'Audit Finding', 'Customer Complaint', 'Deviation', 'OOS', 'Internal']) },
+      { fieldId: 'f-type', name: 'capaType', label: 'CAPA type', typeId: FT_SELECT, typeName: 'select', required: true, width: '50', options: sel(['Corrective', 'Preventive', 'Both']) },
+      { fieldId: 'f-severity', name: 'severity', label: 'Severity', typeId: FT_SELECT, typeName: 'select', required: true, width: '50', options: sel(['Critical', 'Major', 'Minor']) },
+      { fieldId: 'f-process', name: 'affectedProcess', label: 'Affected product / process', typeId: FT_TEXT, typeName: 'text', width: '50' },
+      { fieldId: 'f-detected', name: 'dateDetected', label: 'Date detected', typeId: FT_DATE, typeName: 'date', width: '50' },
+    ],
+  );
+
+  const capaRcaFormId = await upsertCapaForm(
+    'capa-rca',
+    'Root Cause Analysis',
+    'Investigation and 5-Why analysis leading to a confirmed root cause.',
+    'Investigation & Root Cause',
+    [
+      { fieldId: 'f-invsum', name: 'investigationSummary', label: 'Investigation summary', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+      { fieldId: 'f-why1', name: 'why1', label: 'Why 1', typeId: FT_TEXT, typeName: 'text' },
+      { fieldId: 'f-why2', name: 'why2', label: 'Why 2', typeId: FT_TEXT, typeName: 'text' },
+      { fieldId: 'f-why3', name: 'why3', label: 'Why 3', typeId: FT_TEXT, typeName: 'text' },
+      { fieldId: 'f-why4', name: 'why4', label: 'Why 4', typeId: FT_TEXT, typeName: 'text' },
+      { fieldId: 'f-why5', name: 'why5', label: 'Why 5', typeId: FT_TEXT, typeName: 'text' },
+      { fieldId: 'f-category', name: 'rootCauseCategory', label: 'Root cause category', typeId: FT_SELECT, typeName: 'select', required: true, width: '50', options: sel(['Man', 'Machine', 'Material', 'Method', 'Measurement', 'Environment']) },
+      { fieldId: 'f-rootcause', name: 'confirmedRootCause', label: 'Confirmed root cause', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+    ],
+  );
+
+  const capaPlanFormId = await upsertCapaForm(
+    'capa-action-plan',
+    'CAPA Action Plan',
+    'Corrective and preventive actions with owners and target dates.',
+    'Action Plan',
+    [
+      { fieldId: 'f-corrective', name: 'correctiveActions', label: 'Corrective actions', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+      { fieldId: 'f-preventive', name: 'preventiveActions', label: 'Preventive actions', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+      { fieldId: 'f-responsible', name: 'responsiblePerson', label: 'Responsible person', typeId: FT_TEXT, typeName: 'text', width: '50' },
+      { fieldId: 'f-target', name: 'targetDate', label: 'Target completion date', typeId: FT_DATE, typeName: 'date', required: true, width: '50' },
+      { fieldId: 'f-risk', name: 'riskIfNotDone', label: 'Risk if not implemented', typeId: FT_SELECT, typeName: 'select', width: '50', options: sel(['High', 'Medium', 'Low']) },
+    ],
+  );
+
+  const capaImplFormId = await upsertCapaForm(
+    'capa-implementation',
+    'Implementation Record',
+    'Record of actions completed and the objective evidence.',
+    'Implementation',
+    [
+      { fieldId: 'f-done', name: 'actionsCompleted', label: 'Actions completed', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+      { fieldId: 'f-evidence', name: 'evidence', label: 'Evidence / references', typeId: FT_TEXTAREA, typeName: 'textarea' },
+      { fieldId: 'f-actual', name: 'actualCompletionDate', label: 'Actual completion date', typeId: FT_DATE, typeName: 'date', required: true, width: '50' },
+      { fieldId: 'f-deviation', name: 'deviationsFromPlan', label: 'Deviations from plan', typeId: FT_TEXTAREA, typeName: 'textarea' },
+    ],
+  );
+
+  const capaEffFormId = await upsertCapaForm(
+    'capa-effectiveness',
+    'Effectiveness Verification',
+    'Verification that the root cause was eliminated over the 30/60/90-day window.',
+    'Effectiveness Verification',
+    [
+      { fieldId: 'f-method', name: 'verificationMethod', label: 'Verification method', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+      { fieldId: 'f-c30', name: 'check30', label: '30-day check', typeId: FT_SELECT, typeName: 'select', width: '33', options: sel(['Pending', 'Pass', 'Fail']) },
+      { fieldId: 'f-c60', name: 'check60', label: '60-day check', typeId: FT_SELECT, typeName: 'select', width: '33', options: sel(['Pending', 'Pass', 'Fail']) },
+      { fieldId: 'f-c90', name: 'check90', label: '90-day check', typeId: FT_SELECT, typeName: 'select', width: '33', options: sel(['Pending', 'Pass', 'Fail']) },
+      { fieldId: 'f-conclusion', name: 'effectivenessConclusion', label: 'Effectiveness conclusion', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+    ],
+  );
+
+  const capaClosureFormId = await upsertCapaForm(
+    'capa-closure',
+    'CAPA Closure',
+    'Final QA sign-off and closure of the CAPA.',
+    'Closure',
+    [
+      { fieldId: 'f-summary', name: 'closureSummary', label: 'Closure summary', typeId: FT_TEXTAREA, typeName: 'textarea', required: true },
+      { fieldId: 'f-residual', name: 'residualRiskAcceptable', label: 'Residual risk acceptable?', typeId: FT_SWITCH, typeName: 'switch', width: '50' },
+      { fieldId: 'f-approver', name: 'qaApprover', label: 'QA approver', typeId: FT_TEXT, typeName: 'text', required: true, width: '50' },
+      { fieldId: 'f-closuredate', name: 'closureDate', label: 'Closure date', typeId: FT_DATE, typeName: 'date', required: true, width: '50' },
+    ],
+  );
+
+  if (approveStatus) {
+    const existingCapaWf = await prisma.workflow.findFirst({ where: { name: 'CAPA Handling v1' } });
+    if (!existingCapaWf) {
+      const roleConnectC = (names: string[] = []) =>
+        names
+          .map((n) => roleByName.get(n))
+          .filter((id): id is string => Boolean(id))
+          .map((id) => ({ id }));
+      await prisma.$transaction(
+        async (tx) => {
+          const wf = await tx.workflow.create({
+            data: {
+              name: 'CAPA Handling v1',
+              typeId: capaType.id,
+              status: 'APPROVED',
+              workflowStatus: 'ACTIVE',
+              createdById: adminUser?.id ?? null,
+            },
+          });
+
+          const mkStage = (name: string, canonicalId: string, isInitialStage = false) =>
+            tx.workflowStage.create({
+              data: { workflowId: wf.id, name, canonicalId, isInitialStage, stageType: 'STAGE' },
+            });
+
+          const initiation = await mkStage('Initiation', 'capa-initiation', true);
+          const investigation = await mkStage('Investigation & Root Cause', 'capa-investigation');
+          const plan = await mkStage('Action Plan', 'capa-action-plan');
+          const implementation = await mkStage('Implementation', 'capa-implementation');
+          const verification = await mkStage('Effectiveness Verification', 'capa-verification');
+          const closure = await mkStage('Closure', 'capa-closure');
+
+          // Primary Approve/Forward on every stage; a Return option on the mid
+          // stages lets a reviewer send the CAPA back for more work.
+          for (const s of [initiation, investigation, plan, implementation, verification, closure]) {
+            await tx.workflowStageAction.create({
+              data: { workflowStageId: s.id, workflowActionId: approveStatus.id, isPrimary: true },
+            });
+          }
+          if (returnStatus) {
+            for (const s of [investigation, plan, implementation, verification]) {
+              await tx.workflowStageAction.create({
+                data: { workflowStageId: s.id, workflowActionId: returnStatus.id, isPrimary: false },
+              });
+            }
+          }
+
+          // Linear transitions Initiation → … → Closure.
+          const transition = (from: { id: string }, to: { id: string }) =>
+            tx.workflowTransition.create({
+              data: { workflowId: wf.id, fromStageId: from.id, toStageId: to.id, branchOrder: 0 },
+            });
+          await transition(initiation, investigation);
+          await transition(investigation, plan);
+          await transition(plan, implementation);
+          await transition(implementation, verification);
+          await transition(verification, closure);
+
+          // Bind each stage's REQUIRED form. QE fills the working stages;
+          // QMS_ADMIN signs off at Closure. Auditors get view access throughout.
+          const bind = (
+            stageId: string,
+            formId: string,
+            fillRoles: string[],
+            viewRoles: string[],
+          ) =>
+            tx.stageFormBinding.create({
+              data: {
+                workflowId: wf.id,
+                stageId,
+                formId,
+                isRequired: true,
+                position: 0,
+                fillMode: 'ANYONE',
+                allowedFillRoles: { connect: roleConnectC(fillRoles) },
+                allowedViewRoles: { connect: roleConnectC(viewRoles) },
+              },
+            });
+
+          await bind(initiation.id, capaInitiationFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
+          await bind(investigation.id, capaRcaFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
+          await bind(plan.id, capaPlanFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
+          await bind(implementation.id, capaImplFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
+          await bind(verification.id, capaEffFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
+          await bind(closure.id, capaClosureFormId, ['QMS_ADMIN'], ['QUALITY_ENGINEER', 'AUDITOR']);
+        },
+        { timeout: 30_000, maxWait: 5_000 },
+      );
+    }
+  }
+  console.log('    CAPA workflow: 6 stages (Initiation → Closure) + 6 required stage forms');
 
   console.log(`\n    All seeded users login with password:  ${SEED_PASSWORD}`);
 }

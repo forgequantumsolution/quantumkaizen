@@ -2,6 +2,7 @@ import { Prisma, type CapaStatus, type NonConformanceStatus } from '@prisma/clie
 import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound, Conflict } from '../../lib/httpError';
 import { writeTrail } from './compliance.service';
+import { raiseTicket as engineRaiseTicket } from '../workflow/engine/orchestrator';
 import type {
   ActionItemUpsertInput,
   CapaCreateInput,
@@ -27,6 +28,163 @@ const NC_STATUS_FOR_CAPA: Partial<Record<CapaStatus, NonConformanceStatus>> = {
   IMPLEMENTATION: 'IN_PROGRESS',
   VERIFICATION: 'VERIFICATION',
   CLOSED: 'CLOSED',
+};
+
+// Stage canonicalId (from the seeded "CAPA Handling v1" workflow) → the
+// CapaStatus the derived-status mirror should reflect. Keeps the enum — which
+// list filters, badges and NC-sync still rely on — in step with the ticket.
+const CAPA_STATUS_FOR_STAGE: Record<string, CapaStatus> = {
+  'capa-initiation': 'OPEN',
+  'capa-investigation': 'INVESTIGATION',
+  'capa-action-plan': 'PLAN',
+  'capa-implementation': 'IMPLEMENTATION',
+  'capa-verification': 'VERIFICATION',
+  'capa-closure': 'CLOSED',
+};
+
+// Ordered CAPA lifecycle — used to pick the furthest stage when a ticket sits on
+// several stages at once (parallel branches).
+const CAPA_FLOW_ORDER: CapaStatus[] = [
+  'OPEN',
+  'INVESTIGATION',
+  'PLAN',
+  'IMPLEMENTATION',
+  'VERIFICATION',
+  'CLOSED',
+];
+
+// Resolve the current CAPA workflow (latest ACTIVE version of the "CAPA"
+// WorkflowType). Returns null if none is published — raising a ticket is
+// best-effort so CAPA creation never hard-depends on it.
+const resolveCapaWorkflowId = async (): Promise<string | null> => {
+  const wf = await prisma.workflow.findFirst({
+    where: {
+      type: { name: 'CAPA' },
+      isLatestVersion: true,
+      isDeleted: false,
+      workflowStatus: 'ACTIVE',
+    },
+    orderBy: { version: 'desc' },
+    select: { id: true },
+  });
+  return wf?.id ?? null;
+};
+
+// Raise the workflow ticket that drives a CAPA and persist the link back onto
+// it. Returns the linkage, or null when no active CAPA workflow is published.
+// Shared by create (best-effort) and the explicit attach endpoint.
+const raiseCapaWorkflowTicket = async (
+  capa: {
+    id: string;
+    capaNumber: string;
+    title: string;
+    description: string | null;
+    departmentId: string | null;
+    nonConformanceId: string | null;
+  },
+  userId: string,
+): Promise<{ workflowId: string; ticketId: string; uniqueId: string } | null> => {
+  const workflowId = await resolveCapaWorkflowId();
+  if (!workflowId) return null;
+  const t = await engineRaiseTicket(
+    {
+      workflowId,
+      title: `${capa.capaNumber} — ${capa.title}`,
+      description: capa.description ?? undefined,
+      departmentId: capa.departmentId ?? undefined,
+      customFields: {
+        capa_id: capa.id,
+        capa_number: capa.capaNumber,
+        non_conformance_id: capa.nonConformanceId ?? null,
+      },
+    },
+    { id: userId },
+  );
+  await prisma.capa.update({
+    where: { id: capa.id },
+    data: {
+      workflowId,
+      workflowTicketId: t.ticketId,
+      workflowTicketUniqueId: t.uniqueId,
+    },
+  });
+  return { workflowId, ticketId: t.ticketId, uniqueId: t.uniqueId };
+};
+
+// Map a ticket flow's current position to a CapaStatus: a completed flow is
+// CLOSED; otherwise take the furthest current stage in the CAPA lifecycle.
+const deriveCapaStatusFromFlow = (flow: {
+  isCompleted: boolean;
+  currentStages: { canonicalId: string }[];
+}): CapaStatus | null => {
+  if (flow.isCompleted) return 'CLOSED';
+  let best: CapaStatus | null = null;
+  for (const s of flow.currentStages) {
+    const mapped = CAPA_STATUS_FOR_STAGE[s.canonicalId];
+    if (!mapped) continue;
+    if (best === null || CAPA_FLOW_ORDER.indexOf(mapped) > CAPA_FLOW_ORDER.indexOf(best)) {
+      best = mapped;
+    }
+  }
+  return best;
+};
+
+// Keep the CapaStatus mirror (and the source NC) in step with the workflow
+// ticket driving the CAPA. No-op for CAPAs not bound to a workflow, and never
+// overrides a manual CANCELLED. Returns true when it changed the CAPA so callers
+// can refetch. The ticket owns the authoritative audit trail, so no CAPA trail
+// entry is written here.
+const syncCapaStatusFromTicket = async (capa: {
+  id: string;
+  status: CapaStatus;
+  workflowTicketId: string | null;
+  implementedAt: Date | null;
+  nonConformanceId: string | null;
+}): Promise<boolean> => {
+  if (!capa.workflowTicketId || capa.status === 'CANCELLED') return false;
+  const flow = await prisma.ticketFlow.findFirst({
+    where: { ticketId: capa.workflowTicketId },
+    orderBy: { createdAt: 'desc' },
+    select: { isCompleted: true, currentStages: { select: { canonicalId: true } } },
+  });
+  if (!flow) return false;
+  const target = deriveCapaStatusFromFlow(flow);
+  if (!target || target === capa.status) return false;
+
+  const now = new Date();
+  const data: Prisma.CapaUpdateInput = { status: target };
+  if (target === 'IMPLEMENTATION' && !capa.implementedAt) data.implementedAt = now;
+  if (target === 'CLOSED') data.closedAt = now;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.capa.update({ where: { id: capa.id }, data });
+    const ncStatus = NC_STATUS_FOR_CAPA[target];
+    if (capa.nonConformanceId && ncStatus) {
+      await tx.nonConformance.update({
+        where: { id: capa.nonConformanceId },
+        data: { status: ncStatus, closedAt: ncStatus === 'CLOSED' ? now : null },
+      });
+    }
+  });
+  return true;
+};
+
+// Sync the CAPA linked to a given workflow ticket. Called by the workflow engine
+// after a transition so the CAPA's status mirror / closedAt / NC roll-up track
+// the ticket immediately — not only when the CAPA detail page is opened.
+// Best-effort and a no-op when no CAPA is bound to the ticket.
+export const syncCapaFromTicketId = async (ticketId: string): Promise<void> => {
+  const capa = await prisma.capa.findFirst({
+    where: { workflowTicketId: ticketId },
+    select: {
+      id: true,
+      status: true,
+      workflowTicketId: true,
+      implementedAt: true,
+      nonConformanceId: true,
+    },
+  });
+  if (capa) await syncCapaStatusFromTicket(capa);
 };
 
 // ────────────────────── CAPA ──────────────────────
@@ -70,7 +228,11 @@ const serializeCapa = (c: CapaRow) => ({
   verified_at: c.verifiedAt,
   effectiveness_check: c.effectivenessCheck,
   effectiveness_due: c.effectivenessDue,
+  effectiveness_data: c.effectivenessData,
   closed_at: c.closedAt,
+  workflow_id: c.workflowId,
+  workflow_ticket_id: c.workflowTicketId,
+  workflow_ticket_unique_id: c.workflowTicketUniqueId,
   action_item_count: c._count.actionItems,
   created_by: c.createdBy,
   created_at: c.createdAt,
@@ -97,10 +259,90 @@ export const listCapas = async (q: ListCapaQuery) => {
   return { data: items.map(serializeCapa) };
 };
 
+// Fishbone categories — kept in sync with the frontend capa/capaData.ts.
+const FISHBONE_CATEGORIES = ['Man', 'Machine', 'Material', 'Method', 'Measurement', 'Environment'];
+
+const flattenResponses = (responses: unknown): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (responses && typeof responses === 'object') {
+    for (const section of Object.values(responses as Record<string, unknown>)) {
+      if (section && typeof section === 'object') Object.assign(out, section as Record<string, unknown>);
+    }
+  }
+  return out;
+};
+const asStr = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v));
+
+// Mirror the submitted CAPA workflow forms (Root Cause Analysis + Effectiveness
+// Verification) into the structured shapes the bespoke tabs render, so a CAPA
+// driven through the workflow auto-fills its fishbone + 30/60/90 views without
+// double entry. Returns nulls when the relevant form hasn't been submitted.
+const deriveCapaFormData = async (
+  ticketId: string,
+): Promise<{ rootCauseData: unknown | null; effectivenessData: unknown | null }> => {
+  const subs = await prisma.formSubmission.findMany({
+    where: {
+      ticketId,
+      status: 'SUBMITTED',
+      form: { templateKey: { in: ['capa-rca', 'capa-effectiveness'] } },
+    },
+    orderBy: { submittedAt: 'desc' },
+    select: { responses: true, form: { select: { templateKey: true } } },
+  });
+  const rca = subs.find((s) => s.form.templateKey === 'capa-rca');
+  const eff = subs.find((s) => s.form.templateKey === 'capa-effectiveness');
+
+  let rootCauseData: unknown | null = null;
+  if (rca) {
+    const r = flattenResponses(rca.responses);
+    const fishbone: Record<string, string[]> = {};
+    for (const c of FISHBONE_CATEGORIES) fishbone[c] = [];
+    const category = asStr(r.rootCauseCategory);
+    const cause = asStr(r.confirmedRootCause).trim();
+    if (FISHBONE_CATEGORIES.includes(category) && cause) fishbone[category] = [cause];
+    rootCauseData = {
+      fiveWhys: [r.why1, r.why2, r.why3, r.why4, r.why5].map(asStr),
+      fishbone,
+      conclusion: asStr(r.confirmedRootCause),
+    };
+  }
+
+  let effectivenessData: unknown | null = null;
+  if (eff) {
+    const r = flattenResponses(eff.responses);
+    const norm = (v: unknown): 'pending' | 'pass' | 'fail' => {
+      const s = String(v ?? '').toLowerCase();
+      return s === 'pass' || s === 'fail' ? s : 'pending';
+    };
+    effectivenessData = {
+      checkIns: [
+        { day: 30, status: norm(r.check30), notes: asStr(r.verificationMethod) },
+        { day: 60, status: norm(r.check60), notes: '' },
+        { day: 90, status: norm(r.check90), notes: asStr(r.effectivenessConclusion) },
+      ],
+    };
+  }
+  return { rootCauseData, effectivenessData };
+};
+
 export const getCapa = async (id: string) => {
-  const c = await prisma.capa.findUnique({ where: { id }, include: capaInclude });
+  let c = await prisma.capa.findUnique({ where: { id }, include: capaInclude });
   if (!c) throw NotFound('CAPA not found');
-  return serializeCapa(c);
+  // Reconcile the derived status mirror with the workflow ticket (if any) so an
+  // opened CAPA reflects transitions performed on the ticket engine.
+  if (await syncCapaStatusFromTicket(c)) {
+    c = await prisma.capa.findUnique({ where: { id }, include: capaInclude });
+    if (!c) throw NotFound('CAPA not found');
+  }
+  const serialized = serializeCapa(c);
+  // Workflow-driven CAPAs mirror their Root Cause / Effectiveness stage forms
+  // into the bespoke tabs (rendered read-only on the client).
+  if (c.workflowTicketId) {
+    const derived = await deriveCapaFormData(c.workflowTicketId);
+    if (derived.rootCauseData) serialized.root_cause_data = derived.rootCauseData;
+    if (derived.effectivenessData) serialized.effectiveness_data = derived.effectivenessData;
+  }
+  return serialized;
 };
 
 export const createCapa = async (input: CapaCreateInput, userId?: string) => {
@@ -144,7 +386,40 @@ export const createCapa = async (input: CapaCreateInput, userId?: string) => {
     { entityType: 'Capa', entityId: capa.id, action: 'CREATE', newValue: capa.capaNumber },
     userId,
   );
+
+  // Best-effort: raise a workflow ticket so the CAPA runs on the dynamic engine
+  // (mirrors the AuditRegister spawn-and-link pattern). A missing or inactive
+  // CAPA workflow must never block CAPA creation.
+  if (userId) {
+    try {
+      await raiseCapaWorkflowTicket(capa, userId);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error(
+        `[capa] failed to raise workflow ticket for ${capa.capaNumber}:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
+  }
+
   return getCapa(capa.id);
+};
+
+// Attach the CAPA workflow to an existing CAPA that has none (e.g. records
+// created before the workflow integration, or when creation raised no ticket).
+export const attachCapaWorkflow = async (id: string, userId?: string) => {
+  if (!userId) throw BadRequest('Authentication required');
+  const capa = await prisma.capa.findUnique({ where: { id } });
+  if (!capa) throw NotFound('CAPA not found');
+  if (capa.workflowTicketId) throw BadRequest('This CAPA already runs on a workflow');
+  // A freshly-raised ticket starts on the initial stage, which would drive the
+  // status mirror back to OPEN — so only OPEN CAPAs may attach.
+  if (capa.status !== 'OPEN') {
+    throw BadRequest('Only OPEN CAPAs can be attached to a workflow');
+  }
+  const res = await raiseCapaWorkflowTicket(capa, userId);
+  if (!res) throw BadRequest('No active CAPA workflow is published');
+  return getCapa(id);
 };
 
 export const updateCapa = async (id: string, input: CapaUpdateInput) => {
@@ -180,6 +455,10 @@ export const updateCapa = async (id: string, input: CapaUpdateInput) => {
         input.effectiveness_check === undefined
           ? existing.effectivenessCheck
           : input.effectiveness_check,
+      effectivenessData:
+        input.effectiveness_data === undefined
+          ? existing.effectivenessData ?? Prisma.JsonNull
+          : jsonOrNull(input.effectiveness_data),
       effectivenessDue:
         input.effectiveness_due === undefined
           ? existing.effectivenessDue

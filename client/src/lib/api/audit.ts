@@ -1047,7 +1047,11 @@ export interface Capa {
   verified_at: string | null;
   effectiveness_check: string | null;
   effectiveness_due: string | null;
+  effectiveness_data: unknown;
   closed_at: string | null;
+  workflow_id: string | null;
+  workflow_ticket_id: string | null;
+  workflow_ticket_unique_id: string | null;
   action_item_count: number;
   created_by: IdName | null;
   created_at: string;
@@ -1085,6 +1089,7 @@ export interface CapaUpdate {
   due_date?: string | null;
   effectiveness_check?: string | null;
   effectiveness_due?: string | null;
+  effectiveness_data?: unknown;
 }
 
 export const useCapas = (q: ListCapaQuery = {}) =>
@@ -1139,6 +1144,18 @@ export const useDeleteCapa = () => {
   return useMutation({
     mutationFn: (id: string) => api.delete(`/audit/capas/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['audit', 'capas'] }),
+  });
+};
+
+// Raise + link the CAPA workflow ticket for a CAPA that doesn't have one yet.
+export const useAttachCapaWorkflow = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/audit/capas/${id}/workflow`).then((r) => r.data),
+    onSuccess: (_d, id) => {
+      qc.invalidateQueries({ queryKey: ['audit', 'capas'] });
+      qc.invalidateQueries({ queryKey: auditKeys.capa(id) });
+    },
   });
 };
 

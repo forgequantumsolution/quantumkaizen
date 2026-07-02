@@ -662,3 +662,102 @@ The preview pane in 7.0 was 360 px wide with a 280 px min-height — readable bu
 
 - `npx tsc --noEmit` — exit 0.
 - Side-by-side preview kicks in at 1280 px viewport width and above; at 1024–1279 px the preview stacks below the form full-width.
+
+---
+
+## CAPA — Dynamic Workflow Integration
+
+Reworked CAPA so its lifecycle is driven by the dynamic workflow engine (like tickets) instead of a fixed status enum, and rebuilt the CAPA detail page. Design/rationale in `docs/capa-dynamic-workflow-plan.md`. DB work targeted the local `kaizen_qms` database. Nothing committed — all changes are in the working tree.
+
+### Database
+
+- **`backend/prisma/schema.prisma`** — `Capa` gains `effectivenessData Json?` (30/60/90 check-ins) plus `workflowId`, `workflowTicketId`, `workflowTicketUniqueId` (spawn-and-link to a workflow ticket, mirroring `AuditRegister`).
+- **Migrations** (created + applied to `kaizen_qms`):
+  - `20260701172958_oos_investigation_capa_ticket_link/` — pre-existing `OosInvestigation.capaTicketId` / `capaTicketUniqueId` drift, split into its own migration.
+  - `20260701172959_capa_workflow_link_and_effectiveness/` — the four `Capa` columns above.
+  - `prisma migrate dev` first bundled both; split into two single-purpose migrations and history re-recorded (no data loss, `migrate diff` reports zero drift).
+
+### Seed
+
+- **`backend/prisma/seed.ts`** — added a `CAPA` `WorkflowType` (prefix `CAPA-`) and the **`CAPA Handling v1`** workflow: 6 linear stages (Initiation → Investigation & Root Cause → Action Plan → Implementation → Effectiveness Verification → Closure), each with a **required** stage form (6 new published forms). Stage `canonicalId`s map 1:1 to `CapaStatus`. Idempotent by workflow name + form `templateKey`.
+
+### Backend — service / API
+
+- **`backend/src/modules/audit/capa.service.ts`**
+  - `resolveCapaWorkflowId()` — latest ACTIVE `CAPA`-type workflow.
+  - `raiseCapaWorkflowTicket()` — raises a ticket via the orchestrator and persists the link (shared by create + attach).
+  - `createCapa` — best-effort raises + links a workflow ticket on create.
+  - `attachCapaWorkflow()` — new; links an existing CAPA. Guards: not already linked, and **OPEN-only** (a fresh ticket starts at the initial stage, which would otherwise reset a mid-lifecycle CAPA's status).
+  - `CAPA_STATUS_FOR_STAGE` + `deriveCapaStatusFromFlow` + `syncCapaStatusFromTicket` — stage→status mirror, run from `getCapa` (keeps `implementedAt`/`closedAt` + NC-sync; never overrides `CANCELLED`).
+  - `serializeCapa` — exposes `effectiveness_data`, `workflow_id`, `workflow_ticket_id`, `workflow_ticket_unique_id`.
+  - `updateCapa` — persists `effectiveness_data`.
+- **`backend/src/modules/audit/capa.controller.ts`** — `attachCapaWorkflow` handler.
+- **`backend/src/modules/audit/audit.routes.ts`** — `POST /audit/capas/:id/workflow` (`capa.update` permission).
+- **`backend/src/modules/audit/audit.schema.ts`** — `effectiveness_data` on `CapaUpdateSchema`.
+
+### Frontend
+
+- **`client/src/lib/api/audit.ts`** — `Capa` + `CapaUpdate` gain the new fields; new `useAttachCapaWorkflow` hook.
+- **`client/src/features/audit/CapaDetailPage.tsx`** — rewritten: header + workflow band + two-column (tabs + sidebar). Tabs: Details, Stage Forms (workflow-linked only), Root Cause, Actions (+ timeline), Effectiveness, History.
+- **`client/src/features/audit/capa/`** (new folder):
+  - `capaData.ts` — typed parsers for `rootCauseData` / `effectivenessData`.
+  - `Fishbone.tsx` — SVG Ishikawa diagram.
+  - `RootCauseTab.tsx` — 5-Why + fishbone + corrective/preventive editor.
+  - `EffectivenessTab.tsx` — 30/60/90 pending/pass/fail cards.
+  - `CapaSidebar.tsx` — Metadata / Linked Records / Key Dates.
+  - `CapaWorkflowBand.tsx` — hybrid flow (strip + `TicketFlowCanvas` modal + `ActionBar`) plus the legacy fallback (attach / advance).
+  - `CapaEnumStepper.tsx` — segmented enum stepper for unlinked CAPAs.
+  - Reuses ticket components `ActionBar`, `TicketFlowCanvas`, `StageFormSection`, `TicketFormHistory`.
+
+### Tests
+
+- **`tests/e2e/capa-workflow.spec.ts`** (new; path is git-ignored) — Playwright, 2 tests, both passing:
+  1. Create a CAPA → ticket raised + linked (OPEN); detail page renders the flow band, Root Cause (5-Why + fishbone), Effectiveness (30/60/90), the seeded "CAPA Initiation" stage form, and the "View workflow" DAG modal.
+  2. API attach guards return 400 ("Only OPEN…" / "already runs…"); a seeded `INVESTIGATION` CAPA renders the enum-stepper fallback + Advance, no attach.
+  - Screenshots: `test-results/capa-0{1..6}-*.png`.
+
+### Verification
+
+- `tsc --noEmit` clean on both backend and frontend (0 errors).
+- Both Playwright tests pass against backend :4000 + client :5173.
+
+### Deferred
+
+- Status-preserving **bulk** migration of existing mid-lifecycle CAPAs (opt-in attach is OPEN-only).
+- Per-CAPA workflow **picker** (defaults to the one canonical CAPA workflow).
+
+### Fix — detail page stale after a stage transition
+
+- **Symptom:** advancing/completing the CAPA ticket moved the Stage Forms to the next stage, but the header status badge, flow band and sidebar stayed on the old stage — the page "looked the same" while the forms were on a different stage.
+- **Cause:** the ticket transition hooks (`useTransition`) only invalidate ticket-side queries; the CAPA record query (`useCapa`, whose derived status is reconciled server-side in `getCapa`) was never refetched.
+- **Fix:** `client/src/features/audit/capa/CapaWorkflowBand.tsx` now watches the linked ticket's flow signature (`isCompleted` + current stage ids) and invalidates `auditKeys.capa(id)` whenever it changes, so the header/badge/sidebar live-update in step with the flow.
+- **Verified:** `tests/e2e/capa-workflow.spec.ts` 3rd test — submit the required Initiation form (API), then Approve/Forward in-page; the header badge live-updates `OPEN → INVESTIGATION` and the flow band shows "Investigation & Root Cause" with no reload. Screenshot `test-results/capa-07-live-advance.png`. All 3 spec tests pass.
+
+### Fix — CAPA status now syncs engine-side on transition
+
+- **Symptom:** completing/advancing the workflow ticket from the Tickets module left the CAPA record stale (e.g. ticket completed but CAPA still `OPEN` in the DB + CAPA list) until someone opened the CAPA detail page.
+- **Cause:** the stage→status mirror (`syncCapaStatusFromTicket`) only ran on `getCapa` (detail read). Transitions performed elsewhere never touched the CAPA record.
+- **Fix:** added `syncCapaFromTicketId(ticketId)` in `backend/src/modules/audit/capa.service.ts` and call it post-commit after every transition in `backend/src/modules/workflow/engine/orchestrator.ts` `performAction` (alongside the existing `syncTicketComplianceFindings` hook). Best-effort; no-op when no CAPA is bound. So completing/advancing the ticket updates the CAPA status / `implementedAt` / `closedAt` / NC roll-up immediately, everywhere.
+- **Note:** the CAPA↔orchestrator import is a runtime-safe cycle (both sides call across the boundary only inside function bodies) — backend boots and typechecks clean.
+- **Verified:** `tests/e2e/capa-workflow.spec.ts` 4th test — transition a CAPA's ticket via API, then read the **list** endpoint (which does not run the on-read sync); it already shows `INVESTIGATION`, proving the engine synced at transition time. All 4 spec tests pass.
+
+### Clarification — the CAPA page vs the workflow ticket
+
+- The rich CAPA UI (Details / Stage Forms / Root Cause fishbone / Actions / Effectiveness / History + sidebar) is the **CAPA detail page** at `/audit/capa/<id>` (Audit → CAPA). The item titled "CAPA-YYYY-NNNN — <title>" in the **Tickets** module is the underlying workflow ticket (generic stages + forms) that drives it — not the CAPA page.
+- The bespoke Root Cause (fishbone) and Effectiveness (30/60/90) tabs read the CAPA's own `rootCauseData` / `effectivenessData`, which are **separate** from the workflow stage-form submissions (per the "keep bespoke editors too" decision) — so they render empty on a CAPA whose data was captured via the stage forms. Wiring stage-form data into those tabs is a pending decision.
+
+### Feature — mirror stage-form data into the bespoke tabs
+
+Decision: **populate from stage forms**. Workflow-driven CAPAs now auto-fill the fishbone / 30-60-90 tabs from the submitted stage forms (read-only), so there's no double entry.
+
+- **Backend** `backend/src/modules/audit/capa.service.ts` — `deriveCapaFormData(ticketId)` reads the latest `SUBMITTED` submissions of the `capa-rca` and `capa-effectiveness` forms and maps their responses (`{ section: { field: value } }`) into the `rootCauseData` / `effectivenessData` shapes: `why1..5` → 5-Why, `rootCauseCategory` + `confirmedRootCause` → fishbone bone + conclusion; `check30/60/90` → 30/60/90 status, `verificationMethod` / `effectivenessConclusion` → notes. `getCapa` overlays this onto the response for workflow-linked CAPAs (compute-on-read; no DB write, no clobbering manual/legacy data).
+- **Frontend** — `CapaDetailPage` passes `mirrored` + `canEdit={... && !hasWorkflow}` to `RootCauseTab` / `EffectivenessTab`; both now render read-only with a "Mirrored from the workflow's … stage form — edit it under the Stage Forms tab" banner when workflow-linked. Legacy (unlinked) CAPAs keep the editors editable.
+- **Verified** — `tests/e2e/capa-workflow.spec.ts` 5th test: submit Initiation → forward → submit the RCA form, then the CAPA detail's `root_cause_data` mirrors it (conclusion, 5-Why, `fishbone.Machine`). Screenshot `test-results/capa-08-rca-mirrored.png` (fishbone + 5-Why filled, read-only, banner shown). All 5 spec tests pass; both `tsc --noEmit` clean.
+
+### Deploy — standalone CAPA-workflow seed (prod-safe)
+
+The dynamic-workflow feature needs the `CAPA Handling v1` workflow + its 6 stage forms to exist in the target DB. The base `seed.ts` creates them but also seeds demo users/roles (password `Admin@123`) — not safe to run wholesale on production.
+
+- **`backend/prisma/seed-capa-workflow.ts`** (new) — seeds ONLY the `CAPA` WorkflowType, the `CAPA Handling v1` workflow (6 stages + actions + transitions) and its 6 forms. Looks up its dependencies (workflow stage statuses, built-in field types, roles) instead of creating users/roles; exits with a clear message if the base seed hasn't run. Idempotent (guarded by WorkflowType name / workflow name / form templateKey).
+- **`backend/package.json`** — added script `db:seed:capa` (`tsx prisma/seed-capa-workflow.ts`).
+- **Deploy runbook:** (1) commit + push (code + the 2 migrations — nothing is committed yet); (2) deploy → `prisma migrate deploy` auto-applies the schema (per `render.yaml` startCommand); (3) run `npm run db:seed:capa` once against the server DB. Without step 3 there is no CAPA workflow, so new CAPAs fall back to the legacy enum UI. Migrations are additive/safe; the test CAPAs are local-only and won't appear on the server.
