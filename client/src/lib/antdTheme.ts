@@ -4,8 +4,8 @@ import { defaultColors } from '@/components/theme/presets';
 import { defaultTypography } from '@/stores/appearanceStore';
 
 const SANS_FAMILIES: Record<string, string> = {
-  outfit:  'Outfit, system-ui, -apple-system, sans-serif',
   inter:   'Inter, system-ui, -apple-system, sans-serif',
+  outfit:  'Outfit, system-ui, -apple-system, sans-serif',
   system:  'system-ui, -apple-system, "Segoe UI", sans-serif',
 };
 
@@ -22,7 +22,7 @@ interface BuildArgs {
  * ConfigProvider in main.tsx (which renders before the store hydrates).
  */
 export function buildAntdTheme({ colors = defaultColors, typography = defaultTypography }: BuildArgs = {}): ThemeConfig {
-  const fontFamily = SANS_FAMILIES[typography.sansFamily] ?? SANS_FAMILIES.outfit;
+  const fontFamily = SANS_FAMILIES[typography.sansFamily] ?? SANS_FAMILIES.inter;
 
   return {
     cssVar: true,

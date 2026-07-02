@@ -34,9 +34,10 @@ const SANS_FAMILIES: Record<string, string> = {
 };
 
 const MONO_FAMILIES: Record<string, string> = {
-  'dm-mono':  "'DM Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace",
-  jetbrains:  "'JetBrains Mono', 'DM Mono', ui-monospace, monospace",
-  system:     "ui-monospace, SFMono-Regular, Menlo, monospace",
+  'roboto-mono': "'Roboto Mono', 'DM Mono', ui-monospace, monospace",
+  'dm-mono':     "'DM Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace",
+  jetbrains:     "'JetBrains Mono', 'DM Mono', ui-monospace, monospace",
+  system:        "ui-monospace, SFMono-Regular, Menlo, monospace",
 };
 
 // Maps store key → CSS custom property name.
@@ -80,8 +81,8 @@ function applyColors(root: HTMLElement, colors: AppearanceColors | undefined) {
 
 function applyTypography(root: HTMLElement, t: AppearanceTypography | undefined) {
   if (!t) return;
-  root.style.setProperty('--font-sans', SANS_FAMILIES[t.sansFamily] ?? SANS_FAMILIES.outfit);
-  root.style.setProperty('--font-mono', MONO_FAMILIES[t.monoFamily] ?? MONO_FAMILIES['dm-mono']);
+  root.style.setProperty('--font-sans', SANS_FAMILIES[t.sansFamily] ?? SANS_FAMILIES.inter);
+  root.style.setProperty('--font-mono', MONO_FAMILIES[t.monoFamily] ?? MONO_FAMILIES['roboto-mono']);
   root.style.setProperty('--font-heading-weight', String(t.headingWeight ?? 700));
   // Drives every rem-sized element across the app.
   root.style.fontSize = `${t.baseFontPx ?? 16}px`;

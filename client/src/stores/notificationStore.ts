@@ -20,6 +20,7 @@ interface NotificationStore {
   markAllRead: () => void;
   addNotification: (n: AppNotification) => void;
   togglePanel: () => void;
+  openPanel: () => void;
   closePanel: () => void;
 }
 
@@ -35,5 +36,6 @@ export const useNotificationStore = create<NotificationStore>((set) => ({
   })),
   addNotification: (n) => set((s) => ({ notifications: [n, ...s.notifications] })),
   togglePanel: () => set((s) => ({ isOpen: !s.isOpen })),
+  openPanel: () => set({ isOpen: true }),
   closePanel: () => set({ isOpen: false }),
 }));

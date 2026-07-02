@@ -36,7 +36,7 @@ export default function SampleListPage() {
     <PageContainer>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><TestTubes size={22} className="text-gray-500" />Samples</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><TestTubes size={22} className="text-gray-500" />Sample Management</h1>
           <p className="text-xs text-gray-500 mt-0.5">Register samples with a barcode and an unbroken chain of custody.</p>
         </div>
         {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>Register Sample</Button>}
@@ -57,7 +57,7 @@ export default function SampleListPage() {
         columns={[
           { title: 'Sample No.', dataIndex: 'sample_number', width: 150, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
           { title: 'Product', dataIndex: 'product_name', ellipsis: true },
-          { title: 'Batch', dataIndex: 'batch_no', width: 110, render: (v: string | null) => v ?? '—' },
+          { title: 'Batch', dataIndex: 'batch_no', width: 110, render: (v: string | null) => v ? <span className="font-mono">{v}</span> : '—' },
           { title: 'Type', dataIndex: 'sample_type', width: 130, render: (v: string | null) => v ?? '—' },
           { title: 'Aliquots', dataIndex: 'aliquot_count', width: 80 },
           {

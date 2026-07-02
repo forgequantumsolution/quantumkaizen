@@ -77,7 +77,7 @@ export default function GradingPage() {
     <PageContainer>
       <div className="mb-4">
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <ClipboardCheck size={22} className="text-gray-500" /> Grading Queue
+          <ClipboardCheck size={22} className="text-gray-500" /> Assessment Results
         </h1>
         <p className="text-xs text-gray-500 mt-0.5">Exam attempts with written answers awaiting manual grading.</p>
       </div>

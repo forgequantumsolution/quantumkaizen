@@ -761,3 +761,314 @@ The dynamic-workflow feature needs the `CAPA Handling v1` workflow + its 6 stage
 - **`backend/prisma/seed-capa-workflow.ts`** (new) — seeds ONLY the `CAPA` WorkflowType, the `CAPA Handling v1` workflow (6 stages + actions + transitions) and its 6 forms. Looks up its dependencies (workflow stage statuses, built-in field types, roles) instead of creating users/roles; exits with a clear message if the base seed hasn't run. Idempotent (guarded by WorkflowType name / workflow name / form templateKey).
 - **`backend/package.json`** — added script `db:seed:capa` (`tsx prisma/seed-capa-workflow.ts`).
 - **Deploy runbook:** (1) commit + push (code + the 2 migrations — nothing is committed yet); (2) deploy → `prisma migrate deploy` auto-applies the schema (per `render.yaml` startCommand); (3) run `npm run db:seed:capa` once against the server DB. Without step 3 there is no CAPA workflow, so new CAPAs fall back to the legacy enum UI. Migrations are additive/safe; the test CAPAs are local-only and won't appear on the server.
+
+---
+
+## Typography Manual (FQS-QK-UIUX-002) — Phase 1: Font switch to Inter + Roboto Mono
+
+Implements the font mandate from the _Font Nomenclature & Typography Instruction Manual_: UI font **Outfit → Inter**, data/mono font **DM Mono → Roboto Mono**. Full plan (all 4 phases) lives in `docs/typography-manual-implementation-plan.md`; this is Phase 1 only. Nothing committed — working tree only.
+
+### Why this is more than a one-line font change
+
+Fonts flow through a runtime theming layer: `appearanceStore` (persisted Zustand) → `AppearanceProvider` writes `--font-sans`/`--font-mono` onto `:root` → `index.css` holds bootstrap defaults → `tailwind.config.js` + `antdTheme.ts` back the static utilities and antd widgets. Changing the font means touching every layer, plus migrating existing users' persisted `localStorage` blob (which would otherwise pin them to Outfit/DM Mono).
+
+### Files modified (7 touch points)
+
+- **`client/src/index.css`** — font `@import` now loads **Inter** + **Roboto Mono** first (Outfit/DM Mono/JetBrains kept as fallbacks). Bootstrap `:root` defaults: `--font-sans: 'Inter', …`, `--font-mono: 'Roboto Mono', 'DM Mono', …`.
+- **`client/src/components/theme/AppearanceProvider.tsx`** — added `'roboto-mono'` to `MONO_FAMILIES`; changed the `applyTypography` fallbacks so a missing key resolves to Inter / Roboto Mono (was Outfit / DM Mono).
+- **`client/src/stores/appearanceStore.ts`** — `MonoFamily` union gains `'roboto-mono'`; `defaultTypography` now `sansFamily: 'inter'`, `monoFamily: 'roboto-mono'`. **Persist `version: 2 → 3`** with a v2→v3 `migrate` branch that force-swaps `outfit → inter` and `dm-mono → roboto-mono` **only when the persisted value equals the old default** — so a user who deliberately picked `'system'` keeps it. (Same reasoning as the 7.2 hotfix: nested/persisted store changes need a version bump + migrate.)
+- **`client/tailwind.config.js`** — `fontFamily.sans` → Inter-first, `fontFamily.mono` → Roboto Mono-first.
+- **`client/src/lib/antdTheme.ts`** — the second `SANS_FAMILIES` map reordered Inter-first; `buildAntdTheme` fallback `outfit → inter` so antd widgets follow.
+- **`client/src/pages/AppearancePage.tsx`** — font-picker option lists relabeled ("Inter (default)" / "Roboto Mono (default)", old fonts kept as non-default choices); the two hardcoded reset-to-default fallbacks (staged initializer + `handleReset`) updated `outfit`/`dm-mono` → `inter`/`roboto-mono`.
+
+### Migration behavior
+
+- New users / cleared storage → default path → Inter + Roboto Mono.
+- Existing users on the old default (Outfit / DM Mono) → v2→v3 migrate rewrites them to Inter / Roboto Mono on next load.
+- Users who chose "System UI" / "System Monospace" → preserved (migrate only rewrites the retired defaults).
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0.
+- `npx vite build` — clean (pre-existing chunk-size warning only).
+- **Playwright UI check** — new `tests/ui/font.spec.ts` + `tests/ui/font.config.ts` (serves `client/dist` via `vite preview`; no backend/login needed, runs on the public route). 3/3 pass:
+  1. `getComputedStyle(document.body).fontFamily` = `Inter, system-ui, …`.
+  2. Runtime CSS vars (written by `AppearanceProvider`) — `--font-sans` = `'Inter', …`, `--font-mono` = `'Roboto Mono', 'DM Mono', …` (proves the store→provider path, not just the bootstrap).
+  3. After rendering a probe span in each family, `document.fonts.check` → `inter: true, robotoMono: true` (faces actually download & render). Caught a lazy-load false-negative first — browsers only fetch a webfont when an element uses it — and fixed the test to force a mono render.
+- Run: `npx playwright test --config tests/ui/font.config.ts`.
+
+### Not done in Phase 1 (see plan doc)
+
+- Phase 2 — semantic status **text** color tokens (`text-oos` etc.) + "never color alone" a11y sweep.
+- Phase 3 — the 14 GMP label renames (blocked on the DB-vs-override decision for workflow-type names).
+- Phase 4 — min-size / line-height enforcement + mono audit on LIMS data fields.
+- Out of scope entirely: floor `+2px` variant, print fonts (Calibri/Georgia), full token rename.
+
+---
+
+## Typography Manual (FQS-QK-UIUX-002) — Phase 2: Semantic status text tokens + a11y audit
+
+Adds the manual's WCAG-rated status **text** colours (§7) as design-system tokens and applies them to the most safety-critical status text (analytical result flags). Also audited the two accessibility mandates from §7 — both already satisfied. Working tree only; nothing committed.
+
+### Audit findings (§6.2 / §6.3 of the plan)
+
+- **Sidebar contrast** — the manual flags `#FFF3DC` on navy as a 2.1:1 FAIL. Grep across `client/src`: `#FFF3DC` is **not used as a text colour anywhere** (it only exists as a Tailwind `gold-100`/`amber-light` swatch value). No-op — nothing to fix.
+- **"Colour never the sole status indicator"** — audited the status renderers: `Badge.tsx` (`StatusBadge`/`SeverityBadge`/`TypeBadge`) always pair a coloured dot **with a text label**; the LIMS `EVALUATION_BADGE` carries `EVALUATION_LABELS` text; the live OOS warning uses `⚠ Out of spec …` (icon + words). All already WCAG 1.4.1-compliant. No colour-only indicators found.
+
+### Files modified
+
+- **`client/tailwind.config.js`** — new `state` colour group with the five semantic status text tokens from the manual, each annotated with its WCAG ratio:
+  - `state.oos` `#C53030` (7.2:1 AAA), `state.oot` `#C98A00` (5.5:1 AA), `state.approved` `#1A6B3D` (7.8:1 AAA), `state.progress` `#1A5C9E` (6.4:1 AA), `state.quarantine` `#B84E00` (6.6:1 AA). Usable as `text-state-oos`, `bg-state-*`, etc.
+- **`client/src/lib/api/testing.ts`** — `EVALUATION_BADGE` (the single shared source for analytical result-flag styling, fanned out to sample tests / OOS views) now uses the semantic tokens for its text colour: `OOS`/`FAIL` → `text-state-oos`, `OOT` → `text-state-oot`, `PASS` → `text-state-approved`. Light `bg-*`/`border-*` kept as-is; only the foreground moves to the WCAG-AAA value. Each badge still renders its label, so colour is never alone.
+- **`client/src/features/lims/SampleTestsPanel.tsx`** — the ad-hoc live "⚠ Out of spec" flag on a result field switched `text-red-600` → `text-state-oos` (keeps the ⚠ icon + text).
+
+### Rationale / scope
+
+- No wholesale repaint of existing status badges — the app's navy/gold ≈ the manual's navy/amber, and the generic badges already pass contrast (plan §1). Only the safety-critical OOS/OOT/pass result flags were moved onto the exact WCAG-rated tokens, at one shared source.
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0.
+- `npx vite build` — clean (pre-existing chunk-size warning only).
+- **CSS-emission check** on the built bundle confirms the tokens ship with the manual's exact hexes (and are present only because they're referenced — Tailwind purges unused, so this also proves the `EVALUATION_BADGE` wiring):
+  - `.text-state-oos{…color:rgb(197 48 48)}` = `#C53030` ✓
+  - `.text-state-approved{…color:rgb(26 107 61)}` = `#1A6B3D` ✓
+  - `.text-state-oot{…color:rgb(201 138 0)}` = `#C98A00` ✓
+- **Playwright UI check** — `tests/ui/state-colors.spec.ts` + `.config.ts` (serves `client/dist` via `vite preview`). 4/4 pass: each of the three applied tokens computes to its exact `rgb()` in a real browser, and an OOS result badge renders `#C53030` **with** its text label (colour-not-alone). Run: `npx playwright test --config tests/ui/state-colors.config.ts`. (The tokens only render because app code references them; progress/quarantine are defined-but-unused so their utilities aren't emitted yet — noted in the spec.)
+
+### Not done in Phase 2
+
+- Phases 3 (14 label renames) and 4 (min-size / line-height / mono data-field audit) — see `docs/typography-manual-implementation-plan.md`.
+
+---
+
+## Typography Manual (FQS-QK-UIUX-002) — Phase 3: GMP nav label renames
+
+Applies the manual's §6 terminology to navigation labels + matching page titles. DB-driven workflow-type modules are relabelled via a display-name override (no seed/DB changes — internal names untouched). Working tree only; nothing committed.
+
+### Approach for DB-driven labels (decision)
+
+Chose the **sidebar display-name override map** over renaming seed `name`s. The workflow type's stored `name` is the internal key used by seeds / idempotency guards (`where: { name: 'CAPA' }`) / permissions, so it's left intact; only the sidebar label is remapped. Zero DB/migration/seed risk, fully reversible.
+
+### Files modified
+
+- **`client/src/components/layout/Sidebar.tsx`**
+  - New `WF_DISPLAY_NAME` map applied in `moduleItems` (`label: WF_DISPLAY_NAME[t.name] ?? t.name`): `CAPA → CAPA Management`, `Deviation → Deviations`, `Complaints → Product Complaints`. (Deviation/Complaints workflow types aren't seeded yet, so those entries are harmless future-proofing; CAPA is live.)
+  - Hardcoded labels: `Document Review → Document Approval` (the DMS-grouped workflow child); LMS group `LMS → Training & Qualification` with children `My Learning → My Training`, `Curricula → Training Programs`, `Training Matrix → Qualification Matrix`, `Grading → Assessment Results`; LIMS children `Samples → Sample Management`, `OOS Investigations → OOS / OOT Investigations`, `Certificates (CoA) → CoA Management`. Updated the stale LMS comment.
+- **`client/src/features/lims/LimsConfigLayout.tsx`** — Partners tab `Suppliers → Vendor Management`.
+- **Page titles aligned to the nav labels** (`<h1>`): `SampleListPage` (Samples → Sample Management), `SuppliersPage` (Suppliers → Vendor Management), `lms/CurriculaPage` (Curricula → Training Programs), `lms/MyLearningPage` (My Learning → My Training), `lms/TrainingMatrixPage` (Training Matrix → Qualification Matrix), `lms/GradingPage` (Grading Queue → Assessment Results).
+
+### Deliberately NOT done
+
+- **`Audit Master → Audit Program`** — SKIPPED. The app's "Audit Master" is the master-**data** config (focus areas, audit types, ISO standards), and an **"Audit Program"** feature already exists separately (`/audit/program`, `AuditProgramListPage` — the ISO-19011 operational program). Renaming would collide and be semantically wrong; the manual's intent is already met by the existing Audit Program. Left as-is.
+- Page titles that are already descriptive and not the old nav string were left: `OosListPage` h1 was already "OOS / OOT Investigations"; `CoaListPage` h1 stays "Certificates of Analysis" (correct expansion of CoA).
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
+- Grep audit: no user-facing old nav labels remain (only a code comment mentioned "My Learning", since fixed).
+- **Playwright UI check (real login)** — `tests/ui/labels.spec.ts` + `.config.ts`, run against the Vite **dev** server (proxies `/api` to the live backend :4000; `vite preview` doesn't proxy). Logs in as `admin@forgequantum.com` and asserts the live sidebar. 2/2 pass:
+  1. "Training & Qualification" group visible; expands to show My Training / Training Programs / Qualification Matrix / Assessment Results; old My Learning / Curricula / Training Matrix / Grading absent.
+  2. LIMS group shows Sample Management / OOS / OOT Investigations / CoA Management; old OOS Investigations / Certificates (CoA) / Samples absent.
+  - Run: `npx playwright test --config tests/ui/labels.config.ts` (needs backend up + seeded).
+
+### Not done in Phase 3
+
+- Phase 4 — min-size / line-height enforcement + mono audit on LIMS data fields. See the plan doc.
+
+---
+
+## Typography Manual (FQS-QK-UIUX-002) — Phase 4: mono data fields + narrative measure/line-height
+
+Final pass: enforce the data typeface on GMP-critical values (§5) and the narrative measure/line-height (§8). Audit-driven and deliberately targeted — the codebase already broadly complies, so this closes specific gaps rather than sweeping. Working tree only; nothing committed.
+
+### Audit results
+
+- **Mono on data (§5)** — already widely applied: `font-mono` appears 42× across 30 LIMS files (sample numbers, barcodes, codes, IDs). Gaps found and fixed were specific fields, not systemic.
+- **Min sizes (§3)** — the Session-5 rem rebase already puts body/data at 14px and nav at 13–17px (Sidebar spans render 15–17px). The remaining `text-[11px]`/`text-xxs` usages are **field labels and micro-meta** (uppercase caption labels, counts, badge chrome) — which the manual permits — not data/nav text. No mass resize done: it would be high-churn, low-safety-value, and risks regressions. Noted as a minor, acceptable deviation (field labels sit ~1px under the manual's 12–13px label floor).
+- **Colour-not-alone / sidebar contrast** — already handled in Phase 2.
+
+### Files modified — mono on GMP-critical values (§5)
+
+- **`client/src/features/lims/SampleListPage.tsx`** — Batch column now renders `<span className="font-mono">` (was plain text). Batch codes need 0/O·8/B·1/l disambiguation.
+- **`client/src/features/lims/SampleDetailPage.tsx`** — `Field` helper gained an optional `mono` prop (applies `font-mono` to the value); the **Batch** field now passes `mono`.
+- **`client/src/features/lims/SampleTestsPanel.tsx`** — the read-only analytical **result value** now renders `font-mono tabular` (was `text-gray-900` proportional), so numeric results align and disambiguate.
+
+### Files modified — narrative measure + line-height (§8)
+
+- **`client/src/index.css`** — new `.gmp-narrative` utility in the `@layer utilities` block: `line-height: 1.65; max-width: 70ch; text-align: left`. Caps GMP narrative text at a 65–75ch measure with ≥1.6 line height per §8 (wider lines slow reading / raise transcription error against printed records).
+- Applied `.gmp-narrative` to the GMP narratives the manual names:
+  - `lims/OosDetailPage.tsx` — OOS investigation **conclusion**.
+  - `audit/CapaDetailPage.tsx` — CAPA **description**.
+  - `audit/AuditProgramExecutionPage.tsx` — program **summary**.
+  - `audit/AuditReportPage.tsx` — audit register **description** + program **summary**.
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
+- CSS-emission check: `.gmp-narrative{line-height:1.65;max-width:70ch;text-align:left}` present in the bundle.
+- **Playwright UI check** — `tests/ui/narrative.spec.ts` + `.config.ts` (serves `client/dist` via `vite preview`). 2/2 pass:
+  1. `.gmp-narrative` → computed `line-height: 26.4px` (1.65×16), `max-width: 603.75px` (70ch resolved), `text-align: left`.
+  2. `.font-mono` → `font-family` resolves to `"Roboto Mono", …` (data typeface reaches data values).
+  - Run: `npx playwright test --config tests/ui/narrative.config.ts`.
+
+### Phase 4 done — high-impact scope of FQS-QK-UIUX-002 complete
+
+Phases 1–4 (fonts, status text tokens + a11y, 14 label renames, mono/narrative enforcement) are implemented and tested. Still out of scope (future work, per the plan doc): floor `+2px` variant tokens (§9), print fonts Calibri/Georgia (§2/§7), and a full rename of the existing typography tokens to the manual's `display-module`/`nav-label`/… names.
+
+---
+
+## UI/UX Manual (FQS-QK-UIUX-003) — Phase A: sidebar groups, icons, status colour, shortcuts, compliance badge
+
+First tranche of the second manual (UI/UX). Design-system quick wins only — the low-risk items that a pharma evaluator notices first. Analysis + full 4-phase plan in `docs/uiux-manual-implementation-plan.md`. Working tree only; nothing committed. (Phases B–D — 21 CFR-UI polish, data-backed features, the 8 missing modules — not started.)
+
+### A1 — Sidebar group headers + GMP grouping (§2/§4)
+
+The sidebar previously rendered three untitled sections (hardcoded block → DB workflow block → Configuration); the group-header render path existed but was dead because every `NavSection.title` was empty. Restructured into the manual's **4 groups**:
+- **`client/src/components/layout/Sidebar.tsx`** — added a `MODULE_GROUP` map + `groupForModule()` that tags each DB-driven workflow module `"Quality System"` (CAPA/Deviation/Complaints/Change/Risk) or `"Compliance"` (Audit/Calibration), defaulting to Quality System. Extracted the hardcoded modules into consts (`dashboardItem`/`dmsItem`/`limsItem`/`trainingItem`/`configItem`) and assembled five titled sections: `""` (Dashboard, ungrouped) · **Lab Operations** (LIMS, DMS) · **Quality System** (`qualityItems`) · **Compliance** (`complianceItems`) · **Admin** (Training & Qualification, Configuration). Empty groups are dropped by the existing `items.length > 0` filter, so unseeded groups don't show. No render-code change needed — the header path was already there.
+- Scope note: the exact 12-item interleave (LIMS #2, Deviations #4, …) from §2 is **not** done — it's blocked on Deviations/Change Control/Calibration/Vendor Management existing as first-class modules (they're dynamic types / LIMS sub-pages today). This is the "achievable grouping"; full reorder is Phase C3.
+
+### A2 — Icon swaps (§3)
+
+`Sidebar.tsx` — imported `Microscope`, `Grid3x3`, `MessageSquareWarning`, `RefreshCw` and applied:
+- Quality Control `Activity → Microscope` · My Training `GraduationCap → Award` (de-duped from the parent's graduation cap) · Qualification Matrix `Database → Grid3x3`.
+- `ICON_BY_KEY`: CAPA `Wrench → RefreshCw` (corrective/preventive loop) · Audit `BookOpen → ClipboardCheck` (inspection checklist) · added `complaints`/`productcomplaints → MessageSquareWarning` (was falling back to the generic `Layers`).
+- Sample Management already used `TestTubes` ✓. Calibration N/A (not a top-level module).
+
+### A3 — 6th status colour (§5)
+
+`client/tailwind.config.js` — added `state.closed: '#5A6B7D'` (5.1:1 AA, neutral grey for inactive/archived/closed), completing the manual's 6-colour system on top of the five added for FQS-QK-UIUX-002 Phase 2.
+
+### A4 — Keyboard shortcuts (§4)
+
+`client/src/hooks/useKeyboardShortcuts.ts` — extended `ROUTE_MAP` with `g l → /lims/samples`, `g c → /audit/capa`, `g a → /audit/register` (the `g`-chord engine already existed).
+
+### A5 — Compliance-mode badge (§4/§8)
+
+`Sidebar.tsx` — a static `🛡 GMP · 21 CFR 11 · EU Annex 11` chip in the sidebar footer (expanded only), using the gold accent token — reassures QA/inspectors that data-integrity controls are active.
+
+### A6 — Nav label sizing (follow-up)
+
+The top-level nav labels rendered at **17px**, which crowded long labels ("Training & Qualification", "CAPA Management") against the expand chevron and read oversized. Reduced to **15px** top-level / **14px** children in `Sidebar.tsx` (`renderNavItem`), keeping the parent > child hierarchy and moving toward the typography manual's nav-label spec (13–14px web). Verified by screenshot — long labels now sit comfortably on one line.
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
+- **Playwright UI check (real login)** — `tests/ui/nav-groups.spec.ts` + `.config.ts`, against the Vite dev server (proxies to backend :4000), logging in as `admin@forgequantum.com`. 4/4 pass:
+  1. Group headers **Lab Operations / Quality System / Admin** render.
+  2. LIMS + DMS in Lab Operations; Training & Qualification + Configuration in Admin.
+  3. Compliance badge `GMP · 21 CFR 11 · EU Annex 11` visible in the footer.
+  4. Pressing `g` then `l` navigates to `/lims/samples`.
+  - Run: `npx playwright test --config tests/ui/nav-groups.config.ts` (needs backend up + seeded).
+- Icon swaps: verified they compile/import and the affected items still render; exact glyph is a visual change (lucide SVGs aren't text-assertable).
+
+### Not done in Phase A
+
+- Phase B (e-sig name/date/meaning button, read-only banner, audit-log link), Phase C (notification badges + real global search + full nav reorder + persona nav — need backend), Phase D (8 missing modules — roadmap). See the plan doc.
+
+---
+
+## UI/UX Manual (FQS-QK-UIUX-003) — Phase B: 21 CFR Part 11 UI polish
+
+Finishes the partially-built Part 11 UI affordances (§8). Working tree only; nothing committed.
+
+### B1 — E-signature modal completion (§8)
+
+`client/src/components/shared/ESignatureModal.tsx` — 21 CFR Part 11 requires the signer's **printed name**, **date/time**, and **meaning** all visible at the point of signing. The modal already had the meaning dropdown; added the missing two and fixed the button:
+- Imported `useAuthStore`; added a signer row to the context panel — `Signer: <user.name>` + a `new Date().toLocaleString()` stamp (display-only operator confirmation; the authoritative signing time stays server-set).
+- Confirm button `Apply Signature → Sign as {meaning}` (e.g. "Sign as Approved", "Sign as Reviewed") so it reflects the signature meaning rather than a generic verb.
+- **Deferred:** the two ad-hoc AntD signing UIs (`features/audit/CapaDetailPage.tsx`, `features/dms/DocumentDetailPage.tsx`) still lack name/date parity and aren't consolidated onto the shared modal — a follow-up (kept out of this pass to limit churn/risk).
+
+### B2 — "Approved — Read Only" banner (§8)
+
+- New `client/src/components/ui/ReadOnlyBanner.tsx` — lock icon + "Record Approved — Read Only", styled with the new `state.closed` token.
+- Applied to the primary submitted-GMP-record surface: `features/tickets/detail/TicketFormHistory.tsx` (above the existing subtle "Read-only · …" caption). The `.form-readonly` plumbing already existed; this adds the prominent lock affordance the manual asks for. Ready to drop into the DMS effective-doc and closed-CAPA views next.
+
+### B3 — Fix the dead "Audit Log" link (§8)
+
+`client/src/components/layout/Header.tsx` — the notification dropdown's footer button navigated to `/dashboard` and was mislabeled "View all in Audit Log" (no `/audit-log` route exists).
+- Relabeled to **"View all notifications →"** and repointed to open the full `NotificationPanel`.
+- **Correctness fix caught during review:** the header bell's own `onClick` already calls `togglePanel()`, so calling `togglePanel()` again from the footer would have *closed* the panel. Added a deterministic `openPanel()` action to `stores/notificationStore.ts` (`set({ isOpen: true })`) and used it in the footer, so the link always opens the panel regardless of prior state.
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
+- **Bundle-string check** on the built JS confirms all three shipped and the dead label is gone: `Sign as ` ✓, `Signer:` ✓, `Record Approved — Read Only` ✓, `View all notifications` ✓, `View all in Audit Log` → **0 occurrences**.
+- **Playwright UI check (real login)** — `tests/ui/notif-link.spec.ts` + `.config.ts` (Vite dev server → backend :4000). 1/1 pass: from `/lims/samples`, open the bell dropdown → the footer reads "View all notifications" (old label absent) → clicking it opens the `NotificationPanel` (`<h2>Notifications</h2>`) and stays on `/lims/samples` (no dead jump to `/dashboard`).
+- B1 (e-sig) and B2 (banner) render inside flows that need specific data/interaction (LMS exam/course signing; a completed ticket's submitted forms), so they were verified by tsc + build + bundle-string presence + code review rather than a driven e2e.
+
+### Not done in Phase B
+
+- E-sig parity in the CAPA/DMS ad-hoc signers; global aggregate audit-log page; session-timeout countdown + last-login display. Phase C (notification badges + real global search + full nav reorder + persona nav — need backend) and Phase D (8 missing modules — roadmap). See the plan doc.
+
+---
+
+## UI/UX Manual (FQS-QK-UIUX-003) — Phase C1: sidebar notification badges
+
+The manual's highest-impact/demo item (§4, U-01: "CAPA: 5 open"-style badges, benchmarked against Veeva/MasterControl). First data-backed feature — adds a real backend counts endpoint + frontend badges. Working tree only; nothing committed. (The rest of Phase C — real global search, full 12-module reorder, persona nav — not started.)
+
+### Backend — new `GET /api/nav-counts` endpoint (read-only aggregation, no schema change)
+
+New module `backend/src/modules/nav-counts/` (service + controller + routes), mirroring the `lims-analytics` pattern; registered in `backend/src/app.ts` at `/api/nav-counts` (auth-only, no extra permission — counts are non-sensitive aggregates of what the user can already navigate to). Returns:
+```json
+{ "workflowTypes": { "<typeId>": <openTickets> }, "oos": <n>, "capa": <n> }
+```
+- **workflowTypes** — open tickets grouped by workflow type. Open work lives on `TicketFlow.isCompleted = false` (Ticket has no status/type column), and the type is two hops away, so: `groupBy(TicketFlow, workflowId)` where not-completed and `ticket.isDeleted = false`, then map `workflowId → Workflow.typeId` and sum.
+- **oos** — `OosInvestigation` where `status != 'CLOSED'`.
+- **capa** — `Capa` where `status notIn (CLOSED, CANCELLED)` (via the `CapaStatus` enum).
+
+### Frontend — badges in the sidebar
+
+- **`client/src/lib/api/navCounts.ts`** (new) — `useNavCounts()` react-query hook (`staleTime 60s`, `refetchInterval 120s`, refetch on focus) — badges are ambient, never block.
+- **`client/src/components/layout/Sidebar.tsx`** — `NavItem` gains `count?`; a module-level `NavBadge` (amber pill on the dark sidebar, hidden at zero, `99+` cap); a `badgeCount(item)` helper that rolls descendant counts up to parents so a collapsed group still surfaces attention. Counts are attached in the nav memo: each DB workflow module gets `navCounts.workflowTypes[t.id]`; the LIMS→OOS child gets `navCounts.oos`. Badges render on both parent rows (before the chevron) and leaf rows (right-aligned), expanded sidebar only.
+- Also fixed a latent inconsistency found here: an earlier font-size edit (A6) only matched the **parent** label span (indentation differed), leaving **leaf** labels at 17px. Brought leaves in line at 15px/14px so Dashboard/CAPA-Management match the parent rows.
+
+### Verification
+
+- Backend `npx tsc --noEmit` — exit 0. Client `npx tsc --noEmit` + `vite build` — clean.
+- **Live endpoint test** — ran a throwaway backend instance on `:4001` (same DB; the running `:4000` predates the new route) and hit `GET /api/nav-counts` with a real admin token → `200` in ~42ms, returning real data: `{"workflowTypes":{"…":23,"…":17},"oos":0,"capa":21}`. Prisma logs confirm the three intended queries.
+- **Badge UI test (Playwright, real login + mocked counts for determinism)** — `tests/ui/nav-badges.spec.ts` + `.config.ts`. 2/2 pass: with `oos:7`, the **LIMS parent** rolls up and shows `7`, and expanding LIMS shows the **OOS leaf** `7`; with all-zero counts, no badge renders.
+
+### ⚠ Operational note
+
+The running `:4000` backend did **not** hot-reload the new route (it 404s `/api/nav-counts` while existing routes work). **It needs a restart** (`npm run dev:backend`) to serve the endpoint. Until then the frontend's nav-counts call 404s and badges simply don't render — graceful, no crash.
+
+### Not done in Phase C
+
+- C2 real global search (needs a backend `/api/search`), C3 full 12-module reorder (blocked on Deviations/Change Control/Calibration/Vendor existing as modules), C4 persona nav. Phase D (8 missing modules) remains a roadmap.
+
+---
+
+## UI/UX Manual (FQS-QK-UIUX-003) — Phase C2: real global search
+
+Replaces the 4-item static ⌘K palette (which only linked to Dashboard/Forms/Workflows/Tickets) with a real cross-module search — the manual's §4 use case: "find a sample by lot number, CAPA by ID, or SOP by document number… essential during inspections." Working tree only; nothing committed.
+
+### Backend — new `GET /api/search?q=` endpoint (read-only)
+
+New module `backend/src/modules/search/` (service + controller + routes), registered in `backend/src/app.ts` at `/api/search` (auth-only). Runs six `findMany` in parallel (case-insensitive `contains`, `take 5` each) across the entities an analyst/inspector looks up by reference:
+- **Sample** — `sampleNumber` / `barcode` / `batchNo` / `productName` (soft-delete filtered) → `/lims/samples/:id`
+- **Capa** — `capaNumber` / `title` / `description` → `/audit/capa/:id`
+- **Document** (DMS) — `docNumber` / `title` / `description` (soft-delete) → `/dms/:id`
+- **Ticket** — `uniqueId` / `title` / `description` (soft-delete) → `/tickets/:id`
+- **OosInvestigation** — `code` / `title` → `/lims/oos/:id`
+- **Coa** — `coaNumber` / `productName` / `batchNo` (soft-delete) → `/lims/coa/:id`
+
+Each hit is normalised to `{ type, id, title, subtitle, path }`. Min query length 2. **Known limitation** (documented in the service): results are auth-gated but not yet scoped to per-entity read permissions — a follow-up.
+
+### Frontend — wire the palette to the API
+
+`client/src/components/shared/GlobalSearch.tsx` rewritten to fetch from the endpoint instead of the static `SEARCH_INDEX`: a debounced (200ms) `useQuery(['global-search', q])` enabled at ≥2 chars, a per-type icon/colour map (Sample/CAPA/Document/Ticket/OOS/CoA), monospace titles (they're reference codes), and loading / too-short / empty states. The existing palette shell — ⌘K open, ↑↓ navigation, ↵ open, Esc close — is preserved.
+
+### Verification
+
+- Backend + client `npx tsc --noEmit` — exit 0.
+- **Live endpoint test** — throwaway backend on `:4001` (same DB; killed cleanly by port afterwards), `GET /api/search?q=capa` → real CAPA hits with correct `{type,title,subtitle,path}` (e.g. `CAPA-2026-0007 → /audit/capa/<id>`). `q=sample` → 0 (no samples seeded — correct).
+- **Palette UI test (Playwright, real login + mocked results)** — `tests/ui/search.spec.ts` + `.config.ts`. 2/2 pass: typing "capa" renders the returned CAPA + Sample hits and clicking navigates to `/audit/capa/<id>`; a 1-char query shows "Type at least 2 characters…" and fires **no** API call.
+
+### ⚠ Operational note
+
+Same as C1: the running `:4000` backend has `nav-counts` (from the earlier restart) but **404s `/api/search`** — its watcher isn't reloading new module files. **Restart it** (`npm run dev:backend`) to serve search. Until then the palette shows "No results" (the 404 yields an empty list — graceful, no crash).
+
+### Not done in Phase C
+
+- C3 full 12-module reorder (blocked on Deviations/Change Control/Calibration/Vendor existing as first-class modules), C4 persona nav, and per-entity permission scoping of search. Phase D (8 missing modules) remains a roadmap.

@@ -33,6 +33,8 @@ import stabilityRoutes from './modules/stability/stability.routes';
 import coaRoutes from './modules/coa/coa.routes';
 import coaPublicRoutes from './modules/coa/coa.public.routes';
 import limsAnalyticsRoutes from './modules/lims-analytics/lims-analytics.routes';
+import navCountsRoutes from './modules/nav-counts/nav-counts.routes';
+import searchRoutes from './modules/search/search.routes';
 import {
   workflowScopedPolicyRouter as approvalWorkflowScopedRouter,
   policyRouter as approvalPolicyRouter,
@@ -104,6 +106,8 @@ export const buildApp = () => {
   app.use('/api/stability', stabilityRoutes); // LIMS 2.0 — stability (ICH Q1A)
   app.use('/api/coa', coaRoutes); // LIMS 2.0 — certificate of analysis
   app.use('/api/lims-analytics', limsAnalyticsRoutes); // LIMS 2.0 — dashboard, TAT, workload, data-review
+  app.use('/api/nav-counts', navCountsRoutes); // sidebar notification badges (FQS-QK-UIUX-003 §4)
+  app.use('/api/search', searchRoutes); // global cross-module search (FQS-QK-UIUX-003 §4)
 
   // Phase 3 — Approval module. Mounted as four routers so we don't have to
   // collide path-namespaces with the existing workflow + ticket routers.

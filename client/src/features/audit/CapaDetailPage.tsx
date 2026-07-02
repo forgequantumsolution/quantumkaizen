@@ -201,7 +201,7 @@ function DetailsTab({ capa, canEdit }: { capa: Capa; canEdit: boolean }) {
       {capa.description && (
         <div className="mt-3 border-t border-gray-100 pt-3">
           <div className="mb-1 text-[11px] uppercase tracking-wide text-gray-500">Description</div>
-          <p className="whitespace-pre-wrap text-sm text-gray-800">{capa.description}</p>
+          <p className="whitespace-pre-wrap text-sm text-gray-800 gmp-narrative">{capa.description}</p>
         </div>
       )}
       <EditCapaModal capa={capa} open={open} onClose={() => setOpen(false)} />

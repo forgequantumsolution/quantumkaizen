@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import Modal from '../ui/Modal';
 import { Button } from '../ui/Button';
+import { useAuthStore } from '@/stores/authStore';
 
 interface ESignatureModalProps {
   isOpen: boolean;
@@ -29,6 +30,7 @@ export default function ESignatureModal({
   entityId,
   isLoading,
 }: ESignatureModalProps) {
+  const user = useAuthStore((s) => s.user);
   const [password, setPassword] = useState('');
   const [meaning, setMeaning] = useState('Approved');
   const [comment, setComment] = useState('');
@@ -51,7 +53,7 @@ export default function ESignatureModal({
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="primary" onClick={handleSign} isLoading={isLoading} disabled={!password}>
             <ShieldCheck size={15} />
-            Apply Signature
+            Sign as {meaning}
           </Button>
         </>
       }
@@ -66,12 +68,17 @@ export default function ESignatureModal({
           </p>
         </div>
 
-        {/* Context */}
+        {/* Context — 21 CFR Part 11 requires the signer's printed name, the
+            date/time, and the meaning to be visible at the point of signing. */}
         <div className="bg-surface-secondary rounded-lg p-3.5">
           <p className="text-xs text-gray-500">
             Signing <span className="font-medium text-gray-700">{entityType}</span>
             <span className="font-mono text-mono-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-1.5">{entityId}</span>
           </p>
+          <div className="mt-2 pt-2 border-t border-gray-200/70 flex items-center justify-between text-xs">
+            <span className="text-gray-500">Signer: <span className="font-medium text-gray-700">{user?.name ?? '—'}</span></span>
+            <span className="font-mono text-mono-xs text-gray-500">{new Date().toLocaleString()}</span>
+          </div>
         </div>
 
         {/* Meaning */}

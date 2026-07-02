@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Roboto+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700;800&family=DM+Mono:wght@300;400;500&family=JetBrains+Mono:wght@300;400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -8,8 +8,8 @@
 /* AppearanceProvider rewrites these at runtime from the appearance store.
    Values here are the bootstrap defaults used before the store hydrates. */
 :root {
-  --font-sans: 'Outfit', system-ui, -apple-system, sans-serif;
-  --font-mono: 'DM Mono', 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Roboto Mono', 'DM Mono', ui-monospace, SFMono-Regular, monospace;
   --font-heading-weight: 700;
 
   /* Core palette */
@@ -398,6 +398,11 @@ html.dark {
   .scrollbar-thin { scrollbar-width: thin; }
 
   .tabular { font-variant-numeric: tabular-nums; }
+
+  /* GMP narrative text — deviation / CAPA / OOS / audit descriptions.
+     Line height ≥1.6 and a 65–75ch measure per FQS-QK-UIUX-002 §8: wider lines
+     slow reading and raise transcription error risk against printed records. */
+  .gmp-narrative { line-height: 1.65; max-width: 70ch; text-align: left; }
 
   .line-clamp-2 {
     display: -webkit-box;

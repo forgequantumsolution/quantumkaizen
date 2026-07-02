@@ -63,7 +63,7 @@ export default function Header() {
   const navigate  = useNavigate();
   const { user, logout } = useAuthStore();
   const { setSidebarOpen } = useUIStore();
-  const { notifications, isOpen, togglePanel, setNotifications } = useNotificationStore();
+  const { notifications, isOpen, togglePanel, openPanel, setNotifications } = useNotificationStore();
   const { year: fyYear, setYear: setFyYear } = useFiscalYearStore();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -255,10 +255,10 @@ export default function Header() {
                   </div>
                   <div className="px-4 py-2 border-t border-surface-border bg-surface-bg">
                     <button
-                      onClick={() => { navigate('/dashboard'); setShowNotifDropdown(false); }}
+                      onClick={() => { setShowNotifDropdown(false); openPanel(); }}
                       className="text-xxs font-medium transition-colors" style={{ color: '#A88937' }}
                     >
-                      View all in Audit Log →
+                      View all notifications →
                     </button>
                   </div>
                 </div>

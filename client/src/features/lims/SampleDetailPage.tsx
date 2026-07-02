@@ -86,7 +86,7 @@ export default function SampleDetailPage() {
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5">
           <h2 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2"><TestTube size={18} className="text-gray-400" />{s.product_name}</h2>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-            <Field label="Batch" value={s.batch_no ?? '—'} />
+            <Field label="Batch" value={s.batch_no ?? '—'} mono />
             <Field label="Type" value={s.sample_type ?? '—'} />
             <Field label="Priority" value={s.priority ?? '—'} />
             <Field label="Specification" value={s.specification_label ?? '—'} />
@@ -211,8 +211,10 @@ function AliquotModal({ open, onClose, id, storageOpts }: { open: boolean; onClo
   );
 }
 
-function Field({ label, value }: { label: string; value: string }) {
-  return <div><div className="text-[11px] text-gray-500 uppercase tracking-wide">{label}</div><div className="text-sm text-gray-900 mt-0.5">{value}</div></div>;
+function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  // `mono` renders the value in the data typeface (Roboto Mono) for GMP-critical
+  // identifiers/quantities — lot/batch codes, IDs — per FQS-QK-UIUX-002 §5.
+  return <div><div className="text-[11px] text-gray-500 uppercase tracking-wide">{label}</div><div className={`text-sm text-gray-900 mt-0.5${mono ? ' font-mono' : ''}`}>{value}</div></div>;
 }
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label className="block text-[11px] font-medium text-gray-600 mb-1">{label}</label>{children}</div>;

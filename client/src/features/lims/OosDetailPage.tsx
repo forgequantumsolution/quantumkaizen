@@ -175,7 +175,7 @@ export default function OosDetailPage() {
         {inv.conclusion && (
           <div className="mt-3 pt-3 border-t border-gray-100">
             <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Conclusion</div>
-            <p className="text-sm text-gray-800 whitespace-pre-wrap">{inv.conclusion}</p>
+            <p className="text-sm text-gray-800 whitespace-pre-wrap gmp-narrative">{inv.conclusion}</p>
           </div>
         )}
       </div>

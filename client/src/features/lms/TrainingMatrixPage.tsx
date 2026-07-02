@@ -106,7 +106,7 @@ export default function TrainingMatrixPage() {
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Grid3x3 size={22} className="text-gray-500" /> Training Matrix
+            <Grid3x3 size={22} className="text-gray-500" /> Qualification Matrix
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">Rules that auto-assign courses by role, department, site or job function.</p>
         </div>
