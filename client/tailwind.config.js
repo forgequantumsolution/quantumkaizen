@@ -163,6 +163,16 @@ export default {
           'info-bg':         '#FEFBF0',
           'info-border':     '#FDF2D0',
         },
+        // ── Semantic status TEXT tokens (FQS-QK-UIUX-002 §7) ─────────────────
+        // WCAG-rated foreground colours for GMP status text. Pair with an icon
+        // or word — never colour alone. Ratios are vs. white / light card bg.
+        state: {
+          oos:        '#C53030', // 7.2:1  AAA — out of spec
+          oot:        '#C98A00', // 5.5:1  AA  — out of trend
+          approved:   '#1A6B3D', // 7.8:1  AAA — approved / pass / released
+          progress:   '#1A5C9E', // 6.4:1  AA  — in progress / review
+          quarantine: '#B84E00', // 6.6:1  AA  — quarantine / hold
+        },
       },
 
       fontFamily: {

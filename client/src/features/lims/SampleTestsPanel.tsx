@@ -207,7 +207,7 @@ function TestCard({ test, canEnter }: { test: SampleTest; canEnter: boolean }) {
                 <div>
                   <InputNumber size="small" className="w-full" value={val ?? undefined} status={preview === 'OOS' ? 'error' : undefined}
                     onChange={(v) => setEdits((p) => ({ ...p, [r.id]: { numeric_value: v ?? null } }))} />
-                  {preview === 'OOS' && <div className="text-[10px] text-red-600 mt-0.5">⚠ Out of spec — will raise an investigation</div>}
+                  {preview === 'OOS' && <div className="text-[10px] text-state-oos mt-0.5">⚠ Out of spec — will raise an investigation</div>}
                 </div>
               );
             },

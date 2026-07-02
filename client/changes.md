@@ -761,3 +761,81 @@ The dynamic-workflow feature needs the `CAPA Handling v1` workflow + its 6 stage
 - **`backend/prisma/seed-capa-workflow.ts`** (new) — seeds ONLY the `CAPA` WorkflowType, the `CAPA Handling v1` workflow (6 stages + actions + transitions) and its 6 forms. Looks up its dependencies (workflow stage statuses, built-in field types, roles) instead of creating users/roles; exits with a clear message if the base seed hasn't run. Idempotent (guarded by WorkflowType name / workflow name / form templateKey).
 - **`backend/package.json`** — added script `db:seed:capa` (`tsx prisma/seed-capa-workflow.ts`).
 - **Deploy runbook:** (1) commit + push (code + the 2 migrations — nothing is committed yet); (2) deploy → `prisma migrate deploy` auto-applies the schema (per `render.yaml` startCommand); (3) run `npm run db:seed:capa` once against the server DB. Without step 3 there is no CAPA workflow, so new CAPAs fall back to the legacy enum UI. Migrations are additive/safe; the test CAPAs are local-only and won't appear on the server.
+
+---
+
+## Typography Manual (FQS-QK-UIUX-002) — Phase 1: Font switch to Inter + Roboto Mono
+
+Implements the font mandate from the _Font Nomenclature & Typography Instruction Manual_: UI font **Outfit → Inter**, data/mono font **DM Mono → Roboto Mono**. Full plan (all 4 phases) lives in `docs/typography-manual-implementation-plan.md`; this is Phase 1 only. Nothing committed — working tree only.
+
+### Why this is more than a one-line font change
+
+Fonts flow through a runtime theming layer: `appearanceStore` (persisted Zustand) → `AppearanceProvider` writes `--font-sans`/`--font-mono` onto `:root` → `index.css` holds bootstrap defaults → `tailwind.config.js` + `antdTheme.ts` back the static utilities and antd widgets. Changing the font means touching every layer, plus migrating existing users' persisted `localStorage` blob (which would otherwise pin them to Outfit/DM Mono).
+
+### Files modified (7 touch points)
+
+- **`client/src/index.css`** — font `@import` now loads **Inter** + **Roboto Mono** first (Outfit/DM Mono/JetBrains kept as fallbacks). Bootstrap `:root` defaults: `--font-sans: 'Inter', …`, `--font-mono: 'Roboto Mono', 'DM Mono', …`.
+- **`client/src/components/theme/AppearanceProvider.tsx`** — added `'roboto-mono'` to `MONO_FAMILIES`; changed the `applyTypography` fallbacks so a missing key resolves to Inter / Roboto Mono (was Outfit / DM Mono).
+- **`client/src/stores/appearanceStore.ts`** — `MonoFamily` union gains `'roboto-mono'`; `defaultTypography` now `sansFamily: 'inter'`, `monoFamily: 'roboto-mono'`. **Persist `version: 2 → 3`** with a v2→v3 `migrate` branch that force-swaps `outfit → inter` and `dm-mono → roboto-mono` **only when the persisted value equals the old default** — so a user who deliberately picked `'system'` keeps it. (Same reasoning as the 7.2 hotfix: nested/persisted store changes need a version bump + migrate.)
+- **`client/tailwind.config.js`** — `fontFamily.sans` → Inter-first, `fontFamily.mono` → Roboto Mono-first.
+- **`client/src/lib/antdTheme.ts`** — the second `SANS_FAMILIES` map reordered Inter-first; `buildAntdTheme` fallback `outfit → inter` so antd widgets follow.
+- **`client/src/pages/AppearancePage.tsx`** — font-picker option lists relabeled ("Inter (default)" / "Roboto Mono (default)", old fonts kept as non-default choices); the two hardcoded reset-to-default fallbacks (staged initializer + `handleReset`) updated `outfit`/`dm-mono` → `inter`/`roboto-mono`.
+
+### Migration behavior
+
+- New users / cleared storage → default path → Inter + Roboto Mono.
+- Existing users on the old default (Outfit / DM Mono) → v2→v3 migrate rewrites them to Inter / Roboto Mono on next load.
+- Users who chose "System UI" / "System Monospace" → preserved (migrate only rewrites the retired defaults).
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0.
+- `npx vite build` — clean (pre-existing chunk-size warning only).
+- **Playwright UI check** — new `tests/ui/font.spec.ts` + `tests/ui/font.config.ts` (serves `client/dist` via `vite preview`; no backend/login needed, runs on the public route). 3/3 pass:
+  1. `getComputedStyle(document.body).fontFamily` = `Inter, system-ui, …`.
+  2. Runtime CSS vars (written by `AppearanceProvider`) — `--font-sans` = `'Inter', …`, `--font-mono` = `'Roboto Mono', 'DM Mono', …` (proves the store→provider path, not just the bootstrap).
+  3. After rendering a probe span in each family, `document.fonts.check` → `inter: true, robotoMono: true` (faces actually download & render). Caught a lazy-load false-negative first — browsers only fetch a webfont when an element uses it — and fixed the test to force a mono render.
+- Run: `npx playwright test --config tests/ui/font.config.ts`.
+
+### Not done in Phase 1 (see plan doc)
+
+- Phase 2 — semantic status **text** color tokens (`text-oos` etc.) + "never color alone" a11y sweep.
+- Phase 3 — the 14 GMP label renames (blocked on the DB-vs-override decision for workflow-type names).
+- Phase 4 — min-size / line-height enforcement + mono audit on LIMS data fields.
+- Out of scope entirely: floor `+2px` variant, print fonts (Calibri/Georgia), full token rename.
+
+---
+
+## Typography Manual (FQS-QK-UIUX-002) — Phase 2: Semantic status text tokens + a11y audit
+
+Adds the manual's WCAG-rated status **text** colours (§7) as design-system tokens and applies them to the most safety-critical status text (analytical result flags). Also audited the two accessibility mandates from §7 — both already satisfied. Working tree only; nothing committed.
+
+### Audit findings (§6.2 / §6.3 of the plan)
+
+- **Sidebar contrast** — the manual flags `#FFF3DC` on navy as a 2.1:1 FAIL. Grep across `client/src`: `#FFF3DC` is **not used as a text colour anywhere** (it only exists as a Tailwind `gold-100`/`amber-light` swatch value). No-op — nothing to fix.
+- **"Colour never the sole status indicator"** — audited the status renderers: `Badge.tsx` (`StatusBadge`/`SeverityBadge`/`TypeBadge`) always pair a coloured dot **with a text label**; the LIMS `EVALUATION_BADGE` carries `EVALUATION_LABELS` text; the live OOS warning uses `⚠ Out of spec …` (icon + words). All already WCAG 1.4.1-compliant. No colour-only indicators found.
+
+### Files modified
+
+- **`client/tailwind.config.js`** — new `state` colour group with the five semantic status text tokens from the manual, each annotated with its WCAG ratio:
+  - `state.oos` `#C53030` (7.2:1 AAA), `state.oot` `#C98A00` (5.5:1 AA), `state.approved` `#1A6B3D` (7.8:1 AAA), `state.progress` `#1A5C9E` (6.4:1 AA), `state.quarantine` `#B84E00` (6.6:1 AA). Usable as `text-state-oos`, `bg-state-*`, etc.
+- **`client/src/lib/api/testing.ts`** — `EVALUATION_BADGE` (the single shared source for analytical result-flag styling, fanned out to sample tests / OOS views) now uses the semantic tokens for its text colour: `OOS`/`FAIL` → `text-state-oos`, `OOT` → `text-state-oot`, `PASS` → `text-state-approved`. Light `bg-*`/`border-*` kept as-is; only the foreground moves to the WCAG-AAA value. Each badge still renders its label, so colour is never alone.
+- **`client/src/features/lims/SampleTestsPanel.tsx`** — the ad-hoc live "⚠ Out of spec" flag on a result field switched `text-red-600` → `text-state-oos` (keeps the ⚠ icon + text).
+
+### Rationale / scope
+
+- No wholesale repaint of existing status badges — the app's navy/gold ≈ the manual's navy/amber, and the generic badges already pass contrast (plan §1). Only the safety-critical OOS/OOT/pass result flags were moved onto the exact WCAG-rated tokens, at one shared source.
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0.
+- `npx vite build` — clean (pre-existing chunk-size warning only).
+- **CSS-emission check** on the built bundle confirms the tokens ship with the manual's exact hexes (and are present only because they're referenced — Tailwind purges unused, so this also proves the `EVALUATION_BADGE` wiring):
+  - `.text-state-oos{…color:rgb(197 48 48)}` = `#C53030` ✓
+  - `.text-state-approved{…color:rgb(26 107 61)}` = `#1A6B3D` ✓
+  - `.text-state-oot{…color:rgb(201 138 0)}` = `#C98A00` ✓
+- **Playwright UI check** — `tests/ui/state-colors.spec.ts` + `.config.ts` (serves `client/dist` via `vite preview`). 4/4 pass: each of the three applied tokens computes to its exact `rgb()` in a real browser, and an OOS result badge renders `#C53030` **with** its text label (colour-not-alone). Run: `npx playwright test --config tests/ui/state-colors.config.ts`. (The tokens only render because app code references them; progress/quarantine are defined-but-unused so their utilities aren't emitted yet — noted in the spec.)
+
+### Not done in Phase 2
+
+- Phases 3 (14 label renames) and 4 (min-size / line-height / mono data-field audit) — see `docs/typography-manual-implementation-plan.md`.

@@ -268,11 +268,14 @@ export const SAMPLE_TEST_STATUS_LABELS: Record<SampleTestStatus, string> = {
   CANCELLED: 'Cancelled',
 };
 
+// Result-flag colours use the semantic status TEXT tokens (FQS-QK-UIUX-002 §7)
+// so OOS/OOT/pass render in the WCAG-rated foregrounds; each badge always
+// carries its EVALUATION_LABELS text, so colour is never the sole indicator.
 export const EVALUATION_BADGE: Record<Evaluation, string> = {
-  PASS: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  OOS: 'bg-red-50 text-red-700 border-red-200',
-  FAIL: 'bg-red-50 text-red-700 border-red-200',
-  OOT: 'bg-amber-50 text-amber-700 border-amber-200',
+  PASS: 'bg-emerald-50 text-state-approved border-emerald-200',
+  OOS: 'bg-red-50 text-state-oos border-red-200',
+  FAIL: 'bg-red-50 text-state-oos border-red-200',
+  OOT: 'bg-amber-50 text-state-oot border-amber-200',
   PENDING: 'bg-gray-100 text-gray-700 border-gray-200',
   NA: 'bg-gray-100 text-gray-500 border-gray-200',
 } as Record<Evaluation, string>;
