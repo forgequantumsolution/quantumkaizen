@@ -839,3 +839,39 @@ Adds the manual's WCAG-rated status **text** colours (§7) as design-system toke
 ### Not done in Phase 2
 
 - Phases 3 (14 label renames) and 4 (min-size / line-height / mono data-field audit) — see `docs/typography-manual-implementation-plan.md`.
+
+---
+
+## Typography Manual (FQS-QK-UIUX-002) — Phase 3: GMP nav label renames
+
+Applies the manual's §6 terminology to navigation labels + matching page titles. DB-driven workflow-type modules are relabelled via a display-name override (no seed/DB changes — internal names untouched). Working tree only; nothing committed.
+
+### Approach for DB-driven labels (decision)
+
+Chose the **sidebar display-name override map** over renaming seed `name`s. The workflow type's stored `name` is the internal key used by seeds / idempotency guards (`where: { name: 'CAPA' }`) / permissions, so it's left intact; only the sidebar label is remapped. Zero DB/migration/seed risk, fully reversible.
+
+### Files modified
+
+- **`client/src/components/layout/Sidebar.tsx`**
+  - New `WF_DISPLAY_NAME` map applied in `moduleItems` (`label: WF_DISPLAY_NAME[t.name] ?? t.name`): `CAPA → CAPA Management`, `Deviation → Deviations`, `Complaints → Product Complaints`. (Deviation/Complaints workflow types aren't seeded yet, so those entries are harmless future-proofing; CAPA is live.)
+  - Hardcoded labels: `Document Review → Document Approval` (the DMS-grouped workflow child); LMS group `LMS → Training & Qualification` with children `My Learning → My Training`, `Curricula → Training Programs`, `Training Matrix → Qualification Matrix`, `Grading → Assessment Results`; LIMS children `Samples → Sample Management`, `OOS Investigations → OOS / OOT Investigations`, `Certificates (CoA) → CoA Management`. Updated the stale LMS comment.
+- **`client/src/features/lims/LimsConfigLayout.tsx`** — Partners tab `Suppliers → Vendor Management`.
+- **Page titles aligned to the nav labels** (`<h1>`): `SampleListPage` (Samples → Sample Management), `SuppliersPage` (Suppliers → Vendor Management), `lms/CurriculaPage` (Curricula → Training Programs), `lms/MyLearningPage` (My Learning → My Training), `lms/TrainingMatrixPage` (Training Matrix → Qualification Matrix), `lms/GradingPage` (Grading Queue → Assessment Results).
+
+### Deliberately NOT done
+
+- **`Audit Master → Audit Program`** — SKIPPED. The app's "Audit Master" is the master-**data** config (focus areas, audit types, ISO standards), and an **"Audit Program"** feature already exists separately (`/audit/program`, `AuditProgramListPage` — the ISO-19011 operational program). Renaming would collide and be semantically wrong; the manual's intent is already met by the existing Audit Program. Left as-is.
+- Page titles that are already descriptive and not the old nav string were left: `OosListPage` h1 was already "OOS / OOT Investigations"; `CoaListPage` h1 stays "Certificates of Analysis" (correct expansion of CoA).
+
+### Verification
+
+- `npx tsc --noEmit` (client) — exit 0. `npx vite build` — clean.
+- Grep audit: no user-facing old nav labels remain (only a code comment mentioned "My Learning", since fixed).
+- **Playwright UI check (real login)** — `tests/ui/labels.spec.ts` + `.config.ts`, run against the Vite **dev** server (proxies `/api` to the live backend :4000; `vite preview` doesn't proxy). Logs in as `admin@forgequantum.com` and asserts the live sidebar. 2/2 pass:
+  1. "Training & Qualification" group visible; expands to show My Training / Training Programs / Qualification Matrix / Assessment Results; old My Learning / Curricula / Training Matrix / Grading absent.
+  2. LIMS group shows Sample Management / OOS / OOT Investigations / CoA Management; old OOS Investigations / Certificates (CoA) / Samples absent.
+  - Run: `npx playwright test --config tests/ui/labels.config.ts` (needs backend up + seeded).
+
+### Not done in Phase 3
+
+- Phase 4 — min-size / line-height enforcement + mono audit on LIMS data fields. See the plan doc.

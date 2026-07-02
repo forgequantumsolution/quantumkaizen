@@ -34,7 +34,7 @@ const GROUPS: { label: string; items: { to: string; label: string; icon: typeof 
     label: 'Partners',
     items: [
       { to: '/lims/customers', label: 'Customers', icon: Users, permission: 'customer.read' },
-      { to: '/lims/suppliers', label: 'Suppliers', icon: Truck, permission: 'supplier.read' },
+      { to: '/lims/suppliers', label: 'Vendor Management', icon: Truck, permission: 'supplier.read' },
     ],
   },
   {

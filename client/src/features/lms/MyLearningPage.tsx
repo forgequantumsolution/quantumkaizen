@@ -53,7 +53,7 @@ export default function MyLearningPage() {
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <GraduationCap size={22} className="text-gray-500" /> My Learning
+            <GraduationCap size={22} className="text-gray-500" /> My Training
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">Your assigned and self-enrolled courses.</p>
         </div>

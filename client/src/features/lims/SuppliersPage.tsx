@@ -30,7 +30,7 @@ export default function SuppliersPage() {
     <PageContainer>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Truck size={22} className="text-gray-500" />Suppliers</h1>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Truck size={22} className="text-gray-500" />Vendor Management</h1>
           <p className="text-xs text-gray-500 mt-0.5">External vendors of materials and services referenced across the LIMS.</p>
         </div>
         {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setOpen(true); }}>New Supplier</Button>}

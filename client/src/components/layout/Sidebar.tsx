@@ -116,6 +116,16 @@ const pickIcon = (
   return ICON_BY_KEY[k] ?? Layers;
 };
 
+// GMP terminology overrides (FQS-QK-UIUX-002 §6) for DB-driven workflow-type
+// modules. The workflow type's stored `name` is the internal key (used by seeds
+// / lookups / permissions) and is left untouched — only its sidebar display
+// label is remapped here. Unmatched names fall through to `t.name`.
+const WF_DISPLAY_NAME: Record<string, string> = {
+  CAPA: "CAPA Management",
+  Deviation: "Deviations",
+  Complaints: "Product Complaints",
+};
+
 // Design tokens — pulled from CSS custom properties (set by AppearanceProvider)
 // so the sidebar tracks the user's color preset. Section/inactive/hover stay
 // hardcoded because they're cosmetic neutrals that don't need theming.
@@ -175,7 +185,7 @@ export default function Sidebar() {
       .map((t) => {
         const isAudit = /^audit$/i.test(t.name);
         return {
-          label: t.name,
+          label: WF_DISPLAY_NAME[t.name] ?? t.name,
           // For Audit, omit the leaf path so the parent acts purely as an expandable
           // group; first child becomes the navigation target in collapsed mode.
           path: isAudit ? undefined : `/modules/${t.id}`,
@@ -196,7 +206,7 @@ export default function Sidebar() {
       ...(docReviewType
         ? [
             {
-              label: "Document Review",
+              label: "Document Approval",
               path: `/modules/${docReviewType.id}`,
               icon: ClipboardCheck,
               permission: "ticket.read",
@@ -225,18 +235,19 @@ export default function Sidebar() {
             children: documentChildren,
           },
           {
-            // Learning Management System — learner area + authoring. "My Learning"
-            // keeps the existing training view; "Courses" is the new author studio.
-            label: "LMS",
+            // Training & Qualification (GMP term for the LMS) — learner area +
+            // authoring. "My Training" is the learner view; "Courses" is the
+            // author studio. Labels follow FQS-QK-UIUX-002 §6.
+            label: "Training & Qualification",
             icon: GraduationCap,
             children: [
-              { label: "My Learning", path: "/lms/my", icon: GraduationCap, permission: "lms_my.read" },
+              { label: "My Training", path: "/lms/my", icon: GraduationCap, permission: "lms_my.read" },
               { label: "Catalog", path: "/lms/catalog", icon: Compass, permission: "lms_my.read" },
               { label: "Courses", path: "/lms/admin/courses", icon: BookOpen, permission: "lms_course.read" },
-              { label: "Curricula", path: "/lms/admin/curricula", icon: Layers, permission: "lms_enrollment.read" },
+              { label: "Training Programs", path: "/lms/admin/curricula", icon: Layers, permission: "lms_enrollment.read" },
               { label: "Assignments", path: "/lms/admin/assignments", icon: Users, permission: "lms_enrollment.assign" },
-              { label: "Training Matrix", path: "/lms/admin/matrix", icon: Database, permission: "lms_matrix.read" },
-              { label: "Grading", path: "/lms/admin/grading", icon: ClipboardCheck, permission: "lms_assessment.grade" },
+              { label: "Qualification Matrix", path: "/lms/admin/matrix", icon: Database, permission: "lms_matrix.read" },
+              { label: "Assessment Results", path: "/lms/admin/grading", icon: ClipboardCheck, permission: "lms_assessment.grade" },
               { label: "Reports", path: "/lms/admin/reports", icon: Gauge, permission: "lms_report.read" },
             ],
           },
@@ -253,7 +264,7 @@ export default function Sidebar() {
                 permission: "lims_dashboard.read",
               },
               {
-                label: "Samples",
+                label: "Sample Management",
                 path: "/lims/samples",
                 icon: TestTubes,
                 permission: "sample.read",
@@ -277,13 +288,13 @@ export default function Sidebar() {
                 permission: "stability.read",
               },
               {
-                label: "OOS Investigations",
+                label: "OOS / OOT Investigations",
                 path: "/lims/oos",
                 icon: AlertTriangle,
                 permission: "oos.read",
               },
               {
-                label: "Certificates (CoA)",
+                label: "CoA Management",
                 path: "/lims/coa",
                 icon: Award,
                 permission: "coa.read",
