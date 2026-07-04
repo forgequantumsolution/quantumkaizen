@@ -142,6 +142,7 @@ export const listSampleTests = async (q: ListSampleTestQuery) => {
   const where: Prisma.SampleTestWhereInput = {};
   if (q.sample_id) where.sampleId = q.sample_id;
   if (q.worklist_id) where.worklistId = q.worklist_id;
+  if (q.unassigned) where.worklistId = null;
   if (q.status) where.status = q.status;
   if (q.review_status) where.reviewStatus = q.review_status;
   const rows = await prisma.sampleTest.findMany({ where, include: testInclude, orderBy: { createdAt: 'desc' }, take: q.page_size ?? 200 });

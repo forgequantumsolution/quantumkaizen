@@ -75,19 +75,26 @@ const serializeSample = async (s: SampleRow, full = false) => {
     batch_no: s.batchNo, sample_type: s.sampleType, source_site: s.sourceSite, specification_id: s.specificationId,
     quantity: s.quantity, unit: s.unit, collected_at: s.collectedAt, received_at: s.receivedAt,
     status: s.status, lab_id: s.labId, current_location_id: s.currentLocationId, priority: s.priority,
+    customer_id: s.customerId, supplier_id: s.supplierId, sampling_point_id: s.samplingPointId,
     remarks: s.remarks, aliquot_count: s.aliquots.length, created_at: s.createdAt, updated_at: s.updatedAt,
   };
   if (!full) return base;
   const names = await storageNames([s.currentLocationId, ...s.aliquots.map((a) => a.storageLocationId), ...s.custodyEvents.flatMap((c) => [c.fromLocationId, c.toLocationId])]);
-  const [spec, lab] = await Promise.all([
+  const [spec, lab, customer, supplier, samplingPoint] = await Promise.all([
     s.specificationId ? prisma.specification.findUnique({ where: { id: s.specificationId }, select: { code: true, productName: true } }) : null,
     s.labId ? prisma.lab.findUnique({ where: { id: s.labId }, select: { name: true } }) : null,
+    s.customerId ? prisma.customer.findUnique({ where: { id: s.customerId }, select: { name: true } }) : null,
+    s.supplierId ? prisma.supplier.findUnique({ where: { id: s.supplierId }, select: { name: true } }) : null,
+    s.samplingPointId ? prisma.samplingPoint.findUnique({ where: { id: s.samplingPointId }, select: { code: true, name: true } }) : null,
   ]);
   return {
     ...base,
     current_location_name: s.currentLocationId ? names.get(s.currentLocationId) ?? null : null,
     specification_label: spec ? `${spec.code} — ${spec.productName}` : null,
     lab_name: lab?.name ?? null,
+    customer_name: customer?.name ?? null,
+    supplier_name: supplier?.name ?? null,
+    sampling_point_name: samplingPoint ? `${samplingPoint.code} — ${samplingPoint.name}` : null,
     custody_events: [...s.custodyEvents].sort((a, b) => +b.occurredAt - +a.occurredAt).map((c) => ({
       id: c.id, action: c.action, from_location_name: c.fromLocationId ? names.get(c.fromLocationId) ?? null : null,
       to_location_name: c.toLocationId ? names.get(c.toLocationId) ?? null : null, handler_name: c.handlerName,
@@ -141,6 +148,9 @@ export const registerSample = async (input: RegisterSampleInput, userId?: string
       barcode: sampleNumber,
       productName: product?.name ?? input.product_name,
       productId: input.product_id ?? null,
+      customerId: input.customer_id ?? null,
+      supplierId: input.supplier_id ?? null,
+      samplingPointId: input.sampling_point_id ?? null,
       batchNo: input.batch_no ?? null,
       sampleType: input.sample_type ?? null,
       sourceSite: input.source_site ?? null,
@@ -180,6 +190,9 @@ export const updateSample = async (id: string, input: UpdateSampleInput, userId?
     data: {
       productName: product?.name ?? input.product_name ?? e.productName,
       productId: input.product_id !== undefined ? input.product_id : e.productId,
+      customerId: input.customer_id !== undefined ? input.customer_id : e.customerId,
+      supplierId: input.supplier_id !== undefined ? input.supplier_id : e.supplierId,
+      samplingPointId: input.sampling_point_id !== undefined ? input.sampling_point_id : e.samplingPointId,
       batchNo: input.batch_no ?? e.batchNo,
       sampleType: input.sample_type ?? e.sampleType,
       sourceSite: input.source_site ?? e.sourceSite,

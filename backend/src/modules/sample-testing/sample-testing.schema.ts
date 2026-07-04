@@ -11,6 +11,7 @@ export const AssignTestsSchema = z.object({
 export const ListSampleTestQuerySchema = z.object({
   sample_id: z.string().optional(),
   worklist_id: z.string().optional(),
+  unassigned: z.coerce.boolean().optional(), // W-3 — tests not on any worklist
   status: z.string().optional(),
   review_status: z.string().optional(),
   page_size: z.coerce.number().int().positive().max(500).optional(),

@@ -1072,3 +1072,44 @@ Same as C1: the running `:4000` backend has `nav-counts` (from the earlier resta
 ### Not done in Phase C
 
 - C3 full 12-module reorder (blocked on Deviations/Change Control/Calibration/Vendor existing as first-class modules), C4 persona nav, and per-entity permission scoping of search. Phase D (8 missing modules) remains a roadmap.
+
+---
+
+# LIMS "disconnected features" wiring — 2026-07-04
+
+Frontend half of the LIMS orphaned-feature backlog (plan: `docs/LIMS-industrial-upgrade-plan.md` §I; backend half in `backend/changes.md`). Connects master data that was write-only, makes CoA templates actually render, completes worklist membership, and clears dead client code. Working tree only — **not committed**. Every item verified end-to-end in the running app (Playwright + API). Both workspaces `tsc --noEmit` clean.
+
+### W-1d — Units-of-Measure catalog wired into the forms
+The Units master (`/lims/units`) was a write-only island; every unit field was free text.
+- **`src/features/lims/UnitSelect.tsx`** (new) — shared AntD `AutoComplete` sourced from `useUnits`, keeps free-text so legacy values still work.
+- Swapped the 6 free-text unit `<Input>`s for `<UnitSelect>`: `SpecDetailPage.tsx`, `SpecVersionsPage.tsx`, `TestDefinitionsPage.tsx`, `SampleListPage.tsx`, `QcMaterialsPage.tsx`, `SampleDetailPage.tsx`.
+- Verified: register-drawer Unit field shows all 8 seeded units with search.
+
+### W-2 + W-1b (CoA) — templates now drive the certificate
+`CoaTemplate` was fully persisted but `CoaDetailPage` hardcoded the layout and ignored it; template Header/Footer HTML + Customer were unsettable.
+- **`src/lib/api/coa.ts`** — `Coa` gains `customer_name` + `template { title, header_html, footer_html, sections }`.
+- **`src/features/lims/CoaListPage.tsx`** — Generate modal gets **Template** + **Customer** pickers (`useCoaTemplates`/`useCustomers`, sends `template_id`/`customer_id`; template pre-fills its default customer); template editor gets **Header HTML** / **Footer HTML** textareas + a **Customer** select.
+- **`src/features/lims/CoaDetailPage.tsx`** — renders from the template: title from `template.title`, header/footer HTML **sanitized with DOMPurify**, body sections in the template's order, a signatures block; falls back to the hardcoded default when no template.
+- **`package.json`** — added `dompurify@^3` (HTML sanitization for the CoA header/footer).
+- Verified: created a template with header/footer/customer, generated a CoA against it, certificate rendered all of them.
+
+### W-1a/b/c — Customer / Supplier / Sampling Point on samples
+Those masters had nowhere to attach on a sample (no columns existed — see backend log for the migration).
+- **`src/lib/api/samples.ts`** — `customer_id`/`supplier_id`/`sampling_point_id` on `SampleSummary` + `RegisterSampleBody`; `customer_name`/`supplier_name`/`sampling_point_name` on `SampleDetail`.
+- **`src/features/lims/SampleListPage.tsx`** — register drawer adds **Customer** + **Sampling Point** pickers, plus a **Supplier / Vendor** picker shown only when Type = `Raw Material` (`useCustomers`/`useSuppliers`/`useSamplingPoints`).
+- **`src/features/lims/SampleDetailPage.tsx`** — header meta shows Sampling Point, and Customer / Supplier when present.
+- Verified: registered SMP-2026-0005 (Raw Material) with all three; detail page shows them.
+
+### W-3 — worklist test membership
+Backend accepted `sample_test_ids` but there was no attach/detach UI, and `useRemoveTestFromWorklist` was dead.
+- **`src/lib/api/testing.ts`** — new **`useSampleTests(params)`** list hook (wraps `GET /testing/tests`, supports `unassigned`).
+- **`src/features/lims/WorklistsPage.tsx`** — detail drawer gets an **"Add tests to this worklist"** multiselect of unassigned tests (→ `useUpdateWorklist` with `sample_test_ids`) and a per-card **Remove** button (wires `useRemoveTestFromWorklist`).
+- Verified: add 2 → "2 test(s)", remove 1 → "1 test(s)".
+
+### W-4 — dead client code resolved
+- **`src/features/lims/SampleDetailPage.tsx`** — wired a **Delete** action (gated `sample.update`, REGISTERED only, `useDeleteSample`).
+- Removed unused **`useSampleTest`** (`src/lib/api/testing.ts`) and **`useUpdateStudy`** (`src/lib/api/stability.ts`).
+- `useRemoveTestFromWorklist` is now used (W-3). `PUT /samples/:id` edit UI intentionally deferred.
+
+### Docs
+- Added `docs/LIMS-module-guide.md` (flow + setup guide) and the §I "disconnected features" backlog in `docs/LIMS-industrial-upgrade-plan.md`.

@@ -270,3 +270,279 @@ stability/CoA build on results. Reagents/instrument integration add depth last.
 - [ ] Stateful processes on the **workflow engine**; data capture via **dynamic forms**
       / configurable grids — not hard-coded.
 - [ ] RBAC keys in `rbac-catalog.ts` + nav entry in `navAccess.ts`; idempotent seed.
+
+---
+
+## I. Disconnected / abandoned features — wiring backlog (audit 2026-07-04)
+
+A code audit (backend endpoints ↔ frontend hooks ↔ pages ↔ Prisma writes) found the
+engine is sound and nearly everything is wired, but a cluster of features are **built
+but not connected** — full CRUD pages whose data no operational flow ever reads, one
+data model persisted but never rendered, and a handful of dead endpoints. None of this
+is placeholder/mock code; it's *orphaned* wiring. This backlog logs each finding and
+the concrete steps to connect it. All changes below are **working-tree only** until
+reviewed (per project rule).
+
+> **✅ IMPLEMENTED (2026-07-04, working tree — not committed).** All of W-1…W-5
+> below were built and verified end-to-end in the running app (Playwright + API):
+> - **W-5** seed now creates 8 units, 5 analytes, 4 sampling points, 3 customers, 3
+>   suppliers and links them onto the demo samples.
+> - **W-1d** `client/src/features/lims/UnitSelect.tsx` (catalog-backed, free-text-safe)
+>   replaces the 6 free-text unit inputs.
+> - **W-2 + W-1b(CoA)** template Header/Footer-HTML + Customer editor fields, generate-modal
+>   Template + Customer pickers, `getCoa` template include, and a template-driven
+>   `CoaDetailPage` (DOMPurify-sanitized HTML, section ordering). DOMPurify added to the client.
+> - **W-1a/b/c** additive migration added `Sample.customerId/supplierId/samplingPointId`
+>   (+ FKs, `ON DELETE SET NULL`) to `kaizen_qms`; register drawer now has Customer /
+>   Sampling-Point pickers and a Supplier picker (shown for Raw Material); detail page shows them.
+> - **W-3** `unassigned` filter on `GET /testing/tests` + new `useSampleTests` hook; the
+>   worklist detail drawer can now attach unassigned tests and remove tests (wiring the
+>   previously-dead `useRemoveTestFromWorklist`).
+> - **W-4** delete action wired on the sample detail page (gated `sample.update`, REGISTERED
+>   only, using `useDeleteSample`); dead `useSampleTest` and `useUpdateStudy` hooks removed.
+>   `sample.delete` key not added — the DELETE route already enforces `sample.update`.
+>
+> Not done (deliberately deferred): `PUT /api/samples/:id` (sample edit) and `PUT
+> /api/stability/:id` remain valid endpoints without a UI — left for a future edit screen.
+
+### I.0 Summary
+
+| ID | Feature | State today | Severity | Root cause |
+|---|---|---|---|---|
+| W-1a | **Sampling Points** | CRUD island | High | No column on `Sample`; no picker on login |
+| W-1b | **Customers** | CRUD island | High | No column on `Sample`; CoA picker not wired (backend ready) |
+| W-1c | **Suppliers / Vendor Mgmt** | CRUD island | Medium | No column on `Sample`; never referenced |
+| W-1d | **Units of Measure** | CRUD island | Medium | Units entered as free-text everywhere; catalog unused |
+| W-1e | **Certifications** | CRUD island | Low | Lab accreditation never surfaced outside its page |
+| W-2 | **CoA Template → rendering** | model persisted, never rendered | High | `CoaDetailPage` hardcodes layout; ignores template |
+| W-3 | **Worklist membership** | half-wired | Medium | No UI to attach/detach tests; remove endpoint dead |
+| W-4 | **Dead endpoints/hooks** | orphaned | Low | 4–5 handlers/hooks with no caller |
+
+Evidence lives in the audit; key files are cited per item below.
+
+---
+
+### W-1 — Reconnect the master-data islands
+
+Five configuration pages are **write-only islands**: you can fill them in, but nothing
+downstream reads them. `useUnits`, `useSamplingPoints`, `useCustomers`, `useSuppliers`,
+`useCertifications` each have exactly **one consumer — their own page**. The fix pattern
+is the same: give the master data a place to attach on an operational record, then a
+picker on the form and a serializer field to read it back.
+
+> **Key blocker:** `Sample` has **no** `customerId`, `supplierId`, or `samplingPointId`
+> column ([`schema.prisma` `model Sample`](../backend/prisma/schema.prisma)) — only
+> `sourceSite`/`unit` free-text. So W-1a/b/c need an **additive migration** first, not
+> just UI. `Coa`, by contrast, **already** has `templateId` + `customerId` columns.
+
+#### W-1a — Sampling Points → Sample login
+- [ ] **Schema**: add `Sample.samplingPointId String?` + relation
+      `samplingPoint SamplingPoint? @relation(fields:[samplingPointId], references:[id], onDelete:SetNull)`
+      and the back-relation on `SamplingPoint`. Additive migration (`prisma db execute`,
+      per §H — verify the table/column exists after; Neon drift).
+- [ ] **Backend**: `sample.schema.ts` add `sampling_point_id` to register/update;
+      `sample.service.ts` set it on create/update and expose `sampling_point_id`
+      (+ optional `sampling_point` label) in the serializer; add `include: { samplingPoint: true }`.
+- [ ] **Frontend**: `lib/api/samples.ts` add the field to `RegisterSampleBody`/`SampleSummary`;
+      `SampleListPage.tsx` register drawer — add a **Sampling Point** picker (`useSamplingPoints`),
+      relevant for environmental/water/in-process types.
+- **Acceptance**: register a sample with a sampling point; it shows on the detail page.
+
+#### W-1b — Customers → Sample + CoA (CoA backend is already ready)
+- [ ] **Schema**: add `Sample.customerId String?` + relation (for contract/customer samples).
+- [ ] **Backend**: wire `customer_id` through `sample.schema.ts`/`sample.service.ts` as above.
+- [ ] **Frontend (Sample)**: `SampleListPage.tsx` — add a **Customer** picker (`useCustomers`).
+- [ ] **Frontend (CoA) — the quick win**: the generate endpoint **already accepts
+      `template_id` + `customer_id`** ([`coa.schema.ts:22-25`](../backend/src/modules/coa/coa.schema.ts#L22-L25))
+      and stores them ([`coa.service.ts:71`](../backend/src/modules/coa/coa.service.ts#L71)).
+      Just add a **Customer** dropdown (`useCustomers`) to the Generate modal in
+      `CoaListPage.tsx`, defaulting from the picked sample's customer. No backend work.
+- **Acceptance**: generate a CoA with a customer selected; `customer_id` persists and renders.
+
+#### W-1c — Suppliers → Sample (raw materials)
+- [ ] **Schema**: add `Sample.supplierId String?` + relation.
+- [ ] **Backend/Frontend**: same pattern; show the **Supplier** picker only when
+      `sampleType === 'Raw Material'` in `SampleListPage.tsx`.
+- **Acceptance**: a raw-material sample records its supplier; visible on detail.
+
+#### W-1d — Units of Measure → replace free-text unit inputs
+Units are typed as free-text `<Input placeholder="%">` in **six** places, so the catalog
+is cosmetic. Introduce one shared control and swap it in.
+- [ ] **New component** `client/src/features/lims/_shared/UnitSelect.tsx` — an
+      AntD `Select` (`showSearch`, `allowCreate`-style tags) sourced from `useUnits`,
+      falling back to free-text so existing data still works.
+- [ ] **Swap** the unit inputs in: `SpecDetailPage.tsx:155`, `SpecVersionsPage.tsx:272`,
+      `TestDefinitionsPage.tsx:224`, `SampleListPage.tsx:126`, `QcMaterialsPage.tsx:111`,
+      `SampleDetailPage.tsx:207`.
+- [ ] (Optional) auto-fill unit from the chosen **Analyte**'s `default_unit` (already
+      available in the test-def editor).
+- **Acceptance**: unit fields offer the catalog; adding a unit in Units appears in the dropdowns.
+
+#### W-1e — Certifications → surface lab accreditation
+- [ ] **Lab view**: on a Lab detail/registry row, show that lab's certifications
+      (`useCertifications({ lab_id })`) with an expiry badge (valid/expiring/expired —
+      the seed already models all three).
+- [ ] **CoA (optional)**: include the issuing lab's accreditation line in the CoA
+      footer/signature block (ties into W-2).
+- [ ] **Dashboard (optional)**: an "expiring certifications" tile on `LimsDashboardPage`.
+- **Acceptance**: opening a lab shows its live certifications; expired ones are flagged.
+
+---
+
+### W-2 — Connect CoA Templates to CoA rendering (backend ready)
+
+`CoaTemplate` (title, `sections`, `headerHtml`, `footerHtml`, `customerId`) is fully
+persisted and round-tripped, and `Coa` **already stores `templateId`**
+([`coa.service.ts:71`](../backend/src/modules/coa/coa.service.ts#L71)) — but
+`CoaDetailPage.tsx:55-118` **hardcodes** the whole certificate and never reads the
+template, so the "Sections to render" multiselect and `headerHtml`/`footerHtml` are inert.
+
+- [ ] **Generate modal** (`CoaListPage.tsx`): add a **Template** picker (`useCoaTemplates`)
+      and send `template_id` (endpoint already accepts it — no backend change).
+- [ ] **Serializer** (`coa.service.ts` `getCoa`): add `include: { template: true }` and
+      expose the template's `title`/`sections`/`header_html`/`footer_html` on the Coa read
+      (currently only the bare `template_id` is returned).
+- [ ] **Render** (`CoaDetailPage.tsx`): drive the layout from the template —
+      render `headerHtml` (sanitised) at top, iterate `sections` **in the template's order**
+      to emit the Description/Results/Conclusion/Signatures blocks, and `footerHtml` at
+      bottom. Fall back to the current hardcoded default when `templateId` is null.
+- [ ] **Template editor** (`CoaListPage.tsx:159-178`): add **Header HTML** / **Footer HTML**
+      textareas and a **Customer** picker (the API + `customer_id` field already exist).
+- **Acceptance**: a CoA issued against a template renders that template's header/footer and
+      only the selected sections, in order; changing the template changes the output.
+
+---
+
+### W-3 — Complete worklist test membership
+
+Backend supports membership — `WorklistUpsertSchema` accepts **`sample_test_ids`**
+([`sample-testing.schema.ts:58`](../backend/src/modules/sample-testing/sample-testing.schema.ts#L58))
+and `SampleTest.worklist_id` exists — but there's no UI to browse unassigned tests and
+attach them, and the **remove-from-worklist** endpoint is dead (see W-4).
+
+- [ ] **New frontend list hook** — there is **no `useSampleTests` list hook** today
+      (only `useSampleTestsForSample` by sample and the dead `useSampleTest` by id), even
+      though `GET /api/testing/tests` (`listTests`, perm `result.read`) exists. Add a
+      `useSampleTests(query)` hook wrapping it.
+- [ ] **Backend filter for unassigned tests** — `ListSampleTestQuerySchema` has
+      `worklist_id` but **no "is-null / unassigned" option**, so you can't currently query
+      "tests on no worklist". Add an `unassigned`/`worklist_id=null` semantic to the list
+      handler (or filter client-side as a stopgap).
+- [ ] **Attach UI**: in the worklist detail drawer (`WorklistsPage.tsx`), add an
+      "Add tests" picker listing unassigned `IN_PROGRESS`/`PENDING` `SampleTest`s (via the
+      new hook), submitting `sample_test_ids` through `useUpdateWorklist`.
+- [ ] **Detach UI**: wire the existing `useRemoveTestFromWorklist`
+      (`DELETE /api/testing/tests/:id/worklist`) to a per-row "remove" action in the drawer.
+- [ ] (Optional) let **Assign Tests** drop new tests straight onto an open worklist.
+- **Acceptance**: add/remove tests on a worklist from the UI; batched result entry then covers them.
+
+---
+
+### W-4 — Dead endpoints & hooks — wire or delete
+
+Four handlers/hooks have no caller. Decide per item; default is the cheaper option noted.
+
+| Endpoint / hook | Recommendation |
+|---|---|
+| `PUT /api/samples/:id` (no client at all) | **Wire**: add an "Edit sample" action on `SampleDetailPage` for `REGISTERED` samples (metadata edits), gated `sample.update`. Otherwise remove the handler. |
+| `DELETE /api/samples/:id` ↔ `useDeleteSample` ([samples.ts:61](../client/src/lib/api/samples.ts#L61)) | **Wire**: a soft-delete action (already only allowed while `REGISTERED`) on the list/detail, or **delete** the hook. |
+| `DELETE /api/testing/tests/:id/worklist` ↔ `useRemoveTestFromWorklist` | **Wire** as part of W-3. |
+| `GET /api/testing/tests/:id` ↔ `useSampleTest` ([testing.ts:137](../client/src/lib/api/testing.ts#L137)) | **Remove** (inline detail from the list already covers it) unless a standalone test-detail view is wanted. |
+| `useUpdateStudy` ([stability.ts:103](../client/src/lib/api/stability.ts#L103)) | **Wire** an edit action on DRAFT stability studies, or delete the hook. |
+
+- **Acceptance**: every remaining endpoint has a caller; removed ones have no dangling hook.
+
+---
+
+### W-5 — Cross-cutting requirements (found on plan review — apply across W-1…W-4)
+
+The per-item steps above assumed a few things that the codebase does **not** currently
+provide. These are prerequisites, not optional polish.
+
+- [ ] **Seed the islands — they are empty in every seed.** `prisma.customer/supplier/
+      samplingPoint/unitOfMeasure/analyte.create` appears in **no** seed file
+      (checked `seed-lims-data.ts`, `seed.ts`). So today the Customers/Suppliers/
+      Sampling-Points/Units pages — **and the Analyte master that the test-def editor's
+      dropdown reads** — are blank in the demo DB; any new picker would show nothing.
+      Add idempotent (upsert-by-code) rows for each to `seed-lims-data.ts`, and set the
+      new `Sample.customerId/supplierId/samplingPointId` on the 4 demo samples so the
+      wiring is visible out of the box.
+- [ ] **RBAC: add the missing `sample.delete` key.** `rbac-catalog.ts` has `sample.create`
+      and `sample.update` but **no `sample.delete`** — W-4's delete action needs a new
+      catalog key (+ grant to SUPER_ADMIN/relevant roles) or must reuse `sample.update`.
+      All other keys the new work needs already exist: `customer.read`, `supplier.read`,
+      `sampling_point.read`, `unit.read`, `worklist.update`, `coa.manage`.
+- [ ] **Permission-gate the new pickers.** A master-data dropdown on the sample-login /
+      CoA form reads that master, so render it only when the user holds the master's
+      `.read` key (e.g. hide the Customer picker without `customer.read`) — same pattern
+      the config nav already uses. Note this adds a soft cross-dependency: a sample
+      registrar now also wants `customer.read`/`supplier.read`/`sampling_point.read`.
+- [ ] **CoA HTML safety (W-2): there is no sanitizer dependency in the repo.** Rendering
+      `headerHtml`/`footerHtml` via `dangerouslySetInnerHTML` is an XSS hole. Either add
+      **DOMPurify** (client) / sanitize server-side on template save, or restrict the
+      header/footer fields to plain text / a whitelisted tag subset. Decide before W-2
+      renders template HTML.
+- [ ] **Migrations (W-1a/b/c): additive only, verify after.** Per §H, apply the new
+      `Sample` columns via additive SQL and **confirm the columns exist afterward** (Neon
+      cold-starts have silently dropped migrations); a tracked migration is still needed
+      before a prod `migrate deploy`, and the existing `Lms*` schema drift is a separate
+      reconciliation.
+- [ ] **`navAccess.ts`**: no new tabs are required (all island pages already have nav
+      entries); only add entries if W-4 introduces a standalone test-detail view.
+
+---
+
+### I.1 Also worth a product decision (not dead, but redundant)
+
+- **Two spec subsystems coexist**: the legacy `Specification` library (`/lims/specifications`,
+  `/api/lims/specifications*`) and the runtime authority `SpecVersion` (`/lims/spec-versions`).
+  Both are live and consumed (legacy `useSpecs` still feeds the sample-list filter), but the
+  overlap confuses setup. Decide whether to **retire the legacy Specification** into SpecVersion
+  (per L1 §E "migrate current `Specification`/`SpecParameter` into the versioned model") and
+  keep one spec authority.
+- **Manual OOS creation** (`OosListPage` "New Investigation") only takes a title + free-text
+  Sample ID — no real sample/result binding. The meaningful path is the auto-raise; either
+  upgrade the modal to a proper sample→test→result picker or drop manual creation.
+
+### I.2 Effort & suggested order
+
+Rough estimates, 1 dev, including seed + RBAC + verification per item (front = frontend
+only; the ✅ backend-ready items are why they're cheap).
+
+| Order | Item | Scope | Backend ready? | Effort |
+|---|---|---|---|---|
+| 1 | **W-2** CoA template → render | `getCoa` include + `CoaDetailPage` render + template editor fields (+ sanitizer) | ✅ (generate accepts `template_id`) | **1–1.5 d** |
+| 2 | **W-1b-CoA** Customer on Generate modal | 1 dropdown, sends `customer_id` | ✅ | **0.5 d** |
+| 3 | **W-1d** Units select | shared `UnitSelect` + swap 6 sites + seed units | ✅ | **1 d** |
+| 4 | **W-1e** Certifications surfacing | lab-detail cert list (`lab_id` filter exists) + optional dashboard tile | ✅ | **0.5–1 d** |
+| 5 | **W-1a/b/c** Sample masters | **1 shared migration** (3 cols+FKs) → schema/service/serializer → 3 pickers → seed | new columns | **2–3 d** |
+| 6 | **W-3** Worklist membership | new `useSampleTests` hook + unassigned filter + attach/detach UI | partial (`sample_test_ids` ok) | **1.5 d** |
+| 7 | **W-4** Dead endpoints | wire or delete (+ `sample.delete` key if kept) | mixed | **0.5–1 d** |
+| — | **W-5** cross-cutting | folded into the items above (seed, RBAC, gating, sanitizer, migration) | — | — |
+
+**Total ≈ 7.5–9.5 dev-days.** Do 1–4 first (all backend-ready, no migration, immediate
+visible payoff); batch 5 behind its single migration; 6–7 are cleanup. Nothing here blocks
+the L-phase roadmap — it closes the gap between "configurable" and "actually connected".
+
+> **Verification note (final pass, 2026-07-04):** every claim in §I was checked against
+> code — endpoint↔hook↔page cross-refs, `rbac-catalog.ts` keys (`sample.delete` absent;
+> `sample.update` + all `*.read` present), seed files (islands + Analyte master unseeded),
+> `Sample`/`Coa`/`CoaTemplate` columns, the `GenerateCoaSchema`/`WorklistUpsertSchema`/
+> `ListSampleTestQuerySchema` shapes, `useCoaTemplates` (exists) vs `useSampleTests`
+> (missing), and the absence of any HTML sanitizer dependency. Line-level references are
+> inline above.
+>
+> **Live-app confirmation (Playwright against the running :5173 dev app, 2026-07-04):**
+> a scripted UI probe (logged in as QMS ADMIN) confirmed the gaps in the actual UI, not
+> just the code:
+> - **Sample Register drawer** shows Product, Batch, Type, Specification, Lab, Priority,
+>   Quantity, **Unit (a free-text input, placeholder "g, mL…" — not a dropdown)**,
+>   Collected, Received, Source Site, Initial Storage, Remarks — and **no Customer, no
+>   Supplier, no Sampling-Point** field (confirms W-1a/b/c + W-1d).
+> - **CoA Template editor** exposes only Name, Title, "Sections to render", Active —
+>   **no Header-HTML, no Footer-HTML, no Customer** input (confirms W-2).
+> - **Every island list rendered empty** (Units/Customers/Suppliers/Sampling-Points/
+>   Certifications/Analytes all `No data`). Note the running DB also had **no LIMS demo
+>   data at all** (Samples/CoA/Worklists lists empty, `SMP-2026-0001` absent), i.e.
+>   `seed-lims-data.ts` was not loaded — so run the seed before demoing, and note the
+>   seed itself still creates zero island rows (W-5).

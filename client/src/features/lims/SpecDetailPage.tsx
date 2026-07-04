@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Input, InputNumber, Select, Spin } from 'antd';
 import { ArrowLeft, Save, ShieldCheck, Archive, Trash2, Plus, X, ScrollText } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import UnitSelect from './UnitSelect';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useSpec, useCreateSpec, useUpdateSpec, useApproveSpec, useRetireSpec, useDeleteSpec,
@@ -152,7 +153,7 @@ export default function SpecDetailPage() {
               {params.map((p, i) => (
                 <tr key={i} className="border-b border-gray-50 align-top">
                   <td className="py-1.5 pr-2"><Input size="small" value={p.name} disabled={!editable} onChange={(e) => setParam(i, { name: e.target.value })} placeholder="e.g. Assay" /></td>
-                  <td className="py-1.5 px-2"><Input size="small" value={p.unit ?? ''} disabled={!editable} onChange={(e) => setParam(i, { unit: e.target.value || null })} placeholder="%" /></td>
+                  <td className="py-1.5 px-2"><UnitSelect size="small" value={p.unit} disabled={!editable} onChange={(v) => setParam(i, { unit: v })} placeholder="%" /></td>
                   <td className="py-1.5 px-2"><InputNumber size="small" value={p.min_value ?? undefined} disabled={!editable} onChange={(v) => setParam(i, { min_value: v ?? null })} className="w-full" /></td>
                   <td className="py-1.5 px-2"><InputNumber size="small" value={p.max_value ?? undefined} disabled={!editable} onChange={(v) => setParam(i, { max_value: v ?? null })} className="w-full" /></td>
                   <td className="py-1.5 px-2"><InputNumber size="small" value={p.target_value ?? undefined} disabled={!editable} onChange={(v) => setParam(i, { target_value: v ?? null })} className="w-full" /></td>

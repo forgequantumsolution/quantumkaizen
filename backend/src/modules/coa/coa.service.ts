@@ -86,9 +86,19 @@ export const listCoas = async (q: ListCoaQuery) => {
 };
 
 export const getCoa = async (id: string) => {
-  const c = await prisma.coa.findFirst({ where: { id, isDeleted: false } });
+  const c = await prisma.coa.findFirst({ where: { id, isDeleted: false }, include: { template: true, customer: true } });
   if (!c) throw NotFound('Certificate not found');
-  return serializeCoa(c, true);
+  return {
+    ...serializeCoa(c, true),
+    customer_name: c.customer?.name ?? null,
+    template: c.template
+      ? {
+          id: c.template.id, name: c.template.name, title: c.template.title,
+          header_html: c.template.headerHtml, footer_html: c.template.footerHtml,
+          sections: c.template.sections.split(',').filter(Boolean),
+        }
+      : null,
+  };
 };
 
 export const issueCoa = async (id: string, input: IssueCoaInput, userId?: string) => {

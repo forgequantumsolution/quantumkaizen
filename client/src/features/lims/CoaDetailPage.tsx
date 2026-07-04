@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { App, Button, Input, Modal, Spin, Table } from 'antd';
 import { ArrowLeft, Printer, BadgeCheck, Ban } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import DOMPurify from 'dompurify';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
 import {
@@ -13,6 +14,9 @@ import {
 function extractErr(err: unknown): string {
   return (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ?? 'Operation failed';
 }
+
+// Template header/footer are author-supplied HTML — always sanitize before render (W-2).
+const clean = (html: string) => ({ __html: DOMPurify.sanitize(html) });
 
 function evalBadge(evaluation: string): string {
   const e = evaluation?.toUpperCase();
@@ -53,14 +57,18 @@ export default function CoaDetailPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-8 max-w-4xl mx-auto">
-        {/* Header */}
+        {coa.template?.header_html && (
+          <div className="mb-5 pb-5 border-b border-gray-200 text-sm text-gray-800" dangerouslySetInnerHTML={clean(coa.template.header_html)} />
+        )}
+        {/* Masthead */}
         <div className="flex items-start justify-between gap-6 border-b border-gray-200 pb-5 mb-5">
           <div className="min-w-0">
-            <h1 className="text-xl font-bold text-gray-900">Certificate of Analysis</h1>
+            <h1 className="text-xl font-bold text-gray-900">{coa.template?.title || 'Certificate of Analysis'}</h1>
             <div className="font-mono text-sm text-blue-600 mt-1">{coa.coa_number}</div>
             <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-4 text-sm">
               <Field label="Product" value={coa.product_name} />
               <Field label="Batch" value={coa.batch_no ?? '—'} />
+              {coa.customer_name && <Field label="Customer" value={coa.customer_name} />}
               <Field label="Issued" value={coa.issued_at ? new Date(coa.issued_at).toLocaleString() : '—'} />
               <Field label="Status" valueNode={<span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${COA_STATUS_BADGE[coa.status]}`}>{coa.status}</span>} />
             </div>
@@ -74,46 +82,72 @@ export default function CoaDetailPage() {
           )}
         </div>
 
-        {/* Results */}
-        <div className="space-y-6">
-          {(coa.results ?? []).map((block: CoaTestBlock, i) => (
-            <div key={i}>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-gray-900">{block.test_name}</h3>
-                {block.overall_result && (
-                  <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${evalBadge(block.overall_result)}`}>{block.overall_result}</span>
-                )}
+        {/* Body sections — rendered in the template's order (or a sensible default) */}
+        {(coa.template?.sections?.length ? coa.template.sections : ['results', 'conclusion', 'signatures']).map((section) => {
+          if (section === 'results') {
+            return (
+              <div key="results" className="space-y-6">
+                {(coa.results ?? []).map((block: CoaTestBlock, i) => (
+                  <div key={i}>
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-sm font-semibold text-gray-900">{block.test_name}</h3>
+                      {block.overall_result && (
+                        <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${evalBadge(block.overall_result)}`}>{block.overall_result}</span>
+                      )}
+                    </div>
+                    <Table<CoaResultLine>
+                      size="small" rowKey={(r) => r.analyte_name} dataSource={block.results} pagination={false}
+                      locale={{ emptyText: 'No results.' }}
+                      columns={[
+                        { title: 'Analyte', dataIndex: 'analyte_name', ellipsis: true },
+                        { title: 'Result', width: 140, render: (_: unknown, r) => (r.value != null && r.value !== '' ? `${r.value}${r.unit ? ` ${r.unit}` : ''}` : '—') },
+                        { title: 'Specification', width: 160, render: (_: unknown, r) => specText(r) },
+                        {
+                          title: 'Evaluation', width: 120,
+                          render: (_: unknown, r) => <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${evalBadge(r.evaluation)}`}>{r.evaluation || '—'}</span>,
+                        },
+                      ]}
+                    />
+                  </div>
+                ))}
+                {(!coa.results || coa.results.length === 0) && <p className="text-sm text-gray-400">No result snapshot on this certificate.</p>}
               </div>
-              <Table<CoaResultLine>
-                size="small" rowKey={(r) => r.analyte_name} dataSource={block.results} pagination={false}
-                locale={{ emptyText: 'No results.' }}
-                columns={[
-                  { title: 'Analyte', dataIndex: 'analyte_name', ellipsis: true },
-                  { title: 'Result', width: 140, render: (_: unknown, r) => (r.value != null && r.value !== '' ? `${r.value}${r.unit ? ` ${r.unit}` : ''}` : '—') },
-                  { title: 'Specification', width: 160, render: (_: unknown, r) => specText(r) },
-                  {
-                    title: 'Evaluation', width: 120,
-                    render: (_: unknown, r) => <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${evalBadge(r.evaluation)}`}>{r.evaluation || '—'}</span>,
-                  },
-                ]}
-              />
-            </div>
-          ))}
-          {(!coa.results || coa.results.length === 0) && <p className="text-sm text-gray-400">No result snapshot on this certificate.</p>}
-        </div>
-
-        {/* Conclusion */}
-        {coa.conclusion && (
-          <div className="mt-6 pt-5 border-t border-gray-200">
-            <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Conclusion</div>
-            <p className="text-sm text-gray-800">{coa.conclusion}</p>
-          </div>
-        )}
+            );
+          }
+          if (section === 'conclusion') {
+            return coa.conclusion ? (
+              <div key="conclusion" className="mt-6 pt-5 border-t border-gray-200">
+                <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Conclusion</div>
+                <p className="text-sm text-gray-800">{coa.conclusion}</p>
+              </div>
+            ) : null;
+          }
+          if (section === 'signatures') {
+            return (
+              <div key="signatures" className="mt-8 pt-5 border-t border-gray-200 grid grid-cols-2 gap-8 text-sm">
+                <div>
+                  <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-8">Authorised by</div>
+                  <div className="border-t border-gray-300 pt-1 text-xs text-gray-500">Signature &amp; date</div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Issued</div>
+                  <div className="text-sm text-gray-900">{coa.issued_at ? new Date(coa.issued_at).toLocaleString() : 'Not yet issued'}</div>
+                  {coa.customer_name && <div className="text-xs text-gray-500 mt-2">Prepared for {coa.customer_name}</div>}
+                </div>
+              </div>
+            );
+          }
+          return null; // 'description' has no dedicated field; identity is shown in the masthead
+        })}
 
         {coa.status === 'REVOKED' && (
           <div className="mt-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             This certificate was revoked{coa.revoked_at ? ` on ${new Date(coa.revoked_at).toLocaleString()}` : ''} and is no longer valid.
           </div>
+        )}
+
+        {coa.template?.footer_html && (
+          <div className="mt-6 pt-5 border-t border-gray-200 text-xs text-gray-600" dangerouslySetInnerHTML={clean(coa.template.footer_html)} />
         )}
       </div>
 

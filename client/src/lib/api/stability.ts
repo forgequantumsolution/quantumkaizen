@@ -100,14 +100,6 @@ export const useCreateStudy = () => {
   });
 };
 
-export const useUpdateStudy = (id: string) => {
-  const qc = useQueryClient();
-  return useMutation<Study, unknown, StudyUpsert>({
-    mutationFn: (b) => api.put(`/stability/${id}`, b).then((r) => r.data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.all }),
-  });
-};
-
 export const useAddCondition = (id: string) => {
   const qc = useQueryClient();
   return useMutation<Study, unknown, ConditionInput>({

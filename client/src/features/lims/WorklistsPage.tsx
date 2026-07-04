@@ -5,6 +5,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useWorklists, useWorklist, useCreateWorklist, useUpdateWorklist, useCloseWorklist, useEnterResults,
+  useSampleTests, useRemoveTestFromWorklist,
   WORKLIST_STATUS_BADGE, WORKLIST_STATUS_LABELS, SAMPLE_TEST_STATUS_BADGE, SAMPLE_TEST_STATUS_LABELS,
   EVALUATION_BADGE, EVALUATION_LABELS, OVERALL_RESULT_BADGE, specLimitLabel,
   type Worklist, type WorklistStatus, type WorklistUpsert, type SampleTest, type Result,
@@ -104,12 +105,32 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
   const [suitability, setSuitability] = useState('');
   useEffect(() => { setSuitability(wl?.system_suitability ?? ''); }, [wl?.id, wl?.system_suitability]);
 
+  const editable = canUpdate && wl?.status !== 'CLOSED';
+  const [addSel, setAddSel] = useState<string[]>([]);
+  useEffect(() => { setAddSel([]); }, [wl?.id]);
+  const { data: unassigned } = useSampleTests({ unassigned: true }, { enabled: id != null && editable });
+  const removeMut = useRemoveTestFromWorklist();
+
   const saveSuitability = async () => {
     if (!wl) return;
     try {
       await updateMut.mutateAsync({ name: wl.name, analyst_name: wl.analyst_name ?? undefined, instrument_id: wl.instrument_id ?? undefined, notes: wl.notes ?? undefined, system_suitability: suitability || undefined, status: wl.status });
       message.success('Worklist saved');
     } catch (e) { message.error(extractErr(e)); }
+  };
+
+  const addTests = async () => {
+    if (!wl || addSel.length === 0) return;
+    try {
+      await updateMut.mutateAsync({ name: wl.name, analyst_name: wl.analyst_name ?? undefined, instrument_id: wl.instrument_id ?? undefined, notes: wl.notes ?? undefined, status: wl.status, sample_test_ids: addSel });
+      message.success(`Added ${addSel.length} test(s)`);
+      setAddSel([]);
+    } catch (e) { message.error(extractErr(e)); }
+  };
+
+  const removeTest = async (testId: string) => {
+    try { await removeMut.mutateAsync(testId); message.success('Removed from worklist'); }
+    catch (e) { message.error(extractErr(e)); }
   };
 
   const close = async () => {
@@ -143,11 +164,26 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
             )}
           </div>
 
+          {editable && (
+            <div className="border border-dashed border-gray-200 rounded-lg p-3">
+              <label className="block text-[11px] font-medium text-gray-600 mb-1">Add tests to this worklist</label>
+              <div className="flex items-center gap-2">
+                <Select
+                  mode="multiple" value={addSel} onChange={setAddSel} className="flex-1" allowClear showSearch optionFilterProp="label"
+                  placeholder="Pick unassigned tests…"
+                  options={(unassigned?.data ?? []).map((t) => ({ value: t.id, label: `${t.sample_number ?? ''} · ${t.test_name} (${SAMPLE_TEST_STATUS_LABELS[t.status]})` }))}
+                  notFoundContent={<span className="text-xs text-gray-400">No unassigned tests</span>}
+                />
+                <Button type="primary" disabled={addSel.length === 0} loading={updateMut.isPending} onClick={addTests}>Add</Button>
+              </div>
+            </div>
+          )}
+
           <div className="space-y-3">
             {(wl.tests ?? []).length === 0 ? (
               <div className="text-sm text-gray-400 py-4 text-center">No tests in this worklist.</div>
             ) : (
-              (wl.tests ?? []).map((t) => <WorklistTestCard key={t.id} test={t} editable={canUpdate && wl.status !== 'CLOSED'} />)
+              (wl.tests ?? []).map((t) => <WorklistTestCard key={t.id} test={t} editable={editable} onRemove={() => removeTest(t.id)} removing={removeMut.isPending} />)
             )}
           </div>
         </div>
@@ -156,7 +192,7 @@ function DetailDrawer({ id, onClose }: { id: string | null; onClose: () => void 
   );
 }
 
-function WorklistTestCard({ test, editable }: { test: SampleTest; editable: boolean }) {
+function WorklistTestCard({ test, editable, onRemove, removing }: { test: SampleTest; editable: boolean; onRemove: () => void; removing: boolean }) {
   const { message } = App.useApp();
   const enterMut = useEnterResults(test.id);
   const [edits, setEdits] = useState<Record<string, { numeric_value?: number | null; text_value?: string | null }>>({});
@@ -186,7 +222,10 @@ function WorklistTestCard({ test, editable }: { test: SampleTest; editable: bool
             <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${OVERALL_RESULT_BADGE[test.overall_result]}`}>{test.overall_result}</span>
           )}
         </div>
-        {canEdit && <Button size="small" type="primary" loading={enterMut.isPending} onClick={save}>Save Results</Button>}
+        <div className="flex items-center gap-2">
+          {editable && <Button size="small" danger loading={removing} onClick={onRemove}>Remove</Button>}
+          {canEdit && <Button size="small" type="primary" loading={enterMut.isPending} onClick={save}>Save Results</Button>}
+        </div>
       </div>
 
       <Table<Result>

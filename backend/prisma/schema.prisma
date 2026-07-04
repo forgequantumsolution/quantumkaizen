@@ -2384,12 +2384,20 @@ model Sample {
   releasedById  String?
   releasedAt    DateTime?
 
+  // trading-partner + provenance links (W-1a/b/c)
+  customerId      String?
+  supplierId      String?
+  samplingPointId String?
+
   // ── relations (FKs to master data + 2.0 binds) ──
   specification   Specification?   @relation(fields: [specificationId], references: [id], onDelete: SetNull)
   lab             Lab?             @relation(fields: [labId], references: [id], onDelete: SetNull)
   currentLocation StorageLocation? @relation(fields: [currentLocationId], references: [id], onDelete: SetNull)
   product         Product?         @relation(fields: [productId], references: [id], onDelete: SetNull)
   specVersion     SpecVersion?     @relation(fields: [specVersionId], references: [id], onDelete: SetNull)
+  customer        Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  supplier        Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  samplingPoint   SamplingPoint?   @relation(fields: [samplingPointId], references: [id], onDelete: SetNull)
 
   custodyEvents     CustodyEvent[]
   aliquots          Aliquot[]
@@ -2501,6 +2509,8 @@ model SamplingPoint {
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  samples Sample[]
 }
 
 model Customer {
@@ -2518,6 +2528,7 @@ model Customer {
 
   coas         Coa[]
   coaTemplates CoaTemplate[]
+  samples      Sample[]
 }
 
 model Supplier {
@@ -2532,6 +2543,8 @@ model Supplier {
   createdById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  samples Sample[]
 }
 
 // ─────────────────────────── LIMS 2.0 — L1 Test Definitions & Spec Versions ───────────────────────────

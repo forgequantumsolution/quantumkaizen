@@ -23,16 +23,19 @@ export interface SampleSummary {
   source_site: string | null; specification_id: string | null; quantity: number | null; unit: string | null;
   collected_at: string | null; received_at: string | null; status: SampleStatus; lab_id: string | null;
   current_location_id: string | null; priority: string | null; remarks: string | null; aliquot_count: number;
+  customer_id: string | null; supplier_id: string | null; sampling_point_id: string | null;
   created_at: string; updated_at: string;
 }
 export interface SampleDetail extends SampleSummary {
   current_location_name: string | null; specification_label: string | null; lab_name: string | null;
+  customer_name: string | null; supplier_name: string | null; sampling_point_name: string | null;
   custody_events: CustodyEvent[]; aliquots: Aliquot[];
 }
 export interface RegisterSampleBody {
   product_name: string; product_id?: string | null; batch_no?: string | null; sample_type?: string | null; source_site?: string | null;
   specification_id?: string | null; quantity?: number | null; unit?: string | null; collected_at?: string | null;
   received_at?: string | null; lab_id?: string | null; current_location_id?: string | null; priority?: string | null; remarks?: string | null;
+  customer_id?: string | null; supplier_id?: string | null; sampling_point_id?: string | null;
 }
 
 const keys = {
