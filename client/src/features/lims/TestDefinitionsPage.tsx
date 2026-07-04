@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Drawer, Input, InputNumber, Select, Spin, Table } from 'antd';
 import { FlaskConical, Plus, Search, Save, ShieldCheck, Trash2, X } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import UnitSelect from './UnitSelect';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useTestDefinitions, useTestDefinition, useCreateTestDefinition, useUpdateTestDefinition,
@@ -221,7 +222,7 @@ function TestDefinitionDrawer({
                         <Select size="small" value={a.analyte_id ?? undefined} disabled={!editable} onChange={(v) => pickAnalyte(i, v ?? null)} allowClear showSearch optionFilterProp="label" placeholder="—" className="w-full"
                           options={analytes.map((x) => ({ value: x.id, label: `${x.code} — ${x.name}` }))} />
                       </td>
-                      <td className="py-1.5 px-2"><Input size="small" value={a.unit ?? ''} disabled={!editable} onChange={(e) => setRow(i, { unit: e.target.value || null })} placeholder="%" /></td>
+                      <td className="py-1.5 px-2"><UnitSelect size="small" value={a.unit} disabled={!editable} onChange={(v) => setRow(i, { unit: v })} placeholder="%" /></td>
                       <td className="py-1.5 px-2">
                         <Select size="small" value={a.data_type} disabled={!editable} onChange={(v) => setRow(i, { data_type: v })} className="w-full" options={TEST_DATA_TYPE_OPTIONS} />
                       </td>

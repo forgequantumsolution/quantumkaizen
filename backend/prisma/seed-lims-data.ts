@@ -53,6 +53,64 @@ async function main() {
   }
   const methods = new Map((await prisma.testMethod.findMany({ select: { id: true, code: true } })).map((m) => [m.code, m.id]));
 
+  // ── Units of Measure (catalogue — feeds the unit pickers) ──
+  const unitDefs = [
+    { code: 'PCT', name: 'Percent', symbol: '%', kind: 'ratio' },
+    { code: 'MG', name: 'Milligram', symbol: 'mg', kind: 'mass' },
+    { code: 'G', name: 'Gram', symbol: 'g', kind: 'mass' },
+    { code: 'ML', name: 'Millilitre', symbol: 'mL', kind: 'volume' },
+    { code: 'MGDL', name: 'Milligram per decilitre', symbol: 'mg/dL', kind: 'concentration' },
+    { code: 'PPM', name: 'Parts per million', symbol: 'ppm', kind: 'concentration' },
+    { code: 'MG5ML', name: 'Milligram per 5 mL', symbol: 'mg/5mL', kind: 'concentration' },
+    { code: 'CFU', name: 'Colony-forming units', symbol: 'CFU', kind: 'count' },
+  ];
+  for (const u of unitDefs) {
+    await prisma.unitOfMeasure.upsert({ where: { code: u.code }, update: {}, create: u });
+  }
+
+  // ── Analytes (component master — feeds the test-definition & spec-line pickers) ──
+  const analyteDefs = [
+    { code: 'AN-DESC', name: 'Description', defaultUnit: null, dataType: 'TEXT', category: 'Physical' },
+    { code: 'AN-ASSAY', name: 'Assay', defaultUnit: '%', dataType: 'NUMERIC', category: 'Chemical' },
+    { code: 'AN-DISS', name: 'Dissolution', defaultUnit: '%', dataType: 'NUMERIC', category: 'Performance' },
+    { code: 'AN-RS', name: 'Related Substances', defaultUnit: '%', dataType: 'NUMERIC', category: 'Impurity' },
+    { code: 'AN-WATER', name: 'Water Content', defaultUnit: '%', dataType: 'NUMERIC', category: 'Chemical' },
+  ];
+  for (const a of analyteDefs) {
+    await prisma.analyte.upsert({ where: { code: a.code }, update: {}, create: { code: a.code, name: a.name, defaultUnit: a.defaultUnit, dataType: a.dataType, category: a.category } });
+  }
+
+  // ── Sampling Points (where samples are drawn) ──
+  const samplingPointDefs = [
+    { code: 'SPT-001', name: 'Production Line 1 — Compression', area: 'Production' },
+    { code: 'SPT-002', name: 'Purified Water Loop — User Point 3', area: 'Utilities' },
+    { code: 'SPT-003', name: 'Warehouse — Raw Material Quarantine', area: 'Warehouse' },
+    { code: 'SPT-004', name: 'Blending Suite — IPC Port', area: 'Production' },
+  ];
+  for (const sp of samplingPointDefs) {
+    await prisma.samplingPoint.upsert({ where: { code: sp.code }, update: {}, create: sp });
+  }
+
+  // ── Customers (CoA recipients) ──
+  const customerDefs = [
+    { code: 'CUST-001', name: 'MediPharm Distributors Ltd', contactName: 'Priya Nair', email: 'qa@medipharm.example', country: 'India' },
+    { code: 'CUST-002', name: 'GlobalRx Wholesale Inc', contactName: 'John Carter', email: 'quality@globalrx.example', country: 'USA' },
+    { code: 'CUST-003', name: 'Emirates Health Supplies', contactName: 'Aisha Rahman', email: 'intake@ehs.example', country: 'UAE' },
+  ];
+  for (const c of customerDefs) {
+    await prisma.customer.upsert({ where: { code: c.code }, update: {}, create: c });
+  }
+
+  // ── Suppliers / vendors (raw-material source) ──
+  const supplierDefs = [
+    { code: 'SUP-001', name: 'Aurora Fine Chemicals', contactName: 'R. Menon', email: 'sales@aurorachem.example', country: 'India' },
+    { code: 'SUP-002', name: 'Nordic API Group', contactName: 'L. Berg', email: 'orders@nordicapi.example', country: 'Denmark' },
+    { code: 'SUP-003', name: 'Zhejiang Excipients Co', contactName: 'Wei Zhang', email: 'export@zjexcip.example', country: 'China' },
+  ];
+  for (const s of supplierDefs) {
+    await prisma.supplier.upsert({ where: { code: s.code }, update: {}, create: s });
+  }
+
   // ── Specifications (+ parameters) ──
   const specDefs = [
     {
@@ -256,6 +314,27 @@ async function main() {
     });
   }
 
+  // ── Link demo samples to trading partners + sampling points (W-1a/b/c) ──
+  const customers = new Map((await prisma.customer.findMany({ select: { id: true, code: true } })).map((c) => [c.code, c.id]));
+  const suppliers = new Map((await prisma.supplier.findMany({ select: { id: true, code: true } })).map((s) => [s.code, s.id]));
+  const samplingPoints = new Map((await prisma.samplingPoint.findMany({ select: { id: true, code: true } })).map((sp) => [sp.code, sp.id]));
+  const sampleLinks: { num: string; customer?: string; supplier?: string; samplingPoint?: string }[] = [
+    { num: 'SMP-2026-0001', customer: 'CUST-001', samplingPoint: 'SPT-001' },
+    { num: 'SMP-2026-0002', customer: 'CUST-002', samplingPoint: 'SPT-004' },
+    { num: 'SMP-2026-0003', supplier: 'SUP-001', samplingPoint: 'SPT-003' }, // Raw Material
+    { num: 'SMP-2026-0004', customer: 'CUST-003', samplingPoint: 'SPT-002' },
+  ];
+  for (const link of sampleLinks) {
+    await prisma.sample.updateMany({
+      where: { sampleNumber: link.num },
+      data: {
+        customerId: link.customer ? customers.get(link.customer) ?? null : null,
+        supplierId: link.supplier ? suppliers.get(link.supplier) ?? null : null,
+        samplingPointId: link.samplingPoint ? samplingPoints.get(link.samplingPoint) ?? null : null,
+      },
+    });
+  }
+
   // ── Pre-assigned tests on SMP-2026-0001 (one OOS) so the testing + OOS screens
   //    show realistic execution out of the box. Idempotent: skip if tests exist. ──
   const pcmSample = await prisma.sample.findUnique({ where: { sampleNumber: 'SMP-2026-0001' }, include: { sampleTests: true } });
@@ -304,6 +383,8 @@ async function main() {
     specs: await prisma.specification.count(), equipment: await prisma.equipment.count(), certs: await prisma.certification.count(), samples: await prisma.sample.count(),
     products: await prisma.product.count(), testDefs: await prisma.testDefinition.count(), panels: await prisma.testPanel.count(),
     specVersions: await prisma.specVersion.count(), sampleTests: await prisma.sampleTest.count(), oos: await prisma.oosInvestigation.count(),
+    units: await prisma.unitOfMeasure.count(), analytes: await prisma.analyte.count(), samplingPoints: await prisma.samplingPoint.count(),
+    customers: await prisma.customer.count(), suppliers: await prisma.supplier.count(),
   };
   console.log('✅  LIMS seed complete:', counts);
 }

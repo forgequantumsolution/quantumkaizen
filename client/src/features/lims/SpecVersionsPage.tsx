@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Drawer, Input, InputNumber, Select, Spin, Switch, Table } from 'antd';
 import { FileStack, Plus, Search, Save, ShieldCheck, GitBranch, Trash2, X, ArrowLeft } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import UnitSelect from './UnitSelect';
 import { useHasPermission } from '@/stores/authStore';
 import { useProducts } from '@/lib/api/product';
 import { useAnalytes } from '@/lib/api/analyte';
@@ -269,7 +270,7 @@ function SpecVersionEditor({ id, onCreated, onDeleted }: { id: string | null; on
                       options={analytes.map((a) => ({ value: a.id, label: `${a.code} — ${a.name}` }))} />
                   </td>
                   <td className="py-1.5 px-2"><Input size="small" value={l.name} disabled={!editable} onChange={(e) => setLine(i, { name: e.target.value })} placeholder="e.g. Assay" /></td>
-                  <td className="py-1.5 px-2"><Input size="small" value={l.unit ?? ''} disabled={!editable} onChange={(e) => setLine(i, { unit: e.target.value || null })} placeholder="%" /></td>
+                  <td className="py-1.5 px-2"><UnitSelect size="small" value={l.unit} disabled={!editable} onChange={(v) => setLine(i, { unit: v })} placeholder="%" /></td>
                   <td className="py-1.5 px-2"><InputNumber size="small" value={l.min_value ?? undefined} disabled={!editable} onChange={(v) => setLine(i, { min_value: v ?? null })} className="w-full" /></td>
                   <td className="py-1.5 px-2"><InputNumber size="small" value={l.max_value ?? undefined} disabled={!editable} onChange={(v) => setLine(i, { max_value: v ?? null })} className="w-full" /></td>
                   <td className="py-1.5 px-2"><InputNumber size="small" value={l.target_value ?? undefined} disabled={!editable} onChange={(v) => setLine(i, { target_value: v ?? null })} className="w-full" /></td>

@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { App, Button, DatePicker, Input, InputNumber, Modal, Select, Spin, Table } from 'antd';
-import { ArrowLeft, TestTube, History, Boxes, Plus, ArrowRightLeft, FileBadge } from 'lucide-react';
+import { ArrowLeft, TestTube, History, Boxes, Plus, ArrowRightLeft, FileBadge, Trash2 } from 'lucide-react';
 import { useGenerateCoa } from '@/lib/api/coa';
 import type { Dayjs } from 'dayjs';
 import { QRCodeSVG } from 'qrcode.react';
 import PageContainer from '@/components/layout/PageContainer';
+import UnitSelect from './UnitSelect';
 import { useHasPermission } from '@/stores/authStore';
 import {
-  useSample, useTransitionSample, useAddCustody, useAddAliquot, useStorageLocations,
+  useSample, useTransitionSample, useAddCustody, useAddAliquot, useStorageLocations, useDeleteSample,
   SAMPLE_STATUS_LABELS, type SampleStatus, type CustodyAction, type Aliquot,
 } from '@/lib/api/samples';
 import { STATUS_BADGE } from './SampleListPage';
@@ -33,6 +34,7 @@ export default function SampleDetailPage() {
   const canGenerateCoa = useHasPermission('coa.create');
   const { data: s, isLoading } = useSample(id);
   const transitionMut = useTransitionSample(id ?? '');
+  const deleteMut = useDeleteSample();
   const generateCoaMut = useGenerateCoa();
   const { data: storage } = useStorageLocations();
   const storageOpts = (storage?.data ?? []).map((x) => ({ value: x.id, label: `${x.code} — ${x.name}` }));
@@ -48,6 +50,13 @@ export default function SampleDetailPage() {
     modal.confirm({
       title: `${label}?`, okText: label, okButtonProps: { danger }, centered: true,
       onOk: async () => { try { await transitionMut.mutateAsync({ status }); message.success('Status updated'); } catch (e) { message.error(extractErr(e)); } },
+    });
+
+  const doDelete = () =>
+    modal.confirm({
+      title: 'Delete this sample?', okText: 'Delete', okButtonProps: { danger: true }, centered: true,
+      content: 'Only registered samples can be deleted. This soft-deletes the record.',
+      onOk: async () => { try { await deleteMut.mutateAsync(s.id); message.success('Sample deleted'); nav('/lims/samples'); } catch (e) { message.error(extractErr(e)); } },
     });
 
   const doGenerateCoa = async () => {
@@ -78,6 +87,9 @@ export default function SampleDetailPage() {
               Generate CoA
             </Button>
           )}
+          {canUpdate && s.status === 'REGISTERED' && (
+            <Button danger icon={<Trash2 size={14} />} onClick={doDelete} loading={deleteMut.isPending}>Delete</Button>
+          )}
         </div>
       </div>
 
@@ -94,6 +106,9 @@ export default function SampleDetailPage() {
             <Field label="Quantity" value={s.quantity != null ? `${s.quantity} ${s.unit ?? ''}` : '—'} />
             <Field label="Source" value={s.source_site ?? '—'} />
             <Field label="Current Location" value={s.current_location_name ?? '—'} />
+            <Field label="Sampling Point" value={s.sampling_point_name ?? '—'} />
+            {s.customer_name && <Field label="Customer" value={s.customer_name} />}
+            {s.supplier_name && <Field label="Supplier" value={s.supplier_name} />}
             <Field label="Collected" value={s.collected_at ? new Date(s.collected_at).toLocaleDateString() : '—'} />
             <Field label="Received" value={s.received_at ? new Date(s.received_at).toLocaleDateString() : '—'} />
           </div>

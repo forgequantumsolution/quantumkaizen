@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { App, Button, Drawer, Input, InputNumber, Space, Switch, Table } from 'antd';
 import { Activity, Plus, Search, Edit3, Trash2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import UnitSelect from './UnitSelect';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useQcMaterials, useCreateQcMaterial, useUpdateQcMaterial, useDeleteQcMaterial,
@@ -108,7 +109,7 @@ function MaterialDrawer({ open, onClose, material }: { open: boolean; onClose: (
         <F label="Analyte"><Input value={form.analyte_name ?? ''} onChange={(e) => set('analyte_name', e.target.value)} placeholder="e.g. Glucose" /></F>
         <div className="grid grid-cols-2 gap-3">
           <F label="Lot No"><Input value={form.lot_no ?? ''} onChange={(e) => set('lot_no', e.target.value)} /></F>
-          <F label="Unit"><Input value={form.unit ?? ''} onChange={(e) => set('unit', e.target.value)} placeholder="mg/dL, %…" /></F>
+          <F label="Unit"><UnitSelect value={form.unit} onChange={(v) => set('unit', v)} placeholder="mg/dL, %…" /></F>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <F label="Target Mean"><InputNumber value={form.target_mean ?? undefined} onChange={(v) => set('target_mean', v ?? null)} className="w-full" /></F>

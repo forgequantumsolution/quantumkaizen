@@ -4,6 +4,7 @@ import { App, Button, DatePicker, Drawer, Input, InputNumber, Select, Space, Tab
 import { TestTubes, Plus, Search } from 'lucide-react';
 import type { Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
+import UnitSelect from './UnitSelect';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useSamples, useRegisterSample, useStorageLocations,
@@ -11,6 +12,9 @@ import {
 } from '@/lib/api/samples';
 import { useSpecs, useLabs } from '@/lib/api/lims';
 import { useProducts } from '@/lib/api/product';
+import { useCustomers } from '@/lib/api/customer';
+import { useSuppliers } from '@/lib/api/supplier';
+import { useSamplingPoints } from '@/lib/api/samplingPoint';
 
 export const STATUS_BADGE: Record<SampleStatus, string> = {
   REGISTERED: 'bg-gray-100 text-gray-700 border-gray-200',
@@ -80,8 +84,14 @@ function RegisterDrawer({ open, onClose, onDone }: { open: boolean; onClose: () 
   const { data: labsData } = useLabs({ is_active: true });
   const { data: storage } = useStorageLocations();
   const { data: productsData } = useProducts();
+  const { data: customersData } = useCustomers();
+  const { data: suppliersData } = useSuppliers();
+  const { data: samplingPointsData } = useSamplingPoints();
   const products = productsData?.data ?? [];
   const labs = labsData?.data ?? [];
+  const customers = customersData?.data ?? [];
+  const suppliers = suppliersData?.data ?? [];
+  const samplingPoints = samplingPointsData?.data ?? [];
 
   const [f, setF] = useState<RegisterSampleBody>({ product_name: '' });
   const [collected, setCollected] = useState<Dayjs | null>(null);
@@ -123,12 +133,19 @@ function RegisterDrawer({ open, onClose, onDone }: { open: boolean; onClose: () 
         </div>
         <div className="grid grid-cols-2 gap-3">
           <F label="Quantity"><InputNumber value={f.quantity ?? undefined} onChange={(v) => set('quantity', v ?? null)} min={0} className="w-full" /></F>
-          <F label="Unit"><Input value={f.unit ?? ''} onChange={(e) => set('unit', e.target.value)} placeholder="g, mL…" /></F>
+          <F label="Unit"><UnitSelect value={f.unit} onChange={(v) => set('unit', v)} placeholder="g, mL…" /></F>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <F label="Collected"><DatePicker value={collected ?? undefined} onChange={(d) => setCollected(d ?? null)} className="w-full" /></F>
           <F label="Received"><DatePicker value={received ?? undefined} onChange={(d) => setReceived(d ?? null)} className="w-full" /></F>
         </div>
+        <div className="grid grid-cols-2 gap-3">
+          <F label="Customer"><Select value={f.customer_id ?? undefined} onChange={(v) => set('customer_id', v ?? null)} allowClear showSearch optionFilterProp="label" className="w-full" placeholder="CoA recipient" options={customers.map((c) => ({ value: c.id, label: `${c.name}${c.country ? ` · ${c.country}` : ''}` }))} /></F>
+          <F label="Sampling Point"><Select value={f.sampling_point_id ?? undefined} onChange={(v) => set('sampling_point_id', v ?? null)} allowClear showSearch optionFilterProp="label" className="w-full" placeholder="Where drawn" options={samplingPoints.map((sp) => ({ value: sp.id, label: `${sp.code} — ${sp.name}` }))} /></F>
+        </div>
+        {f.sample_type === 'Raw Material' && (
+          <F label="Supplier / Vendor"><Select value={f.supplier_id ?? undefined} onChange={(v) => set('supplier_id', v ?? null)} allowClear showSearch optionFilterProp="label" className="w-full" placeholder="Material source" options={suppliers.map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))} /></F>
+        )}
         <F label="Source Site"><Input value={f.source_site ?? ''} onChange={(e) => set('source_site', e.target.value)} /></F>
         <F label="Initial Storage"><Select value={f.current_location_id ?? undefined} onChange={(v) => set('current_location_id', v ?? null)} allowClear showSearch optionFilterProp="label" className="w-full" options={(storage?.data ?? []).map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))} /></F>
         <F label="Remarks"><Input.TextArea rows={2} value={f.remarks ?? ''} onChange={(e) => set('remarks', e.target.value)} /></F>

@@ -39,6 +39,15 @@ export interface Coa {
   created_at: string;
   updated_at: string;
   results?: CoaTestBlock[];
+  customer_name?: string | null;
+  template?: {
+    id: string;
+    name: string;
+    title: string | null;
+    header_html: string | null;
+    footer_html: string | null;
+    sections: string[];
+  } | null;
 }
 export interface CoaTemplate {
   id: string;

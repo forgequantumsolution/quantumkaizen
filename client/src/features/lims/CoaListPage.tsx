@@ -9,6 +9,7 @@ import {
   COA_STATUS_BADGE, type Coa, type CoaStatus, type CoaTemplate, type CoaTemplateUpsert,
 } from '@/lib/api/coa';
 import { useSamples } from '@/lib/api/samples';
+import { useCustomers } from '@/lib/api/customer';
 
 const STATUS_OPTIONS: { value: CoaStatus; label: string }[] = [
   { value: 'DRAFT', label: 'Draft' }, { value: 'ISSUED', label: 'Issued' }, { value: 'REVOKED', label: 'Revoked' },
@@ -76,28 +77,49 @@ function GenerateModal({ open, onClose, onDone }: { open: boolean; onClose: () =
   const { message } = App.useApp();
   const mut = useGenerateCoa();
   const { data: samples } = useSamples();
+  const { data: templates } = useCoaTemplates();
+  const { data: customers } = useCustomers();
   // Certificates are issued off released results; surface released samples first.
   const sampleOpts = [...(samples?.data ?? [])]
     .sort((a, b) => (a.status === 'RELEASED' ? -1 : 0) - (b.status === 'RELEASED' ? -1 : 0))
     .map((s) => ({ value: s.id, label: `${s.sample_number} — ${s.product_name}${s.batch_no ? ` · ${s.batch_no}` : ''} (${s.status})` }));
+  const templateOpts = (templates?.data ?? []).filter((t) => t.is_active).map((t) => ({ value: t.id, label: t.name }));
+  const customerOpts = (customers?.data ?? []).map((c) => ({ value: c.id, label: `${c.name}${c.country ? ` · ${c.country}` : ''}` }));
   const [sampleId, setSampleId] = useState<string | undefined>();
+  const [templateId, setTemplateId] = useState<string | undefined>();
+  const [customerId, setCustomerId] = useState<string | undefined>();
   const [conclusion, setConclusion] = useState('');
+  // Picking a template pre-fills its default customer (if any) unless already chosen.
+  const onTemplate = (id: string | undefined) => {
+    setTemplateId(id);
+    const t = (templates?.data ?? []).find((x) => x.id === id);
+    if (t?.customer_id && !customerId) setCustomerId(t.customer_id);
+  };
+  const reset = () => { setSampleId(undefined); setTemplateId(undefined); setCustomerId(undefined); setConclusion(''); };
   const submit = async () => {
     if (!sampleId) return message.error('Select a sample');
     try {
-      const created = await mut.mutateAsync({ sample_id: sampleId, conclusion: conclusion || null });
+      const created = await mut.mutateAsync({ sample_id: sampleId, template_id: templateId ?? null, customer_id: customerId ?? null, conclusion: conclusion || null });
       message.success(`Generated ${created.coa_number}`);
-      setSampleId(undefined); setConclusion('');
+      reset();
       onDone(created.id);
     } catch (e) { message.error(extractErr(e)); }
   };
   return (
-    <Modal title="Generate Certificate of Analysis" open={open} onCancel={onClose} onOk={submit} okText="Generate" okButtonProps={{ loading: mut.isPending }} centered destroyOnClose>
+    <Modal title="Generate Certificate of Analysis" open={open} onCancel={onClose} onOk={submit} okText="Generate" okButtonProps={{ loading: mut.isPending }} centered destroyOnClose afterClose={reset}>
       <div className="space-y-3">
         <F label="Sample *">
           <Select value={sampleId} onChange={setSampleId} showSearch optionFilterProp="label" className="w-full" placeholder="Select a tested sample" options={sampleOpts} />
           <p className="text-[11px] text-gray-400 mt-1">Snapshots the sample&apos;s test results into a certificate.</p>
         </F>
+        <div className="grid grid-cols-2 gap-3">
+          <F label="Template">
+            <Select value={templateId} onChange={onTemplate} allowClear showSearch optionFilterProp="label" className="w-full" placeholder="Default layout" options={templateOpts} />
+          </F>
+          <F label="Customer">
+            <Select value={customerId} onChange={setCustomerId} allowClear showSearch optionFilterProp="label" className="w-full" placeholder="No customer" options={customerOpts} />
+          </F>
+        </div>
         <F label="Conclusion"><Input.TextArea rows={2} value={conclusion} onChange={(e) => setConclusion(e.target.value)} placeholder="Optional overall conclusion" /></F>
       </div>
     </Modal>
@@ -107,7 +129,9 @@ function GenerateModal({ open, onClose, onDone }: { open: boolean; onClose: () =
 function TemplatesDrawer({ open, onClose, canManage }: { open: boolean; onClose: () => void; canManage: boolean }) {
   const { message } = App.useApp();
   const { data, isLoading } = useCoaTemplates();
+  const { data: customers } = useCustomers();
   const templates = data?.data ?? [];
+  const customerOpts = (customers?.data ?? []).map((c) => ({ value: c.id, label: `${c.name}${c.country ? ` · ${c.country}` : ''}` }));
   const createMut = useCreateCoaTemplate();
   const deleteMut = useDeleteCoaTemplate();
   const [editing, setEditing] = useState<CoaTemplate | null>(null);
@@ -119,7 +143,7 @@ function TemplatesDrawer({ open, onClose, canManage }: { open: boolean; onClose:
   const startNew = () => { setEditing(null); setForm({ name: '', sections: [] }); };
   const startEdit = (t: CoaTemplate) => {
     setEditing(t);
-    setForm({ name: t.name, title: t.title, sections: t.sections, customer_id: t.customer_id, is_active: t.is_active });
+    setForm({ name: t.name, title: t.title, header_html: t.header_html, footer_html: t.footer_html, sections: t.sections, customer_id: t.customer_id, is_active: t.is_active });
   };
   const submit = async () => {
     if (!form.name?.trim()) return message.error('Name is required');
@@ -165,9 +189,14 @@ function TemplatesDrawer({ open, onClose, canManage }: { open: boolean; onClose:
           <div className="space-y-3">
             <F label="Name *"><Input value={form.name} onChange={(e) => set('name', e.target.value)} /></F>
             <F label="Title"><Input value={form.title ?? ''} onChange={(e) => set('title', e.target.value)} placeholder="Document title" /></F>
+            <F label="Customer">
+              <Select value={form.customer_id ?? undefined} onChange={(v) => set('customer_id', v ?? null)} allowClear showSearch optionFilterProp="label" className="w-full" options={customerOpts} placeholder="Customer-specific variant (optional)" />
+            </F>
             <F label="Sections">
               <Select mode="multiple" value={form.sections ?? []} onChange={(v) => set('sections', v)} className="w-full" options={SECTION_OPTIONS} placeholder="Sections to render" />
             </F>
+            <F label="Header HTML"><Input.TextArea rows={2} value={form.header_html ?? ''} onChange={(e) => set('header_html', e.target.value)} placeholder="e.g. <h2>Acme Pharma Ltd</h2> — rendered above the certificate" /></F>
+            <F label="Footer HTML"><Input.TextArea rows={2} value={form.footer_html ?? ''} onChange={(e) => set('footer_html', e.target.value)} placeholder="e.g. address / disclaimer — rendered below the certificate" /></F>
             <div className="flex items-center gap-2">
               <Switch checked={form.is_active ?? true} onChange={(v) => set('is_active', v)} size="small" />
               <span className="text-xs text-gray-600">Active</span>

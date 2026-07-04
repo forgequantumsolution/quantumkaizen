@@ -134,11 +134,15 @@ export const useSampleTestsForSample = (sampleId: string | undefined) =>
     enabled: !!sampleId,
   });
 
-export const useSampleTest = (id: string | undefined) =>
-  useQuery<SampleTest>({
-    queryKey: keys.test(id ?? ''),
-    queryFn: () => api.get(`/testing/tests/${id}`).then((r) => r.data),
-    enabled: !!id,
+// List sample tests across samples (W-3) — e.g. unassigned tests for worklist attach.
+export const useSampleTests = (
+  params: { unassigned?: boolean; worklist_id?: string; status?: string; review_status?: string } = {},
+  options: { enabled?: boolean } = {},
+) =>
+  useQuery<{ data: SampleTest[] }>({
+    queryKey: [...keys.all, 'tests', params],
+    queryFn: () => api.get('/testing/tests', { params }).then((r) => r.data),
+    enabled: options.enabled ?? true,
   });
 
 export const useAssignTests = (sampleId: string) => {
