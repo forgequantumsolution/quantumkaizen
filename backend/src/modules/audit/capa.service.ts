@@ -251,12 +251,20 @@ export const listCapas = async (q: ListCapaQuery) => {
       { capaNumber: { contains: q.search, mode: 'insensitive' } },
     ];
   }
-  const items = await prisma.capa.findMany({
-    where,
-    include: capaInclude,
-    orderBy: { createdAt: 'desc' },
-  });
-  return { data: items.map(serializeCapa) };
+  const [items, total] = await Promise.all([
+    prisma.capa.findMany({
+      where,
+      include: capaInclude,
+      orderBy: { createdAt: 'desc' },
+      skip: (q.page - 1) * q.page_size,
+      take: q.page_size,
+    }),
+    prisma.capa.count({ where }),
+  ]);
+  return {
+    data: items.map(serializeCapa),
+    pagination: { total_items: total, page: q.page, page_size: q.page_size },
+  };
 };
 
 // Fishbone categories — kept in sync with the frontend capa/capaData.ts.
@@ -570,12 +578,20 @@ export const listActionItems = async (q: ListActionItemQuery) => {
       { actionNumber: { contains: q.search, mode: 'insensitive' } },
     ];
   }
-  const items = await prisma.actionItem.findMany({
-    where,
-    include: actionInclude,
-    orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
-  });
-  return { data: items.map(serializeAction) };
+  const [items, total] = await Promise.all([
+    prisma.actionItem.findMany({
+      where,
+      include: actionInclude,
+      orderBy: [{ status: 'asc' }, { dueDate: 'asc' }, { createdAt: 'desc' }],
+      skip: (q.page - 1) * q.page_size,
+      take: q.page_size,
+    }),
+    prisma.actionItem.count({ where }),
+  ]);
+  return {
+    data: items.map(serializeAction),
+    pagination: { total_items: total, page: q.page, page_size: q.page_size },
+  };
 };
 
 export const createActionItem = async (input: ActionItemUpsertInput, userId?: string) => {

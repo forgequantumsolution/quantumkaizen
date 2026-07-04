@@ -12,7 +12,8 @@ import ApprovalAwaitingCard from './detail/ApprovalAwaitingCard';
 import TicketHeaderCard from './detail/TicketHeaderCard';
 import StageFormSection from './detail/StageFormSection';
 import TicketFormHistory from './detail/TicketFormHistory';
-import TicketFlowCanvas, { type SelectedStageInfo } from './detail/TicketFlowCanvas';
+import { type SelectedStageInfo } from './detail/TicketFlowCanvas';
+import StageTabs from './detail/StageTabs';
 import TicketActivityModal from './detail/TicketActivityModal';
 import TicketDetailsModal from './detail/TicketDetailsModal';
 
@@ -106,33 +107,14 @@ export default function TicketDetailPage() {
         />
 
         {flow && workflowOpen && (
-          <Card noPadding className="overflow-hidden">
-            <TicketFlowCanvas
-              workflowId={flow.workflow.id}
-              currentStageIds={flow.currentStages.map((s) => s.canonicalId)}
-              currentPersistedStageIds={flow.currentStages.map((s) => s.id)}
-              isCompleted={isCompleted}
-              direction="LR"
-              height={240}
-              onStageNodeClick={setSelectedStage}
-              onPaneClick={() => setSelectedStage(null)}
-            />
-            {selectedStage && !selectedStage.isCurrent && (
-              <div className="px-4 py-2 border-t border-gray-100 bg-slate-50 text-xs flex items-center gap-2">
-                <span className="text-slate-500 uppercase font-semibold tracking-wide text-[10px]">
-                  {selectedStage.isInitial ? 'Initial stage' : 'Selected stage'}
-                </span>
-                <span className="font-medium text-slate-800">{selectedStage.name}</span>
-                <button
-                  type="button"
-                  className="ml-auto text-slate-500 hover:text-slate-700"
-                  onClick={() => setSelectedStage(null)}
-                >
-                  Clear
-                </button>
-              </div>
-            )}
-          </Card>
+          <StageTabs
+            workflowId={flow.workflow.id}
+            currentStageIds={flow.currentStages.map((s) => s.canonicalId)}
+            currentPersistedStageIds={flow.currentStages.map((s) => s.id)}
+            isCompleted={isCompleted}
+            selectedCanonicalId={selectedStage?.canonicalId ?? null}
+            onStageSelect={setSelectedStage}
+          />
         )}
 
         {!isCompleted && (

@@ -4,14 +4,12 @@ import {
   Drawer,
   Input,
   Space,
-  Spin,
   Switch,
-  Table,
   message,
-  type TablePaginationConfig,
 } from 'antd';
 import { Plus, Edit3, Trash2 } from 'lucide-react';
 import type { QueryKey, UseMutationResult, UseQueryResult } from '@tanstack/react-query';
+import { DataTable } from '@/components/ui';
 import type { LookupMaster, LookupMasterUpsert } from '@/lib/api/audit';
 import { useHasPermission } from '@/stores/authStore';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
@@ -70,8 +68,6 @@ export default function LookupMasterPage({
       successMessage: `${title} deleted`,
     });
 
-  const pagination: TablePaginationConfig = { pageSize: 30, showSizeChanger: false };
-
   return (
     <>
       <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
@@ -93,33 +89,38 @@ export default function LookupMasterPage({
         )}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-32">
-          <Spin />
-        </div>
-      ) : (
-        <Table<LookupMaster>
-          size="small"
-          rowKey="id"
-          dataSource={rows}
-          pagination={pagination}
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+        <DataTable<LookupMaster>
+          data={rows}
+          isLoading={isLoading}
+          pageSize={30}
+          emptyMessage={`No ${title.toLowerCase()} records found`}
           columns={[
-            { title: 'Name', dataIndex: 'name', render: (v: string) => <span className="font-medium text-gray-800">{v}</span> },
-            { title: 'Description', dataIndex: 'description', ellipsis: true, render: (v: string | null) => v ?? '—' },
             {
-              title: 'Active',
-              dataIndex: 'is_active',
-              width: 90,
-              render: (v: boolean) => (
-                <span className={`text-xs ${v ? 'text-emerald-700' : 'text-gray-400'}`}>
-                  {v ? 'Active' : 'Inactive'}
+              key: 'name',
+              header: 'Name',
+              render: (r) => <span className="font-medium text-gray-800">{r.name}</span>,
+            },
+            {
+              key: 'description',
+              header: 'Description',
+              sortable: false,
+              render: (r) => r.description ?? '—',
+            },
+            {
+              key: 'is_active',
+              header: 'Active',
+              render: (r) => (
+                <span className={`text-xs ${r.is_active ? 'text-emerald-700' : 'text-gray-400'}`}>
+                  {r.is_active ? 'Active' : 'Inactive'}
                 </span>
               ),
             },
             {
-              title: 'Actions',
-              width: 100,
-              render: (_: unknown, r) => (
+              key: 'actions',
+              header: 'Actions',
+              sortable: false,
+              render: (r) => (
                 <Space size={4}>
                   {canUpdate && (
                     <Button
@@ -139,7 +140,7 @@ export default function LookupMasterPage({
             },
           ]}
         />
-      )}
+      </div>
 
       <LookupDrawer
         open={drawerOpen}

@@ -1,7 +1,7 @@
 import type { BuilderEdge, BuilderNode } from '@/lib/api/workflow';
 import type {
-  WorkflowReactFlowNode,
-  WorkflowReactFlowEdge,
+  WorkflowFlowNode,
+  WorkflowFlowEdge,
   StageNodeData,
   ForkNodeData,
   JoinNodeData,
@@ -9,18 +9,18 @@ import type {
 } from './builder.types';
 
 // Auto-layout (dagre) decides actual positions at render time — see
-// `layout.ts`. The builder still needs a placeholder so React Flow can mount
-// the node before the layout pass runs.
+// `layout.ts`. The canvas still needs a placeholder so the node can mount
+// before the layout pass runs.
 const DEFAULT_POS = { x: 0, y: 0 };
 
 /**
- * Convert backend `flow_json` payload to React Flow nodes/edges.
+ * Convert backend `flow_json` payload to canvas nodes/edges.
  */
 export const deserializeFlow = (
   serverNodes: BuilderNode[],
   serverEdges: BuilderEdge[],
-): { nodes: WorkflowReactFlowNode[]; edges: WorkflowReactFlowEdge[] } => {
-  const nodes: WorkflowReactFlowNode[] = serverNodes.map((n) => {
+): { nodes: WorkflowFlowNode[]; edges: WorkflowFlowEdge[] } => {
+  const nodes: WorkflowFlowNode[] = serverNodes.map((n) => {
     const kind = (n.data.nodeType ?? n.type ?? 'stage').toLowerCase();
     if (kind === 'fork') {
       const cfg = n.data.parallelConfig ?? {};
@@ -64,7 +64,7 @@ export const deserializeFlow = (
     return { id: n.id, type: 'stage', position: DEFAULT_POS, data };
   });
 
-  const edges: WorkflowReactFlowEdge[] = serverEdges.map((e, idx) => ({
+  const edges: WorkflowFlowEdge[] = serverEdges.map((e, idx) => ({
     id: e.id ?? `edge-${idx}`,
     source: e.source,
     target: e.target,
@@ -82,12 +82,12 @@ export const deserializeFlow = (
 };
 
 /**
- * Convert React Flow state to backend `flow_json` payload. Positions are no
+ * Convert canvas state to backend `flow_json` payload. Positions are no
  * longer round-tripped to the server — layout is purely a client concern.
  */
 export const serializeFlow = (
-  nodes: WorkflowReactFlowNode[],
-  edges: WorkflowReactFlowEdge[],
+  nodes: WorkflowFlowNode[],
+  edges: WorkflowFlowEdge[],
 ): { nodes: BuilderNode[]; edges: BuilderEdge[] } => {
   const out: BuilderNode[] = nodes.map((n) => {
     const kind = n.type ?? 'stage';

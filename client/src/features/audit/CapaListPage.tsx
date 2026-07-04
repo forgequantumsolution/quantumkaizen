@@ -1,7 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Input, Modal, Select, Space, Spin, Table, message } from 'antd';
-import { Plus, Search } from 'lucide-react';
+import { Button, Input, Modal, Select, message } from 'antd';
+import { Plus, Search, SlidersHorizontal, Check } from 'lucide-react';
+import { DataTable, type Column } from '@/components/ui';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+
+const PAGE_SIZE = 10;
 import {
   useCapas,
   useCreateCapa,
@@ -33,112 +37,157 @@ export default function CapaListPage() {
   const [status, setStatus] = useState<CapaStatus | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const activeStatusLabel = status === 'ALL' ? 'All' : status.replace(/_/g, ' ');
+
+  const debouncedSearch = useDebouncedValue(search, 450);
+  useEffect(() => setPage(1), [debouncedSearch, status]);
 
   const { data, isLoading } = useCapas({
+    page,
+    page_size: PAGE_SIZE,
     status: status === 'ALL' ? undefined : status,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
   });
   const rows = data?.data ?? [];
+  const totalItems = data?.pagination?.total_items ?? rows.length;
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div>
+      {/* Single toolbar row: title + search + filter + create. */}
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="min-w-0">
           <h2 className="text-base font-semibold text-gray-900">CAPA</h2>
           <p className="text-xs text-gray-500">
             Corrective &amp; preventive actions raised from non-conformances
           </p>
         </div>
-        {canCreate && (
-          <Button type="primary" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
-            New CAPA
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            allowClear
+            prefix={<Search size={14} className="text-gray-400" />}
+            placeholder="Search CAPA # or title"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 240 }}
+          />
+          <Button icon={<SlidersHorizontal size={14} />} onClick={() => setFilterOpen(true)}>
+            Filter
+            {status !== 'ALL' && (
+              <span className="ml-1.5 inline-flex items-center rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold px-1.5 py-0.5 capitalize">
+                {activeStatusLabel.toLowerCase()}
+              </span>
+            )}
           </Button>
-        )}
+          {canCreate && (
+            <Button type="primary" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
+              New CAPA
+            </Button>
+          )}
+        </div>
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <div className="flex items-center gap-1 flex-wrap">
-          {STATUSES.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatus(s)}
-              className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
-                status === s
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {s.replace(/_/g, ' ')}
-            </button>
-          ))}
+      {/* Filter modal — status selection. */}
+      <Modal
+        open={filterOpen}
+        onCancel={() => setFilterOpen(false)}
+        title="Filter CAPAs"
+        footer={
+          <div className="flex items-center justify-between">
+            <Button type="text" onClick={() => setStatus('ALL')} disabled={status === 'ALL'}>
+              Clear
+            </Button>
+            <Button type="primary" onClick={() => setFilterOpen(false)}>
+              Done
+            </Button>
+          </div>
+        }
+      >
+        <div className="py-1">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">
+            Status
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {STATUSES.map((s) => {
+              const active = status === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setStatus(s)}
+                  className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm font-medium capitalize transition-colors ${
+                    active
+                      ? 'border-gold-400 bg-gold-50 text-gold-800'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{s === 'ALL' ? 'All' : s.replace(/_/g, ' ').toLowerCase()}</span>
+                  {active && <Check size={15} className="text-gold-600 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
-        <Input
-          allowClear
-          prefix={<Search size={14} className="text-gray-400" />}
-          placeholder="Search CAPA # or title"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
+      </Modal>
+
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+        <DataTable<Capa>
+          data={rows}
+          isLoading={isLoading}
+          emptyMessage="No CAPAs found"
+          onRowClick={(r) => nav(`/audit/capa/${r.id}`)}
+          columns={CAPA_COLUMNS}
+          serverPagination={{
+            page,
+            pageSize: PAGE_SIZE,
+            totalItems,
+            onPageChange: setPage,
+          }}
         />
       </div>
-
-      {isLoading ? (
-        <div className="flex items-center justify-center py-32">
-          <Spin />
-        </div>
-      ) : (
-        <Table<Capa>
-          size="small"
-          rowKey="id"
-          dataSource={rows}
-          pagination={{ pageSize: 20, showSizeChanger: false }}
-          onRow={(r) => ({ onClick: () => nav(`/audit/capa/${r.id}`), className: 'cursor-pointer' })}
-          columns={[
-            {
-              title: 'CAPA #',
-              dataIndex: 'capa_number',
-              width: 140,
-              render: (v: string) => <span className="font-mono text-blue-600">{v}</span>,
-            },
-            { title: 'Title', dataIndex: 'title', ellipsis: true },
-            { title: 'Type', dataIndex: 'type', width: 110, render: (v: string) => v },
-            {
-              title: 'Status',
-              dataIndex: 'status',
-              width: 130,
-              render: (v: CapaStatus) => <CapaStatusBadge status={v} />,
-            },
-            {
-              title: 'Source NC',
-              width: 130,
-              render: (_: unknown, r) =>
-                r.non_conformance ? (
-                  <span className="font-mono text-emerald-700">{r.non_conformance.ncNumber}</span>
-                ) : (
-                  '—'
-                ),
-            },
-            { title: 'Owner', width: 140, render: (_: unknown, r) => r.owner?.name ?? '—' },
-            {
-              title: 'Actions',
-              dataIndex: 'action_item_count',
-              width: 80,
-              render: (v: number) => v,
-            },
-            {
-              title: 'Due',
-              dataIndex: 'due_date',
-              width: 110,
-              render: (v: string | null) => (v ? new Date(v).toLocaleDateString() : '—'),
-            },
-          ]}
-        />
-      )}
 
       <CreateCapaModal open={createOpen} onClose={() => setCreateOpen(false)} />
     </>
   );
 }
+
+const CAPA_COLUMNS: Column<Capa>[] = [
+  {
+    key: 'capa_number',
+    header: 'CAPA #',
+    render: (r) => <span className="font-mono text-blue-600">{r.capa_number}</span>,
+  },
+  { key: 'title', header: 'Title' },
+  { key: 'type', header: 'Type' },
+  {
+    key: 'status',
+    header: 'Status',
+    sortable: false,
+    render: (r) => <CapaStatusBadge status={r.status as CapaStatus} />,
+  },
+  {
+    key: 'source_nc',
+    header: 'Source NC',
+    sortable: false,
+    render: (r) =>
+      r.non_conformance ? (
+        <span className="font-mono text-emerald-700">{r.non_conformance.ncNumber}</span>
+      ) : (
+        '—'
+      ),
+  },
+  { key: 'owner', header: 'Owner', sortable: false, render: (r) => r.owner?.name ?? '—' },
+  {
+    key: 'action_item_count',
+    header: 'Actions',
+    render: (r) => r.action_item_count,
+  },
+  {
+    key: 'due_date',
+    header: 'Due',
+    render: (r) => (r.due_date ? new Date(r.due_date).toLocaleDateString() : '—'),
+  },
+];
 
 function CreateCapaModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const nav = useNavigate();

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { App } from 'antd';
@@ -34,6 +34,7 @@ import {
   Input,
   Select,
   KpiCard,
+  Modal,
 } from '@/components/ui';
 import type { KpiAccent } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
@@ -150,6 +151,7 @@ export default function ModulePage({
   const [priorityId, setPriorityId] = useState<string>('');
   const [workflowFilterId, setWorkflowFilterId] = useState<string>('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [tablePage, setTablePage] = useState(1);
 
   // Reset state when switching modules — honoring a ?tab= deep-link.
   useEffect(() => {
@@ -254,6 +256,18 @@ export default function ModulePage({
     return list;
   }, [allTickets, tab, activeKpi, search, priorityId, workflowFilterId, user, bookmarks, isWorkspaceWideViewer]);
 
+  // Paginate the visible table (10 / page). The KPI counts still come from the
+  // full `allTickets` set, so they stay accurate regardless of the page shown.
+  const TABLE_PAGE_SIZE = 10;
+  const tableTotalPages = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
+  useEffect(() => {
+    setTablePage(1);
+  }, [activeKpi, search, priorityId, workflowFilterId, tab]);
+  const pagedTickets = useMemo(
+    () => filtered.slice((tablePage - 1) * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE),
+    [filtered, tablePage],
+  );
+
   const handleDelete = (t: TicketSummary) => {
     modal.confirm({
       title: 'Delete ticket',
@@ -324,6 +338,12 @@ export default function ModulePage({
   const codePrefix = workflowType?.codePrefix;
   const hasFilter = !!priorityId || !!workflowFilterId;
 
+  // The "Document Review" module lives under DMS: documents are authored in the
+  // DMS library, so this workspace is create-free and drops the KPI band. Detect
+  // it the same way the sidebar does so only this module is affected.
+  const isDocReview = /^document\s*review$/i.test(moduleName.trim());
+  const showCreate = canCreate && !isDocReview;
+
   // Download + Customize Columns — shown on its own row on the full page, but
   // tucked to the right of the header row when embedded (Audit My Workspace).
   const tableToolbar = (
@@ -355,128 +375,150 @@ export default function ModulePage({
     </>
   );
 
+  // Shared controls reused by both the embedded compact bar and the full hero.
+  const searchField = (
+    <div className="relative w-60">
+      <Search
+        size={15}
+        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
+      />
+      <Input
+        placeholder="Search requests…"
+        value={searchInput}
+        onChange={(e) => setSearchInput(e.target.value)}
+        className="pl-10 !rounded-full"
+      />
+    </div>
+  );
+
+  const filterButton = (
+    <Button
+      variant={hasFilter ? 'primary' : 'outline'}
+      size="sm"
+      onClick={() => setFilterOpen((v) => !v)}
+    >
+      <FilterIcon size={14} />
+      <span className="ml-1.5">Filter</span>
+      {hasFilter && (
+        <span className="ml-1.5 bg-white/30 text-white text-[10px] font-semibold rounded-full w-4 h-4 inline-flex items-center justify-center">
+          {(priorityId ? 1 : 0) + (workflowFilterId ? 1 : 0)}
+        </span>
+      )}
+    </Button>
+  );
+
   const body = (
     <>
-      {/* ── Top header (title + search + filter + buttons) ──────────────── */}
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        {!embedded && (
-          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
-            {moduleName}
-          </h1>
-        )}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative w-64">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
-            />
-            <Input
-              placeholder="Search requests…"
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              className="pl-9"
-            />
+      {embedded ? (
+        /* ── Embedded compact bar (e.g. Audit → My Tasks) ─────────────── */
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            {searchField}
           </div>
-          <Button
-            variant={hasFilter ? 'primary' : 'outline'}
-            size="sm"
-            onClick={() => setFilterOpen((v) => !v)}
-          >
-            <FilterIcon size={14} />
-            <span className="ml-1.5">Filter</span>
-            {hasFilter && (
-              <span className="ml-1.5 bg-white/30 text-white text-[10px] font-semibold rounded-full w-4 h-4 inline-flex items-center justify-center">
-                {(priorityId ? 1 : 0) + (workflowFilterId ? 1 : 0)}
-              </span>
-            )}
-          </Button>
-          {!embedded && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate('/dashboard')}
-            >
-              <LayoutDashboard size={14} />
-              <span className="ml-1.5">View Dashboard</span>
-            </Button>
-          )}
-          {!embedded && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => {
-                setTab('dashboard');
-                setActiveKpi(null);
-                setSearchInput('');
-              }}
-            >
-              <History size={14} />
-              <span className="ml-1.5">Recent {moduleName} Details</span>
-            </Button>
-          )}
-          {!embedded && canCreate && (
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setCreateOpen(true)}
-              disabled={typeWorkflows.length === 0}
-              title={
-                typeWorkflows.length === 0
-                  ? `No active ${moduleName} workflows yet — create one first.`
-                  : undefined
-              }
-            >
-              <Plus size={14} />
-              <span className="ml-1.5">Initiate {moduleName}</span>
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap ml-auto">
+            {filterButton}
+            {(tab === 'workspace' || activeKpi) && tableToolbar}
+          </div>
         </div>
+      ) : (
+        /* ── Full hero header card ─────────────────────────────────────── */
+        <div className="rounded-xl border border-gray-200/80 bg-white shadow-sm overflow-hidden border-l-[3px] border-l-gold-500">
+          <div className="px-3.5 py-2.5">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              {/* Identity + tabs share the top row. */}
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                  <WorkflowIcon size={18} />
+                </span>
+                <h1 className="text-[15px] font-bold text-gray-900 tracking-tight truncate leading-none">
+                  {moduleName}
+                </h1>
+                {codePrefix && (
+                  <span className="text-[10px] font-mono font-bold text-gold-700 bg-gold-50 ring-1 ring-gold-200 px-1.5 py-0.5 rounded-md shrink-0">
+                    {codePrefix}
+                  </span>
+                )}
+                <div className="h-6 w-px bg-gray-200 shrink-0 hidden md:block" />
+                <div className="w-fit max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -my-1">
+                  <nav className="inline-flex gap-1.5 p-1 rounded-lg bg-gray-100/80 ring-1 ring-gray-200/60">
+                    <TabButton
+                      active={tab === 'dashboard'}
+                      onClick={() => setTab('dashboard')}
+                      icon={<LayoutDashboard size={14} />}
+                      label="Overview"
+                    />
+                    <TabButton
+                      active={tab === 'workspace'}
+                      onClick={() => setTab('workspace')}
+                      icon={<Briefcase size={14} />}
+                      label="My Tasks"
+                    />
+                  </nav>
+                </div>
+              </div>
 
-        {/* Embedded: keep the table toolbar on the same row, pushed right. */}
-        {embedded && (tab === 'workspace' || activeKpi) && (
-          <div className="flex items-center gap-2 flex-wrap ml-auto">{tableToolbar}</div>
-        )}
-      </div>
-
-      {/* ── Sub-tabs ────────────────────────────────────────────────────── */}
-      {!embedded && (
-        <div className="mt-3 border-b border-gray-200 flex items-center gap-1">
-          <TabButton
-            active={tab === 'dashboard'}
-            onClick={() => setTab('dashboard')}
-            icon={<LayoutDashboard size={14} />}
-            label="Dashboard"
-          />
-          <TabButton
-            active={tab === 'workspace'}
-            onClick={() => setTab('workspace')}
-            icon={<Briefcase size={14} />}
-            label="My Workspace"
-          />
-          {codePrefix && (
-            <span className="ml-auto text-[11px] font-mono text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded mb-1.5">
-              {codePrefix}
-            </span>
-          )}
+              {/* Actions */}
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {searchField}
+                {filterButton}
+                {!isDocReview && (
+                  <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')}>
+                    <LayoutDashboard size={14} />
+                    <span className="ml-1.5">Analytics</span>
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setTab('dashboard');
+                    setActiveKpi(null);
+                    setSearchInput('');
+                  }}
+                >
+                  <History size={14} />
+                  <span className="ml-1.5">Recent Records</span>
+                </Button>
+                {showCreate && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => setCreateOpen(true)}
+                    disabled={typeWorkflows.length === 0}
+                    title={
+                      typeWorkflows.length === 0
+                        ? `No active ${moduleName} workflows yet — create one first.`
+                        : undefined
+                    }
+                  >
+                    <Plus size={14} />
+                    <span className="ml-1.5">New {moduleName}</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
       {tab === 'dashboard' && (
         <>
-          {/* ── KPI cards ───────────────────────────────────────────────── */}
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {KPI_DEFS.map((k) => (
-              <KpiCard
-                key={k.id}
-                label={k.label}
-                value={kpiCounts[k.id]}
-                icon={k.icon}
-                accent={k.accent}
-                selected={activeKpi === k.id}
-                onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
-              />
-            ))}
-          </div>
+          {/* ── KPI cards (hidden for Document Review under DMS) ─────────── */}
+          {!isDocReview && (
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {KPI_DEFS.map((k) => (
+                <KpiCard
+                  key={k.id}
+                  label={k.label}
+                  value={kpiCounts[k.id]}
+                  icon={k.icon}
+                  accent={k.accent}
+                  selected={activeKpi === k.id}
+                  onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
+                />
+              ))}
+            </div>
+          )}
 
           {/* ── Module dashboard (charts) ──────────────────────────────── */}
           {!activeKpi && (
@@ -495,66 +537,65 @@ export default function ModulePage({
         </div>
       )}
 
-      {filterOpen && (
-        <Card className="!p-3 mt-2">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-2 items-end">
-            <div className="md:col-span-4">
-              <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                Priority
-              </label>
-              <Select
-                value={priorityId}
-                onChange={(e) => setPriorityId(e.target.value)}
-                placeholder="Any priority"
-                options={[
-                  { value: '', label: 'Any priority' },
-                  ...priorities.map((p) => ({ value: p.id, label: p.name })),
-                ]}
-              />
-            </div>
-            <div className="md:col-span-5">
-              <label className="block text-[11px] font-medium text-gray-600 mb-1">
-                Workflow
-              </label>
-              <Select
-                value={workflowFilterId}
-                onChange={(e) => setWorkflowFilterId(e.target.value)}
-                placeholder="Any workflow"
-                options={[
-                  { value: '', label: 'Any workflow' },
-                  ...typeWorkflows.map((w) => ({
-                    value: w.id,
-                    label: displayWorkflowName(w),
-                  })),
-                ]}
-              />
-            </div>
-            <div className="md:col-span-3 flex gap-2">
-              {hasFilter && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setPriorityId('');
-                    setWorkflowFilterId('');
-                  }}
-                >
-                  <X size={12} />
-                  <span className="ml-1">Clear</span>
-                </Button>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setFilterOpen(false)}
-                className="ml-auto"
-              >
-                Done
-              </Button>
-            </div>
+      <Modal
+        isOpen={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        title={`Filter ${moduleName}`}
+        size="sm"
+        footer={
+          <div className="flex items-center justify-between w-full">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={!hasFilter}
+              onClick={() => {
+                setPriorityId('');
+                setWorkflowFilterId('');
+              }}
+            >
+              <X size={13} />
+              <span className="ml-1">Clear</span>
+            </Button>
+            <Button variant="primary" size="sm" onClick={() => setFilterOpen(false)}>
+              Done
+            </Button>
           </div>
-        </Card>
-      )}
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Priority
+            </label>
+            <Select
+              value={priorityId}
+              onChange={(e) => setPriorityId(e.target.value)}
+              placeholder="Any priority"
+              options={[
+                { value: '', label: 'Any priority' },
+                ...priorities.map((p) => ({ value: p.id, label: p.name })),
+              ]}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+              Workflow
+            </label>
+            <Select
+              value={workflowFilterId}
+              onChange={(e) => setWorkflowFilterId(e.target.value)}
+              placeholder="Any workflow"
+              options={[
+                { value: '', label: 'Any workflow' },
+                ...typeWorkflows.map((w) => ({
+                  value: w.id,
+                  label: displayWorkflowName(w),
+                })),
+              ]}
+            />
+          </div>
+        </div>
+      </Modal>
 
       {/* ── Table (workspace tab, or when a KPI is filtered) ────────────── */}
       {(tab === 'workspace' || activeKpi) && (
@@ -574,18 +615,18 @@ export default function ModulePage({
               title={`No ${moduleName} tickets`}
               description={
                 allTickets.length === 0
-                  ? canCreate
-                    ? `Initiate the first ${moduleName} to get started.`
+                  ? showCreate
+                    ? `Create the first ${moduleName} to get started.`
                     : `No ${moduleName} tickets yet.`
                   : 'Try clearing filters or switching tabs.'
               }
               actionLabel={
-                allTickets.length === 0 && canCreate
-                  ? `Initiate ${moduleName}`
+                allTickets.length === 0 && showCreate
+                  ? `New ${moduleName}`
                   : 'Clear filters'
               }
               onAction={() => {
-                if (allTickets.length === 0 && canCreate) {
+                if (allTickets.length === 0 && showCreate) {
                   setCreateOpen(true);
                 } else {
                   setActiveKpi(null);
@@ -599,13 +640,55 @@ export default function ModulePage({
           </Card>
         ) : (
           <TicketTable
-            tickets={filtered}
+            tickets={pagedTickets}
             moduleName={moduleName}
             visibleCols={visibleCols}
             isBookmarked={(id) => bookmarks.isBookmarked(id)}
             onToggleBookmark={(id) => bookmarks.toggle(id)}
             onView={(t) => navigate(`/tickets/${t.id}`)}
             onDelete={canDelete ? handleDelete : undefined}
+            footer={
+              filtered.length > TABLE_PAGE_SIZE ? (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-surface-secondary">
+                  <p className="text-xs text-gray-500">
+                    Showing {(tablePage - 1) * TABLE_PAGE_SIZE + 1}–
+                    {Math.min(tablePage * TABLE_PAGE_SIZE, filtered.length)} of {filtered.length}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setTablePage((p) => Math.max(1, p - 1))}
+                      disabled={tablePage === 1}
+                      className="px-2 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100 transition-colors"
+                    >
+                      Prev
+                    </button>
+                    {Array.from({ length: tableTotalPages }, (_, i) => i + 1)
+                      .slice(Math.max(0, tablePage - 3), Math.max(0, tablePage - 3) + 5)
+                      .map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setTablePage(p)}
+                          className={cn(
+                            'w-7 h-7 text-xs rounded border transition-colors',
+                            p === tablePage
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'border-gray-200 hover:bg-gray-100',
+                          )}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    <button
+                      onClick={() => setTablePage((p) => Math.min(tableTotalPages, p + 1))}
+                      disabled={tablePage >= tableTotalPages}
+                      className="px-2 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100 transition-colors"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              ) : null
+            }
           />
         )}
       </div>
@@ -639,10 +722,10 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
       type="button"
       onClick={onClick}
       className={cn(
-        'inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+        'inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold rounded-lg transition-all duration-150',
         active
-          ? 'text-blue-600 border-blue-500'
-          : 'text-gray-500 border-transparent hover:text-gray-800',
+          ? 'bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80'
+          : 'text-gray-500 hover:text-gray-900 hover:bg-white/70',
       )}
     >
       {icon}
@@ -699,6 +782,7 @@ interface TicketTableProps {
   onToggleBookmark: (id: string) => void;
   onView: (t: TicketSummary) => void;
   onDelete?: (t: TicketSummary) => void;
+  footer?: ReactNode;
 }
 
 function TicketTable({
@@ -709,6 +793,7 @@ function TicketTable({
   onToggleBookmark,
   onView,
   onDelete,
+  footer,
 }: TicketTableProps) {
   return (
     <Card noPadding className="overflow-hidden">
@@ -853,6 +938,7 @@ function TicketTable({
           </tbody>
         </table>
       </div>
+      {footer}
     </Card>
   );
 }

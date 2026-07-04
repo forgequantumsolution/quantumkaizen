@@ -21,6 +21,17 @@ interface DataTableProps<T> {
   selectable?: boolean;
   bulkActions?: { label: string; action: string; variant?: 'danger' | 'default' }[];
   onBulkAction?: (action: string, selectedRows: T[]) => void;
+  /**
+   * When provided, the table is driven by the server: `data` is treated as the
+   * current page (not sliced), client-side sorting is disabled, and the pager
+   * reflects `totalItems`. `page` is 1-based.
+   */
+  serverPagination?: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    onPageChange: (page: number) => void;
+  };
 }
 
 function SkeletonRows({ columns, rows = 5 }: { columns: number; rows?: number }) {
@@ -53,6 +64,7 @@ export function DataTable<T>({
   selectable,
   bulkActions,
   onBulkAction,
+  serverPagination,
 }: DataTableProps<T>) {
   const [page, setPage] = useState(0);
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -69,19 +81,32 @@ export function DataTable<T>({
     setPage(0);
   };
 
-  const sortedData = sortKey
-    ? [...data].sort((a, b) => {
-        const av = (a as any)[sortKey];
-        const bv = (b as any)[sortKey];
-        if (av == null) return 1;
-        if (bv == null) return -1;
-        const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
-        return sortDir === 'asc' ? cmp : -cmp;
-      })
-    : data;
+  // Client sorting only applies in client-pagination mode; the server owns
+  // ordering when paginating server-side.
+  const sortedData =
+    !serverPagination && sortKey
+      ? [...data].sort((a, b) => {
+          const av = (a as any)[sortKey];
+          const bv = (b as any)[sortKey];
+          if (av == null) return 1;
+          if (bv == null) return -1;
+          const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
+          return sortDir === 'asc' ? cmp : -cmp;
+        })
+      : data;
 
-  const paginatedData = sortedData.slice(page * pageSize, (page + 1) * pageSize);
-  const totalPages = Math.ceil(sortedData.length / pageSize);
+  const effPageSize = serverPagination?.pageSize ?? pageSize;
+  const effPage = serverPagination ? serverPagination.page - 1 : page;
+  const totalItems = serverPagination?.totalItems ?? sortedData.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / effPageSize));
+  // In server mode `data` is already the current page; don't slice it.
+  const paginatedData = serverPagination
+    ? data
+    : sortedData.slice(page * pageSize, (page + 1) * pageSize);
+  const goToPage = (p: number) => {
+    if (serverPagination) serverPagination.onPageChange(p + 1);
+    else setPage(p);
+  };
 
   const toggleRow = (idx: number) => {
     setSelectedIds((prev) => {
@@ -158,20 +183,22 @@ export function DataTable<T>({
                   />
                 </th>
               )}
-              {columns.map((col) => (
+              {columns.map((col) => {
+                const canSort = !serverPagination && col.sortable !== false;
+                return (
                 <th
                   key={col.key}
                   className={cn(
                     'px-5 py-3 text-xxs font-semibold uppercase tracking-wider text-gray-500',
                     'whitespace-nowrap select-none',
-                    col.sortable !== false && 'cursor-pointer hover:text-gray-700',
+                    canSort && 'cursor-pointer hover:text-gray-700',
                     col.className,
                   )}
-                  onClick={() => col.sortable !== false && handleSort(col.key)}
+                  onClick={() => canSort && handleSort(col.key)}
                 >
                   <div className="flex items-center gap-1">
                     {col.header}
-                    {col.sortable !== false && (
+                    {canSort && (
                       <span className="shrink-0">
                         {sortKey === col.key ? (
                           sortDir === 'asc' ? (
@@ -186,7 +213,8 @@ export function DataTable<T>({
                     )}
                   </div>
                 </th>
-              ))}
+                );
+              })}
             </tr>
           </thead>
           <tbody>
@@ -233,28 +261,29 @@ export function DataTable<T>({
         </table>
       </div>
 
-      {sortedData.length > pageSize && (
+      {totalItems > effPageSize && (
         <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-surface-secondary">
           <p className="text-xs text-gray-500">
-            Showing {page * pageSize + 1}–{Math.min((page + 1) * pageSize, sortedData.length)} of {sortedData.length}
+            Showing {totalItems === 0 ? 0 : effPage * effPageSize + 1}–
+            {Math.min((effPage + 1) * effPageSize, totalItems)} of {totalItems}
           </p>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              disabled={page === 0}
+              onClick={() => goToPage(Math.max(0, effPage - 1))}
+              disabled={effPage === 0}
               className="px-2 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100 transition-colors"
             >
               Prev
             </button>
             {Array.from({ length: totalPages }, (_, i) => i)
-              .slice(Math.max(0, page - 2), Math.min(totalPages, page + 3))
+              .slice(Math.max(0, effPage - 2), Math.min(totalPages, effPage + 3))
               .map((i) => (
                 <button
                   key={i}
-                  onClick={() => setPage(i)}
+                  onClick={() => goToPage(i)}
                   className={cn(
                     'w-7 h-7 text-xs rounded border transition-colors',
-                    i === page
+                    i === effPage
                       ? 'bg-blue-600 text-white border-blue-600'
                       : 'border-gray-200 hover:bg-gray-100',
                   )}
@@ -263,8 +292,8 @@ export function DataTable<T>({
                 </button>
               ))}
             <button
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              disabled={page >= totalPages - 1}
+              onClick={() => goToPage(Math.min(totalPages - 1, effPage + 1))}
+              disabled={effPage >= totalPages - 1}
               className="px-2 py-1 text-xs rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-100 transition-colors"
             >
               Next

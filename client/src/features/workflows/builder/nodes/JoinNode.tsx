@@ -1,59 +1,38 @@
-import { Handle, Position, type NodeProps } from 'reactflow';
 import { Merge } from 'lucide-react';
 import type { JoinNodeData } from '../builder.types';
+import type { NodeComponentProps } from './types';
 
-const SOURCE_STYLE: React.CSSProperties = {
-  width: 12,
-  height: 12,
-  background: '#fff',
-  border: '2px solid #7C3AED',
-};
-
-const BRANCH_STYLE: React.CSSProperties = {
-  width: 12,
-  height: 12,
-  background: '#7C3AED',
-  border: '2px solid #fff',
-};
-
-export default function JoinNode({ data, selected }: NodeProps<JoinNodeData>) {
-  const branches = Array.from({ length: data.branchCount }, (_, i) => i);
-
+export default function JoinNode({ data, selected }: NodeComponentProps<JoinNodeData>) {
   return (
     <div
-      className="rounded-lg border bg-purple-50 shadow-sm"
+      className="wf-node-card"
       style={{
-        minWidth: 180,
-        borderColor: selected ? '#C9A84C' : '#A78BFA',
-        borderWidth: selected ? 2 : 1,
-        boxShadow: selected ? '0 0 0 3px rgba(201,168,76,0.18)' : undefined,
+        minWidth: 188,
+        borderRadius: 12,
+        border: `1px solid ${selected ? '#C9A84C' : '#C4B5FD'}`,
+        borderLeft: '4px solid #6D28D9',
+        background: '#FBFAFF',
+        boxShadow: selected
+          ? '0 0 0 3px rgba(201,168,76,0.22)'
+          : '0 4px 12px rgba(109,40,217,0.10)',
+        overflow: 'hidden',
       }}
     >
-      {branches.map((i) => (
-        <Handle
-          key={`branch-${i}`}
-          type="target"
-          position={Position.Top}
-          id={`branch-${i}`}
-          style={{
-            ...BRANCH_STYLE,
-            left: `${((i + 1) * 100) / (data.branchCount + 1)}%`,
-          }}
-        />
-      ))}
-
-      <div className="px-3 py-2 border-b text-xs font-medium tracking-wide uppercase text-purple-700 bg-purple-100/60">
+      <div
+        className="px-3 py-2 text-[11px] font-semibold tracking-wide uppercase text-purple-800"
+        style={{ background: 'linear-gradient(135deg,#DDD6FE 0%,#EDE9FE 100%)' }}
+      >
         <div className="flex items-center gap-1.5">
-          <Merge size={12} />
+          <Merge size={13} />
           <span>Join — {data.joinType}</span>
         </div>
       </div>
-      <div className="px-3 py-2">
+      <div className="px-3 py-2.5">
         <div className="text-sm font-semibold text-gray-900">{data.label || 'Join'}</div>
-        <div className="text-xs text-gray-500 mt-0.5">{data.branchCount} branches</div>
+        <div className="text-xs text-purple-500/80 mt-0.5">
+          merges {data.branchCount} branches
+        </div>
       </div>
-
-      <Handle type="source" position={Position.Bottom} style={SOURCE_STYLE} />
     </div>
   );
 }

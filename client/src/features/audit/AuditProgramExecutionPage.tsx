@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Button, Drawer, Input, Modal, Select, Space, Spin, Table, message } from 'antd';
-import { ArrowLeft, CheckCircle, PlayCircle, Plus, Trash2, Edit3 } from 'lucide-react';
+import { Button, Drawer, Input, Modal, Select, Space, Spin, message } from 'antd';
+import { DataTable } from '@/components/ui';
+import { ArrowLeft, CheckCircle, PlayCircle, Plus, Trash2, Edit3, Info } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import {
   useAuditProgram,
@@ -51,6 +52,7 @@ export default function AuditProgramExecutionPage() {
   const [findingDrawerOpen, setFindingDrawerOpen] = useState(false);
   const [editingFinding, setEditingFinding] = useState<AuditFinding | null>(null);
   const [completeOpen, setCompleteOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [summary, setSummary] = useState('');
   const [score, setScore] = useState<string>('');
 
@@ -86,6 +88,13 @@ export default function AuditProgramExecutionPage() {
       message.error(extractErr(err));
     }
   };
+
+  const findings = p.findings ?? [];
+  const sevCounts = { CRITICAL: 0, MAJOR: 0, MINOR: 0, OBSERVATION: 0 };
+  for (const f of findings) {
+    const k = f.severity as keyof typeof sevCounts;
+    if (k in sevCounts) sevCounts[k] += 1;
+  }
 
   return (
     <PageContainer>
@@ -125,56 +134,96 @@ export default function AuditProgramExecutionPage() {
         </div>
       </div>
 
-      {/* Register summary */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">
-          {p.register.title}
-        </h2>
-        <div className="text-[11px] text-gray-500 font-mono mb-3">
-          Register {p.register.register_number}
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <Field label="Audit Type" value={p.register.audit_type.replace(/_/g, ' ')} />
-          <Field label="Auditor" value={p.register.auditor?.name ?? '—'} />
-          <Field
-            label="Planned"
-            value={
-              p.register.planned_date
-                ? new Date(p.register.planned_date).toLocaleDateString()
-                : '—'
-            }
-          />
-          <Field label="Plant" value={p.register.plant ?? '—'} />
-          <Field label="Checklist" value={p.register.checklist_form?.title ?? '—'} />
-          <Field
-            label="Started"
-            value={p.started_at ? new Date(p.started_at).toLocaleString() : '—'}
-          />
-          <Field
-            label="Completed"
-            value={p.completed_at ? new Date(p.completed_at).toLocaleString() : '—'}
-          />
-          <Field label="Score" value={p.score == null ? '—' : String(p.score)} />
-        </div>
-        {p.summary && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">
-              Summary
+      {/* Program summary — key facts only; full details live in the drawer. */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-gray-900 truncate">
+              {p.register.title}
+            </h2>
+            <div className="text-[11px] text-gray-500 font-mono mt-0.5">
+              Register {p.register.register_number}
             </div>
-            <p className="text-sm text-gray-800 whitespace-pre-wrap gmp-narrative">{p.summary}</p>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5 mt-3">
+              <Fact label="Type" value={p.register.audit_type.replace(/_/g, ' ')} />
+              <Fact label="Auditor" value={p.register.auditor?.name ?? '—'} />
+              <Fact
+                label="Planned"
+                value={
+                  p.register.planned_date
+                    ? new Date(p.register.planned_date).toLocaleDateString()
+                    : '—'
+                }
+              />
+              {p.score != null && <Fact label="Score" value={String(p.score)} />}
+            </div>
           </div>
-        )}
-        {p.register.checklist_form && p.status !== 'PLANNED' && (
-          <div className="mt-3 pt-3 border-t border-gray-100">
+          <Button icon={<Info size={14} />} onClick={() => setDetailsOpen(true)}>
+            View details
+          </Button>
+        </div>
+
+        {/* Findings overview — the core of "tracking the audit". */}
+        <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+          <StatChip label="Findings" value={findings.length} tone="slate" />
+          <StatChip label="Critical" value={sevCounts.CRITICAL} tone="red" />
+          <StatChip label="Major" value={sevCounts.MAJOR} tone="amber" />
+          <StatChip label="Minor" value={sevCounts.MINOR} tone="blue" />
+          <StatChip label="Observation" value={sevCounts.OBSERVATION} tone="gray" />
+        </div>
+      </div>
+
+      {/* Full audit details — moved out of the main view into a drawer. */}
+      <Drawer
+        title="Audit details"
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        width={440}
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Audit Type" value={p.register.audit_type.replace(/_/g, ' ')} />
+            <Field label="Auditor" value={p.register.auditor?.name ?? '—'} />
+            <Field
+              label="Planned"
+              value={
+                p.register.planned_date
+                  ? new Date(p.register.planned_date).toLocaleDateString()
+                  : '—'
+              }
+            />
+            <Field label="Plant" value={p.register.plant ?? '—'} />
+            <Field label="Checklist" value={p.register.checklist_form?.title ?? '—'} />
+            <Field
+              label="Started"
+              value={p.started_at ? new Date(p.started_at).toLocaleString() : '—'}
+            />
+            <Field
+              label="Completed"
+              value={p.completed_at ? new Date(p.completed_at).toLocaleString() : '—'}
+            />
+            <Field label="Score" value={p.score == null ? '—' : String(p.score)} />
+          </div>
+          {p.summary && (
+            <div className="pt-3 border-t border-gray-100">
+              <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">
+                Summary
+              </div>
+              <p className="text-sm text-gray-800 whitespace-pre-wrap gmp-narrative">
+                {p.summary}
+              </p>
+            </div>
+          )}
+          {p.register.checklist_form && p.status !== 'PLANNED' && (
             <Button
-              size="small"
+              block
               onClick={() => nav(`/forms/${p.register.checklist_form!.id}/fill`)}
             >
               Open Checklist Form
             </Button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      </Drawer>
 
       {/* Findings */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -310,85 +359,86 @@ function FindingsTable({
 
   return (
     <>
-      <Table<AuditFinding>
-        size="small"
-        rowKey="id"
-        dataSource={findings}
-        pagination={false}
-        columns={[
-          {
-            title: 'Finding #',
-            dataIndex: 'finding_number',
-            width: 130,
-            render: (v: string) => <span className="font-mono text-blue-600">{v}</span>,
-          },
-          {
-            title: 'Severity',
-            dataIndex: 'severity',
-            width: 110,
-            render: (v: FindingSeverity) => <FindingSeverityBadge severity={v} />,
-          },
-          {
-            title: 'Status',
-            dataIndex: 'status',
-            width: 110,
-            render: (v: FindingStatus) => <FindingStatusBadge status={v} />,
-          },
-          {
-            title: 'Clause',
-            dataIndex: 'clause_ref',
-            width: 90,
-            render: (v: string | null, r) =>
-              v || r.iso_sub_clause?.subClauseNumber || '—',
-          },
-          { title: 'Description', dataIndex: 'description', ellipsis: true },
-          {
-            title: 'NC',
-            width: 110,
-            render: (_: unknown, r) =>
-              r.non_conformance ? (
-                <Link
-                  to="/audit/non-conformance"
-                  className="font-mono text-emerald-700 hover:underline"
-                >
-                  {r.non_conformance.ncNumber}
-                </Link>
-              ) : (
-                '—'
-              ),
-          },
-          {
-            title: 'Actions',
-            width: 230,
-            render: (_: unknown, r) => (
-              <Space size={4}>
-                {canEdit && (
-                  <Button
-                    size="small"
-                    icon={<Edit3 size={12} />}
-                    onClick={() => onEdit(r)}
-                  />
-                )}
-                {canPromote &&
-                  !r.non_conformance &&
-                  r.severity !== 'OBSERVATION' && (
-                    <Button size="small" onClick={() => setPromoting(r)}>
-                      Promote → NC
-                    </Button>
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <DataTable<AuditFinding>
+          data={findings}
+          pageSize={1000}
+          emptyMessage="No findings recorded yet."
+          columns={[
+            {
+              key: 'finding_number',
+              header: 'Finding #',
+              render: (r) => <span className="font-mono text-blue-600">{r.finding_number}</span>,
+            },
+            {
+              key: 'severity',
+              header: 'Severity',
+              sortable: false,
+              render: (r) => <FindingSeverityBadge severity={r.severity as FindingSeverity} />,
+            },
+            {
+              key: 'status',
+              header: 'Status',
+              sortable: false,
+              render: (r) => <FindingStatusBadge status={r.status as FindingStatus} />,
+            },
+            {
+              key: 'clause_ref',
+              header: 'Clause',
+              sortable: false,
+              render: (r) => r.clause_ref || r.iso_sub_clause?.subClauseNumber || '—',
+            },
+            { key: 'description', header: 'Description' },
+            {
+              key: 'nc',
+              header: 'NC',
+              sortable: false,
+              render: (r) =>
+                r.non_conformance ? (
+                  <Link
+                    to="/audit/non-conformance"
+                    className="font-mono text-emerald-700 hover:underline"
+                  >
+                    {r.non_conformance.ncNumber}
+                  </Link>
+                ) : (
+                  '—'
+                ),
+            },
+            {
+              key: 'actions',
+              header: 'Actions',
+              sortable: false,
+              render: (r) => (
+                <Space size={4}>
+                  {canEdit && (
+                    <Button
+                      size="small"
+                      icon={<Edit3 size={12} />}
+                      onClick={() => onEdit(r)}
+                    />
                   )}
-                {canDelete && (
-                  <Button
-                    size="small"
-                    danger
-                    icon={<Trash2 size={12} />}
-                    onClick={() => handleDelete(r)}
-                  />
-                )}
-              </Space>
-            ),
-          },
-        ]}
-      />
+                  {canPromote &&
+                    !r.non_conformance &&
+                    r.severity !== 'OBSERVATION' && (
+                      <Button size="small" onClick={() => setPromoting(r)}>
+                        Promote → NC
+                      </Button>
+                    )}
+                  {canDelete && (
+                    <Button
+                      size="small"
+                      danger
+                      icon={<Trash2 size={12} />}
+                      onClick={() => handleDelete(r)}
+                    />
+                  )}
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </div>
 
       <Modal
         title={`Promote ${promoting?.finding_number ?? ''} to Non-Conformance`}
@@ -560,6 +610,43 @@ function Field({ label, value }: { label: string; value: string }) {
       <div className="text-[11px] text-gray-500 uppercase tracking-wide">{label}</div>
       <div className="text-sm text-gray-900 mt-0.5">{value}</div>
     </div>
+  );
+}
+
+// Inline key fact used in the compact summary strip.
+function Fact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-[11px] text-gray-400 uppercase tracking-wide">{label}</span>
+      <span className="text-sm font-medium text-gray-800">{value}</span>
+    </div>
+  );
+}
+
+const STAT_TONES = {
+  slate: 'bg-slate-50 text-slate-700 ring-slate-200',
+  red: 'bg-red-50 text-red-700 ring-red-200',
+  amber: 'bg-amber-50 text-amber-700 ring-amber-200',
+  blue: 'bg-blue-50 text-blue-700 ring-blue-200',
+  gray: 'bg-gray-50 text-gray-600 ring-gray-200',
+} as const;
+
+function StatChip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: keyof typeof STAT_TONES;
+}) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium ring-1 ${STAT_TONES[tone]}`}
+    >
+      <span className="font-bold tabular-nums">{value}</span>
+      {label}
+    </span>
   );
 }
 

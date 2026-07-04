@@ -1,11 +1,10 @@
 import { Input, Select } from '@/components/ui';
-import type { ForkNodeData } from '../builder.types';
-import type { Node } from 'reactflow';
+import type { ForkNodeData, WorkflowFlowNode } from '../builder.types';
 
 interface Props {
   data: ForkNodeData;
   onChange: (next: ForkNodeData) => void;
-  allNodes: Node[];
+  allNodes: WorkflowFlowNode[];
 }
 
 export default function ForkInspector({ data, onChange, allNodes }: Props) {

@@ -196,6 +196,8 @@ export interface ComplianceResultRow {
     title: string;
     register_number: string;
   };
+  // The audit's auditor — used for "by user" filtering on the performance view.
+  auditor: { id: string; name: string } | null;
   // Present only for NON_CONFORMANCE items that were synced into an NC.
   nc: { id: string; nc_number: string; status: string } | null;
 }
@@ -215,6 +217,7 @@ export const listAuditComplianceResults = async (filter?: {
       registerNumber: true,
       workflowTicketId: true,
       program: { select: { id: true } },
+      auditor: { select: { id: true, name: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -255,6 +258,7 @@ export const listAuditComplianceResults = async (filter?: {
           title: reg.title,
           register_number: reg.registerNumber,
         },
+        auditor: reg.auditor ? { id: reg.auditor.id, name: reg.auditor.name } : null,
         nc: nc ? { id: nc.id, nc_number: nc.ncNumber, status: nc.status } : null,
       });
     }

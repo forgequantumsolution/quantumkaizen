@@ -1,0 +1,185 @@
+/* ─── jsPlumb workflow canvas ─────────────────────────────────────────────
+   Styling for the community-edition (@jsplumb/browser-ui) canvas that replaced
+   React Flow. Connectors/endpoints are SVG drawn by jsPlumb; everything else
+   (grid, controls, node chrome) is ours. */
+
+.wf-canvas-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #f8fafc;
+  /* Dotted grid — two radial layers for a subtle depth. */
+  background-image: radial-gradient(circle, #dbe2ec 1.2px, transparent 1.2px);
+  background-size: 22px 22px;
+  cursor: grab;
+  touch-action: none;
+}
+.wf-canvas-viewport.is-panning {
+  cursor: grabbing;
+}
+
+/* The transformed layer jsPlumb draws into. */
+.wf-canvas-surface {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  transform-origin: 0 0;
+}
+
+/* Node wrapper — jsPlumb positions this absolutely via style.left/top. */
+.wf-node {
+  position: absolute;
+  z-index: 2;
+  user-select: none;
+}
+.wf-node .wf-node-card {
+  transition:
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+.wf-node[data-editable='true'] {
+  cursor: grab;
+}
+.wf-node[data-editable='true']:active {
+  cursor: grabbing;
+}
+.wf-node[data-editable='true']:hover .wf-node-card {
+  transform: translateY(-1px);
+}
+
+/* Connection drag handle (source). Sits at the outgoing edge of the node. */
+.wf-connect-handle {
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 2px solid #c9a84c;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.25);
+  cursor: crosshair;
+  z-index: 3;
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
+}
+.wf-node[data-dir='LR'] .wf-connect-handle {
+  bottom: auto;
+  left: auto;
+  top: 50%;
+  right: -7px;
+  transform: translateY(-50%);
+}
+.wf-connect-handle:hover {
+  background: #c9a84c;
+  transform: translateX(-50%) scale(1.2);
+}
+.wf-node[data-dir='LR'] .wf-connect-handle:hover {
+  transform: translateY(-50%) scale(1.2);
+}
+
+/* Hover-reveal delete control (top-right of each node). */
+.wf-node-delete {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #ef4444;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+  cursor: pointer;
+  z-index: 4;
+  opacity: 0;
+  transform: scale(0.8);
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease,
+    background 0.12s ease;
+}
+.wf-node:hover .wf-node-delete {
+  opacity: 1;
+  transform: scale(1);
+}
+.wf-node-delete:hover {
+  background: #dc2626;
+  transform: scale(1.12);
+}
+
+/* jsPlumb SVG connectors sit under the nodes. */
+.jtk-connector {
+  z-index: 1;
+}
+.jtk-connector path {
+  transition: stroke 0.15s ease;
+}
+.jtk-endpoint {
+  z-index: 1;
+  opacity: 0;
+}
+.jtk-connector-active path,
+.jtk-connector:hover path {
+  stroke: #c9a84c !important;
+}
+
+/* Edge labels rendered as jsPlumb overlays. */
+.wf-edge-label {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  white-space: nowrap;
+}
+
+/* Floating zoom / fit controls. */
+.wf-canvas-controls {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 10;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 4px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.1);
+}
+.wf-canvas-controls button {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  color: #475569;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.wf-canvas-controls button:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+.wf-zoom-readout {
+  text-align: center;
+  font-size: 10px;
+  color: #94a3b8;
+  font-variant-numeric: tabular-nums;
+  padding-top: 1px;
+}

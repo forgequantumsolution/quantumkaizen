@@ -1,12 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import { Button, Space, Spin, Table } from 'antd';
+import { Button, Space } from 'antd';
 import { Plus, Edit3, Trash2 } from 'lucide-react';
+import { DataTable } from '@/components/ui';
 import {
   useAuditMasters,
   useDeleteAuditMaster,
-  type AuditFrequency,
   type AuditMaster,
-  type AuditType,
 } from '@/lib/api/audit';
 import { useHasPermission } from '@/stores/authStore';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
@@ -50,61 +49,57 @@ export default function AuditMasterPage() {
         )}
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-32">
-          <Spin />
-        </div>
-      ) : (
-        <Table<AuditMaster>
-          size="small"
-          rowKey="id"
-          dataSource={rows}
-          pagination={{ pageSize: 30, showSizeChanger: false }}
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+        <DataTable<AuditMaster>
+          data={rows}
+          isLoading={isLoading}
+          pageSize={30}
+          emptyMessage="No audit masters found"
           columns={[
-            { title: 'Name', dataIndex: 'name', ellipsis: true },
+            { key: 'name', header: 'Name' },
             {
-              title: 'Type',
-              dataIndex: 'audit_type',
-              width: 120,
-              render: (v: AuditType) => (
+              key: 'audit_type',
+              header: 'Type',
+              render: (r) => (
                 <span className="text-xs font-medium text-gray-700">
-                  {v.replace(/_/g, ' ')}
+                  {r.audit_type.replace(/_/g, ' ')}
                 </span>
               ),
             },
             {
-              title: 'Frequency',
-              dataIndex: 'frequency',
-              width: 110,
-              render: (v: AuditFrequency) => v.replace(/_/g, ' '),
+              key: 'frequency',
+              header: 'Frequency',
+              render: (r) => r.frequency.replace(/_/g, ' '),
             },
             {
-              title: 'Checklist',
-              width: 220,
-              render: (_: unknown, r) =>
+              key: 'checklist',
+              header: 'Checklist',
+              sortable: false,
+              render: (r) =>
                 r.checklist_forms.length
                   ? r.checklist_forms.map((c) => c.title).join(', ')
                   : '—',
             },
             {
-              title: 'ISO Standard',
-              width: 160,
-              render: (_: unknown, r) => r.default_iso_standard?.name ?? '—',
+              key: 'iso',
+              header: 'ISO Standard',
+              sortable: false,
+              render: (r) => r.default_iso_standard?.name ?? '—',
             },
             {
-              title: 'Active',
-              dataIndex: 'is_active',
-              width: 80,
-              render: (v: boolean) => (
-                <span className={`text-xs ${v ? 'text-emerald-700' : 'text-gray-400'}`}>
-                  {v ? 'Active' : 'Inactive'}
+              key: 'is_active',
+              header: 'Active',
+              render: (r) => (
+                <span className={`text-xs ${r.is_active ? 'text-emerald-700' : 'text-gray-400'}`}>
+                  {r.is_active ? 'Active' : 'Inactive'}
                 </span>
               ),
             },
             {
-              title: 'Actions',
-              width: 100,
-              render: (_: unknown, r) => (
+              key: 'actions',
+              header: 'Actions',
+              sortable: false,
+              render: (r) => (
                 <Space size={4}>
                   {canUpdate && (
                     <Button
@@ -126,7 +121,7 @@ export default function AuditMasterPage() {
             },
           ]}
         />
-      )}
+      </div>
     </>
   );
 }

@@ -29,16 +29,16 @@ type Section = "master-data" | "workflows" | "forms";
 // Tabs that appear *inside* the Master Data section. `permission` gates each tab
 // (see lib/navAccess.ts + Access Control → Menu Access); undefined = always shown.
 const masterDataTabs = [
-  { key: "general",        label: "General",        icon: Building2,    permission: undefined },
-  { key: "users",          label: "Users",          icon: UsersIcon,   permission: "user.read" },
-  { key: "departments",    label: "Departments",    icon: Layers,      permission: "department.read" },
-  { key: "sites",          label: "Sites",          icon: MapPin,      permission: undefined },
-  { key: "roles",          label: "Roles",          icon: KeyRound,    permission: "role.read" },
-  { key: "access",         label: "Access Control", icon: Lock,        permission: "role.read" },
-  { key: "workflow-types", label: "Workflow Types", icon: Workflow,    permission: "workflow.lookups.read" },
-  { key: "severities",     label: "Severities",     icon: AlertOctagon, permission: "workflow.lookups.read" },
-  { key: "notifications",  label: "Notifications",  icon: Bell,        permission: undefined },
-  { key: "security",       label: "Security",       icon: Shield,      permission: undefined },
+  { key: "general",        label: "Organization Profile", icon: Building2,    permission: undefined },
+  { key: "users",          label: "User Management",      icon: UsersIcon,   permission: "user.read" },
+  { key: "departments",    label: "Departments",          icon: Layers,      permission: "department.read" },
+  { key: "sites",          label: "Facilities",           icon: MapPin,      permission: undefined },
+  { key: "roles",          label: "Roles",                icon: KeyRound,    permission: "role.read" },
+  { key: "access",         label: "Access Control",       icon: Lock,        permission: "role.read" },
+  { key: "workflow-types", label: "Workflow Categories",  icon: Workflow,    permission: "workflow.lookups.read" },
+  { key: "severities",     label: "Severity Matrix",      icon: AlertOctagon, permission: "workflow.lookups.read" },
+  { key: "notifications",  label: "Notifications",        icon: Bell,        permission: undefined },
+  { key: "security",       label: "Security & Compliance", icon: Shield,     permission: undefined },
 ] as const;
 
 type MdTab = (typeof masterDataTabs)[number]["key"];
@@ -131,12 +131,14 @@ export default function SettingsPage() {
 
   return (
     <PageContainer>
-      {section !== "forms" && (
+      {/* Workflows renders its own hero header (title + create + filters) inside
+          WorkflowsPage, so skip the generic PageHeader for that section. */}
+      {section !== "forms" && section !== "workflows" && (
         <PageHeader
           title={SECTION_TITLES[section]}
           description={
             section === "master-data"
-              ? "Master configuration data — organization, users, departments, roles, access, workflow types, and more."
+              ? "Centralized configuration for your organization — profile, users, roles, access policies, workflow categories, and compliance settings."
               : "Browse and configure workflow definitions."
           }
           actions={headerActions}
@@ -160,35 +162,44 @@ export default function SettingsPage() {
       {/* ── MASTER DATA section — internal tab strip ───── */}
       {section === "master-data" && (
         <>
-          <div className="border-b border-gray-200">
-            <nav role="tablist" className="flex gap-1 overflow-x-auto -mb-px">
+          <div className="mb-5">
+            <nav
+              role="tablist"
+              className="flex gap-1 overflow-x-auto p-1.5 rounded-2xl bg-gray-100/80 ring-1 ring-gray-200/70 shadow-inner [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
               {masterDataTabs
                 .filter((tab) => !tab.permission || hasPermission(tab.permission))
                 .map((tab) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    onClick={() => setActiveTab(tab.key)}
-                    className={cn(
-                      "flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-all duration-175",
-                      isActive
-                        ? "border-slate-900 text-slate-900"
-                        : "border-transparent text-gray-500 hover:text-gray-900 hover:border-gray-300",
-                    )}
-                  >
-                    <Icon
-                      size={16}
-                      className={isActive ? "text-slate-900" : "text-gray-400"}
-                    />
-                    {tab.label}
-                  </button>
-                );
-              })}
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={isActive}
+                      onClick={() => setActiveTab(tab.key)}
+                      className={cn(
+                        "group relative flex items-center gap-2 px-3.5 py-2 text-[13px] font-semibold whitespace-nowrap rounded-xl transition-all duration-150",
+                        isActive
+                          ? "bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80"
+                          : "text-gray-500 hover:text-gray-900 hover:bg-white/70",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex items-center justify-center rounded-lg transition-colors",
+                          isActive
+                            ? "text-gold-600"
+                            : "text-gray-400 group-hover:text-gray-600",
+                        )}
+                      >
+                        <Icon size={15} strokeWidth={2} />
+                      </span>
+                      {tab.label}
+                    </button>
+                  );
+                })}
             </nav>
           </div>
 

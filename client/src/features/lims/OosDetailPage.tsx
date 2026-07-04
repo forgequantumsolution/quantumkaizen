@@ -347,7 +347,7 @@ function RaiseCapaModal({ open, onClose, oos }: { open: boolean; onClose: () => 
 function CloseModal({ open, onClose, id }: { open: boolean; onClose: () => void; id: string }) {
   const { message } = App.useApp();
   const closeMut = useCloseInvestigation(id);
-  const { data: capas } = useCapas();
+  const { data: capas } = useCapas({ page_size: 200 });
   const capaOpts = (capas?.data ?? []).map((c) => ({ value: c.id, label: `${c.capa_number} — ${c.title} (${c.status})` }));
   const [classification, setClassification] = useState<OosClassification>('LAB_ERROR');
   const [conclusion, setConclusion] = useState('');

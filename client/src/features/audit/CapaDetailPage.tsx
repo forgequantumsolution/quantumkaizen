@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { Table, Modal as AntModal, Select as AntSelect, Input as AntInput, message } from 'antd';
+import { Modal as AntModal, Select as AntSelect, Input as AntInput, message } from 'antd';
+import { DataTable } from '@/components/ui';
 import { ArrowLeft, Plus } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { Card, Button, Tabs, Spinner } from '@/components/ui';
@@ -311,7 +312,7 @@ function EditCapaModal({ capa, open, onClose }: { capa: Capa; open: boolean; onC
 
 /* ── Actions tab ── */
 function ActionsTab({ capa }: { capa: Capa }) {
-  const { data } = useActionItems({ capa_id: capa.id });
+  const { data } = useActionItems({ capa_id: capa.id, page_size: 200 });
   const rows = data?.data ?? [];
   const canCreate = useHasPermission('action_item.create');
   const canUpdate = useHasPermission('action_item.update');
@@ -359,52 +360,50 @@ function ActionsTab({ capa }: { capa: Capa }) {
           </Button>
         )}
       </div>
-      <Table<ActionItem>
-        size="small"
-        rowKey="id"
-        dataSource={rows}
-        pagination={false}
-        locale={{ emptyText: 'No action items yet' }}
-        columns={[
-          {
-            title: 'Action #',
-            dataIndex: 'action_number',
-            width: 120,
-            render: (v: string) => <span className="font-mono text-blue-600">{v}</span>,
-          },
-          { title: 'Title', dataIndex: 'title', ellipsis: true },
-          { title: 'Owner', width: 130, render: (_: unknown, r) => r.owner?.name ?? '—' },
-          {
-            title: 'Priority',
-            dataIndex: 'priority',
-            width: 100,
-            render: (v: ActionItem['priority']) => <ActionPriorityBadge priority={v} />,
-          },
-          {
-            title: 'Due',
-            dataIndex: 'due_date',
-            width: 110,
-            render: (v: string | null) => (v ? new Date(v).toLocaleDateString() : '—'),
-          },
-          {
-            title: 'Status',
-            dataIndex: 'status',
-            width: 150,
-            render: (v: ActionItemStatus, r) =>
-              canUpdate ? (
-                <AntSelect
-                  size="small"
-                  value={v}
-                  onChange={(s) => statusMut.mutate({ id: r.id, status: s })}
-                  options={ACTION_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
-                  className="w-full"
-                />
-              ) : (
-                <ActionStatusBadge status={v} />
-              ),
-          },
-        ]}
-      />
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <DataTable<ActionItem>
+          data={rows}
+          pageSize={1000}
+          emptyMessage="No action items yet"
+          columns={[
+            {
+              key: 'action_number',
+              header: 'Action #',
+              render: (r) => <span className="font-mono text-blue-600">{r.action_number}</span>,
+            },
+            { key: 'title', header: 'Title' },
+            { key: 'owner', header: 'Owner', sortable: false, render: (r) => r.owner?.name ?? '—' },
+            {
+              key: 'priority',
+              header: 'Priority',
+              sortable: false,
+              render: (r) => <ActionPriorityBadge priority={r.priority} />,
+            },
+            {
+              key: 'due_date',
+              header: 'Due',
+              render: (r) => (r.due_date ? new Date(r.due_date).toLocaleDateString() : '—'),
+            },
+            {
+              key: 'status',
+              header: 'Status',
+              sortable: false,
+              render: (r) =>
+                canUpdate ? (
+                  <AntSelect
+                    size="small"
+                    value={r.status}
+                    onChange={(s) => statusMut.mutate({ id: r.id, status: s })}
+                    options={ACTION_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
+                    className="w-full min-w-[140px]"
+                  />
+                ) : (
+                  <ActionStatusBadge status={r.status as ActionItemStatus} />
+                ),
+            },
+          ]}
+        />
+      </div>
 
       {/* Simple timeline — one bar per action, coloured by state. */}
       {rows.length > 0 && (

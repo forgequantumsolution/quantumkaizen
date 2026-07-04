@@ -1,16 +1,7 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Edit3, Pause, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
-import ReactFlow, {
-  Background,
-  Controls,
-  MiniMap,
-  useEdgesState,
-  useNodesState,
-  type ReactFlowInstance,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
 import { Card, Button, Spinner, EmptyState } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import PageHeader from '@/components/layout/PageHeader';
@@ -24,7 +15,7 @@ import {
 import WorkflowStatusBadge from './shared/WorkflowStatusBadge';
 import { deserializeFlow } from './builder/builder.serializer';
 import { layoutGraph } from './builder/layout';
-import { nodeTypes } from './builder/nodes';
+import JsPlumbCanvas from './builder/JsPlumbCanvas';
 
 export default function WorkflowDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -36,32 +27,15 @@ export default function WorkflowDetailPage() {
   const { data, isLoading, error } = useWorkflow(id);
   const softDelete = useSoftDeleteWorkflow();
   const setStatus = useSetWorkflowStatus(id);
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const rfInstance = useRef<ReactFlowInstance | null>(null);
-  const needsFitView = useRef(false);
 
   const flowJson = useMemo(() => data?.flow_json ?? { nodes: [], edges: [] }, [data]);
 
   // Apply dagre layout to the deserialised graph — backend no longer stores
   // positions, so every node arrives at (0,0) and needs computed coordinates.
-  useEffect(() => {
+  const { nodes, edges } = useMemo(() => {
     const { nodes: n, edges: e } = deserializeFlow(flowJson.nodes, flowJson.edges);
-    const laidOut = layoutGraph(n, e, { direction: 'TB' });
-    setNodes(laidOut);
-    setEdges(e);
-    needsFitView.current = true;
-  }, [flowJson, setNodes, setEdges]);
-
-  // Re-fit the viewport once after the laid-out nodes commit.
-  useEffect(() => {
-    if (!needsFitView.current || nodes.length === 0) return;
-    const id = requestAnimationFrame(() => {
-      rfInstance.current?.fitView({ padding: 0.18, maxZoom: 1, minZoom: 0.4 });
-      needsFitView.current = false;
-    });
-    return () => cancelAnimationFrame(id);
-  }, [nodes]);
+    return { nodes: layoutGraph(n, e, { direction: 'TB' }), edges: e };
+  }, [flowJson]);
 
   const handleDelete = async () => {
     if (!data) return;
@@ -210,29 +184,13 @@ export default function WorkflowDetailPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
           <Card noPadding className="overflow-hidden" style={{ height: 600 }}>
-            <ReactFlow
+            <JsPlumbCanvas
               nodes={nodes}
               edges={edges}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onInit={(inst) => {
-                rfInstance.current = inst;
-              }}
-              nodeTypes={nodeTypes}
-              fitView
-              nodesDraggable={false}
-              nodesConnectable={false}
-              elementsSelectable
-              proOptions={{ hideAttribution: true }}
-              defaultEdgeOptions={{
-                type: 'smoothstep',
-                style: { stroke: '#94A3B8', strokeWidth: 2 },
-              }}
-            >
-              <Background gap={16} size={1} color="#E8ECF2" />
-              <Controls showInteractive={false} />
-              <MiniMap pannable zoomable />
-            </ReactFlow>
+              interactive
+              editable={false}
+              direction="TB"
+            />
           </Card>
 
           <div className="space-y-3 overflow-auto" style={{ maxHeight: 600 }}>

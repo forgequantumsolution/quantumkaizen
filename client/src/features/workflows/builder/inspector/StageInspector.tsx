@@ -9,13 +9,16 @@
  */
 import { useState } from 'react';
 import {
+  Bell,
   ClipboardList,
   FileText,
+  Flag,
   Pencil,
   Plus,
   ShieldCheck,
   Timer,
   Trash2,
+  Zap,
 } from 'lucide-react';
 import { Button, Input, Select } from '@/components/ui';
 import type {
@@ -33,6 +36,128 @@ interface Props {
   data: StageNodeData;
   onChange: (next: StageNodeData) => void;
   stageStatuses: WorkflowStageStatus[];
+}
+
+// ─── Presentational building blocks (module-scope so inputs keep focus) ──────
+
+interface SectionProps {
+  icon: React.ElementType;
+  title: string;
+  color?: string;
+  tint?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+  bodyClassName?: string;
+}
+
+function Section({
+  icon: Icon,
+  title,
+  color = '#64748B',
+  tint = '#F1F5F9',
+  action,
+  children,
+  bodyClassName = 'p-3',
+}: SectionProps) {
+  return (
+    <div className="rounded-xl border border-gray-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100 bg-gray-50/40">
+        <div className="flex items-center gap-2">
+          <span
+            className="w-6 h-6 rounded-lg flex items-center justify-center"
+            style={{ background: tint, color }}
+          >
+            <Icon size={13} strokeWidth={2} />
+          </span>
+          <h4 className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">
+            {title}
+          </h4>
+        </div>
+        {action}
+      </div>
+      <div className={bodyClassName}>{children}</div>
+    </div>
+  );
+}
+
+interface ToggleRowProps {
+  icon: React.ElementType;
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  color: string;
+  tint: string;
+}
+
+function ToggleRow({
+  icon: Icon,
+  label,
+  description,
+  checked,
+  onChange,
+  color,
+  tint,
+}: ToggleRowProps) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`w-full flex items-center gap-2.5 rounded-lg border p-2 text-left transition-colors ${
+        checked ? 'border-transparent' : 'border-gray-200 bg-white hover:bg-gray-50'
+      }`}
+      style={checked ? { background: tint, borderColor: `${color}40` } : undefined}
+    >
+      <span
+        className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+        style={{ background: checked ? '#fff' : '#F8FAFC', color: checked ? color : '#94A3B8' }}
+      >
+        <Icon size={14} strokeWidth={2} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13px] font-semibold text-gray-800 leading-tight">
+          {label}
+        </span>
+        <span className="block text-[10.5px] text-gray-500 leading-tight mt-0.5">
+          {description}
+        </span>
+      </span>
+      <span
+        className="w-9 h-5 rounded-full p-0.5 shrink-0 transition-colors"
+        style={{ background: checked ? color : '#CBD5E1' }}
+      >
+        <span
+          className="block w-4 h-4 rounded-full bg-white shadow-sm transition-transform"
+          style={{ transform: checked ? 'translateX(16px)' : 'translateX(0)' }}
+        />
+      </span>
+    </button>
+  );
+}
+
+// Dashed full-width "add" button used across sections.
+function AddButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-gray-300 py-2 text-xs font-medium text-gray-500 hover:border-gold-400 hover:text-gold-700 hover:bg-gold-50/40 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <Plus size={14} />
+      {label}
+    </button>
+  );
 }
 
 /** Compact "RoleA, UserB, +2" summary for a form binding's access list. */
@@ -125,12 +250,16 @@ export default function StageInspector({
     return (
       <div className="space-y-2">
         {arr.length === 0 && (
-          <p className="text-xs text-gray-400 italic">No {kind} actions yet.</p>
+          <p className="text-[11px] text-gray-400 italic px-0.5">No {kind} actions yet.</p>
         )}
         {arr.map((a, i) => {
           const status = stageStatuses.find((s) => s.id === a.stage_status_id);
+          const mismatch = status && a.behavior !== status.behavior;
           return (
-            <div key={i} className="flex gap-2 items-start">
+            <div
+              key={i}
+              className="flex gap-1.5 items-center rounded-lg border border-gray-200 bg-gray-50/60 p-1.5"
+            >
               <Select
                 value={a.stage_status_id}
                 onChange={(e) => {
@@ -145,26 +274,23 @@ export default function StageInspector({
                   value: s.id,
                   label: `${s.name} (${s.behavior})`,
                 }))}
-                className="flex-1"
+                className="flex-1 !bg-white"
               />
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => removeAction(kind, i)}
                 aria-label="remove action"
+                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0"
               >
-                <Trash2 size={14} className="text-red-500" />
-              </Button>
-              {status && a.behavior !== status.behavior && (
-                <span className="text-[10px] text-amber-600">behavior mismatch</span>
+                <Trash2 size={14} />
+              </button>
+              {mismatch && (
+                <span className="text-[10px] text-amber-600 shrink-0">mismatch</span>
               )}
             </div>
           );
         })}
-        <Button variant="ghost" size="sm" onClick={() => addAction(kind)}>
-          <Plus size={14} />
-          <span className="ml-1">Add {kind} action</span>
-        </Button>
+        <AddButton label={`Add ${kind} action`} onClick={() => addAction(kind)} />
       </div>
     );
   };
@@ -261,82 +387,78 @@ export default function StageInspector({
   };
 
   return (
-    <div className="space-y-4">
-      <div>
-        <label className="text-xs font-medium text-gray-700 mb-1 block">Stage name</label>
-        <Input
-          value={data.label}
-          onChange={(e) => update('label', e.target.value)}
-          placeholder="e.g. Review"
-          maxLength={100}
-        />
-      </div>
+    <div className="space-y-3.5">
+      {/* ── Basics ──────────────────────────────────────────────────────── */}
+      <Section icon={Flag} title="Basics" color="#0EA5E9" tint="#E0F2FE">
+        <div className="space-y-2.5">
+          <div>
+            <label className="text-[11px] font-semibold text-gray-500 mb-1 block">
+              Stage name
+            </label>
+            <Input
+              value={data.label}
+              onChange={(e) => update('label', e.target.value)}
+              placeholder="e.g. Review"
+              maxLength={100}
+            />
+          </div>
+          <ToggleRow
+            icon={Flag}
+            label="Initial stage"
+            description="First step when a ticket is raised"
+            checked={!!data.is_initial_stage}
+            onChange={(v) => update('is_initial_stage', v)}
+            color="#22C55E"
+            tint="#F0FDF4"
+          />
+          <ToggleRow
+            icon={Bell}
+            label="Email notification"
+            description="Notify assignees on entry"
+            checked={!!data.email_notification}
+            onChange={(v) => update('email_notification', v)}
+            color="#C9A84C"
+            tint="#FEFBF0"
+          />
+        </div>
+      </Section>
 
-      <label className="flex items-center gap-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          checked={!!data.is_initial_stage}
-          onChange={(e) => update('is_initial_stage', e.target.checked)}
-        />
-        <span>Initial stage</span>
-      </label>
-
-      <label className="flex items-center gap-2 text-sm text-gray-700">
-        <input
-          type="checkbox"
-          checked={!!data.email_notification}
-          onChange={(e) => update('email_notification', e.target.checked)}
-        />
-        <span>Send email notification</span>
-      </label>
-
-      <div>
-        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
-          Primary actions
-        </h4>
+      {/* ── Actions ─────────────────────────────────────────────────────── */}
+      <Section icon={Zap} title="Primary actions" color="#2563EB" tint="#EFF6FF">
         {renderActions('primary')}
-      </div>
+      </Section>
 
-      <div>
-        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
-          Secondary actions
-        </h4>
+      <Section icon={Zap} title="Secondary actions" color="#64748B" tint="#F1F5F9">
         {renderActions('secondary')}
-      </div>
+      </Section>
 
       {/* ── Approvals ───────────────────────────────────────────────────── */}
-      <div className="border-t pt-3">
-        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-          <ShieldCheck size={12} />
-          Approvals
-        </h4>
+      <Section
+        icon={ShieldCheck}
+        title="Approvals"
+        color="#16A34A"
+        tint="#F0FDF4"
+        bodyClassName={allActionRefs.length === 0 ? 'p-3' : 'px-3 py-1'}
+      >
         {allActionRefs.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">
+          <p className="text-[11px] text-gray-400 italic">
             Add at least one action above to attach an approval policy.
           </p>
         ) : (
-          <div className="rounded border border-gray-200 px-2">
-            {allActionRefs.map(renderApprovalRow)}
-          </div>
+          <div>{allActionRefs.map(renderApprovalRow)}</div>
         )}
-      </div>
+      </Section>
 
       {/* ── SLA ─────────────────────────────────────────────────────────── */}
-      <div className="border-t pt-3">
-        <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-          <Timer size={12} />
-          SLA
-        </h4>
+      <Section icon={Timer} title="SLA" color="#DC2626" tint="#FEF2F2">
         {sla ? (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-gray-50/60 p-2.5">
             <div className="text-xs text-gray-700">
-              <div>
-                Duration:{' '}
-                <span className="font-medium">
-                  {Math.round(sla.duration / 360) / 10}h
-                </span>
+              <div className="font-semibold text-gray-900">
+                {Math.round(sla.duration / 360) / 10}h
+                <span className="font-normal text-gray-400"> duration</span>
               </div>
-              <div className="text-gray-500">
+              <div className="text-gray-500 mt-0.5">
                 {sla.thresholds.length} threshold
                 {sla.thresholds.length === 1 ? '' : 's'}
               </div>
@@ -346,108 +468,111 @@ export default function StageInspector({
                 <Pencil size={12} />
                 <span className="ml-1">Edit</span>
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
+              <button
+                type="button"
                 aria-label="remove sla"
                 onClick={() => {
                   if (!confirm('Remove the SLA for this stage?')) return;
                   update('sla', null);
                 }}
+                className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
               >
-                <Trash2 size={14} className="text-red-500" />
-              </Button>
+                <Trash2 size={14} />
+              </button>
             </div>
           </div>
         ) : (
-          <Button variant="ghost" size="sm" onClick={() => setSlaOpen(true)}>
-            <Plus size={12} />
-            <span className="ml-1">Add SLA</span>
-          </Button>
+          <AddButton label="Add SLA" onClick={() => setSlaOpen(true)} />
         )}
-      </div>
+      </Section>
 
       {/* ── Forms ──────────────────────────────────────────────────────── */}
-      <div className="border-t pt-3">
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wide flex items-center gap-1.5">
-            <ClipboardList size={12} />
-            Forms
-          </h4>
-          <Button
-            variant="ghost"
-            size="sm"
+      <Section
+        icon={ClipboardList}
+        title="Forms"
+        color="#7C3AED"
+        tint="#F5F3FF"
+        action={
+          <button
+            type="button"
             onClick={() => {
               setFormEditIndex(null);
               setFormBindingOpen(true);
             }}
+            className="flex items-center gap-1 text-[11px] font-semibold text-gold-700 hover:text-gold-800 hover:bg-gold-50 rounded-md px-1.5 py-1 transition-colors"
           >
             <Plus size={12} />
-            <span className="ml-1 text-xs">Attach form</span>
-          </Button>
-        </div>
+            Attach
+          </button>
+        }
+      >
         {formBindings.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">
+          <p className="text-[11px] text-gray-400 italic">
             No forms attached. Required forms will block transitions until submitted.
           </p>
         ) : (
-          <div className="rounded border border-gray-200 px-2">
+          <div className="space-y-2">
             {formBindings.map((b, idx) => (
               <div
                 key={`${b.formId}-${idx}`}
-                className="flex items-center gap-2 py-1.5 border-b border-gray-100 last:border-0"
+                className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-2"
               >
-                <FileText
-                  size={14}
-                  className={b.isRequired ? 'text-amber-600' : 'text-gray-300'}
-                />
+                <span
+                  className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                    b.isRequired ? 'bg-amber-50 text-amber-600' : 'bg-gray-100 text-gray-400'
+                  }`}
+                >
+                  <FileText size={14} />
+                </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-gray-900 truncate">
+                  <div className="text-[13px] font-medium text-gray-900 truncate">
                     {b.formTitle
                       ? `${b.formTitle}${b.formVersion ? ` (v${b.formVersion})` : ''}`
                       : `Form ${b.formId.substring(0, 8)}…`}
                   </div>
-                  <div className="text-[11px] text-gray-500">
+                  <div className="text-[10.5px] text-gray-500 mt-0.5">
                     {b.isRequired ? 'Required to transition' : 'Optional'}
                     {' · position '}
                     {b.position}
                   </div>
-                  <div className="text-[11px] text-gray-500 truncate">
+                  <div className="text-[10.5px] text-gray-500 truncate mt-0.5">
                     {`Fill: ${summariseAccess(b.fillRoleLabels, b.fillUserLabels)} · ${
                       (b.fillMode ?? 'ANYONE') === 'EACH' ? 'Each one' : 'Anyone'
                     } · View: ${summariseAccess(b.viewRoleLabels, b.viewUserLabels, 'Fillers only')}`}
                   </div>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label="edit form binding"
-                  onClick={() => {
-                    setFormEditIndex(idx);
-                    setFormBindingOpen(true);
-                  }}
-                >
-                  <Pencil size={14} className="text-gray-500" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-label="remove form binding"
-                  onClick={() => {
-                    if (!confirm('Detach this form from the stage?')) return;
-                    update(
-                      'formBindings',
-                      formBindings.filter((_, i) => i !== idx),
-                    );
-                  }}
-                >
-                  <Trash2 size={14} className="text-red-500" />
-                </Button>
+                <div className="flex items-center shrink-0">
+                  <button
+                    type="button"
+                    aria-label="edit form binding"
+                    onClick={() => {
+                      setFormEditIndex(idx);
+                      setFormBindingOpen(true);
+                    }}
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="remove form binding"
+                    onClick={() => {
+                      if (!confirm('Detach this form from the stage?')) return;
+                      update(
+                        'formBindings',
+                        formBindings.filter((_, i) => i !== idx),
+                      );
+                    }}
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </Section>
 
       <SlaPolicyEditor
         isOpen={slaOpen}

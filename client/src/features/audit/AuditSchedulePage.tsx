@@ -9,13 +9,12 @@ import {
   Modal,
   Select,
   Space,
-  Spin,
   Switch,
-  Table,
   message,
 } from 'antd';
 import type { Dayjs } from 'dayjs';
 import { Plus, Edit3, Trash2, RefreshCw } from 'lucide-react';
+import { DataTable } from '@/components/ui';
 import {
   useScheduleRules,
   useCreateScheduleRule,
@@ -55,7 +54,16 @@ const STATUS_BADGE: Record<string, 'default' | 'processing' | 'success' | 'warni
   CANCELLED: 'error',
 };
 
-export default function AuditSchedulePage() {
+export default function AuditSchedulePage({
+  embedded = false,
+  section = 'all',
+}: {
+  embedded?: boolean;
+  /** 'calendar' → just the calendar; 'rules' → actions + rules tables; 'all' → both. */
+  section?: 'calendar' | 'rules' | 'all';
+} = {}) {
+  const showCalendar = section === 'calendar' || section === 'all';
+  const showRules = section === 'rules' || section === 'all';
   const canCreate = useHasPermission('audit_schedule.create');
   const canUpdate = useHasPermission('audit_schedule.update');
   const canDelete = useHasPermission('audit_schedule.delete');
@@ -109,35 +117,44 @@ export default function AuditSchedulePage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Audit Schedule</h2>
-          <p className="text-xs text-gray-500">
-            Recurrence rules auto-generate audits; planned audits show on the calendar.
-          </p>
+      {showRules && (
+        <div
+          className={`flex items-center gap-3 mb-3 flex-wrap ${
+            embedded ? 'justify-end' : 'justify-between'
+          }`}
+        >
+          {!embedded && (
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Audit Schedule</h2>
+              <p className="text-xs text-gray-500">
+                Recurrence rules auto-generate audits; planned audits show on the calendar.
+              </p>
+            </div>
+          )}
+          <Space>
+            {canCreate && (
+              <Button icon={<RefreshCw size={14} />} onClick={runNow} loading={runSweep.isPending}>
+                Generate due audits
+              </Button>
+            )}
+            {canCreate && (
+              <Button
+                type="primary"
+                icon={<Plus size={14} />}
+                onClick={() => {
+                  setEditing(null);
+                  setDrawerOpen(true);
+                }}
+              >
+                New Rule
+              </Button>
+            )}
+          </Space>
         </div>
-        <Space>
-          {canCreate && (
-            <Button icon={<RefreshCw size={14} />} onClick={runNow} loading={runSweep.isPending}>
-              Generate due audits
-            </Button>
-          )}
-          {canCreate && (
-            <Button
-              type="primary"
-              icon={<Plus size={14} />}
-              onClick={() => {
-                setEditing(null);
-                setDrawerOpen(true);
-              }}
-            >
-              New Rule
-            </Button>
-          )}
-        </Space>
-      </div>
+      )}
 
       {/* Calendar of planned audits */}
+      {showCalendar && (
       <div className="bg-white rounded-xl border border-gray-200 p-3 mb-4">
         <Calendar
           fullscreen={false}
@@ -162,109 +179,130 @@ export default function AuditSchedulePage() {
           }}
         />
       </div>
+      )}
 
       {/* Schedule rules */}
+      {showRules && (
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h3 className="text-sm font-semibold text-gray-900 mb-3">Recurrence Rules</h3>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Spin />
-          </div>
-        ) : (
-          <Table<AuditScheduleRule>
-            size="small"
-            rowKey="id"
-            dataSource={rules}
-            pagination={false}
-            locale={{ emptyText: 'No schedule rules yet' }}
-            columns={[
-              { title: 'Name', dataIndex: 'name', render: (v: string) => <span className="font-medium text-gray-800">{v}</span> },
-              { title: 'Audit Master', render: (_: unknown, r) => r.audit_master?.name ?? '—' },
-              {
-                title: 'Workflow',
-                width: 150,
-                render: (_: unknown, r) =>
-                  r.workflow_id ? (
-                    <span className="text-gray-700">{wfName(r.workflow_id)}</span>
-                  ) : (
-                    <span className="text-gray-400">—</span>
-                  ),
-              },
-              { title: 'Frequency', dataIndex: 'frequency', width: 120, render: (v: string) => v.replace(/_/g, ' ') },
-              {
-                title: 'Next run',
-                dataIndex: 'next_run_at',
-                width: 120,
-                render: (v: string) => new Date(v).toLocaleDateString(),
-              },
-              {
-                title: 'Active',
-                dataIndex: 'is_active',
-                width: 80,
-                render: (v: boolean) => (
-                  <span className={`text-xs ${v ? 'text-emerald-700' : 'text-gray-400'}`}>
-                    {v ? 'Active' : 'Paused'}
-                  </span>
+        <DataTable<AuditScheduleRule>
+          data={rules}
+          isLoading={isLoading}
+          pageSize={1000}
+          emptyMessage="No schedule rules yet"
+          columns={[
+            {
+              key: 'name',
+              header: 'Name',
+              render: (r) => <span className="font-medium text-gray-800">{r.name}</span>,
+            },
+            {
+              key: 'audit_master',
+              header: 'Audit Master',
+              sortable: false,
+              render: (r) => r.audit_master?.name ?? '—',
+            },
+            {
+              key: 'workflow',
+              header: 'Workflow',
+              sortable: false,
+              render: (r) =>
+                r.workflow_id ? (
+                  <span className="text-gray-700">{wfName(r.workflow_id)}</span>
+                ) : (
+                  <span className="text-gray-400">—</span>
                 ),
-              },
-              {
-                title: '',
-                width: 90,
-                render: (_: unknown, r) => (
-                  <Space size={4}>
-                    {canUpdate && (
-                      <Button
-                        size="small"
-                        icon={<Edit3 size={12} />}
-                        onClick={() => {
-                          setEditing(r);
-                          setDrawerOpen(true);
-                        }}
-                      />
-                    )}
-                    {canDelete && (
-                      <Button size="small" danger icon={<Trash2 size={12} />} onClick={() => handleDelete(r)} />
-                    )}
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        )}
+            },
+            {
+              key: 'frequency',
+              header: 'Frequency',
+              render: (r) => r.frequency.replace(/_/g, ' '),
+            },
+            {
+              key: 'next_run_at',
+              header: 'Next run',
+              render: (r) => new Date(r.next_run_at).toLocaleDateString(),
+            },
+            {
+              key: 'is_active',
+              header: 'Active',
+              render: (r) => (
+                <span className={`text-xs ${r.is_active ? 'text-emerald-700' : 'text-gray-400'}`}>
+                  {r.is_active ? 'Active' : 'Paused'}
+                </span>
+              ),
+            },
+            {
+              key: 'actions',
+              header: '',
+              sortable: false,
+              render: (r) => (
+                <Space size={4}>
+                  {canUpdate && (
+                    <Button
+                      size="small"
+                      icon={<Edit3 size={12} />}
+                      onClick={() => {
+                        setEditing(r);
+                        setDrawerOpen(true);
+                      }}
+                    />
+                  )}
+                  {canDelete && (
+                    <Button size="small" danger icon={<Trash2 size={12} />} onClick={() => handleDelete(r)} />
+                  )}
+                </Space>
+              ),
+            },
+          ]}
+        />
       </div>
+      )}
 
       {/* Upcoming list (compact, complements the calendar) */}
-      {audits.length > 0 && (
+      {showRules && audits.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-200 p-5 mt-4">
           <h3 className="text-sm font-semibold text-gray-900 mb-3">Planned Audits</h3>
-          <Table<CalendarAudit>
-            size="small"
-            rowKey="id"
-            dataSource={[...audits].sort((a, b) => a.planned_date.localeCompare(b.planned_date))}
-            pagination={{ pageSize: 10, showSizeChanger: false }}
+          <DataTable<CalendarAudit>
+            data={[...audits].sort((a, b) => a.planned_date.localeCompare(b.planned_date))}
+            pageSize={10}
+            emptyMessage="No planned audits"
             columns={[
               {
-                title: 'Date',
-                dataIndex: 'planned_date',
-                width: 110,
-                render: (v: string) => new Date(v).toLocaleDateString(),
+                key: 'planned_date',
+                header: 'Date',
+                render: (r) => new Date(r.planned_date).toLocaleDateString(),
               },
               {
-                title: 'Audit',
-                render: (_: unknown, r) => (
+                key: 'title',
+                header: 'Audit',
+                render: (r) => (
                   <Link to={`/audit/register/${r.id}`} className="text-blue-600 hover:underline">
                     {r.title}
                   </Link>
                 ),
               },
-              { title: 'Reg #', dataIndex: 'register_number', width: 130, render: (v: string) => <span className="font-mono text-xs text-gray-500">{v}</span> },
-              { title: 'Status', dataIndex: 'status', width: 140, render: (v: CalendarAudit['status']) => <AuditStatusBadge status={v} /> },
+              {
+                key: 'register_number',
+                header: 'Reg #',
+                render: (r) => (
+                  <span className="font-mono text-xs text-gray-500">{r.register_number}</span>
+                ),
+              },
+              {
+                key: 'status',
+                header: 'Status',
+                sortable: false,
+                render: (r) => <AuditStatusBadge status={r.status} />,
+              },
             ]}
           />
         </div>
       )}
 
-      <RuleDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} record={editing} />
+      {showRules && (
+        <RuleDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} record={editing} />
+      )}
     </>
   );
 }

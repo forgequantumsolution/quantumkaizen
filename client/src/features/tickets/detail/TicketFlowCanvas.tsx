@@ -1,19 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react';
-import ReactFlow, {
-  Background,
-  Controls,
-  MiniMap,
-  useEdgesState,
-  useNodesState,
-  type ReactFlowInstance,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
+import { useCallback, useMemo } from 'react';
 import { Workflow as WorkflowIcon, Loader2 } from 'lucide-react';
 import { Card } from '@/components/ui';
 import { useWorkflow } from '@/lib/api/workflow';
 import { deserializeFlow } from '@/features/workflows/builder/builder.serializer';
 import { layoutGraph } from '@/features/workflows/builder/layout';
-import { nodeTypes } from '@/features/workflows/builder/nodes';
+import JsPlumbCanvas from '@/features/workflows/builder/JsPlumbCanvas';
 import type { StageNodeData } from '@/features/workflows/builder/builder.types';
 
 export interface SelectedStageInfo {
@@ -55,67 +46,63 @@ export default function TicketFlowCanvas({
 }: Props) {
   const { data, isLoading, error } = useWorkflow(workflowId);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const rfRef = useRef<ReactFlowInstance | null>(null);
-  const needsFitView = useRef(false);
-
   const flowJson = useMemo(
     () => data?.flow_json ?? { nodes: [], edges: [] },
     [data],
   );
 
-  const currentIdSet = useMemo(
-    () => new Set(currentStageIds),
-    [currentStageIds],
-  );
+  const currentIdSet = useMemo(() => new Set(currentStageIds), [currentStageIds]);
   const currentPersistedSet = useMemo(
     () => new Set(currentPersistedStageIds),
     [currentPersistedStageIds],
   );
 
-  useEffect(() => {
+  // Deserialise + decorate + lay out. Highlight current stage(s): match by
+  // canonical id first, then fall back to `persistedStageId` so this works for
+  // both pre- and post-publish workflows.
+  const { nodes, edges } = useMemo(() => {
     const { nodes: rawNodes, edges: rawEdges } = deserializeFlow(
       flowJson.nodes,
       flowJson.edges,
     );
-
-    // Highlight current stage(s). We try canonical id (the React Flow node id
-    // at build time) first, then fall back to `persistedStageId` so this works
-    // for both pre- and post-publish workflows.
     const decorated = rawNodes.map((n) => {
       if (n.type !== 'stage') return n;
-      const data = n.data as StageNodeData;
+      const d = n.data as StageNodeData;
       const isCurrent =
         currentIdSet.has(n.id) ||
-        (data.persistedStageId
-          ? currentPersistedSet.has(data.persistedStageId)
-          : false);
+        (d.persistedStageId ? currentPersistedSet.has(d.persistedStageId) : false);
       return {
         ...n,
         data: {
-          ...data,
+          ...d,
           isCurrent: isCompleted ? false : isCurrent,
           isCompleted,
           flowDirection: direction,
         },
       };
     });
+    return {
+      nodes: layoutGraph(decorated, rawEdges, { direction }),
+      edges: rawEdges,
+    };
+  }, [flowJson, currentIdSet, currentPersistedSet, isCompleted, direction]);
 
-    const laidOut = layoutGraph(decorated, rawEdges, { direction });
-    setNodes(laidOut);
-    setEdges(rawEdges);
-    needsFitView.current = true;
-  }, [flowJson, currentIdSet, currentPersistedSet, isCompleted, direction, setNodes, setEdges]);
-
-  useEffect(() => {
-    if (!needsFitView.current || nodes.length === 0) return;
-    const id = requestAnimationFrame(() => {
-      rfRef.current?.fitView({ padding: 0.18, maxZoom: 1, minZoom: 0.4 });
-      needsFitView.current = false;
-    });
-    return () => cancelAnimationFrame(id);
-  }, [nodes]);
+  const handleSelect = useCallback(
+    (id: string) => {
+      if (!onStageNodeClick) return;
+      const node = nodes.find((n) => n.id === id);
+      if (!node || node.type !== 'stage') return;
+      const d = node.data as StageNodeData;
+      onStageNodeClick({
+        canonicalId: node.id,
+        persistedId: d.persistedStageId,
+        name: d.label || 'Untitled stage',
+        isCurrent: d.isCurrent === true,
+        isInitial: d.is_initial_stage === true,
+      });
+    },
+    [nodes, onStageNodeClick],
+  );
 
   if (isLoading) {
     return (
@@ -147,45 +134,15 @@ export default function TicketFlowCanvas({
 
   return (
     <Card noPadding style={{ height }} className="overflow-hidden">
-      <ReactFlow
+      <JsPlumbCanvas
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onInit={(inst) => {
-          rfRef.current = inst;
-        }}
-        onNodeClick={(_e, node) => {
-          if (!onStageNodeClick || node.type !== 'stage') return;
-          const d = node.data as StageNodeData;
-          onStageNodeClick({
-            canonicalId: node.id,
-            persistedId: d.persistedStageId,
-            name: d.label || 'Untitled stage',
-            isCurrent: d.isCurrent === true,
-            isInitial: d.is_initial_stage === true,
-          });
-        }}
+        interactive={interactive}
+        editable={false}
+        direction={direction}
+        onSelect={handleSelect}
         onPaneClick={onPaneClick}
-        nodeTypes={nodeTypes}
-        fitView
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable={interactive}
-        panOnDrag={interactive}
-        zoomOnScroll={interactive}
-        zoomOnPinch={interactive}
-        zoomOnDoubleClick={interactive}
-        proOptions={{ hideAttribution: true }}
-        defaultEdgeOptions={{
-          type: 'smoothstep',
-          style: { stroke: '#94A3B8', strokeWidth: 2 },
-        }}
-      >
-        <Background gap={16} size={1} color="#E8ECF2" />
-        {interactive && <Controls showInteractive={false} />}
-        {interactive && height >= 360 && <MiniMap pannable zoomable />}
-      </ReactFlow>
+      />
     </Card>
   );
 }

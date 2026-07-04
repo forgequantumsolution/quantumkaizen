@@ -1,7 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Button, Drawer, Input, Select, Space, Spin, Table, message } from 'antd';
-import { Plus, Search, Edit3, Trash2 } from 'lucide-react';
+import { Button, Drawer, Input, Modal, Select, Space, message } from 'antd';
+import { Plus, Search, Edit3, Trash2, SlidersHorizontal, Check } from 'lucide-react';
+import { DataTable, type Column } from '@/components/ui';
+import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+
+const PAGE_SIZE = 10;
 import {
   useActionItems,
   useCreateActionItem,
@@ -37,12 +41,20 @@ export default function ActionItemsPage() {
   const [search, setSearch] = useState('');
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<ActionItem | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [page, setPage] = useState(1);
+
+  const debouncedSearch = useDebouncedValue(search, 450);
+  useEffect(() => setPage(1), [debouncedSearch, status]);
 
   const { data, isLoading } = useActionItems({
+    page,
+    page_size: PAGE_SIZE,
     status: status === 'ALL' ? undefined : status,
-    search: search || undefined,
+    search: debouncedSearch || undefined,
   });
   const rows = data?.data ?? [];
+  const totalItems = data?.pagination?.total_items ?? rows.length;
 
   const statusMut = useUpdateActionItemStatus();
   const deleteMut = useDeleteActionItem();
@@ -59,80 +71,116 @@ export default function ActionItemsPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div>
+      {/* Single toolbar row: title + search + filter + create. */}
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div className="min-w-0">
           <h2 className="text-base font-semibold text-gray-900">Action Items</h2>
           <p className="text-xs text-gray-500">Assignable tasks across CAPAs, non-conformances and findings</p>
         </div>
-        {canCreate && (
-          <Button
-            type="primary"
-            icon={<Plus size={14} />}
-            onClick={() => {
-              setEditing(null);
-              setDrawerOpen(true);
-            }}
-          >
-            New Action
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            allowClear
+            prefix={<Search size={14} className="text-gray-400" />}
+            placeholder="Search action # or title"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 240 }}
+          />
+          <Button icon={<SlidersHorizontal size={14} />} onClick={() => setFilterOpen(true)}>
+            Filter
+            {status !== 'ALL' && (
+              <span className="ml-1.5 inline-flex items-center rounded-full bg-gold-100 text-gold-700 text-[10px] font-semibold px-1.5 py-0.5 capitalize">
+                {status.replace(/_/g, ' ').toLowerCase()}
+              </span>
+            )}
           </Button>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <div className="flex items-center gap-1 flex-wrap">
-          {STATUSES.map((s) => (
-            <button
-              key={s}
-              onClick={() => setStatus(s)}
-              className={`px-2.5 py-1 text-xs rounded-md border transition-colors ${
-                status === s
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
-              }`}
+          {canCreate && (
+            <Button
+              type="primary"
+              icon={<Plus size={14} />}
+              onClick={() => {
+                setEditing(null);
+                setDrawerOpen(true);
+              }}
             >
-              {s.replace(/_/g, ' ')}
-            </button>
-          ))}
+              New Action
+            </Button>
+          )}
         </div>
-        <Input
-          allowClear
-          prefix={<Search size={14} className="text-gray-400" />}
-          placeholder="Search action # or title"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="max-w-xs"
-        />
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-32">
-          <Spin />
+      {/* Filter modal — status selection. */}
+      <Modal
+        open={filterOpen}
+        onCancel={() => setFilterOpen(false)}
+        title="Filter action items"
+        footer={
+          <div className="flex items-center justify-between">
+            <Button type="text" onClick={() => setStatus('ALL')} disabled={status === 'ALL'}>
+              Clear
+            </Button>
+            <Button type="primary" onClick={() => setFilterOpen(false)}>
+              Done
+            </Button>
+          </div>
+        }
+      >
+        <div className="py-1">
+          <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">
+            Status
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            {STATUSES.map((s) => {
+              const active = status === s;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setStatus(s)}
+                  className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm font-medium capitalize transition-colors ${
+                    active
+                      ? 'border-gold-400 bg-gold-50 text-gold-800'
+                      : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <span>{s === 'ALL' ? 'All' : s.replace(/_/g, ' ').toLowerCase()}</span>
+                  {active && <Check size={15} className="text-gold-600 shrink-0" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      ) : (
-        <Table<ActionItem>
-          size="small"
-          rowKey="id"
-          dataSource={rows}
-          pagination={{ pageSize: 20, showSizeChanger: false }}
+      </Modal>
+
+      <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+        <DataTable<ActionItem>
+          data={rows}
+          isLoading={isLoading}
+          emptyMessage="No action items found"
+          serverPagination={{
+            page,
+            pageSize: PAGE_SIZE,
+            totalItems,
+            onPageChange: setPage,
+          }}
           columns={[
             {
-              title: 'Action #',
-              dataIndex: 'action_number',
-              width: 120,
-              render: (v: string) => <span className="font-mono text-blue-600">{v}</span>,
+              key: 'action_number',
+              header: 'Action #',
+              render: (r) => <span className="font-mono text-blue-600">{r.action_number}</span>,
             },
-            { title: 'Title', dataIndex: 'title', ellipsis: true },
-            { title: 'Owner', width: 130, render: (_: unknown, r) => r.owner?.name ?? '—' },
+            { key: 'title', header: 'Title' },
+            { key: 'owner', header: 'Owner', sortable: false, render: (r) => r.owner?.name ?? '—' },
             {
-              title: 'Priority',
-              dataIndex: 'priority',
-              width: 100,
-              render: (v: ActionItemPriority) => <ActionPriorityBadge priority={v} />,
+              key: 'priority',
+              header: 'Priority',
+              sortable: false,
+              render: (r) => <ActionPriorityBadge priority={r.priority as ActionItemPriority} />,
             },
             {
-              title: 'Source',
-              width: 130,
-              render: (_: unknown, r) =>
+              key: 'source',
+              header: 'Source',
+              sortable: false,
+              render: (r) =>
                 r.capa ? (
                   <Link to={`/audit/capa/${r.capa.id}`} className="font-mono text-blue-600 hover:underline">
                     {r.capa.capaNumber}
@@ -146,52 +194,62 @@ export default function ActionItemsPage() {
                 ),
             },
             {
-              title: 'Due',
-              dataIndex: 'due_date',
-              width: 110,
-              render: (v: string | null) => (v ? new Date(v).toLocaleDateString() : '—'),
+              key: 'due_date',
+              header: 'Due',
+              render: (r) => (r.due_date ? new Date(r.due_date).toLocaleDateString() : '—'),
             },
             {
-              title: 'Status',
-              dataIndex: 'status',
-              width: 150,
-              render: (v: ActionItemStatus, r) =>
+              key: 'status',
+              header: 'Status',
+              sortable: false,
+              render: (r) =>
                 canUpdate ? (
                   <Select
                     size="small"
-                    value={v}
+                    value={r.status}
+                    onClick={(e) => e.stopPropagation()}
                     onChange={(s) => statusMut.mutate({ id: r.id, status: s })}
                     options={ALL_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
-                    className="w-full"
+                    className="w-full min-w-[140px]"
                   />
                 ) : (
-                  <ActionStatusBadge status={v} />
+                  <ActionStatusBadge status={r.status as ActionItemStatus} />
                 ),
             },
             {
-              title: '',
-              width: 80,
-              render: (_: unknown, r) => (
+              key: 'actions',
+              header: '',
+              sortable: false,
+              render: (r) => (
                 <Space size={4}>
                   {canUpdate && (
                     <Button
                       size="small"
                       icon={<Edit3 size={12} />}
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         setEditing(r);
                         setDrawerOpen(true);
                       }}
                     />
                   )}
                   {canDelete && (
-                    <Button size="small" danger icon={<Trash2 size={12} />} onClick={() => handleDelete(r)} />
+                    <Button
+                      size="small"
+                      danger
+                      icon={<Trash2 size={12} />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(r);
+                      }}
+                    />
                   )}
                 </Space>
               ),
             },
           ]}
         />
-      )}
+      </div>
 
       <ActionItemDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} record={editing} />
     </>

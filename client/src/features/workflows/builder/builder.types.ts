@@ -1,4 +1,3 @@
-import type { Node, Edge } from 'reactflow';
 import type {
   BuilderActionPayload,
   JoinType,
@@ -136,8 +135,37 @@ export interface DecisionNodeData {
 
 export type WorkflowNodeData = StageNodeData | ForkNodeData | JoinNodeData | DecisionNodeData;
 
-export type WorkflowReactFlowNode = Node<WorkflowNodeData>;
-export type WorkflowReactFlowEdge = Edge<{ branchName?: string; condition?: string; order?: number }>;
+// ─── Framework-agnostic graph model ──────────────────────────────────────────
+// Replaces React Flow's Node/Edge shapes. The jsPlumb canvas
+// (`JsPlumbCanvas.tsx`) renders these directly; positions are computed by dagre
+// (`layout.ts`) and owned by jsPlumb at runtime.
+export interface FlowNode<TData = WorkflowNodeData> {
+  id: string;
+  /** Node kind — selects which renderer + endpoints to use. */
+  type: NodeKind;
+  position: { x: number; y: number };
+  data: TData;
+  selected?: boolean;
+}
+
+export interface FlowEdgeData {
+  branchName?: string;
+  condition?: string;
+  order?: number;
+}
+
+export interface FlowEdge<TData = FlowEdgeData> {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+  label?: string;
+  data?: TData;
+}
+
+export type WorkflowFlowNode = FlowNode<WorkflowNodeData>;
+export type WorkflowFlowEdge = FlowEdge<FlowEdgeData>;
 
 export const NODE_TYPE_LABELS = {
   stage: 'Stage',

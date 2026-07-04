@@ -297,6 +297,8 @@ export interface ListRegisterQuery {
   search?: string;
 }
 export interface ListProgramQuery {
+  page?: number;
+  page_size?: number;
   status?: ProgramStatus;
   financial_year?: string;
   search?: string;
@@ -564,7 +566,7 @@ export const useDeleteAuditRegister = () => {
 // ─────────────────────────────── Audit Program ──────────────────────────────
 
 export const useAuditPrograms = (q: ListProgramQuery = {}) =>
-  useQuery<{ data: AuditProgram[] }>({
+  useQuery<PaginatedResp<AuditProgram> & { counts?: Record<string, number> }>({
     queryKey: auditKeys.programs(q),
     queryFn: () => api.get('/audit/programs', { params: q }).then((r) => r.data),
   });
@@ -683,6 +685,7 @@ export interface ComplianceResultRow {
   section: string;
   ticket_id: string;
   audit: { register_id: string; program_id: string; title: string; register_number: string };
+  auditor: { id: string; name: string } | null;
   nc: { id: string; nc_number: string; status: NonConformanceStatus } | null;
 }
 
@@ -1059,6 +1062,8 @@ export interface Capa {
 }
 
 export interface ListCapaQuery {
+  page?: number;
+  page_size?: number;
   status?: CapaStatus;
   type?: CapaType;
   owner_id?: string;
@@ -1093,7 +1098,7 @@ export interface CapaUpdate {
 }
 
 export const useCapas = (q: ListCapaQuery = {}) =>
-  useQuery<{ data: Capa[] }>({
+  useQuery<PaginatedResp<Capa>>({
     queryKey: auditKeys.capas(q),
     queryFn: () => api.get('/audit/capas', { params: q }).then((r) => r.data),
   });
@@ -1183,6 +1188,8 @@ export interface ActionItem {
 }
 
 export interface ListActionItemQuery {
+  page?: number;
+  page_size?: number;
   status?: ActionItemStatus;
   priority?: ActionItemPriority;
   owner_id?: string;
@@ -1205,7 +1212,7 @@ export interface ActionItemUpsert {
 }
 
 export const useActionItems = (q: ListActionItemQuery = {}) =>
-  useQuery<{ data: ActionItem[] }>({
+  useQuery<PaginatedResp<ActionItem>>({
     queryKey: auditKeys.actionItems(q),
     queryFn: () => api.get('/audit/action-items', { params: q }).then((r) => r.data),
   });

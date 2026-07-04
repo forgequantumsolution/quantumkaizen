@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -10,6 +10,8 @@ import {
   Edit3,
   Play,
   Pause,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Card, Button, EmptyState, Spinner, Input, Select } from '@/components/ui';
@@ -33,6 +35,8 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'INACTIVE', label: 'Inactive' },
 ];
 
+const PAGE_SIZE = 12;
+
 interface Props {
   // Provided by an outer wrapper (SettingsPage) that owns the create flow.
   // When set, this page skips its own header button + modal and delegates
@@ -51,15 +55,23 @@ export default function WorkflowsPage({ onCreateWorkflow }: Props = {}) {
   const [statusFilter, setStatusFilter] = useState<WorkflowLifecycleStatus | ''>('');
   const [typeFilter, setTypeFilter] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [page, setPage] = useState(1);
+
+  // Any filter change resets to the first page so results aren't hidden behind
+  // a now-out-of-range page number.
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, typeFilter]);
 
   const filters = useMemo(
     () => ({
       search: search || undefined,
       status: statusFilter || undefined,
       typeId: typeFilter || undefined,
-      pageSize: 50,
+      page,
+      pageSize: PAGE_SIZE,
     }),
-    [search, statusFilter, typeFilter],
+    [search, statusFilter, typeFilter, page],
   );
 
   const { data, isLoading, error } = useWorkflows(filters);
@@ -81,6 +93,8 @@ export default function WorkflowsPage({ onCreateWorkflow }: Props = {}) {
   };
 
   const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   // When embedded (SettingsPage passes onCreateWorkflow), the parent owns the
   // create flow — we don't render our own header button or modal here.
@@ -89,45 +103,60 @@ export default function WorkflowsPage({ onCreateWorkflow }: Props = {}) {
 
   return (
     <>
-      {!isEmbedded && canCreate && (
-        <div className="mb-4 flex justify-end">
-          <Button variant="primary" onClick={triggerCreate}>
-            <Plus size={16} />
-            <span className="ml-1.5">Create Workflow</span>
-          </Button>
-        </div>
-      )}
+      {/* ── Hero header + filters ─────────────────────────────────────────── */}
+      <div className="rounded-xl border border-gray-200/80 bg-white shadow-sm overflow-hidden border-l-[3px] border-l-gold-500">
+        <div className="px-4 py-3.5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                <WorkflowIcon size={18} />
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-[15px] font-bold text-gray-900 tracking-tight truncate leading-none">
+                  Workflows
+                </h1>
+                <p className="text-[11px] text-gray-400 truncate leading-tight mt-1">
+                  Browse and configure workflow definitions.
+                </p>
+              </div>
+            </div>
+            {canCreate && (
+              <Button variant="primary" size="sm" onClick={triggerCreate}>
+                <Plus size={14} />
+                <span className="ml-1.5">Create Workflow</span>
+              </Button>
+            )}
+          </div>
 
-      {/* Filters */}
-      <Card className="!p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <div className="relative">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
+          <div className="mt-3.5 grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="relative">
+              <Search
+                size={15}
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
+              />
+              <Input
+                placeholder="Search by name…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 !rounded-full"
+              />
+            </div>
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as WorkflowLifecycleStatus | '')}
+              options={STATUS_OPTIONS}
             />
-            <Input
-              placeholder="Search by name..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+            <Select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              options={[
+                { value: '', label: 'All types' },
+                ...types.map((t) => ({ value: t.id, label: t.name })),
+              ]}
             />
           </div>
-          <Select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as WorkflowLifecycleStatus | '')}
-            options={STATUS_OPTIONS}
-          />
-          <Select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            options={[
-              { value: '', label: 'All types' },
-              ...types.map((t) => ({ value: t.id, label: t.name })),
-            ]}
-          />
         </div>
-      </Card>
+      </div>
 
       {/* Body */}
       <div className="mt-6">
@@ -156,19 +185,32 @@ export default function WorkflowsPage({ onCreateWorkflow }: Props = {}) {
             />
           </Card>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {items.map((wf) => (
-              <WorkflowCard
-                key={wf.id}
-                workflow={wf}
-                canUpdate={canUpdate}
-                canDelete={canDelete}
-                onOpen={() => navigate(`/workflows/${wf.id}`)}
-                onEdit={() => navigate(`/workflows/${wf.id}/builder`)}
-                onDelete={() => handleDelete(wf)}
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {items.map((wf) => (
+                <WorkflowCard
+                  key={wf.id}
+                  workflow={wf}
+                  canUpdate={canUpdate}
+                  canDelete={canDelete}
+                  onOpen={() => navigate(`/workflows/${wf.id}`)}
+                  onEdit={() => navigate(`/workflows/${wf.id}/builder`)}
+                  onDelete={() => handleDelete(wf)}
+                />
+              ))}
+            </div>
+
+            {total > PAGE_SIZE && (
+              <Pagination
+                page={page}
+                totalPages={totalPages}
+                total={total}
+                rangeStart={(page - 1) * PAGE_SIZE + 1}
+                rangeEnd={Math.min(page * PAGE_SIZE, total)}
+                onChange={setPage}
               />
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
 
@@ -178,6 +220,17 @@ export default function WorkflowsPage({ onCreateWorkflow }: Props = {}) {
     </>
   );
 }
+
+// Status-driven accents for the card's top bar + icon badge.
+const STATUS_ACCENT: Record<
+  WorkflowLifecycleStatus,
+  { bar: string; iconBg: string; iconColor: string; ring: string }
+> = {
+  ACTIVE: { bar: '#22C55E', iconBg: '#F0FDF4', iconColor: '#16A34A', ring: '#BBF7D0' },
+  DRAFT: { bar: '#F59E0B', iconBg: '#FFFBEB', iconColor: '#D97706', ring: '#FDE68A' },
+  DRAFT_UPDATE: { bar: '#F59E0B', iconBg: '#FFFBEB', iconColor: '#D97706', ring: '#FDE68A' },
+  INACTIVE: { bar: '#94A3B8', iconBg: '#F8FAFC', iconColor: '#64748B', ring: '#E2E8F0' },
+};
 
 function WorkflowCard({
   workflow,
@@ -211,48 +264,60 @@ function WorkflowCard({
     }
   };
 
+  const accent = STATUS_ACCENT[workflow.workflowStatus] ?? STATUS_ACCENT.INACTIVE;
+
   return (
-    <Card
-      className={cn(
-        'hover:shadow-md transition-shadow cursor-pointer flex flex-col gap-3',
-        '!p-5',
-      )}
+    <div
       onClick={onOpen}
+      className="group relative flex flex-col rounded-2xl border border-gray-200/80 bg-white shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:border-gray-300 transition-all duration-200 cursor-pointer overflow-hidden"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="text-body-md font-semibold text-gray-900 truncate">{displayWorkflowName(workflow)}</h3>
-          {workflow.type && (
-            <p className="text-xs text-gray-500 mt-0.5 truncate">{workflow.type.name}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+      {/* Status accent bar */}
+      <span className="absolute inset-x-0 top-0 h-1" style={{ background: accent.bar }} />
+
+      <div className="p-4 pt-5 flex flex-col gap-3 flex-1">
+        <div className="flex items-start gap-3">
           <span
-            className="text-xs font-medium text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
-            title={`Workflow version ${workflow.version}`}
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ring-1"
+            style={{ background: accent.iconBg, color: accent.iconColor, boxShadow: `0 0 0 1px ${accent.ring}` }}
           >
-            v{workflow.version}
+            <WorkflowIcon size={18} strokeWidth={2} />
           </span>
-          <WorkflowStatusBadge status={workflow.workflowStatus} />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-semibold text-gray-900 truncate leading-tight">
+              {displayWorkflowName(workflow)}
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5 truncate">
+              {workflow.type?.name ?? 'No type'}
+            </p>
+          </div>
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <WorkflowStatusBadge status={workflow.workflowStatus} />
+            <span
+              className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
+              title={`Workflow version ${workflow.version}`}
+            >
+              v{workflow.version}
+            </span>
+          </div>
         </div>
+
+        <div className="flex items-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5">
+            <Network size={13} className="text-gray-400" />
+            {workflow.stageCount} {workflow.stageCount === 1 ? 'stage' : 'stages'}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Clock size={13} className="text-gray-400" />
+            {formatDate(workflow.updatedAt)}
+          </span>
+        </div>
+
+        {workflow.createdBy && (
+          <p className="text-[11px] text-gray-400 truncate">by {workflow.createdBy.name}</p>
+        )}
       </div>
 
-      <div className="flex items-center gap-4 text-xs text-gray-500">
-        <span className="flex items-center gap-1">
-          <Network size={12} />
-          {workflow.stageCount} {workflow.stageCount === 1 ? 'stage' : 'stages'}
-        </span>
-        <span className="flex items-center gap-1">
-          <Clock size={12} />
-          {formatDate(workflow.updatedAt)}
-        </span>
-      </div>
-
-      {workflow.createdBy && (
-        <p className="text-xs text-gray-400 truncate">by {workflow.createdBy.name}</p>
-      )}
-
-      <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-100">
+      <div className="flex items-center gap-1 px-2.5 py-2 border-t border-gray-100 bg-gray-50/60">
         {canUpdate && (
           <Button
             variant="ghost"
@@ -305,15 +370,79 @@ function WorkflowCard({
           <Button
             variant="ghost"
             size="sm"
+            className="ml-auto"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
             }}
+            title="Delete workflow"
           >
             <Trash2 size={14} className="text-red-500" />
           </Button>
         )}
       </div>
-    </Card>
+    </div>
+  );
+}
+
+function Pagination({
+  page,
+  totalPages,
+  total,
+  rangeStart,
+  rangeEnd,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  total: number;
+  rangeStart: number;
+  rangeEnd: number;
+  onChange: (p: number) => void;
+}) {
+  // Show a sliding window of up to 5 page buttons centred on the current page.
+  const windowStart = Math.max(1, Math.min(page - 2, totalPages - 4));
+  const pages = Array.from({ length: Math.min(5, totalPages) }, (_, i) => windowStart + i);
+
+  return (
+    <div className="mt-6 flex items-center justify-between gap-3 flex-wrap">
+      <p className="text-xs text-gray-500">
+        Showing <span className="font-medium text-gray-700">{rangeStart}</span>–
+        <span className="font-medium text-gray-700">{rangeEnd}</span> of{' '}
+        <span className="font-medium text-gray-700">{total}</span>
+      </p>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => onChange(Math.max(1, page - 1))}
+          disabled={page === 1}
+          className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          aria-label="Previous page"
+        >
+          <ChevronLeft size={15} />
+        </button>
+        {pages.map((p) => (
+          <button
+            key={p}
+            onClick={() => onChange(p)}
+            className={cn(
+              'min-w-8 h-8 px-2 inline-flex items-center justify-center text-xs font-semibold rounded-lg border transition-colors',
+              p === page
+                ? 'bg-gold-500 text-white border-gold-500'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-100',
+            )}
+          >
+            {p}
+          </button>
+        ))}
+        <button
+          onClick={() => onChange(Math.min(totalPages, page + 1))}
+          disabled={page >= totalPages}
+          className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          aria-label="Next page"
+        >
+          <ChevronRight size={15} />
+        </button>
+      </div>
+    </div>
   );
 }

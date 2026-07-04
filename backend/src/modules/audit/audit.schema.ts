@@ -228,6 +228,8 @@ export const RejectAuditRegisterSchema = z.object({
 
 // ── Audit Program ──
 export const ListAuditProgramQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(200).default(20),
   status: ProgramStatusEnum.optional(),
   financial_year: z.string().optional(),
   search: z.string().optional(),
@@ -360,6 +362,8 @@ export const UpdateCapaStatusSchema = z.object({
 });
 
 export const ListCapaQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(200).default(20),
   status: CapaStatusEnum.optional(),
   type: CapaTypeEnum.optional(),
   owner_id: z.string().optional(),
@@ -386,6 +390,8 @@ export const UpdateActionItemStatusSchema = z.object({
 });
 
 export const ListActionItemQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  page_size: z.coerce.number().int().min(1).max(200).default(20),
   status: ActionItemStatusEnum.optional(),
   priority: ActionItemPriorityEnum.optional(),
   owner_id: z.string().optional(),

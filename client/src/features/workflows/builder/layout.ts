@@ -7,12 +7,12 @@
  * Approve), and that reads better than left-to-right for tall sidebars.
  *
  * If the user has dragged a node, we honor the drag for the rest of the
- * session by keeping the React Flow node's current `position` (the autolayout
+ * session by keeping the canvas node's current `position` (the autolayout
  * is only re-applied on full graph load). Per-user drag persistence isn't
  * stored anywhere; reloading the page snaps back to the auto-layout.
  */
 import dagre from 'dagre';
-import type { Edge, Node } from 'reactflow';
+import type { FlowEdge, FlowNode } from './builder.types';
 
 // Empirical sizes for the canvas nodes — match the rendered card dimensions
 // in `client/src/features/workflows/builder/nodes/*`. These are best-effort;
@@ -36,10 +36,10 @@ interface LayoutOptions {
  * objects are not mutated.
  */
 export const layoutGraph = <TData>(
-  nodes: Node<TData>[],
-  edges: Edge[],
+  nodes: FlowNode<TData>[],
+  edges: FlowEdge[],
   opts: LayoutOptions = {},
-): Node<TData>[] => {
+): FlowNode<TData>[] => {
   if (nodes.length === 0) return nodes;
 
   const g = new dagre.graphlib.Graph();

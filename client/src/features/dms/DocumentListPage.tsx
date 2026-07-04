@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Input, Select, Table, Button } from 'antd';
 import { Search, Plus, FileText, BookOpenCheck } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import { cn } from '@/lib/utils';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useDocuments,
@@ -44,21 +45,69 @@ export default function DocumentListPage() {
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <FileText size={22} className="text-gray-500" />
-            Documents
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Controlled documents — SOPs, policies and protocols authored in the online editor.
-          </p>
+      <div className="rounded-xl border border-gray-200/80 bg-white shadow-sm overflow-hidden mb-4 border-l-[3px] border-l-gold-500">
+        <div className="px-3.5 py-2.5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {/* Identity + tabs share the top row. */}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 text-white flex items-center justify-center shadow-sm shrink-0">
+                <FileText size={18} />
+              </span>
+              <h1 className="text-[15px] font-bold text-gray-900 tracking-tight truncate leading-none">
+                Documents
+              </h1>
+              <div className="h-6 w-px bg-gray-200 shrink-0 hidden md:block" />
+              <div className="w-fit max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -my-1">
+                <nav className="inline-flex gap-1.5 p-1 rounded-lg bg-gray-100/80 ring-1 ring-gray-200/60">
+                  {STATUS_TABS.map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      onClick={() => setStatus(t.key)}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold rounded-lg whitespace-nowrap transition-all duration-150',
+                        status === t.key
+                          ? 'bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-white/70',
+                      )}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <Select
+                value={type}
+                onChange={setType}
+                allowClear
+                placeholder="All types"
+                style={{ width: 170 }}
+                options={Object.entries(DOC_TYPE_LABELS).map(([v, label]) => ({ value: v, label }))}
+              />
+              <div className="relative w-60">
+                <Search
+                  size={15}
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
+                />
+                <Input
+                  placeholder="Search number / title…"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10 !rounded-full"
+                />
+              </div>
+              {canCreate && (
+                <Button type="primary" icon={<Plus size={14} />} onClick={() => nav('/dms/new')}>
+                  New Document
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
-        {canCreate && (
-          <Button type="primary" icon={<Plus size={14} />} onClick={() => nav('/dms/new')}>
-            New Document
-          </Button>
-        )}
       </div>
 
       {myReads && myReads.count > 0 && (
@@ -81,42 +130,6 @@ export default function DocumentListPage() {
           </div>
         </div>
       )}
-
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
-          {STATUS_TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setStatus(t.key)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                status === t.key ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <Select
-            value={type}
-            onChange={setType}
-            allowClear
-            placeholder="All types"
-            style={{ width: 170 }}
-            options={Object.entries(DOC_TYPE_LABELS).map(([v, label]) => ({ value: v, label }))}
-          />
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-            <Input
-              placeholder="Search number / title…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              style={{ width: 240 }}
-            />
-          </div>
-        </div>
-      </div>
 
       <Table<DocSummary>
         size="small"

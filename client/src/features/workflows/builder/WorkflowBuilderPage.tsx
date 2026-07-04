@@ -1,22 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Pause, Play, Save } from 'lucide-react';
+import {
+  ArrowLeft,
+  Boxes,
+  CheckCircle2,
+  Pause,
+  Play,
+  Save,
+  Spline,
+  Workflow as WorkflowIcon,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { App } from 'antd';
-import ReactFlow, {
-  addEdge,
-  Background,
-  Controls,
-  MiniMap,
-  type Connection,
-  type Edge,
-  type Node,
-  type ReactFlowInstance,
-  useEdgesState,
-  useNodesState,
-} from 'reactflow';
-import 'reactflow/dist/style.css';
-import { Button, Card, Spinner } from '@/components/ui';
+import { Button, Spinner } from '@/components/ui';
 import { displayWorkflowName } from '@/lib/utils';
 import {
   isWorkflowValidationFailure,
@@ -31,7 +27,7 @@ import type { BuilderEdge, BuilderNode } from '@/lib/api/workflow';
 import { useStageStatuses } from '@/lib/api/workflowLookups';
 import { deserializeFlow, serializeFlow } from './builder.serializer';
 import { layoutGraph } from './layout';
-import { nodeTypes } from './nodes';
+import JsPlumbCanvas, { type JsPlumbCanvasHandle } from './JsPlumbCanvas';
 import NodePalette from './NodePalette';
 import InspectorPanel from './inspector/InspectorPanel';
 import ValidationErrorPanel from './ValidationErrorPanel';
@@ -42,8 +38,8 @@ import type {
   NodeKind,
   StageNodeData,
   WorkflowNodeData,
-  WorkflowReactFlowEdge,
-  WorkflowReactFlowNode,
+  WorkflowFlowEdge,
+  WorkflowFlowNode,
 } from './builder.types';
 
 let nodeCounter = 0;
@@ -82,19 +78,26 @@ export default function WorkflowBuilderPage() {
   // load preference back to published once they explicitly discard the draft.
   const [draftDiscarded, setDraftDiscarded] = useState(false);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNodeData>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowReactFlowEdge['data']>([]);
+  const [nodes, setNodes] = useState<WorkflowFlowNode[]>([]);
+  const [edges, setEdges] = useState<WorkflowFlowEdge[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const rfInstance = useRef<ReactFlowInstance | null>(null);
-  const needsFitView = useRef(false);
+  const canvasRef = useRef<JsPlumbCanvasHandle | null>(null);
+
+  // Re-fit the viewport after a full graph (re)load. The canvas auto-fits on
+  // first mount; this covers switching between the draft and the published
+  // graph. Two rAFs so the node elements are measured after jsPlumb lays them
+  // out.
+  const scheduleFit = useCallback(() => {
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => canvasRef.current?.fitView()),
+    );
+  }, []);
 
   // Load workflow → canvas. Prefers the saved draft (TemporaryWorkflow row)
   // over the published flow_json when one exists, so users see exactly what
   // they last saved. Positions are computed by dagre at load time (the backend
-  // no longer stores layout). React Flow's `fitView` prop only runs on initial
-  // mount BEFORE this effect's setNodes commits, so we set a flag and re-fit
-  // in the post-commit effect below.
+  // no longer stores layout).
   useEffect(() => {
     if (!data) return;
     // `draftData?.flow_json` is unknown-typed; cast to the builder shape.
@@ -110,80 +113,78 @@ export default function WorkflowBuilderPage() {
     const laidOut = layoutGraph(n, e, { direction: 'TB' });
     setNodes(laidOut);
     setEdges(e);
-    needsFitView.current = true;
-  }, [data, draftData, draftDiscarded, setNodes, setEdges]);
-
-  // After the laid-out nodes commit to React state, fit the viewport once so
-  // every stage is visible. The flag is single-shot — user-initiated drags
-  // don't retrigger this (they go through `onNodesChange` and don't bump
-  // `data`, so the load effect above doesn't fire either).
-  useEffect(() => {
-    if (!needsFitView.current || nodes.length === 0) return;
-    const id = requestAnimationFrame(() => {
-      rfInstance.current?.fitView({ padding: 0.18, maxZoom: 1, minZoom: 0.4 });
-      needsFitView.current = false;
-    });
-    return () => cancelAnimationFrame(id);
-  }, [nodes]);
+    scheduleFit();
+  }, [data, draftData, draftDiscarded, scheduleFit]);
 
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedId) ?? null,
     [nodes, selectedId],
   );
 
-  // Apply dagre after a topology change. Drag-only changes go through
-  // `onNodesChange` and don't re-layout, so user drags survive within a
-  // session.
+  // Apply dagre after a topology change. Position-only changes (drags) update a
+  // single node's `position` and don't re-layout, so user drags survive within
+  // a session.
   const relayout = useCallback(
-    (ns: WorkflowReactFlowNode[], es: WorkflowReactFlowEdge[]) =>
-      layoutGraph(ns, es as Edge[], { direction: 'TB' }),
+    (ns: WorkflowFlowNode[], es: WorkflowFlowEdge[]) =>
+      layoutGraph(ns, es, { direction: 'TB' }),
     [],
   );
 
-  const onConnect = useCallback(
-    (params: Edge | Connection) => {
+  const handleConnect = useCallback(
+    (source: string, target: string) => {
       setEdges((eds) => {
-        const next = addEdge(
-          { ...params, data: { branchName: undefined, condition: undefined } },
-          eds as Edge[],
-        ) as typeof eds;
-        // After a new edge, re-layout so the graph rearranges to honour the new topology.
-        setNodes((cur) => relayout(cur, next as unknown as WorkflowReactFlowEdge[]));
+        if (eds.some((e) => e.source === source && e.target === target)) return eds;
+        const next: WorkflowFlowEdge[] = [
+          ...eds,
+          {
+            id: `edge-${source}-${target}-${eds.length}`,
+            source,
+            target,
+            sourceHandle: null,
+            targetHandle: null,
+            data: {},
+          },
+        ];
+        // After a new edge, re-layout so the graph honours the new topology.
+        setNodes((cur) => relayout(cur, next));
         return next;
       });
     },
-    [setEdges, setNodes, relayout],
+    [relayout],
+  );
+
+  const handleDisconnect = useCallback(
+    (source: string, target: string) => {
+      setEdges((eds) => {
+        const next = eds.filter((e) => !(e.source === source && e.target === target));
+        if (next.length === eds.length) return eds;
+        setNodes((cur) => relayout(cur, next));
+        return next;
+      });
+    },
+    [relayout],
+  );
+
+  const handleNodePositionChange = useCallback(
+    (id: string, pos: { x: number; y: number }) => {
+      setNodes((ns) => ns.map((n) => (n.id === id ? { ...n, position: pos } : n)));
+    },
+    [],
   );
 
   const handleAddNode = (kind: NodeKind) => {
     const id = newNodeId();
-    const newNode: WorkflowReactFlowNode = {
+    const newNode: WorkflowFlowNode = {
       id,
       type: kind,
       // Placeholder — dagre lays this out as soon as it's appended.
       position: { x: 0, y: 0 },
       data: defaultDataFor(kind),
     };
-    setNodes((ns) => {
-      const next = [...ns, newNode];
-      return relayout(next, edges as unknown as WorkflowReactFlowEdge[]);
-    });
+    setNodes((ns) => relayout([...ns, newNode], edges));
     setSelectedId(id);
-    // Pan to the newly added node once dagre has positioned it.
-    requestAnimationFrame(() => {
-      const inst = rfInstance.current;
-      if (!inst) return;
-      const placed = (nodes as WorkflowReactFlowNode[]).find((n) => n.id === id);
-      if (!placed) {
-        inst.fitView({ padding: 0.18, duration: 350 });
-        return;
-      }
-      const zoom = Math.max(inst.getZoom(), 0.85);
-      inst.setCenter(placed.position.x + 110, placed.position.y + 45, {
-        duration: 350,
-        zoom,
-      });
-    });
+    // Re-fit once dagre has positioned the new node.
+    scheduleFit();
   };
 
   const handleNodeUpdate = (nodeId: string, newData: WorkflowNodeData) => {
@@ -191,13 +192,22 @@ export default function WorkflowBuilderPage() {
   };
 
   const handleNodeDelete = (nodeId: string) => {
-    if (!confirm('Delete this node and its connections?')) return;
-    const remainingEdges = (edges as WorkflowReactFlowEdge[]).filter(
-      (e) => e.source !== nodeId && e.target !== nodeId,
-    );
-    setEdges(remainingEdges as typeof edges);
-    setNodes((ns) => relayout(ns.filter((n) => n.id !== nodeId), remainingEdges));
-    setSelectedId(null);
+    modal.confirm({
+      title: 'Delete node',
+      content: 'Delete this node and its connections?',
+      okText: 'Delete',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancel',
+      centered: true,
+      onOk: () => {
+        const remainingEdges = edges.filter(
+          (e) => e.source !== nodeId && e.target !== nodeId,
+        );
+        setEdges(remainingEdges);
+        setNodes((ns) => relayout(ns.filter((n) => n.id !== nodeId), remainingEdges));
+        setSelectedId(null);
+      },
+    });
   };
 
   /**
@@ -207,10 +217,7 @@ export default function WorkflowBuilderPage() {
    */
   const handleSaveDraft = async () => {
     setValidationErrors([]);
-    const payload = serializeFlow(
-      nodes as WorkflowReactFlowNode[],
-      edges as WorkflowReactFlowEdge[],
-    );
+    const payload = serializeFlow(nodes, edges);
     try {
       await saveDraft.mutateAsync({ flow_json: payload });
       toast.success('Draft saved');
@@ -231,10 +238,7 @@ export default function WorkflowBuilderPage() {
    */
   const runPublish = async () => {
     setValidationErrors([]);
-    const payload = serializeFlow(
-      nodes as WorkflowReactFlowNode[],
-      edges as WorkflowReactFlowEdge[],
-    );
+    const payload = serializeFlow(nodes, edges);
     try {
       const res = await publish.mutateAsync({
         flow_json: payload,
@@ -308,48 +312,68 @@ export default function WorkflowBuilderPage() {
     );
   }
 
+  const status = data.workflow.workflowStatus;
+  const statusStyle =
+    status === 'ACTIVE'
+      ? { dot: '#22C55E', text: 'text-green-700', bg: 'bg-green-50', ring: 'ring-green-200' }
+      : status === 'INACTIVE'
+        ? { dot: '#94A3B8', text: 'text-gray-600', bg: 'bg-gray-50', ring: 'ring-gray-200' }
+        : { dot: '#F59E0B', text: 'text-amber-700', bg: 'bg-amber-50', ring: 'ring-amber-200' };
+
   return (
-    <div className="h-[calc(100vh-56px)] flex flex-col">
+    <div className="h-[calc(100vh-56px)] flex flex-col bg-gradient-to-b from-slate-50 to-slate-100/50">
       {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 px-6 py-3 border-b bg-white">
+      <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-gray-200/70 bg-white/80 backdrop-blur-md shadow-[0_1px_3px_rgba(15,23,42,0.04)] z-10">
         <div className="flex items-center gap-3 min-w-0">
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
             onClick={() => navigate('/workflows')}
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors shrink-0"
+            title="Back to workflows"
           >
-            <ArrowLeft size={14} />
-            <span className="ml-1">Back</span>
-          </Button>
+            <ArrowLeft size={16} />
+          </button>
+          <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 text-white flex items-center justify-center shadow-sm shrink-0">
+            <WorkflowIcon size={18} />
+          </span>
           <div className="min-w-0">
-            <h1 className="text-base font-semibold text-gray-900 truncate">
+            <h1 className="text-[15px] font-bold text-gray-900 truncate leading-tight">
               {displayWorkflowName(data.workflow)}
             </h1>
-            <p className="text-xs text-gray-500 truncate">Workflow builder</p>
+            <p className="text-[11px] text-gray-400 truncate leading-tight mt-0.5">
+              Workflow builder
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500">
-            {nodes.length} node{nodes.length === 1 ? '' : 's'} · {edges.length} edge
-            {edges.length === 1 ? '' : 's'}
-          </span>
 
-          {/* Current status pill + flip control. Activate is enabled only
-              once at least one stage exists (mirrors the backend guard). */}
+        <div className="flex items-center gap-2.5">
+          {/* Graph stats */}
+          <div className="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-lg bg-gray-50 ring-1 ring-gray-200/70 text-[11px] font-medium text-gray-600">
+            <span className="flex items-center gap-1.5" title="Nodes">
+              <Boxes size={13} className="text-gray-400" />
+              {nodes.length}
+            </span>
+            <span className="w-px h-3.5 bg-gray-200" />
+            <span className="flex items-center gap-1.5" title="Connections">
+              <Spline size={13} className="text-gray-400" />
+              {edges.length}
+            </span>
+          </div>
+
+          {/* Status pill */}
           <span
-            className={
-              data.workflow.workflowStatus === 'ACTIVE'
-                ? 'text-[11px] px-2 py-0.5 rounded bg-green-100 text-green-800'
-                : data.workflow.workflowStatus === 'INACTIVE'
-                  ? 'text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-700'
-                  : 'text-[11px] px-2 py-0.5 rounded bg-amber-100 text-amber-800'
-            }
-            title={`Workflow status: ${data.workflow.workflowStatus}`}
+            className={`flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg ring-1 ${statusStyle.bg} ${statusStyle.text} ${statusStyle.ring}`}
+            title={`Workflow status: ${status}`}
           >
-            {data.workflow.workflowStatus}
+            <span
+              className="w-1.5 h-1.5 rounded-full"
+              style={{ background: statusStyle.dot }}
+            />
+            {status}
           </span>
 
-          {data.workflow.workflowStatus === 'ACTIVE' ? (
+          <span className="w-px h-6 bg-gray-200 mx-0.5" />
+
+          {status === 'ACTIVE' ? (
             <Button
               variant="outline"
               onClick={() => handleSetStatus('INACTIVE')}
@@ -405,52 +429,43 @@ export default function WorkflowBuilderPage() {
       </div>
 
       {/* Body */}
-      <div className="flex-1 grid gap-2 p-2 overflow-hidden" style={{ gridTemplateColumns: '180px 1fr 296px' }}>
-        <div className="h-full min-h-0 overflow-auto">
+      <div className="flex-1 grid gap-3 p-3 overflow-hidden" style={{ gridTemplateColumns: '210px 1fr 320px' }}>
+        <div className="h-full min-h-0 overflow-hidden">
           <NodePalette onAdd={handleAddNode} />
         </div>
 
-        <Card noPadding className="relative overflow-hidden h-full">
-          <ReactFlow
+        <div className="relative overflow-hidden h-full rounded-2xl border border-gray-200/80 bg-white shadow-sm ring-1 ring-black/[0.02]">
+          <JsPlumbCanvas
+            ref={canvasRef}
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onInit={(inst) => {
-              rfInstance.current = inst;
-            }}
-            onNodeClick={(_e, node) => setSelectedId(node.id)}
+            selectedId={selectedId}
+            interactive
+            editable
+            direction="TB"
+            onConnect={handleConnect}
+            onNodePositionChange={handleNodePositionChange}
+            onSelect={setSelectedId}
             onPaneClick={() => setSelectedId(null)}
-            nodeTypes={nodeTypes}
-            fitView
-            fitViewOptions={{ padding: 0.18, maxZoom: 1, minZoom: 0.4 }}
-            proOptions={{ hideAttribution: true }}
-            connectionLineStyle={{ stroke: '#C9A84C', strokeWidth: 2 }}
-            defaultEdgeOptions={{
-              type: 'smoothstep',
-              animated: false,
-              style: { stroke: '#94A3B8', strokeWidth: 2 },
-            }}
-          >
-            <Background gap={16} size={1} color="#E8ECF2" />
-            <Controls />
-            <MiniMap pannable zoomable />
-          </ReactFlow>
+            onNodeDelete={handleNodeDelete}
+          />
           <ValidationErrorPanel
             errors={validationErrors}
             onDismiss={() => setValidationErrors([])}
           />
-        </Card>
+        </div>
 
-        <div className="h-full min-h-0 overflow-auto">
+        <div className="h-full min-h-0 overflow-hidden">
           <InspectorPanel
             workflowId={id}
-            selectedNode={selectedNode as Node<WorkflowNodeData> | null}
+            selectedNode={selectedNode}
             onNodeUpdate={handleNodeUpdate}
             onNodeDelete={handleNodeDelete}
             allNodes={nodes}
             stageStatuses={stageStatuses}
+            edges={edges}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
           />
         </div>
       </div>

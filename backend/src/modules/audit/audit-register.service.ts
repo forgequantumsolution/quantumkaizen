@@ -510,29 +510,51 @@ export const deleteAuditRegister = async (id: string) => {
 // ────────────────────── Audit Program ──────────────────────
 
 export const listAuditPrograms = async (q: ListAuditProgramQuery) => {
+  const search: Prisma.AuditProgramWhereInput['OR'] = q.search
+    ? [
+        { programNumber: { contains: q.search, mode: 'insensitive' } },
+        { register: { title: { contains: q.search, mode: 'insensitive' } } },
+      ]
+    : undefined;
+
   const where: Prisma.AuditProgramWhereInput = {};
   if (q.status) where.status = q.status;
   if (q.financial_year) where.register = { financialYear: q.financial_year };
-  if (q.search) {
-    where.OR = [
-      { programNumber: { contains: q.search, mode: 'insensitive' } },
-      { register: { title: { contains: q.search, mode: 'insensitive' } } },
-    ];
-  }
-  const items = await prisma.auditProgram.findMany({
-    where,
-    include: {
-      register: {
-        include: {
-          auditor: { select: { id: true, name: true } },
-          checklistForm: { select: { id: true, title: true } },
+  if (search) where.OR = search;
+
+  // Counts ignore the status filter so the overview reflects every status.
+  const countWhere: Prisma.AuditProgramWhereInput = {};
+  if (q.financial_year) countWhere.register = { financialYear: q.financial_year };
+  if (search) countWhere.OR = search;
+
+  const [items, total, grouped] = await Promise.all([
+    prisma.auditProgram.findMany({
+      where,
+      include: {
+        register: {
+          include: {
+            auditor: { select: { id: true, name: true } },
+            checklistForm: { select: { id: true, title: true } },
+          },
         },
+        _count: { select: { findings: true } },
       },
-      _count: { select: { findings: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-  return { data: items.map(serializeProgram) };
+      orderBy: { createdAt: 'desc' },
+      skip: (q.page - 1) * q.page_size,
+      take: q.page_size,
+    }),
+    prisma.auditProgram.count({ where }),
+    prisma.auditProgram.groupBy({ by: ['status'], where: countWhere, _count: true }),
+  ]);
+
+  const counts: Record<string, number> = {};
+  for (const g of grouped) counts[g.status] = g._count;
+
+  return {
+    data: items.map(serializeProgram),
+    pagination: { total_items: total, page: q.page, page_size: q.page_size },
+    counts,
+  };
 };
 
 export const getAuditProgram = async (id: string) => {
