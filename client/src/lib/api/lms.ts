@@ -741,6 +741,14 @@ export interface CertVerifyResult {
   issued_at?: string;
   expires_at?: string | null;
 }
+export interface ReportBreakdownRow {
+  key: string;
+  name: string;
+  total: number;
+  completed: number;
+  overdue: number;
+  completion_rate: number;
+}
 export interface ComplianceReport {
   summary: {
     total: number;
@@ -752,8 +760,27 @@ export interface ComplianceReport {
     matrix_total: number;
     matrix_coverage: number;
   };
-  by_department: { name: string; total: number; completed: number; overdue: number; completion_rate: number }[];
+  by_department: ReportBreakdownRow[];
+  by_role: ReportBreakdownRow[];
+  by_site: ReportBreakdownRow[];
+  assessment: {
+    attempts: number;
+    passed: number;
+    failed: number;
+    pass_rate: number;
+    avg_score: number;
+    learners: number;
+  };
   expiring_certificates: { id: string; serial: string; course_title: string; holder_name: string | null; expires_at: string | null }[];
+}
+// Optional filters for the compliance dashboard + CSV export (all AND-ed).
+export interface ReportFilter {
+  department_id?: string;
+  role_id?: string;
+  site_id?: string;
+  course_id?: string;
+  from?: string;
+  to?: string;
 }
 export interface Transcript {
   user_id: string;
@@ -790,11 +817,29 @@ export const useCertificate = (id: string | undefined) =>
     enabled: !!id,
   });
 
-export const useComplianceReport = () =>
+// Strip empty filter values so the query key + request params stay stable.
+const cleanFilter = (f: ReportFilter = {}) =>
+  Object.fromEntries(Object.entries(f).filter(([, v]) => v != null && v !== ''));
+
+export const useComplianceReport = (filter: ReportFilter = {}) =>
   useQuery<ComplianceReport>({
-    queryKey: ['lms', 'report', 'compliance'],
-    queryFn: () => api.get('/lms/reports/compliance').then((r) => r.data),
+    queryKey: ['lms', 'report', 'compliance', cleanFilter(filter)],
+    queryFn: () => api.get('/lms/reports/compliance', { params: cleanFilter(filter) }).then((r) => r.data),
   });
+
+// Download the enrollment-level training-records CSV for the current filter.
+export const downloadEnrollmentsCsv = async (filter: ReportFilter = {}) => {
+  const res = await api.get('/lms/reports/enrollments.csv', {
+    params: cleanFilter(filter),
+    responseType: 'blob',
+  });
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'lms-training-records.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
 export const useTranscript = (userId: string | undefined) =>
   useQuery<Transcript>({

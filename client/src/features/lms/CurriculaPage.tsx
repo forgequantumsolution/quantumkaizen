@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { App, Button, Empty, Input, Modal, Select, Table, Tag } from 'antd';
-import { Layers, Plus, Trash2 } from 'lucide-react';
+import { Layers, Plus, Trash2, Search } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
 import {
@@ -16,9 +16,15 @@ export default function CurriculaPage() {
   const del = useDeleteCurriculum();
 
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [courseIds, setCourseIds] = useState<string[]>([]);
+
+  const q = search.trim().toLowerCase();
+  const rows = (curricula ?? []).filter(
+    (c) => !q || c.title.toLowerCase().includes(q) || c.code.toLowerCase().includes(q),
+  );
 
   const reset = () => { setTitle(''); setDescription(''); setCourseIds([]); };
 
@@ -53,15 +59,24 @@ export default function CurriculaPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Layers size={22} className="text-gray-500" /> Training Programs
           </h1>
-          <p className="text-xs text-gray-500 mt-0.5">Group courses into learning paths to assign together.</p>
         </div>
-        {canWrite && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>New Curriculum</Button>}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            allowClear
+            prefix={<Search size={14} className="text-gray-400" />}
+            placeholder="Search programs"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 240 }}
+          />
+          {canWrite && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>New Curriculum</Button>}
+        </div>
       </div>
 
-      {isLoading ? null : (curricula?.length ?? 0) === 0 ? (
-        <Empty description="No curricula yet." />
+      {isLoading ? null : rows.length === 0 ? (
+        <Empty description={q ? 'No programs match your search.' : 'No curricula yet.'} />
       ) : (
-        <Table rowKey="id" dataSource={curricula} columns={columns} size="small"
+        <Table rowKey="id" dataSource={rows} columns={columns} size="small"
           expandable={{
             expandedRowRender: (r) => (
               <ol className="list-decimal ml-5 text-sm text-gray-700 space-y-0.5">

@@ -33,15 +33,14 @@ export default function TestDefinitionsPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><FlaskConical size={22} className="text-gray-500" />Test Definitions</h1>
           <p className="text-xs text-gray-500 mt-0.5">Reusable analytical tests with an ordered set of measured analytes.</p>
         </div>
-        {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpenId(null)}>New Test</Button>}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 mb-3">
-        <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 150 }}
-          options={[{ value: 'DRAFT', label: 'Draft' }, { value: 'APPROVED', label: 'Approved' }, { value: 'RETIRED', label: 'Retired' }]} />
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input placeholder="Search code / name / technique…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 260 }} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 150 }}
+            options={[{ value: 'DRAFT', label: 'Draft' }, { value: 'APPROVED', label: 'Approved' }, { value: 'RETIRED', label: 'Retired' }]} />
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input placeholder="Search code / name / technique…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 260 }} />
+          </div>
+          {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpenId(null)}>New Test</Button>}
         </div>
       </div>
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { App, Button, Empty, Input, Tag } from 'antd';
-import { Compass, Search, ArrowLeft, BookOpen, Clock } from 'lucide-react';
+import { App, Button, Empty, Input, Select, Tag } from 'antd';
+import { Compass, Search, BookOpen, Clock } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useCatalog, useSelfEnroll, type CatalogItem } from '@/lib/api/lms';
 
@@ -32,9 +32,14 @@ export default function CatalogPage() {
   const nav = useNavigate();
   const { message } = App.useApp();
   const [search, setSearch] = useState('');
+  const [category, setCategory] = useState<string>();
   const { data, isLoading } = useCatalog(search || undefined);
   const enroll = useSelfEnroll();
   const [enrollingId, setEnrollingId] = useState<string | null>(null);
+
+  const items = data?.items ?? [];
+  const categories = [...new Set(items.map((i) => i.category).filter((c): c is string => !!c))].sort();
+  const shown = category ? items.filter((i) => i.category === category) : items;
 
   const onEnroll = async (c: CatalogItem) => {
     setEnrollingId(c.course_id);
@@ -51,31 +56,37 @@ export default function CatalogPage() {
 
   return (
     <PageContainer>
-      <button onClick={() => nav('/lms/my')} className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3">
-        <ArrowLeft size={14} /> My Learning
-      </button>
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Compass size={22} className="text-gray-500" /> Course Catalog
-        </h1>
-        <p className="text-xs text-gray-500 mt-0.5">Browse and self-enrol in available courses.</p>
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Compass size={22} className="text-gray-500" /> Course Catalog
+          </h1>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            allowClear
+            prefix={<Search size={14} className="text-gray-400" />}
+            placeholder="Search courses"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 280 }}
+          />
+          <Select
+            allowClear
+            placeholder="All categories"
+            value={category}
+            onChange={setCategory}
+            style={{ width: 190 }}
+            options={categories.map((c) => ({ value: c, label: c }))}
+          />
+        </div>
       </div>
 
-      <Input
-        allowClear
-        prefix={<Search size={14} className="text-gray-400" />}
-        placeholder="Search courses"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        style={{ maxWidth: 320 }}
-        className="mb-4"
-      />
-
-      {isLoading ? null : (data?.items.length ?? 0) === 0 ? (
+      {isLoading ? null : shown.length === 0 ? (
         <Empty description="No courses available for self-enrolment." />
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {data?.items.map((c) => (
+          {shown.map((c) => (
             <CatalogCard key={c.course_id} c={c} onEnroll={() => onEnroll(c)} enrolling={enrollingId === c.course_id} />
           ))}
         </div>

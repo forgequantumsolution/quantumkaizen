@@ -23,7 +23,7 @@ const ACTION_COLOR: Record<string, string> = {
   REVIEW: 'gold',
 };
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 export default function DataReviewPage() {
   const canRead = useHasPermission('data_review.read');
@@ -135,9 +135,9 @@ export default function DataReviewPage() {
 
   return (
     <PageContainer>
-      <Header />
-
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <Header />
+        <div className="flex items-center gap-2 flex-wrap">
         <Select
           value={entityType}
           onChange={(v) => { setEntityType(v); resetPage(); }}
@@ -178,6 +178,7 @@ export default function DataReviewPage() {
           value={range ?? undefined}
           onChange={(v) => { setRange(v as [Dayjs | null, Dayjs | null] | null); resetPage(); }}
         />
+        </div>
       </div>
 
       <Table<AuditEntry>

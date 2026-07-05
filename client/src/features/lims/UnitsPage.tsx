@@ -41,13 +41,12 @@ export default function UnitsPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Ruler size={22} className="text-gray-500" />Units of Measure</h1>
           <p className="text-xs text-gray-500 mt-0.5">Standard units referenced by specification parameters and test results.</p>
         </div>
-        {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setOpen(true); }}>New Unit</Button>}
-      </div>
-
-      <div className="flex items-center justify-end mb-3">
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input placeholder="Search code / name / symbol…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 250 }} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input placeholder="Search code / name / symbol…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 250 }} />
+          </div>
+          {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setOpen(true); }}>New Unit</Button>}
         </div>
       </div>
 

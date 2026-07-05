@@ -39,16 +39,15 @@ export default function SpecVersionsPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><FileStack size={22} className="text-gray-500" />Specification Versions</h1>
           <p className="text-xs text-gray-500 mt-0.5">Versioned, multi-stage specifications — the limit authority for result evaluation.</p>
         </div>
-        {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setEditorId(null)}>New Spec Version</Button>}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 mb-3 flex-wrap">
-        <Select value={stage} onChange={setStage} allowClear placeholder="All stages" style={{ width: 160 }} options={STAGE_OPTIONS} />
-        <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 150 }}
-          options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))} />
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input placeholder="Search code / name…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 240 }} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={stage} onChange={setStage} allowClear placeholder="All stages" style={{ width: 160 }} options={STAGE_OPTIONS} />
+          <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 150 }}
+            options={STATUS_OPTIONS.map((s) => ({ value: s, label: s }))} />
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input placeholder="Search code / name…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 240 }} />
+          </div>
+          {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setEditorId(null)}>New Spec Version</Button>}
         </div>
       </div>
 

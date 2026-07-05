@@ -43,15 +43,14 @@ export default function SampleListPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><TestTubes size={22} className="text-gray-500" />Sample Management</h1>
           <p className="text-xs text-gray-500 mt-0.5">Register samples with a barcode and an unbroken chain of custody.</p>
         </div>
-        {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>Register Sample</Button>}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 mb-3">
-        <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 160 }}
-          options={Object.entries(SAMPLE_STATUS_LABELS).map(([v, label]) => ({ value: v, label }))} />
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input placeholder="Search no. / barcode / product / batch…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 280 }} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 160 }}
+            options={Object.entries(SAMPLE_STATUS_LABELS).map(([v, label]) => ({ value: v, label }))} />
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input placeholder="Search no. / barcode / product / batch…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 280 }} />
+          </div>
+          {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>Register Sample</Button>}
         </div>
       </div>
 

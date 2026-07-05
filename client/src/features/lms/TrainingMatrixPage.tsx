@@ -27,6 +27,7 @@ export default function TrainingMatrixPage() {
   const { data: curricula } = useCurricula();
 
   const [open, setOpen] = useState(false);
+  const [targetFilter, setTargetFilter] = useState<MatrixTargetType>();
   const [targetType, setTargetType] = useState<MatrixTargetType>('ROLE');
   const [targetId, setTargetId] = useState<string>('');
   const [requiresType, setRequiresType] = useState<MatrixRequiresType>('COURSE');
@@ -68,6 +69,8 @@ export default function TrainingMatrixPage() {
     } catch { message.error('Sync failed'); }
   };
 
+  const matrixRows = (rules ?? []).filter((r) => !targetFilter || r.target_type === targetFilter);
+
   const columns = [
     { title: 'Target', render: (_: unknown, r: MatrixRule) => (
       <span><Tag>{r.target_type.replace('_', ' ')}</Tag> {nameLookup(r.target_type, r.target_id)}</span>
@@ -108,18 +111,28 @@ export default function TrainingMatrixPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Grid3x3 size={22} className="text-gray-500" /> Qualification Matrix
           </h1>
-          <p className="text-xs text-gray-500 mt-0.5">Rules that auto-assign courses by role, department, site or job function.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select
+            allowClear
+            placeholder="All targets"
+            value={targetFilter}
+            onChange={setTargetFilter}
+            style={{ width: 170 }}
+            options={(['ROLE', 'DEPARTMENT', 'SITE', 'JOB_FUNCTION'] as MatrixTargetType[]).map((t) => ({
+              value: t,
+              label: t.replace('_', ' '),
+            }))}
+          />
           {canWrite && <Button icon={<RefreshCw size={14} />} loading={sync.isPending} onClick={runSync}>Run sync</Button>}
           {canWrite && <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>Add rule</Button>}
         </div>
       </div>
 
-      {isLoading ? null : (rules?.length ?? 0) === 0 ? (
-        <Empty description="No matrix rules yet." />
+      {isLoading ? null : (matrixRows.length === 0) ? (
+        <Empty description={targetFilter ? 'No rules for this target type.' : 'No matrix rules yet.'} />
       ) : (
-        <Table rowKey="id" dataSource={rules} columns={columns} size="small" pagination={{ pageSize: 20 }} />
+        <Table rowKey="id" dataSource={matrixRows} columns={columns} size="small" pagination={{ pageSize: 20 }} />
       )}
 
       <Modal title="Add matrix rule" open={open} onCancel={() => setOpen(false)} onOk={submit} okText="Add rule" confirmLoading={create.isPending} width={560}>

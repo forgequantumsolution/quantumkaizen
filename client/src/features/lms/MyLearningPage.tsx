@@ -1,6 +1,7 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Empty, Progress, Tag } from 'antd';
-import { GraduationCap, Compass, Clock, CheckCircle2, AlertTriangle, Award } from 'lucide-react';
+import { Button, Empty, Input, Progress, Select, Tag } from 'antd';
+import { GraduationCap, Compass, Clock, CheckCircle2, AlertTriangle, Award, Search } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useMyLearning, useMyCertificates, type EnrollmentStatus, type MyEnrollment } from '@/lib/api/lms';
 
@@ -43,8 +44,15 @@ export default function MyLearningPage() {
   const nav = useNavigate();
   const { data, isLoading } = useMyLearning();
   const { data: certs } = useMyCertificates();
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<EnrollmentStatus>();
 
-  const items = data?.items ?? [];
+  const q = search.trim().toLowerCase();
+  const items = (data?.items ?? []).filter(
+    (i) =>
+      (!statusFilter || i.status === statusFilter) &&
+      (!q || i.title.toLowerCase().includes(q) || i.code.toLowerCase().includes(q)),
+  );
   const inProgress = items.filter((i) => i.status === 'ASSIGNED' || i.status === 'IN_PROGRESS');
   const done = items.filter((i) => i.status === 'COMPLETED');
 
@@ -55,9 +63,26 @@ export default function MyLearningPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <GraduationCap size={22} className="text-gray-500" /> My Training
           </h1>
-          <p className="text-xs text-gray-500 mt-0.5">Your assigned and self-enrolled courses.</p>
         </div>
-        <Button icon={<Compass size={14} />} onClick={() => nav('/lms/catalog')}>Browse catalog</Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            allowClear
+            prefix={<Search size={14} className="text-gray-400" />}
+            placeholder="Search my courses"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 240 }}
+          />
+          <Select
+            allowClear
+            placeholder="All statuses"
+            value={statusFilter}
+            onChange={setStatusFilter}
+            style={{ width: 160 }}
+            options={(Object.keys(STATUS) as EnrollmentStatus[]).map((s) => ({ value: s, label: STATUS[s].label }))}
+          />
+          <Button icon={<Compass size={14} />} onClick={() => nav('/lms/catalog')}>Browse catalog</Button>
+        </div>
       </div>
 
       {(data?.overdue ?? 0) > 0 && (

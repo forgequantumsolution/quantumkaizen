@@ -23,25 +23,17 @@ import {
   AlertOctagon,
   GraduationCap,
   FlaskConical,
-  Gauge,
   BadgeCheck,
   ScrollText,
-  TestTubes,
   Snowflake,
   Package,
   Atom,
   Ruler,
   MapPin,
-  Users,
   Truck,
   Activity,
-  Thermometer,
-  Award,
   ShieldCheck,
   Settings2,
-  Compass,
-  Microscope,
-  Grid3x3,
   MessageSquareWarning,
   RefreshCw,
 } from "lucide-react";
@@ -116,13 +108,6 @@ const findFirstLeaf = (item: NavItem): NavItem | null => {
   return null;
 };
 
-// Badge count for an item: leaves use their own count; parents roll up the sum
-// of descendants so a collapsed group still surfaces what needs attention.
-const badgeCount = (item: NavItem): number =>
-  item.children?.length
-    ? item.children.reduce((sum, c) => sum + badgeCount(c), 0)
-    : item.count ?? 0;
-
 const pickIcon = (
   name: string,
   iconName: string | null | undefined
@@ -162,7 +147,8 @@ const MODULE_GROUP: Record<string, ModuleGroup> = {
   calibration: "Compliance",
 };
 const groupForModule = (name: string): ModuleGroup =>
-  MODULE_GROUP[name.toLowerCase().replace(/[^a-z0-9]/g, "")] ?? "Quality System";
+  MODULE_GROUP[name.toLowerCase().replace(/[^a-z0-9]/g, "")] ??
+  "Quality System";
 
 // Design tokens — pulled from CSS custom properties (set by AppearanceProvider)
 // so the sidebar tracks the user's color preset. Section/inactive/hover stay
@@ -175,33 +161,6 @@ const SECTION_CLR = "rgba(255,255,255,0.65)";
 const INACTIVE_CLR = "#FFFFFF";
 const DIVIDER = "rgba(255,255,255,0.06)";
 const HOVER_BG = "rgba(255,255,255,0.04)";
-
-// Notification count pill (FQS-QK-UIUX-003 §4/U-01). Amber on the dark sidebar
-// so it reads without the alarm of solid red; renders nothing at zero.
-function NavBadge({ n }: { n: number }) {
-  if (!n) return null;
-  return (
-    <span
-      style={{
-        backgroundColor: ACCENT,
-        color: "#0D0E17",
-        fontSize: "10px",
-        fontWeight: 700,
-        lineHeight: 1,
-        minWidth: "17px",
-        height: "16px",
-        padding: "0 5px",
-        borderRadius: "999px",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: 0,
-      }}
-    >
-      {n > 99 ? "99+" : n}
-    </span>
-  );
-}
 
 export default function Sidebar() {
   const location = useLocation();
@@ -313,43 +272,79 @@ export default function Sidebar() {
     // Training & Qualification (GMP term for the LMS). "My Training" is the
     // learner view; "Courses" is the author studio. Labels/icons follow
     // FQS-QK-UIUX-002 §6 and FQS-QK-UIUX-003 §3.
+    // Training & Qualification (LMS) opens inside one tabbed frame
+    // (LmsModuleLayout), mirroring LIMS/Audit — the sub-sections (My Training /
+    // Catalog / Courses / Programs / Assignments / Matrix / Results / Reports)
+    // are top tabs, not sidebar items. Lands on "My Training" (every employee);
+    // stays active across every /lms route so the group highlights on drill-downs.
     const trainingItem: NavItem = {
       label: "Training & Qualification",
+      path: "/lms/my",
       icon: GraduationCap,
-      children: [
-        { label: "My Training", path: "/lms/my", icon: Award, permission: "lms_my.read" },
-        { label: "Catalog", path: "/lms/catalog", icon: Compass, permission: "lms_my.read" },
-        { label: "Courses", path: "/lms/admin/courses", icon: BookOpen, permission: "lms_course.read" },
-        { label: "Training Programs", path: "/lms/admin/curricula", icon: Layers, permission: "lms_enrollment.read" },
-        { label: "Assignments", path: "/lms/admin/assignments", icon: Users, permission: "lms_enrollment.assign" },
-        { label: "Qualification Matrix", path: "/lms/admin/matrix", icon: Grid3x3, permission: "lms_matrix.read" },
-        { label: "Assessment Results", path: "/lms/admin/grading", icon: ClipboardCheck, permission: "lms_assessment.grade" },
-        { label: "Reports", path: "/lms/admin/reports", icon: Gauge, permission: "lms_report.read" },
-      ],
+      permission: "lms_my.read",
+      activeForPrefixes: ["/lms"],
     };
-    // Day-to-day LIMS operations; set-up-once master data lives under the single
-    // "Configuration" entry (LimsConfigLayout, grouped tabs).
+    // Day-to-day LIMS operations open inside one tabbed frame (LimsModuleLayout),
+    // mirroring the Audit module — the sub-sections (Overview / Samples / Worklists
+    // / QC / Stability / OOS / CoA / Data Review) are top tabs, not sidebar items.
+    // Set-up-once master data lives under the separate "LIMS Configuration" entry.
     const limsItem: NavItem = {
       label: "LIMS",
+      path: "/lims/dashboard",
       icon: FlaskConical,
-      children: [
-        { label: "Dashboard", path: "/lims/dashboard", icon: LayoutDashboard, permission: "lims_dashboard.read" },
-        { label: "Sample Management", path: "/lims/samples", icon: TestTubes, permission: "sample.read" },
-        { label: "Worklists", path: "/lims/worklists", icon: ClipboardList, permission: "worklist.read" },
-        { label: "Quality Control", path: "/lims/qc", icon: Microscope, permission: "qc.read" },
-        { label: "Stability", path: "/lims/stability", icon: Thermometer, permission: "stability.read" },
-        { label: "OOS / OOT Investigations", path: "/lims/oos", icon: AlertTriangle, permission: "oos.read", count: navCounts?.oos },
-        { label: "CoA Management", path: "/lims/coa", icon: Award, permission: "coa.read" },
-        { label: "Data Review", path: "/lims/data-review", icon: ShieldCheck, permission: "data_review.read" },
-        { label: "Configuration", path: "/lims/config", icon: Settings2, permission: "lab.read" },
+      permission: "lims_dashboard.read",
+      count: navCounts?.oos,
+      activeForPrefixes: [
+        "/lims/dashboard",
+        "/lims/samples",
+        "/lims/worklists",
+        "/lims/qc",
+        "/lims/stability",
+        "/lims/oos",
+        "/lims/coa",
+        "/lims/data-review",
+      ],
+    };
+    const limsConfigItem: NavItem = {
+      label: "LIMS Configuration",
+      path: "/lims/config",
+      icon: Settings2,
+      permission: "lab.read",
+      activeForPrefixes: [
+        "/lims/config",
+        "/lims/labs",
+        "/lims/equipment",
+        "/lims/storage",
+        "/lims/certifications",
+        "/lims/products",
+        "/lims/analytes",
+        "/lims/units",
+        "/lims/sampling-points",
+        "/lims/customers",
+        "/lims/suppliers",
+        "/lims/methods",
+        "/lims/tests",
+        "/lims/panels",
+        "/lims/specifications",
+        "/lims/spec-versions",
       ],
     };
     const configItem: NavItem = {
       label: "Configuration",
       icon: Settings,
       children: [
-        { label: "Workflows", path: "/settings?section=workflows", icon: GitBranch, permission: "workflow.read" },
-        { label: "Forms", path: "/settings?section=forms", icon: ClipboardList, permission: "form.read" },
+        {
+          label: "Workflows",
+          path: "/settings?section=workflows",
+          icon: GitBranch,
+          permission: "workflow.read",
+        },
+        {
+          label: "Forms",
+          path: "/settings?section=forms",
+          icon: ClipboardList,
+          permission: "form.read",
+        },
         { label: "Master Data", path: "/settings", icon: Database },
         { label: "Appearance", path: "/appearance", icon: Palette },
       ],
@@ -360,10 +355,11 @@ export default function Sidebar() {
     // `items.length > 0` filter at the end of this memo.
     const sections: NavSection[] = [
       { title: "", items: [dashboardItem] },
-      { title: "Lab Operations", items: [limsItem, dmsItem] },
+      { title: "Lab Operations", items: [limsItem, limsConfigItem] },
+      { title: "DMS", items: [dmsItem] },
       { title: "Quality System", items: qualityItems },
       { title: "Compliance", items: complianceItems },
-      { title: "Admin", items: [trainingItem, configItem] },
+      { title: "LMS", items: [trainingItem, configItem] },
     ];
 
     // Gate by permission: drop items the user can't access, and any parent whose
@@ -527,7 +523,6 @@ export default function Sidebar() {
             >
               {item.label}
             </span>
-            <NavBadge n={badgeCount(item)} />
             <ChevronDown
               size={13}
               style={{
@@ -606,9 +601,6 @@ export default function Sidebar() {
             >
               {item.label}
             </span>
-            <span style={{ marginLeft: "auto" }}>
-              <NavBadge n={badgeCount(item)} />
-            </span>
           </>
         )}
       </NavLink>
@@ -621,7 +613,7 @@ export default function Sidebar() {
       className={cn(
         "fixed left-0 top-0 h-screen flex flex-col z-40",
         "transition-[width] duration-250 ease-in-out",
-        sidebarCollapsed ? "w-[56px]" : "w-[256px]"
+        sidebarCollapsed ? "w-[56px]" : "w-[288px]"
       )}
     >
       {/* Brand */}

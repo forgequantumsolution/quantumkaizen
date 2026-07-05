@@ -38,17 +38,14 @@ export default function CoaListPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Award size={22} className="text-gray-500" />Certificates of Analysis</h1>
           <p className="text-xs text-gray-500 mt-0.5">Generate, issue and verify certificates from released sample results.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 160 }} options={STATUS_OPTIONS} />
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input placeholder="Search no. / product / batch…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 280 }} />
+          </div>
           <Button icon={<FileText size={14} />} onClick={() => setTmplOpen(true)}>Templates</Button>
           {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => setGenOpen(true)}>Generate CoA</Button>}
-        </div>
-      </div>
-
-      <div className="flex items-center justify-end gap-2 mb-3">
-        <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 160 }} options={STATUS_OPTIONS} />
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input placeholder="Search no. / product / batch…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 280 }} />
         </div>
       </div>
 

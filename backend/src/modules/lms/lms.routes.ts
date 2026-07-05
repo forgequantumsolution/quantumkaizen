@@ -21,6 +21,7 @@ import {
   LessonProgressSchema,
   ListCoursesQuerySchema,
   PublishCourseSchema,
+  ReportFilterSchema,
   SubmitAttemptSchema,
   UpdateAssessmentSchema,
   UpdateCourseSchema,
@@ -114,7 +115,8 @@ router.delete('/matrix/:id', requirePermission('lms_matrix.write'), validate(IdP
 router.post('/matrix/sync', requirePermission('lms_matrix.write'), asyncHandler(ctrl.syncMatrix));
 
 // ── Reporting (Phase 6) ──
-router.get('/reports/compliance', requirePermission('lms_report.read'), asyncHandler(ctrl.complianceReport));
+router.get('/reports/compliance', requirePermission('lms_report.read'), validate(ReportFilterSchema, 'query'), asyncHandler(ctrl.complianceReport));
+router.get('/reports/enrollments.csv', requirePermission('lms_report.read'), validate(ReportFilterSchema, 'query'), asyncHandler(ctrl.enrollmentsCsv));
 router.get('/reports/transcript/:userId', requirePermission('lms_report.read'), validate(UserIdParamSchema, 'params'), asyncHandler(ctrl.transcript));
 
 export default router;

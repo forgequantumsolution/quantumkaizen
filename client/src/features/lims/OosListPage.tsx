@@ -40,39 +40,38 @@ export default function OosListPage() {
             Out-of-specification and out-of-trend investigations through a phased lab review.
           </p>
         </div>
-        {canCreate && (
-          <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>
-            New Investigation
-          </Button>
-        )}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 mb-3 flex-wrap">
-        <Select
-          value={status}
-          onChange={setStatus}
-          allowClear
-          placeholder="All statuses"
-          style={{ width: 160 }}
-          options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
-        />
-        <Select
-          value={phase}
-          onChange={setPhase}
-          allowClear
-          placeholder="All phases"
-          style={{ width: 170 }}
-          options={PHASES.map((p) => ({ value: p, label: PHASE_LABELS[p] }))}
-        />
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input
-            placeholder="Search code / title…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            style={{ width: 280 }}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select
+            value={status}
+            onChange={setStatus}
+            allowClear
+            placeholder="All statuses"
+            style={{ width: 160 }}
+            options={STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
           />
+          <Select
+            value={phase}
+            onChange={setPhase}
+            allowClear
+            placeholder="All phases"
+            style={{ width: 170 }}
+            options={PHASES.map((p) => ({ value: p, label: PHASE_LABELS[p] }))}
+          />
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input
+              placeholder="Search code / title…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              style={{ width: 280 }}
+            />
+          </div>
+          {canCreate && (
+            <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>
+              New Investigation
+            </Button>
+          )}
         </div>
       </div>
 

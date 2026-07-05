@@ -1,9 +1,21 @@
-import { useState } from 'react';
-import { Button, Empty, Progress, Select, Spin, Table, Tag } from 'antd';
-import { BarChart3, Download, FileText } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Button, DatePicker, Empty, Progress, Segmented, Select, Spin, Table, Tag } from 'antd';
+import { BarChart3, Download, FileText, RotateCcw } from 'lucide-react';
+import dayjs, { type Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
-import { useComplianceReport, useTranscript, type ComplianceReport, type Transcript } from '@/lib/api/lms';
+import {
+  useComplianceReport,
+  useTranscript,
+  downloadEnrollmentsCsv,
+  type ReportFilter,
+  type ReportBreakdownRow,
+  type Transcript,
+} from '@/lib/api/lms';
+import { useCourses } from '@/lib/api/lms';
 import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useRoles } from '@/features/admin/roles/hooks';
+import { useDepartments } from '@/features/admin/departments/hooks';
+import { useSites } from '@/lib/api/sites';
 
 function downloadCsv(filename: string, rows: (string | number | null)[][]) {
   const esc = (v: string | number | null) => {
@@ -29,18 +41,51 @@ function Kpi({ label, value, tone }: { label: string; value: string | number; to
   );
 }
 
+type Dimension = 'Department' | 'Role' | 'Site';
+
 export default function ReportsPage() {
-  const { data: report, isLoading } = useComplianceReport();
+  // ── Filters ──
+  const [deptId, setDeptId] = useState<string>();
+  const [roleId, setRoleId] = useState<string>();
+  const [siteId, setSiteId] = useState<string>();
+  const [courseId, setCourseId] = useState<string>();
+  const [range, setRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+  const [dim, setDim] = useState<Dimension>('Department');
+
+  const filter = useMemo<ReportFilter>(
+    () => ({
+      department_id: deptId,
+      role_id: roleId,
+      site_id: siteId,
+      course_id: courseId,
+      from: range?.[0] ? range[0].startOf('day').toISOString() : undefined,
+      to: range?.[1] ? range[1].endOf('day').toISOString() : undefined,
+    }),
+    [deptId, roleId, siteId, courseId, range],
+  );
+
+  const { data: report, isLoading, isFetching } = useComplianceReport(filter);
+
+  // Option lists for the filter bar + transcript picker.
   const { data: usersResp } = useAdminUsers({ isActive: true, pageSize: 200 });
+  const { data: rolesResp } = useRoles({ pageSize: 200 });
+  const { data: deptResp } = useDepartments({ isActive: true, pageSize: 200 });
+  const { data: sitesResp } = useSites({ pageSize: 200 });
+  const { data: courses } = useCourses({ status: 'PUBLISHED', latest_only: true });
+
   const [userId, setUserId] = useState<string>();
   const { data: transcript } = useTranscript(userId);
 
-  const exportCompliance = (r: ComplianceReport) => {
-    downloadCsv('lms-compliance-by-department.csv', [
-      ['Department', 'Total', 'Completed', 'Overdue', 'Completion %'],
-      ...r.by_department.map((d) => [d.name, d.total, d.completed, d.overdue, d.completion_rate]),
-    ]);
+  const hasFilters = !!(deptId || roleId || siteId || courseId || range?.[0]);
+  const resetFilters = () => {
+    setDeptId(undefined); setRoleId(undefined); setSiteId(undefined);
+    setCourseId(undefined); setRange(null);
   };
+
+  const breakdown: ReportBreakdownRow[] =
+    dim === 'Department' ? report?.by_department ?? []
+    : dim === 'Role' ? report?.by_role ?? []
+    : report?.by_site ?? [];
 
   const exportTranscript = (t: Transcript) => {
     downloadCsv(`transcript-${t.user_name ?? t.user_id}.csv`, [
@@ -57,11 +102,32 @@ export default function ReportsPage() {
 
   return (
     <PageContainer>
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+      <div className="flex items-center justify-between gap-3 mb-5 flex-wrap">
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2 shrink-0">
           <BarChart3 size={22} className="text-gray-500" /> Training Reports
         </h1>
-        <p className="text-xs text-gray-500 mt-0.5">Compliance overview, expiring certificates, and per-employee transcripts.</p>
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          <Select allowClear showSearch optionFilterProp="label" style={{ width: 160 }} value={deptId} onChange={setDeptId}
+            placeholder="All departments"
+            options={(deptResp?.items ?? []).map((d) => ({ value: d.id, label: d.name }))} />
+          <Select allowClear showSearch optionFilterProp="label" style={{ width: 140 }} value={roleId} onChange={setRoleId}
+            placeholder="All roles"
+            options={(rolesResp?.items ?? []).map((r) => ({ value: r.id, label: r.name }))} />
+          <Select allowClear showSearch optionFilterProp="label" style={{ width: 140 }} value={siteId} onChange={setSiteId}
+            placeholder="All sites"
+            options={(sitesResp?.items ?? []).map((s) => ({ value: s.id, label: s.name }))} />
+          <Select allowClear showSearch optionFilterProp="label" style={{ width: 190 }} value={courseId} onChange={setCourseId}
+            placeholder="All courses"
+            options={(courses?.data ?? []).map((c) => ({ value: c.id, label: `${c.code} — ${c.title}` }))} />
+          <DatePicker.RangePicker value={range as [Dayjs, Dayjs] | null} onChange={(v) => setRange(v as [Dayjs | null, Dayjs | null] | null)} placeholder={['Assigned from', 'to']} />
+          {hasFilters && (
+            <Button icon={<RotateCcw size={13} />} onClick={resetFilters}>Reset</Button>
+          )}
+          {isFetching && !isLoading && <Spin size="small" />}
+          <Button type="primary" icon={<Download size={14} />} onClick={() => downloadEnrollmentsCsv(filter)}>
+            Export records (CSV)
+          </Button>
+        </div>
       </div>
 
       {isLoading || !report ? (
@@ -77,21 +143,39 @@ export default function ReportsPage() {
             <Kpi label="Matrix coverage" value={`${report.summary.matrix_coverage}%`} />
           </div>
 
-          {/* By department */}
+          {/* Assessment (exam) analytics */}
           <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-700">Compliance by department</h3>
-              <Button size="small" icon={<Download size={13} />} onClick={() => exportCompliance(report)}>Export CSV</Button>
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Assessment results</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+              <Kpi label="Attempts" value={report.assessment.attempts} />
+              <Kpi label="Passed" value={report.assessment.passed} tone="text-emerald-600" />
+              <Kpi label="Failed" value={report.assessment.failed} tone="text-red-600" />
+              <Kpi label="Pass rate" value={`${report.assessment.pass_rate}%`} />
+              <Kpi label="Avg score" value={`${report.assessment.avg_score}%`} />
+              <Kpi label="Learners" value={report.assessment.learners} />
             </div>
-            {report.by_department.length === 0 ? <Empty description="No data" /> : (
+          </div>
+
+          {/* Completion breakdown by dimension */}
+          <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+              <h3 className="text-sm font-semibold text-gray-700">Completion by {dim.toLowerCase()}</h3>
+              <Segmented options={['Department', 'Role', 'Site']} value={dim} onChange={(v) => setDim(v as Dimension)} />
+            </div>
+            {breakdown.length === 0 ? <Empty description="No data" /> : (
               <Table
-                rowKey="name" size="small" pagination={false} dataSource={report.by_department}
+                rowKey="key" size="small" pagination={false} dataSource={breakdown}
                 columns={[
-                  { title: 'Department', dataIndex: 'name' },
+                  { title: dim, dataIndex: 'name' },
                   { title: 'Total', dataIndex: 'total', width: 80 },
                   { title: 'Completed', dataIndex: 'completed', width: 100 },
                   { title: 'Overdue', dataIndex: 'overdue', width: 90, render: (v: number) => v > 0 ? <span className="text-red-600">{v}</span> : v },
-                  { title: 'Completion', dataIndex: 'completion_rate', width: 160, render: (v: number) => <Progress percent={v} size="small" /> },
+                  { title: 'Completion', dataIndex: 'completion_rate', width: 200, render: (v: number) => (
+                    <div className="flex items-center gap-2 flex-nowrap">
+                      <Progress percent={v} size="small" showInfo={false} style={{ width: 120, margin: 0 }} />
+                      <span className="text-xs text-gray-600 w-9 shrink-0 text-right">{v}%</span>
+                    </div>
+                  ) },
                 ]}
               />
             )}

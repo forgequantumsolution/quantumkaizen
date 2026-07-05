@@ -33,12 +33,12 @@ export default function StorageLocationsPage() {
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2"><Snowflake size={22} className="text-gray-500" />Storage Locations</h1>
           <p className="text-xs text-gray-500 mt-0.5">Freezers, fridges and zones where samples and aliquots are stored.</p>
         </div>
-        {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setOpen(true); }}>New Location</Button>}
-      </div>
-      <div className="flex items-center justify-end mb-3">
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input placeholder="Search code / name…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 240 }} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input placeholder="Search code / name…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 240 }} />
+          </div>
+          {canCreate && <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setOpen(true); }}>New Location</Button>}
         </div>
       </div>
       <Table<StorageLocation> size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}

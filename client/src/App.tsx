@@ -48,6 +48,8 @@ import TrainingMatrixPage from '@/features/lms/TrainingMatrixPage';
 import CertificatePage from '@/features/lms/CertificatePage';
 import ReportsPage from '@/features/lms/ReportsPage';
 import CertificateVerifyPage from '@/features/lms/CertificateVerifyPage';
+import LmsModuleLayout from '@/features/lms/LmsModuleLayout';
+import LmsConfigLayout from '@/features/lms/LmsConfigLayout';
 import LabRegistryPage from '@/features/lims/LabRegistryPage';
 import EquipmentListPage from '@/features/lims/EquipmentListPage';
 import EquipmentDetailPage from '@/features/lims/EquipmentDetailPage';
@@ -80,6 +82,7 @@ import CoaVerifyPage from '@/features/lims/CoaVerifyPage';
 import LimsDashboardPage from '@/features/lims/LimsDashboardPage';
 import DataReviewPage from '@/features/lims/DataReviewPage';
 import LimsConfigLayout from '@/features/lims/LimsConfigLayout';
+import LimsModuleLayout from '@/features/lims/LimsModuleLayout';
 import AuditReportPage from '@/features/audit/AuditReportPage';
 import CapaListPage from '@/features/audit/CapaListPage';
 import CapaDetailPage from '@/features/audit/CapaDetailPage';
@@ -139,23 +142,43 @@ export default function App() {
           <Route path="/training" element={<TrainingListPage />} />
           <Route path="/training/:id" element={<TrainingDetailPage />} />
 
-          {/* LMS — Learning Management System */}
-          <Route path="/lms/my" element={<MyLearningPage />} />
-          <Route path="/lms/catalog" element={<CatalogPage />} />
+          {/* LMS — Learning Management System. List/overview pages share the
+              LmsModuleLayout tab bar; player/builder/certificate pages stay
+              full-page (drill-downs, like LIMS SampleDetailPage). */}
+          <Route path="/lms" element={<Navigate to="/lms/my" replace />} />
+          <Route element={<LmsModuleLayout />}>
+            <Route path="/lms/my" element={<MyLearningPage />} />
+            <Route path="/lms/catalog" element={<CatalogPage />} />
+            <Route path="/lms/admin/assignments" element={<AssignmentsPage />} />
+            <Route path="/lms/admin/grading" element={<GradingPage />} />
+            <Route path="/lms/admin/reports" element={<ReportsPage />} />
+            {/* Configuration — set-up-once authoring, nested sub-layout inside
+                the LMS module (its own left sub-sidebar, not a separate entry). */}
+            <Route element={<LmsConfigLayout />}>
+              <Route path="/lms/admin/courses" element={<CourseListPage />} />
+              <Route path="/lms/admin/curricula" element={<CurriculaPage />} />
+              <Route path="/lms/admin/matrix" element={<TrainingMatrixPage />} />
+            </Route>
+          </Route>
           <Route path="/lms/learn/:id" element={<CoursePlayerPage />} />
           <Route path="/lms/learn/:id/exam" element={<ExamPlayerPage />} />
-          <Route path="/lms/admin/courses" element={<CourseListPage />} />
           <Route path="/lms/admin/courses/:id" element={<CourseBuilderPage />} />
           <Route path="/lms/admin/courses/:id/exam" element={<ExamBuilderPage />} />
-          <Route path="/lms/admin/grading" element={<GradingPage />} />
-          <Route path="/lms/admin/assignments" element={<AssignmentsPage />} />
-          <Route path="/lms/admin/curricula" element={<CurriculaPage />} />
-          <Route path="/lms/admin/matrix" element={<TrainingMatrixPage />} />
-          <Route path="/lms/admin/reports" element={<ReportsPage />} />
           <Route path="/lms/certificate/:id" element={<CertificatePage />} />
 
-          {/* LIMS — operational (day-to-day) */}
-          <Route path="/lims/samples" element={<SampleListPage />} />
+          {/* LIMS — operational (day-to-day). List/overview pages share the
+              LimsModuleLayout tab bar; detail/editor pages stay full-page. */}
+          <Route path="/lims" element={<Navigate to="/lims/dashboard" replace />} />
+          <Route element={<LimsModuleLayout />}>
+            <Route path="/lims/dashboard" element={<LimsDashboardPage />} />
+            <Route path="/lims/samples" element={<SampleListPage />} />
+            <Route path="/lims/worklists" element={<WorklistsPage />} />
+            <Route path="/lims/qc" element={<QcMaterialsPage />} />
+            <Route path="/lims/stability" element={<StabilityListPage />} />
+            <Route path="/lims/oos" element={<OosListPage />} />
+            <Route path="/lims/coa" element={<CoaListPage />} />
+            <Route path="/lims/data-review" element={<DataReviewPage />} />
+          </Route>
           <Route path="/lims/samples/:id" element={<SampleDetailPage />} />
 
           {/* LIMS Configuration — all set-up-once master data under one grouped area */}
@@ -182,20 +205,11 @@ export default function App() {
           <Route path="/lims/specifications/new" element={<SpecDetailPage />} />
           <Route path="/lims/specifications/:id" element={<SpecDetailPage />} />
 
-          {/* LIMS 2.0 — M-LIMS-B core testing */}
-          <Route path="/lims/worklists" element={<WorklistsPage />} />
-          <Route path="/lims/oos" element={<OosListPage />} />
+          {/* LIMS operational detail pages (full-page, no tab bar) */}
           <Route path="/lims/oos/:id" element={<OosDetailPage />} />
-          {/* LIMS 2.0 — M-LIMS-C: QC + Stability */}
-          <Route path="/lims/qc" element={<QcMaterialsPage />} />
           <Route path="/lims/qc/:id" element={<QcChartPage />} />
-          <Route path="/lims/stability" element={<StabilityListPage />} />
           <Route path="/lims/stability/:id" element={<StabilityDetailPage />} />
-          {/* LIMS 2.0 — M-LIMS-D: CoA, dashboard, data review */}
-          <Route path="/lims/coa" element={<CoaListPage />} />
           <Route path="/lims/coa/:id" element={<CoaDetailPage />} />
-          <Route path="/lims/dashboard" element={<LimsDashboardPage />} />
-          <Route path="/lims/data-review" element={<DataReviewPage />} />
 
           {/* Audit module — Register → Approval → Program → Non-Conformance */}
           <Route path="/audit" element={<Navigate to="/audit/dashboard" replace />} />

@@ -9,6 +9,7 @@
  */
 import { prisma } from '../../lib/prisma';
 import { Forbidden, NotFound } from '../../lib/httpError';
+import type { ReportFilter } from './lms.schema';
 
 const DAY = 24 * 3600 * 1000;
 
@@ -82,48 +83,146 @@ export const verifyCertificate = async (token: string) => {
   };
 };
 
-// ─────────────────────────── Compliance dashboard ───────────────────────────
-export const complianceReport = async () => {
+// ─────────────────────── Shared reporting data access ───────────────────────
+// Enrolled users, resolved with their org dimensions (department / role / site)
+// so the dashboard can break completion down along any of them.
+type OrgUser = {
+  id: string;
+  name: string;
+  departmentId: string | null;
+  departmentName: string | null;
+  roleId: string | null;
+  roleName: string | null;
+  siteId: string | null;
+  siteName: string | null;
+};
+
+// Turn the org filters (role/department/site) into the set of user IDs they
+// match. Returns null when no org filter is set, meaning "don't restrict".
+const resolveFilterUserIds = async (f: ReportFilter): Promise<string[] | null> => {
+  const and: Record<string, string>[] = [];
+  if (f.role_id) and.push({ roleId: f.role_id });
+  if (f.department_id) and.push({ departmentId: f.department_id });
+  if (f.site_id) and.push({ siteId: f.site_id });
+  if (!and.length) return null;
+  const users = await prisma.user.findMany({ where: { AND: and }, select: { id: true } });
+  return users.map((u) => u.id);
+};
+
+const loadOrgUsers = async (userIds: string[]): Promise<Map<string, OrgUser>> => {
+  const ids = [...new Set(userIds)];
+  const users = ids.length
+    ? await prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: {
+          id: true,
+          name: true,
+          department: { select: { id: true, name: true } },
+          role: { select: { id: true, name: true } },
+          site: { select: { id: true, name: true } },
+        },
+      })
+    : [];
+  return new Map(
+    users.map((u) => [
+      u.id,
+      {
+        id: u.id,
+        name: u.name,
+        departmentId: u.department?.id ?? null,
+        departmentName: u.department?.name ?? null,
+        roleId: u.role?.id ?? null,
+        roleName: u.role?.name ?? null,
+        siteId: u.site?.id ?? null,
+        siteName: u.site?.name ?? null,
+      },
+    ]),
+  );
+};
+
+// Enrollments matching the filter, joined with course + certificate + org user.
+const loadReportEnrollments = async (f: ReportFilter, userIds: string[] | null) => {
+  const where: Record<string, unknown> = {
+    course: f.course_id ? { isDeleted: false, id: f.course_id } : { isDeleted: false },
+  };
+  if (userIds) where.userId = { in: userIds };
+  if (f.from || f.to) {
+    where.assignedAt = { ...(f.from ? { gte: f.from } : {}), ...(f.to ? { lte: f.to } : {}) };
+  }
   const enrollments = await prisma.lmsEnrollment.findMany({
-    where: { course: { isDeleted: false } },
-    select: { userId: true, status: true, dueDate: true, source: true, completedAt: true },
+    where,
+    include: {
+      course: { select: { code: true, title: true, type: true } },
+      certificate: { select: { serial: true, expiresAt: true } },
+    },
+    orderBy: { assignedAt: 'desc' },
   });
+  const orgUsers = await loadOrgUsers(enrollments.map((e) => e.userId));
+  return { enrollments, orgUsers };
+};
+
+type ReportEnrollment = Awaited<ReturnType<typeof loadReportEnrollments>>['enrollments'][number];
+const isOverdue = (e: ReportEnrollment, now: number) =>
+  !!e.dueDate && e.dueDate.getTime() < now && e.status !== 'COMPLETED' && e.status !== 'WAIVED';
+
+// ─────────────────────────── Compliance dashboard ───────────────────────────
+// Filterable by department / role / site / course / assigned-date range. Returns
+// a headline summary plus completion broken down by each org dimension, an
+// assessment (exam) pass/fail rollup, and certificates expiring in the next 60d.
+export const complianceReport = async (filter: ReportFilter = {}) => {
   const now = Date.now();
+  const userIds = await resolveFilterUserIds(filter);
+  const { enrollments, orgUsers } = await loadReportEnrollments(filter, userIds);
 
   const total = enrollments.length;
   const completed = enrollments.filter((e) => e.status === 'COMPLETED').length;
   const inProgress = enrollments.filter((e) => e.status === 'IN_PROGRESS' || e.status === 'ASSIGNED').length;
   const failed = enrollments.filter((e) => e.status === 'FAILED').length;
-  const overdue = enrollments.filter(
-    (e) => e.dueDate && e.dueDate.getTime() < now && e.status !== 'COMPLETED' && e.status !== 'WAIVED',
-  ).length;
+  const overdue = enrollments.filter((e) => isOverdue(e, now)).length;
 
   const matrix = enrollments.filter((e) => e.source === 'MATRIX');
   const matrixCompleted = matrix.filter((e) => e.status === 'COMPLETED').length;
 
-  // By department — group via the enrolled users' departments.
-  const names = await resolveNames(enrollments.map((e) => e.userId));
-  const deptIds = [...new Set([...names.values()].map((u) => u.departmentId).filter((x): x is string => !!x))];
-  const depts = deptIds.length
-    ? await prisma.department.findMany({ where: { id: { in: deptIds } }, select: { id: true, name: true } })
-    : [];
-  const deptName = new Map(depts.map((d) => [d.id, d.name]));
+  // Generic grouping over any org dimension, sharing the same completion/overdue
+  // roll-up so by-department / by-role / by-site stay consistent.
+  const groupBy = (keyOf: (u?: OrgUser) => string | null, labelOf: (u?: OrgUser) => string | null) => {
+    const map = new Map<string, { key: string; name: string; total: number; completed: number; overdue: number }>();
+    for (const e of enrollments) {
+      const u = orgUsers.get(e.userId);
+      const key = keyOf(u) ?? 'none';
+      const label = key === 'none' ? 'Unassigned' : labelOf(u) ?? 'Unknown';
+      const row = map.get(key) ?? { key, name: label, total: 0, completed: 0, overdue: 0 };
+      row.total++;
+      if (e.status === 'COMPLETED') row.completed++;
+      if (isOverdue(e, now)) row.overdue++;
+      map.set(key, row);
+    }
+    return [...map.values()]
+      .map((d) => ({ ...d, completion_rate: d.total ? Math.round((d.completed / d.total) * 100) : 0 }))
+      .sort((a, b) => b.total - a.total);
+  };
 
-  const byDeptMap = new Map<string, { name: string; total: number; completed: number; overdue: number }>();
-  for (const e of enrollments) {
-    const did = names.get(e.userId)?.departmentId ?? 'none';
-    const label = did === 'none' ? 'Unassigned' : deptName.get(did) ?? 'Unknown';
-    const row = byDeptMap.get(did) ?? { name: label, total: 0, completed: 0, overdue: 0 };
-    row.total++;
-    if (e.status === 'COMPLETED') row.completed++;
-    if (e.dueDate && e.dueDate.getTime() < now && e.status !== 'COMPLETED' && e.status !== 'WAIVED') row.overdue++;
-    byDeptMap.set(did, row);
+  // Assessment (exam) analytics — decided attempts only (pass/fail determined),
+  // scoped by the same user/course/date filters.
+  const attemptWhere: Record<string, unknown> = { passed: { not: null } };
+  if (userIds) attemptWhere.userId = { in: userIds };
+  if (filter.course_id) attemptWhere.assessment = { courseId: filter.course_id };
+  if (filter.from || filter.to) {
+    attemptWhere.submittedAt = { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) };
   }
+  const attempts = await prisma.lmsAssessmentAttempt.findMany({
+    where: attemptWhere,
+    select: { userId: true, score: true, passed: true },
+  });
+  const attScored = attempts.filter((a) => a.score !== null);
+  const attPassed = attempts.filter((a) => a.passed === true).length;
 
-  // Expiring certificates (next 60 days).
+  // Expiring certificates (next 60 days), scoped to the filtered users.
   const horizon = new Date(now + 60 * DAY);
+  const certWhere: Record<string, unknown> = { expiresAt: { not: null, gte: new Date(now), lte: horizon } };
+  if (userIds) certWhere.userId = { in: userIds };
   const expiringRows = await prisma.lmsCertificate.findMany({
-    where: { expiresAt: { not: null, gte: new Date(now), lte: horizon } },
+    where: certWhere,
     include: { course: { select: { title: true } } },
     orderBy: { expiresAt: 'asc' },
   });
@@ -140,9 +239,19 @@ export const complianceReport = async () => {
       matrix_total: matrix.length,
       matrix_coverage: matrix.length ? Math.round((matrixCompleted / matrix.length) * 100) : 0,
     },
-    by_department: [...byDeptMap.values()]
-      .map((d) => ({ ...d, completion_rate: d.total ? Math.round((d.completed / d.total) * 100) : 0 }))
-      .sort((a, b) => b.total - a.total),
+    by_department: groupBy((u) => u?.departmentId ?? null, (u) => u?.departmentName ?? null),
+    by_role: groupBy((u) => u?.roleId ?? null, (u) => u?.roleName ?? null),
+    by_site: groupBy((u) => u?.siteId ?? null, (u) => u?.siteName ?? null),
+    assessment: {
+      attempts: attempts.length,
+      passed: attPassed,
+      failed: attempts.length - attPassed,
+      pass_rate: attempts.length ? Math.round((attPassed / attempts.length) * 100) : 0,
+      avg_score: attScored.length
+        ? Math.round(attScored.reduce((s, a) => s + (a.score ?? 0), 0) / attScored.length)
+        : 0,
+      learners: new Set(attempts.map((a) => a.userId)).size,
+    },
     expiring_certificates: expiringRows.map((c) => ({
       id: c.id,
       serial: c.serial,
@@ -151,6 +260,35 @@ export const complianceReport = async () => {
       expires_at: c.expiresAt,
     })),
   };
+};
+
+// ─────────────────────────── CSV export ───────────────────────────
+const csvCell = (v: unknown) => {
+  const s = v == null ? '' : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const day = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : '');
+
+// Enrollment-level CSV of the (filtered) training records — one row per
+// enrollment, with the learner's org context and completion/certificate state.
+export const enrollmentsCsv = async (filter: ReportFilter = {}) => {
+  const userIds = await resolveFilterUserIds(filter);
+  const { enrollments, orgUsers } = await loadReportEnrollments(filter, userIds);
+  const header = [
+    'Employee', 'Department', 'Role', 'Site', 'Course Code', 'Course Title', 'Type',
+    'Version', 'Status', 'Source', 'Progress %', 'Score', 'Due Date', 'Assigned',
+    'Completed', 'Certificate', 'Cert Expires',
+  ];
+  const rows = enrollments.map((e) => {
+    const u = orgUsers.get(e.userId);
+    return [
+      u?.name ?? e.userId, u?.departmentName ?? '', u?.roleName ?? '', u?.siteName ?? '',
+      e.course.code, e.course.title, e.course.type, e.courseVersion, e.status, e.source,
+      e.progressPct, e.score ?? '', day(e.dueDate), day(e.assignedAt), day(e.completedAt),
+      e.certificate?.serial ?? '', day(e.certificate?.expiresAt),
+    ];
+  });
+  return [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\n');
 };
 
 // ─────────────────────────── Per-employee transcript ───────────────────────────

@@ -19,6 +19,7 @@ import type {
   LessonProgressInput,
   ListCoursesQuery,
   PublishCourseInput,
+  ReportFilter,
   SubmitAttemptInput,
   UpdateAssessmentInput,
   UpdateCourseInput,
@@ -251,8 +252,14 @@ export const getCertificate = async (req: Request, res: Response) => {
 export const verifyCertificate = async (req: Request, res: Response) => {
   res.json(await report.verifyCertificate(req.params.token as string));
 };
-export const complianceReport = async (_req: Request, res: Response) => {
-  res.json(await report.complianceReport());
+export const complianceReport = async (req: Request, res: Response) => {
+  res.json(await report.complianceReport(req.query as unknown as ReportFilter));
+};
+export const enrollmentsCsv = async (req: Request, res: Response) => {
+  const csv = await report.enrollmentsCsv(req.query as unknown as ReportFilter);
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="lms-training-records.csv"');
+  res.send(csv);
 };
 export const transcript = async (req: Request, res: Response) => {
   res.json(await report.transcript(req.params.userId as string));

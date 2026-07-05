@@ -4,6 +4,18 @@ export const IdParamSchema = z.object({ id: z.string().uuid() });
 export const UserIdParamSchema = z.object({ userId: z.string().uuid() });
 export const TokenParamSchema = z.object({ token: z.string().min(8).max(100) });
 
+// ─────────────────────────── Reporting filters (Phase 6+) ───────────────────
+// Optional dimensions for the compliance dashboard + CSV export. All AND-ed.
+export const ReportFilterSchema = z.object({
+  department_id: z.string().uuid().optional(),
+  role_id: z.string().uuid().optional(),
+  site_id: z.string().uuid().optional(),
+  course_id: z.string().uuid().optional(),
+  from: z.coerce.date().optional(),
+  to: z.coerce.date().optional(),
+});
+export type ReportFilter = z.infer<typeof ReportFilterSchema>;
+
 // ─────────────────────────── Courses ───────────────────────────
 export const ListCoursesQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

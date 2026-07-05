@@ -461,12 +461,6 @@ export default function ModulePage({
               <div className="flex items-center gap-2 flex-wrap justify-end">
                 {searchField}
                 {filterButton}
-                {!isDocReview && (
-                  <Button variant="outline" size="sm" onClick={() => navigate('/dashboard')}>
-                    <LayoutDashboard size={14} />
-                    <span className="ml-1.5">Analytics</span>
-                  </Button>
-                )}
                 <Button
                   variant="outline"
                   size="sm"

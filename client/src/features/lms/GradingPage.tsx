@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { App, Button, Empty, InputNumber, Modal, Spin, Table, Tag } from 'antd';
-import { ClipboardCheck } from 'lucide-react';
+import { App, Button, Empty, Input, InputNumber, Modal, Spin, Table, Tag } from 'antd';
+import { ClipboardCheck, Search } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import {
   useGradingQueue, useGraderAttempt, useGradeAttempt,
@@ -61,6 +61,15 @@ function GradeModal({ attemptId, onClose }: { attemptId: string; onClose: () => 
 export default function GradingPage() {
   const { data, isLoading } = useGradingQueue();
   const [grading, setGrading] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  const q = search.trim().toLowerCase();
+  const rows = (data ?? []).filter(
+    (r) =>
+      !q ||
+      r.assessment_title.toLowerCase().includes(q) ||
+      (r.user_name ?? '').toLowerCase().includes(q),
+  );
 
   const columns = [
     { title: 'Exam', dataIndex: 'assessment_title' },
@@ -75,19 +84,30 @@ export default function GradingPage() {
 
   return (
     <PageContainer>
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <ClipboardCheck size={22} className="text-gray-500" /> Assessment Results
-        </h1>
-        <p className="text-xs text-gray-500 mt-0.5">Exam attempts with written answers awaiting manual grading.</p>
+      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <ClipboardCheck size={22} className="text-gray-500" /> Assessment Results
+          </h1>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            allowClear
+            prefix={<Search size={14} className="text-gray-400" />}
+            placeholder="Search exam or learner"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 260 }}
+          />
+        </div>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-20"><Spin /></div>
-      ) : (data?.length ?? 0) === 0 ? (
-        <Empty description="Nothing to grade 🎉" />
+      ) : rows.length === 0 ? (
+        <Empty description={q ? 'No attempts match your search.' : 'Nothing to grade 🎉'} />
       ) : (
-        <Table rowKey="attempt_id" dataSource={data} columns={columns} size="small" pagination={{ pageSize: 20 }} />
+        <Table rowKey="attempt_id" dataSource={rows} columns={columns} size="small" pagination={{ pageSize: 20 }} />
       )}
 
       {grading && <GradeModal attemptId={grading} onClose={() => setGrading(null)} />}

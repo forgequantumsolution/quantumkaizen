@@ -57,19 +57,18 @@ export default function EquipmentListPage() {
           </h1>
           <p className="text-xs text-gray-500 mt-0.5">Instruments with calibration schedules — overdue items are flagged not-for-use.</p>
         </div>
-        {canCreate && (
-          <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-            New Equipment
-          </Button>
-        )}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 mb-3 flex-wrap">
-        <Button type={dueOnly ? 'primary' : 'default'} size="middle" onClick={() => setDueOnly((v) => !v)}>Calibration due</Button>
-        <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 160 }} options={STATUS_OPTIONS} />
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input placeholder="Search code / name / serial…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 250 }} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button type={dueOnly ? 'primary' : 'default'} size="middle" onClick={() => setDueOnly((v) => !v)}>Calibration due</Button>
+          <Select value={status} onChange={setStatus} allowClear placeholder="All statuses" style={{ width: 160 }} options={STATUS_OPTIONS} />
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input placeholder="Search code / name / serial…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 250 }} />
+          </div>
+          {canCreate && (
+            <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
+              New Equipment
+            </Button>
+          )}
         </div>
       </div>
 

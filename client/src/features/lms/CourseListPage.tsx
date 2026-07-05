@@ -119,37 +119,33 @@ export default function CourseListPage() {
             <BookOpen size={22} className="text-gray-500" />
             Courses
           </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Author courses from video, slides, PDF and documents; version and publish with e-signature.
-          </p>
         </div>
-        {canWrite && (
-          <Button type="primary" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
-            New Course
-          </Button>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <Input
-          allowClear
-          prefix={<Search size={14} className="text-gray-400" />}
-          placeholder="Search title or code"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={{ maxWidth: 280 }}
-        />
-        <Select
-          allowClear
-          placeholder="Status"
-          value={statusFilter}
-          onChange={(v) => setStatusFilter(v)}
-          style={{ width: 160 }}
-          options={(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'RETIRED'] as CourseStatus[]).map((s) => ({
-            value: s,
-            label: s.replace('_', ' '),
-          }))}
-        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Input
+            allowClear
+            prefix={<Search size={14} className="text-gray-400" />}
+            placeholder="Search title or code"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ width: 260 }}
+          />
+          <Select
+            allowClear
+            placeholder="Status"
+            value={statusFilter}
+            onChange={(v) => setStatusFilter(v)}
+            style={{ width: 150 }}
+            options={(['DRAFT', 'IN_REVIEW', 'PUBLISHED', 'RETIRED'] as CourseStatus[]).map((s) => ({
+              value: s,
+              label: s.replace('_', ' '),
+            }))}
+          />
+          {canWrite && (
+            <Button type="primary" icon={<Plus size={14} />} onClick={() => setCreateOpen(true)}>
+              New Course
+            </Button>
+          )}
+        </div>
       </div>
 
       <Table

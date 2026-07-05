@@ -63,25 +63,24 @@ export default function LabRegistryPage() {
             Internal, partner and contract laboratories — GMP classification and accreditation.
           </p>
         </div>
-        {canCreate && (
-          <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
-            New Lab
-          </Button>
-        )}
-      </div>
-
-      <div className="flex items-center justify-end gap-2 mb-3">
-        <Select
-          value={type}
-          onChange={setType}
-          allowClear
-          placeholder="All types"
-          style={{ width: 160 }}
-          options={TYPE_OPTIONS}
-        />
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-          <Input placeholder="Search code / name / location…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 260 }} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select
+            value={type}
+            onChange={setType}
+            allowClear
+            placeholder="All types"
+            style={{ width: 160 }}
+            options={TYPE_OPTIONS}
+          />
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+            <Input placeholder="Search code / name / location…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 260 }} />
+          </div>
+          {canCreate && (
+            <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setDrawerOpen(true); }}>
+              New Lab
+            </Button>
+          )}
         </div>
       </div>
 
