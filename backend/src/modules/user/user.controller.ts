@@ -26,3 +26,11 @@ export const resetPassword = async (req: Request, res: Response) => {
 export const remove = async (req: Request, res: Response) => {
   res.json(await service.deactivate(req.params.id as string));
 };
+
+export const getPermissions = async (req: Request, res: Response) => {
+  res.json(await service.getPermissions(req.params.id as string));
+};
+
+export const setPermissions = async (req: Request, res: Response) => {
+  res.json(await service.setOverrides(req.params.id as string, req.body, req.user?.userId));
+};

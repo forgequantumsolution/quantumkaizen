@@ -93,6 +93,9 @@ model User {
   formBindingsFill StageFormBinding[] @relation("FormBindingFillUsers")
   formBindingsView StageFormBinding[] @relation("FormBindingViewUsers")
 
+  // Access control — per-user permission overrides (GRANT / DENY on top of role + dept).
+  permissionOverrides UserPermission[] @relation("UserPermissionOverrides")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -123,6 +126,9 @@ model Department {
 
   nonConformances NonConformance[] @relation("NonConformanceDepartment")
   capas           Capa[]           @relation("CapaDepartment")
+
+  // Access control — department-level permission grants (mirrors Role.permissions).
+  permissions Permission[] @relation("DepartmentPermissions")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -165,9 +171,37 @@ model Permission {
 
   roles Role[] @relation("RolePermissions")
 
+  // Access control — new subjects a permission can attach to.
+  departments   Department[]     @relation("DepartmentPermissions")
+  userOverrides UserPermission[] @relation("UserPermissionPerm")
+
   createdAt DateTime @default(now())
 
   @@index([module])
+}
+
+// Access control — per-user permission override. Layers on top of role + dept
+// grants: effect=GRANT adds a key, effect=DENY removes it (deny wins). See
+// docs/ACCESS-CONTROL-enhancement-plan.md §3 + src/lib/effective-permissions.ts.
+enum PermissionEffect {
+  GRANT
+  DENY
+}
+
+model UserPermission {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation("UserPermissionOverrides", fields: [userId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission       @relation("UserPermissionPerm", fields: [permissionId], references: [id], onDelete: Cascade)
+  effect       PermissionEffect
+  reason       String? // GxP: why this override exists
+  grantedById  String? // audit: who set it
+  createdAt    DateTime         @default(now())
+
+  @@unique([userId, permissionId]) // one row per (user, permission); effect flips GRANT↔DENY
+  @@index([userId])
+  @@index([permissionId])
 }
 
 model Site {

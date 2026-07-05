@@ -31,6 +31,19 @@ export const ResetPasswordSchema = z.object({
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
+// Per-user permission overrides. The payload is the FULL desired override set —
+// the service upserts these rows and deletes any (user, permission) override not
+// present. `effect` GRANT adds a key; DENY removes it (deny wins over role/dept).
+export const SetOverridesSchema = z.object({
+  overrides: z.array(
+    z.object({
+      permissionId: z.string().uuid(),
+      effect: z.enum(['GRANT', 'DENY']),
+      reason: z.string().max(500).optional().nullable(),
+    }),
+  ),
+});
+
 export const IdParamSchema = z.object({ id: z.string().uuid() });
 
 export const ListQuerySchema = z.object({
@@ -46,4 +59,5 @@ export const ListQuerySchema = z.object({
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+export type SetOverridesInput = z.infer<typeof SetOverridesSchema>;
 export type ListQuery = z.infer<typeof ListQuerySchema>;

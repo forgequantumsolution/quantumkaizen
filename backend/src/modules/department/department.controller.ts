@@ -22,6 +22,10 @@ export const patch = async (req: Request, res: Response) => {
   res.json(await service.update(req.params.id as string, req.body));
 };
 
+export const setPermissions = async (req: Request, res: Response) => {
+  res.json(await service.setPermissions(req.params.id as string, req.body, req.user?.userId));
+};
+
 export const remove = async (req: Request, res: Response) => {
   await service.remove(req.params.id as string);
   res.status(204).send();

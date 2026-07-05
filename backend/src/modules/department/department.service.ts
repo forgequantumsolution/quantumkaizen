@@ -1,9 +1,12 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { Conflict, NotFound } from '../../lib/httpError';
+import { invalidatePermissionCache } from '../../middleware/permissions';
+import { writeTrail } from '../audit/compliance.service';
 import type {
   CreateDepartmentInput,
   ListQuery,
+  SetPermissionsInput,
   UpdateDepartmentInput,
 } from './department.schema';
 
@@ -22,6 +25,16 @@ const baseSelect = {
   parent: { select: { id: true, code: true, name: true } },
   _count: { select: { users: true, children: true } },
 } as const;
+
+// Detail select adds the department's permission grants (mirrors Role). Kept
+// separate from baseSelect so list/tree stay lean.
+const detailSelect = {
+  ...baseSelect,
+  permissions: {
+    select: { id: true, key: true, module: true, action: true },
+    orderBy: [{ module: 'asc' }, { action: 'asc' }],
+  },
+} satisfies Prisma.DepartmentSelect;
 
 export const list = async ({ page, pageSize, search, isActive, parentId }: ListQuery) => {
   const where: Prisma.DepartmentWhereInput = {};
@@ -69,10 +82,54 @@ export const tree = async () => {
 export const getById = async (id: string) => {
   const dept = await prisma.department.findUnique({
     where: { id },
-    select: baseSelect,
+    select: detailSelect,
   });
   if (!dept) throw NotFound('Department not found');
   return dept;
+};
+
+// Replace a department's permission grants (mirrors role.setPermissions).
+// Clears the whole permission cache (v1 — 30 s TTL bounds the blast radius) and
+// records a GxP audit-trail entry with the before→after key diff.
+export const setPermissions = async (
+  id: string,
+  data: SetPermissionsInput,
+  actorUserId?: string,
+) => {
+  const dept = await prisma.department.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      name: true,
+      permissions: { select: { key: true } },
+    },
+  });
+  if (!dept) throw NotFound('Department not found');
+
+  const before = dept.permissions.map((p) => p.key).sort();
+
+  const updated = await prisma.department.update({
+    where: { id },
+    data: {
+      permissions: { set: data.permissionIds.map((pid) => ({ id: pid })) },
+    },
+    select: detailSelect,
+  });
+  invalidatePermissionCache();
+
+  const after = updated.permissions.map((p) => p.key).sort();
+  await writeTrail(
+    {
+      entityType: 'Department',
+      entityId: id,
+      action: 'UPDATE',
+      field: 'permissions',
+      oldValue: before.join(', ') || '(none)',
+      newValue: after.join(', ') || '(none)',
+    },
+    actorUserId,
+  );
+  return updated;
 };
 
 export const create = async (data: CreateDepartmentInput) => {

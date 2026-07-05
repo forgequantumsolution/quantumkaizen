@@ -5,6 +5,7 @@ import {
   IdParamSchema,
   ListQuerySchema,
   ResetPasswordSchema,
+  SetOverridesSchema,
   UpdateUserSchema,
 } from './user.schema';
 import { validate } from '../../middleware/validate';
@@ -32,6 +33,19 @@ router.post(
   validate(IdParamSchema, 'params'),
   validate(ResetPasswordSchema),
   asyncHandler(ctrl.resetPassword)
+);
+router.get(
+  '/:id/permissions',
+  requirePermission('user.read'),
+  validate(IdParamSchema, 'params'),
+  asyncHandler(ctrl.getPermissions)
+);
+router.put(
+  '/:id/permissions',
+  requirePermission('user.update'),
+  validate(IdParamSchema, 'params'),
+  validate(SetOverridesSchema),
+  asyncHandler(ctrl.setPermissions)
 );
 router.delete(
   '/:id',

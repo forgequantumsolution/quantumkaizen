@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
-import { prisma } from '../lib/prisma';
 import { Forbidden, Unauthorized } from '../lib/httpError';
+import { computeEffectivePermissions } from '../lib/effective-permissions';
 
 const cache = new Map<string, { keys: Set<string>; expires: number }>();
 const TTL_MS = 30_000;
@@ -9,13 +9,9 @@ const loadPermissions = async (userId: string): Promise<Set<string>> => {
   const cached = cache.get(userId);
   if (cached && cached.expires > Date.now()) return cached.keys;
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: {
-      role: { select: { permissions: { select: { key: true } } } },
-    },
-  });
-  const keys = new Set((user?.role?.permissions ?? []).map((p) => p.key));
+  // Resolve role + department + user-override permissions via the shared resolver
+  // so the guard, /login and /me can never drift. Keeps the 30 s cache.
+  const keys = await computeEffectivePermissions(userId);
   cache.set(userId, { keys, expires: Date.now() + TTL_MS });
   return keys;
 };

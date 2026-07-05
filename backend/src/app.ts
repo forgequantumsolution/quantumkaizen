@@ -35,6 +35,7 @@ import coaPublicRoutes from './modules/coa/coa.public.routes';
 import limsAnalyticsRoutes from './modules/lims-analytics/lims-analytics.routes';
 import navCountsRoutes from './modules/nav-counts/nav-counts.routes';
 import searchRoutes from './modules/search/search.routes';
+import accessRoutes from './modules/access/access.routes';
 import {
   workflowScopedPolicyRouter as approvalWorkflowScopedRouter,
   policyRouter as approvalPolicyRouter,
@@ -85,6 +86,7 @@ export const buildApp = () => {
   app.use('/api/sites', siteRoutes);
   app.use('/api/roles', roleRoutes);
   app.use('/api/permissions', permissionRoutes);
+  app.use('/api/access', accessRoutes); // access-control analysis (who-can reverse lookup)
   app.use('/api/organization', organizationRoutes);
   app.use('/api/workflows', workflowRoutes);
   app.use('/api/workflow-lookups', workflowLookupRoutes);

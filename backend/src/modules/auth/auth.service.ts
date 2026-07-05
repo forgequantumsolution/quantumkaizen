@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { signToken } from '../../lib/jwt';
 import { Conflict, Unauthorized } from '../../lib/httpError';
+import { computeEffectivePermissions } from '../../lib/effective-permissions';
 import type { LoginInput, RegisterInput } from './auth.schema';
 
 const publicUserSelect = {
@@ -31,12 +32,19 @@ const publicUserSelect = {
 
 type RawUser = Prisma.UserGetPayload<{ select: typeof publicUserSelect }>;
 
-const flatten = (user: RawUser) => {
+/**
+ * Shape the public user payload and attach the flattened effective-permission
+ * list. Permissions come from the shared resolver (role ∪ department ∪ user
+ * GRANT − user DENY, SUPER_ADMIN → all) so /login and /me never drift from the
+ * route guard. Existing users (no dept grants / overrides) resolve identically.
+ */
+const flatten = async (user: RawUser) => {
   const { role, ...rest } = user;
+  const permissions = [...(await computeEffectivePermissions(user.id))];
   return {
     ...rest,
     role: role ? { id: role.id, name: role.name } : null,
-    permissions: role?.permissions.map((p) => p.key) ?? [],
+    permissions,
   };
 };
 
@@ -58,7 +66,7 @@ export const registerUser = async (input: RegisterInput) => {
   });
 
   const token = signToken({ userId: user.id, email: user.email });
-  return { user: flatten(user), token };
+  return { user: await flatten(user), token };
 };
 
 export const loginUser = async (input: LoginInput) => {
@@ -80,10 +88,10 @@ export const loginUser = async (input: LoginInput) => {
   });
 
   const token = signToken({ userId: user.id, email: user.email });
-  return { user: flatten(user), token };
+  return { user: await flatten(user), token };
 };
 
 export const getCurrentUser = async (userId: string) => {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: publicUserSelect });
-  return user ? flatten(user) : null;
+  return user ? await flatten(user) : null;
 };

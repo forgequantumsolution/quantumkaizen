@@ -29,6 +29,8 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'department.delete', module: 'DEPARTMENT', action: 'DELETE', description: 'Delete departments' },
   { key: 'org.read',          module: 'ORG',        action: 'READ',   description: 'View organization settings' },
   { key: 'org.update',        module: 'ORG',        action: 'UPDATE', description: 'Edit organization settings' },
+  // ── Dashboard ────────────────────────────────────────
+  { key: 'dashboard.read',    module: 'DASHBOARD',  action: 'READ',   description: 'View the dashboard (KPIs & workload overview)' },
   // ── QMS modules ──────────────────────────────────────
   { key: 'doc.read',          module: 'DOC',        action: 'READ',    description: 'View documents' },
   { key: 'doc.write',         module: 'DOC',        action: 'WRITE',   description: 'Create/edit documents' },

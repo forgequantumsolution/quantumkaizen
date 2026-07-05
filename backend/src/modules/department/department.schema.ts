@@ -14,6 +14,10 @@ export const CreateDepartmentSchema = z.object({
 
 export const UpdateDepartmentSchema = CreateDepartmentSchema.partial();
 
+export const SetPermissionsSchema = z.object({
+  permissionIds: z.array(z.string().uuid()),
+});
+
 export const IdParamSchema = z.object({ id: z.string().uuid() });
 
 export const ListQuerySchema = z.object({
@@ -26,4 +30,5 @@ export const ListQuerySchema = z.object({
 
 export type CreateDepartmentInput = z.infer<typeof CreateDepartmentSchema>;
 export type UpdateDepartmentInput = z.infer<typeof UpdateDepartmentSchema>;
+export type SetPermissionsInput = z.infer<typeof SetPermissionsSchema>;
 export type ListQuery = z.infer<typeof ListQuerySchema>;

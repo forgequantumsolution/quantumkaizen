@@ -3,10 +3,13 @@ import { prisma } from '../../lib/prisma';
 import { hashPassword } from '../../lib/password';
 import { Conflict, NotFound } from '../../lib/httpError';
 import { invalidatePermissionCache } from '../../middleware/permissions';
+import { computeEffectiveWithSources } from '../../lib/effective-permissions';
+import { writeTrail } from '../audit/compliance.service';
 import type {
   CreateUserInput,
   ListQuery,
   ResetPasswordInput,
+  SetOverridesInput,
   UpdateUserInput,
 } from './user.schema';
 
@@ -190,4 +193,105 @@ export const deactivate = async (id: string) => {
   });
   invalidatePermissionCache(id);
   return updated;
+};
+
+// Raw override rows for a user (permissionId + key + effect + reason) — lets the
+// UI edit overrides directly (sources[] only carries keys, not ids).
+const overrideRows = async (userId: string) => {
+  const rows = await prisma.userPermission.findMany({
+    where: { userId },
+    select: {
+      permissionId: true,
+      effect: true,
+      reason: true,
+      permission: { select: { key: true } },
+    },
+  });
+  return rows.map((r) => ({
+    permissionId: r.permissionId,
+    key: r.permission.key,
+    effect: r.effect,
+    reason: r.reason,
+  }));
+};
+
+/**
+ * GET /api/users/:id/permissions — the effective permission set for a user plus
+ * the source breakdown (role / department / grants / denies) and the raw
+ * override rows. Powers the Access Analysis + User matrix (plan §6.3).
+ */
+export const getPermissions = async (id: string) => {
+  const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+  if (!user) throw NotFound('User not found');
+  const resolved = await computeEffectiveWithSources(id);
+  return { ...resolved, overrides: await overrideRows(id) };
+};
+
+/**
+ * PUT /api/users/:id/permissions — set the user's override list to EXACTLY the
+ * provided payload. Upserts each (user, permission) row and deletes any override
+ * not present. Records grantedById on every row, invalidates the user's cache,
+ * and writes a GxP audit-trail entry with the before→after override diff.
+ */
+export const setOverrides = async (
+  id: string,
+  data: SetOverridesInput,
+  actorUserId?: string,
+) => {
+  const user = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+  if (!user) throw NotFound('User not found');
+
+  // Reject duplicate permissionIds in the payload (unique row per permission).
+  const ids = data.overrides.map((o) => o.permissionId);
+  if (new Set(ids).size !== ids.length) {
+    throw Conflict('Duplicate permissionId in overrides payload');
+  }
+
+  const before = await overrideRows(id);
+
+  await prisma.$transaction([
+    // Delete overrides not present in the payload.
+    prisma.userPermission.deleteMany({
+      where: { userId: id, permissionId: { notIn: ids.length ? ids : ['__none__'] } },
+    }),
+    // Upsert each desired override (unique on userId+permissionId).
+    ...data.overrides.map((o) =>
+      prisma.userPermission.upsert({
+        where: { userId_permissionId: { userId: id, permissionId: o.permissionId } },
+        create: {
+          userId: id,
+          permissionId: o.permissionId,
+          effect: o.effect,
+          reason: o.reason ?? null,
+          grantedById: actorUserId ?? null,
+        },
+        update: {
+          effect: o.effect,
+          reason: o.reason ?? null,
+          grantedById: actorUserId ?? null,
+        },
+      }),
+    ),
+  ]);
+
+  invalidatePermissionCache(id);
+
+  const after = await overrideRows(id);
+  const fmt = (rows: typeof before) =>
+    rows.map((r) => `${r.effect}:${r.key}`).sort().join(', ') || '(none)';
+  await writeTrail(
+    {
+      entityType: 'User',
+      entityId: id,
+      action: 'UPDATE',
+      field: 'permissionOverrides',
+      oldValue: fmt(before),
+      newValue: fmt(after),
+      reason: data.overrides.find((o) => o.reason)?.reason ?? null,
+    },
+    actorUserId,
+  );
+
+  const resolved = await computeEffectiveWithSources(id);
+  return { ...resolved, overrides: after };
 };

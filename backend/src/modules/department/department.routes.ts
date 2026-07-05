@@ -4,6 +4,7 @@ import {
   CreateDepartmentSchema,
   IdParamSchema,
   ListQuerySchema,
+  SetPermissionsSchema,
   UpdateDepartmentSchema,
 } from './department.schema';
 import { validate } from '../../middleware/validate';
@@ -25,6 +26,13 @@ router.patch(
   validate(IdParamSchema, 'params'),
   validate(UpdateDepartmentSchema),
   asyncHandler(ctrl.patch)
+);
+router.put(
+  '/:id/permissions',
+  requirePermission('department.update'),
+  validate(IdParamSchema, 'params'),
+  validate(SetPermissionsSchema),
+  asyncHandler(ctrl.setPermissions)
 );
 router.delete(
   '/:id',
