@@ -37,7 +37,7 @@ const extractApiError = (err: unknown, fallback = 'Save failed'): string =>
 export default function RolesTab() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
   const filters = useMemo(
     () => ({ search: search.trim() || undefined, page, pageSize }),
     [search, page, pageSize],
