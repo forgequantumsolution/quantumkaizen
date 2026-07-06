@@ -11,7 +11,9 @@ import {
   useSetWorkflowStatus,
   useSoftDeleteWorkflow,
   useWorkflow,
+  workflowKeys,
 } from '@/lib/api/workflow';
+import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import WorkflowStatusBadge from './shared/WorkflowStatusBadge';
 import { deserializeFlow } from './builder/builder.serializer';
 import { layoutGraph } from './builder/layout';
@@ -27,6 +29,7 @@ export default function WorkflowDetailPage() {
   const { data, isLoading, error } = useWorkflow(id);
   const softDelete = useSoftDeleteWorkflow();
   const setStatus = useSetWorkflowStatus(id);
+  const confirmDelete = useConfirmDelete();
 
   const flowJson = useMemo(() => data?.flow_json ?? { nodes: [], edges: [] }, [data]);
 
@@ -37,19 +40,19 @@ export default function WorkflowDetailPage() {
     return { nodes: layoutGraph(n, e, { direction: 'TB' }), edges: e };
   }, [flowJson]);
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!data) return;
-    if (!confirm(`Delete "${displayWorkflowName(data.workflow)}"? This is a soft-delete.`)) return;
-    try {
-      await softDelete.mutateAsync(data.workflow.id);
-      toast.success('Workflow deleted');
-      navigate('/workflows');
-    } catch (err) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message ?? 'Failed to delete';
-      toast.error(msg);
-    }
+    confirmDelete({
+      entityLabel: 'workflow',
+      name: displayWorkflowName(data.workflow),
+      extraWarning: 'This is a soft-delete and can be undone by an admin.',
+      mutate: async () => {
+        await softDelete.mutateAsync(data.workflow.id);
+        navigate('/workflows');
+      },
+      invalidateKey: workflowKeys.all,
+      successMessage: 'Workflow deleted',
+    });
   };
 
   const handleSetStatus = async (next: 'ACTIVE' | 'INACTIVE' | 'DRAFT') => {
