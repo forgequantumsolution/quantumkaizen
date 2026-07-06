@@ -18,7 +18,7 @@ import type { Prisma } from '@prisma/client';
 import {
   bindingAccessSelect,
   expectedSubmitterIds,
-  isLegacyOpen,
+  isOpenToAll,
 } from '../../stage-form/stage-form.access';
 import { isAuditFormsStage } from '../../../lib/auditFormsStage';
 
@@ -100,6 +100,7 @@ export const findUnsatisfiedRequiredForms = async (
 
     for (const b of bindings) {
       const access = {
+        isRestricted: b.isRestricted,
         fillMode: b.fillMode,
         allowedFillRoles: b.allowedFillRoles,
         allowedFillUsers: b.allowedFillUsers,
@@ -107,7 +108,7 @@ export const findUnsatisfiedRequiredForms = async (
         allowedViewUsers: b.allowedViewUsers,
       };
 
-      if (b.fillMode === 'EACH' && !isLegacyOpen(access)) {
+      if (b.fillMode === 'EACH' && !isOpenToAll(access)) {
         // EACH: every expected person owes their own copy. Expected set is
         // computed from CURRENT role membership, so departed members drop out.
         const expected = await expectedSubmitterIds(tx, access);

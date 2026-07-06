@@ -10,8 +10,13 @@
  *   canFill = u ∈ fill group                       (view-only never fills)
  *   canRead = u ∈ fill group OR u ∈ view group     (fillers can always read)
  *   SUPER_ADMIN bypasses both (matches approval.layer.ts).
- *   An EMPTY fill group means "legacy open" — everyone may read & fill — so
- *   bindings created before this feature keep working.
+ *
+ * Openness is EXPLICIT via `isRestricted` (schema column, default true for new
+ * bindings). `isRestricted = false` means "open to all" — everyone may read &
+ * fill (ANYONE semantics). Existing bindings were backfilled at migration time:
+ * any binding that already had a fill/view group stayed restricted; groupless
+ * ("legacy open") bindings were set open, so behaviour was preserved exactly.
+ * A brand-new binding with no group is therefore closed, not silently open.
  */
 import type { Prisma, PrismaClient } from '@prisma/client';
 import { Forbidden } from '../../lib/httpError';
@@ -20,6 +25,7 @@ type Db = PrismaClient | Prisma.TransactionClient;
 
 /** Select fragment to load a binding's access lists + mode. */
 export const bindingAccessSelect = {
+  isRestricted: true,
   fillMode: true,
   allowedFillRoles: { select: { id: true } },
   allowedFillUsers: { select: { id: true } },
@@ -28,6 +34,7 @@ export const bindingAccessSelect = {
 } satisfies Prisma.StageFormBindingSelect;
 
 export interface BindingAccess {
+  isRestricted: boolean;
   fillMode: 'ANYONE' | 'EACH';
   allowedFillRoles: { id: string }[];
   allowedFillUsers: { id: string }[];
@@ -54,9 +61,8 @@ export const loadActor = async (db: Db, userId: string): Promise<Actor> => {
   };
 };
 
-/** A binding with no fill roles AND no fill users is treated as open to all. */
-export const isLegacyOpen = (b: BindingAccess): boolean =>
-  b.allowedFillRoles.length === 0 && b.allowedFillUsers.length === 0;
+/** A non-restricted binding is open to everyone (read & fill). */
+export const isOpenToAll = (b: BindingAccess): boolean => !b.isRestricted;
 
 const inGroup = (
   roles: { id: string }[],
@@ -69,14 +75,14 @@ const inGroup = (
 /** Pure check — may this actor FILL the form? (Fill wins over view-only.) */
 export const canFillForm = (b: BindingAccess, actor: Actor): boolean => {
   if (actor.isSuperAdmin) return true;
-  if (isLegacyOpen(b)) return true;
+  if (isOpenToAll(b)) return true;
   return inGroup(b.allowedFillRoles, b.allowedFillUsers, actor);
 };
 
 /** Pure check — may this actor READ the form? (Fillers always can.) */
 export const canReadForm = (b: BindingAccess, actor: Actor): boolean => {
   if (actor.isSuperAdmin) return true;
-  if (isLegacyOpen(b)) return true;
+  if (isOpenToAll(b)) return true;
   if (inGroup(b.allowedFillRoles, b.allowedFillUsers, actor)) return true;
   return inGroup(b.allowedViewRoles, b.allowedViewUsers, actor);
 };
@@ -107,14 +113,14 @@ export const assertCanReadForm = async (
  * The set of users each owing their own copy in EACH mode: every active member
  * of the fill roles, union the named fill users. Computed from CURRENT role
  * membership, so people who join/leave a role are added/removed naturally and a
- * deactivated user can never deadlock the stage. Returns [] for legacy-open
+ * deactivated user can never deadlock the stage. Returns [] for open-to-all
  * bindings (no defined fill group).
  */
 export const expectedSubmitterIds = async (
   db: Db,
   b: BindingAccess,
 ): Promise<string[]> => {
-  if (isLegacyOpen(b)) return [];
+  if (isOpenToAll(b)) return [];
   const ids = new Set<string>(b.allowedFillUsers.map((u) => u.id));
   const roleIds = b.allowedFillRoles.map((r) => r.id);
   if (roleIds.length > 0) {

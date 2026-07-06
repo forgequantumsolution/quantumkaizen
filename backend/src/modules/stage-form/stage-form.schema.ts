@@ -31,6 +31,16 @@ export const CreateStageFormBindingSchema = z.object({
   formId: z.string().uuid(),
   isRequired: z.boolean().default(true),
   position: z.number().int().min(0).max(1000).default(0),
+  // Per-form access. Secure by default: a new binding is RESTRICTED to its
+  // groups (only members + SUPER_ADMIN) unless explicitly opened
+  // (isRestricted:false = open to all). Empty groups + restricted = nobody but
+  // SUPER_ADMIN, so a form is never silently world-open.
+  isRestricted: z.boolean().default(true),
+  fillMode: z.enum(['ANYONE', 'EACH']).default('ANYONE'),
+  fillRoleIds: z.array(z.string().uuid()).default([]),
+  fillUserIds: z.array(z.string().uuid()).default([]),
+  viewRoleIds: z.array(z.string().uuid()).default([]),
+  viewUserIds: z.array(z.string().uuid()).default([]),
 });
 
 export const UpdateStageFormBindingSchema = z
@@ -38,6 +48,12 @@ export const UpdateStageFormBindingSchema = z
     isRequired: z.boolean().optional(),
     position: z.number().int().min(0).max(1000).optional(),
     isActive: z.boolean().optional(),
+    isRestricted: z.boolean().optional(),
+    fillMode: z.enum(['ANYONE', 'EACH']).optional(),
+    fillRoleIds: z.array(z.string().uuid()).optional(),
+    fillUserIds: z.array(z.string().uuid()).optional(),
+    viewRoleIds: z.array(z.string().uuid()).optional(),
+    viewUserIds: z.array(z.string().uuid()).optional(),
   })
   .refine((d) => Object.keys(d).length > 0, {
     message: 'PATCH body must contain at least one field',

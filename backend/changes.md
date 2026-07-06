@@ -4,6 +4,38 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Ticket form access control — enforce per-form fill/view groups — 2026-07-06
+
+**Problem:** Inside a ticket, users who were **not** in a form's fill/view group could still see and interact with the form. The backend resolver already returned the right `canRead`/`canFill` and the submit endpoint enforced `assertCanFillForm`, but "openness" was inferred from an *empty fill group* — so any binding created without a group (and every virtual audit checklist) was silently open to everyone. Working tree only — **not committed**.
+
+Three parts: A (frontend gate) is in `client/changes.md`; B & C are below. Verified end-to-end: `tests/e2e/ticket-form-access.spec.ts` → **3/3 pass**; backend reloaded with no type errors.
+
+DB context: local Postgres `localhost:5432/kaizen_qms`; `prisma migrate status` clean (45 migrations after this change).
+
+### Part C — Make per-form openness explicit (`isRestricted`), secure by default
+Openness is no longer guessed from "empty fill group" — an explicit column decides it, and **new bindings default to restricted**.
+
+- **`prisma/schema.prisma`** — `StageFormBinding` gains `isRestricted Boolean @default(true)`. `true` (default for NEW rows) = only the fill/view groups (plus SUPER_ADMIN) may access; `false` = open to all (ANYONE semantics).
+- **`prisma/migrations/20260706211840_stage_form_binding_is_restricted/migration.sql`** (new) — adds the column, then **backfills existing rows to preserve behaviour exactly**: bindings that already had a fill/view group → stay restricted; groupless ("legacy open") bindings → set open. Verified after apply: doc@ perspective **16 open / 25 restricted** (identical to pre-migration); backfill integrity `openRowsWithAGroup=0`, `restrictedRowsWithNoGroup=0`; column default `true, NOT NULL`.
+- **`src/modules/stage-form/stage-form.access.ts`** — `bindingAccessSelect` + `BindingAccess` now include `isRestricted`; `isLegacyOpen(b)` (empty-group check) replaced by **`isOpenToAll(b) = !b.isRestricted`**; `canFillForm` / `canReadForm` / `expectedSubmitterIds` use it.
+- **`src/modules/workflow/engine/form.layer.ts`** — import `isOpenToAll` instead of `isLegacyOpen`; per-binding `access` object carries `isRestricted`.
+- **`src/modules/stage-form/stage-form.service.ts`** — `isRestricted` carried through `listForTicket` (real-binding map + the `access` object driving `canRead`/`canFill`). Virtual audit-checklist bindings set `isRestricted: false` **intentionally** (kept open-to-all to preserve behaviour; locking them down needs a config surface on the audit register — follow-up).
+
+### Part B — Configurable audiences on the standalone binding API
+The standalone `/stage-form-bindings` endpoint previously could not set access groups at all (only the workflow builder could), so anything it created was groupless → open. Now it has parity + a secure default.
+
+- **`src/modules/stage-form/stage-form.schema.ts`** — `CreateStageFormBindingSchema` adds `isRestricted` (default **true**), `fillMode`, and `fillRoleIds` / `fillUserIds` / `viewRoleIds` / `viewUserIds`; `UpdateStageFormBindingSchema` adds the same as optional.
+- **`src/modules/stage-form/stage-form.service.ts`** — `createBinding` connects the group ids and sets `isRestricted` / `fillMode`; `updateBinding` maps the group id arrays to `set` (replace membership) and passes scalar fields through (absent arrays leave membership untouched).
+
+### Tests
+- **`tests/e2e/ticket-form-access.spec.ts`** (new) — API: restricted form reports `canRead=false`/`canFill=false` and hides submission content to a non-audience user; API: submitting a restricted form is rejected `403`; UI: the form is not rendered and a "restricted" notice is shown instead.
+
+### Notes / follow-ups
+- Audit-checklist forms remain open-to-all by design (see Part C).
+- Pre-existing, unrelated: `qa@forgequantum.com` and `auditor@forgequantum.com` return `401` for the seed password (`Admin@123`); not touched by this work.
+
+---
+
 # LIMS "disconnected features" wiring — 2026-07-04
 
 Backend half of the LIMS orphaned-feature backlog (plan: `docs/LIMS-industrial-upgrade-plan.md` §I; frontend half in `client/changes.md`). Working tree only — **not committed**. Verified end-to-end (Playwright + direct API). `tsc --noEmit` clean.

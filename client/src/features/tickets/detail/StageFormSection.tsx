@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ClipboardList, Printer } from 'lucide-react';
+import { CheckCircle2, ClipboardList, Lock, Printer } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import {
   useTicketStageForms,
@@ -13,7 +13,17 @@ interface Props {
 
 export default function StageFormSection({ ticketId }: Props) {
   const { data, isLoading } = useTicketStageForms(ticketId);
-  const bindings = useMemo(() => data?.bindings ?? [], [data]);
+  // Only forms the current user may READ are surfaced with content. Forms they're
+  // not in the fill/view group for are shown as a locked notice (no title, no
+  // content — the backend also nulls their submission payload) so the user knows
+  // a form exists but isn't left staring at an empty panel. View-only forms
+  // (canRead && !canFill) are kept but rendered read-only below.
+  const bindings = useMemo(
+    () => (data?.bindings ?? []).filter((b) => b.canRead),
+    [data],
+  );
+  const totalCount = data?.bindings?.length ?? 0;
+  const restrictedCount = totalCount - bindings.length;
 
   const [activeBindingId, setActiveBindingId] = useState<string | null>(null);
 
@@ -37,8 +47,27 @@ export default function StageFormSection({ ticketId }: Props) {
     );
   }
 
-  if (bindings.length === 0) {
+  // No forms on this stage at all → render nothing.
+  if (totalCount === 0) {
     return null;
+  }
+
+  // There are forms on this stage, but the user can read none of them → show a
+  // clear "restricted" notice instead of a blank space. No form title is leaked.
+  if (bindings.length === 0) {
+    return (
+      <Card className="!p-4">
+        <div className="flex items-start gap-2.5 text-[13px] text-gray-600">
+          <Lock size={15} className="mt-0.5 shrink-0 text-gray-400" />
+          <span>
+            {restrictedCount === 1
+              ? 'This stage has a form restricted to other users — you don’t have permission to view or fill it.'
+              : `This stage has ${restrictedCount} forms restricted to other users — you don’t have permission to view or fill them.`}{' '}
+            Someone with access will complete {restrictedCount === 1 ? 'it' : 'them'}.
+          </span>
+        </div>
+      </Card>
+    );
   }
 
   const active = bindings.find((b) => b.id === activeBindingId) ?? bindings[0]!;
@@ -51,6 +80,10 @@ export default function StageFormSection({ ticketId }: Props) {
     : Math.round((doneBindings / totalBindings) * 100);
 
   const isActiveSubmitted = active.latestSubmission?.status === 'SUBMITTED';
+  // A user with view access but not fill access sees the form read-only, just
+  // like an already-submitted form — they can never enter or submit responses.
+  const isViewOnly = !active.canFill;
+  const readOnly = isActiveSubmitted || isViewOnly;
 
   return (
     <Card noPadding className="overflow-hidden">
@@ -91,12 +124,16 @@ export default function StageFormSection({ ticketId }: Props) {
         </Button>
       </div>
 
-      {/* Submitted meta — only when read-only */}
-      {isActiveSubmitted && (
+      {/* Read-only banner — submitted responses, or view-only access */}
+      {readOnly && (
         <div className="px-3 py-1.5 bg-emerald-50/40 text-[11px] text-gray-600 flex items-center gap-2 border-b border-gray-100">
           <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-          <span>Read-only · submitted responses</span>
-          {active.latestSubmission?.submittedAt && (
+          <span>
+            {isActiveSubmitted
+              ? 'Read-only · submitted responses'
+              : 'Read-only · view access (you cannot fill this form)'}
+          </span>
+          {isActiveSubmitted && active.latestSubmission?.submittedAt && (
             <span className="text-gray-400">
               · {new Date(active.latestSubmission.submittedAt).toLocaleString()}
             </span>
@@ -108,15 +145,27 @@ export default function StageFormSection({ ticketId }: Props) {
       <div className="px-3 py-3 bg-gray-50/30">
         <FormFillEmbed
           key={`${active.id}::${active.latestSubmission?.id ?? 'new'}::${
-            isActiveSubmitted ? 'ro' : 'rw'
+            readOnly ? 'ro' : 'rw'
           }`}
           formId={active.formId}
           workflowCtx={{ ticketId, bindingId: active.id }}
           submissionId={active.latestSubmission?.id ?? null}
-          readOnly={isActiveSubmitted}
+          readOnly={readOnly}
           variant="inline"
         />
       </div>
+
+      {/* Mixed case: some forms on this stage are restricted from this user. */}
+      {restrictedCount > 0 && (
+        <div className="px-3 py-1.5 text-[11px] text-gray-500 border-t border-gray-100 flex items-center gap-1.5">
+          <Lock size={12} className="text-gray-400 shrink-0" />
+          <span>
+            {restrictedCount === 1
+              ? '1 more form on this stage is restricted to other users.'
+              : `${restrictedCount} more forms on this stage are restricted to other users.`}
+          </span>
+        </div>
+      )}
     </Card>
   );
 }
