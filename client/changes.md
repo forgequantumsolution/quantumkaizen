@@ -1170,6 +1170,26 @@ The read-only detail view only listed stage names + a couple of action chips —
 - New **Flow** section shows the stage's incoming ("From: …") and outgoing ("To: …") stage names, derived from the graph edges.
 - Re-verified with the exact real `flow_json`: stage "first" → `initial` · No actions · Effectiveness Verification (v1, required, shared copy, Fill/View QUALITY_ENGINEER) · Flow To: second.
 
+### Ticket workflow — segmented progress stepper instead of stage cards
+
+Inside a ticket the workflow rendered as a row of bordered stage **cards** (`StageTabs`). Reworked the presentation into a horizontal **progress stepper** — a thin colored bar per stage with the label beneath — matching the requested design.
+
+- **`src/features/tickets/detail/StageTabs.tsx`** — kept the existing data pipeline (deserialize → LR layout → order → `done`/`current`/`upcoming` status, plus click-to-select driving the form-history filter) and replaced only the presentation: each stage is now a full-width `rounded-full` bar (done = `emerald-500`, current = `blue-500`, upcoming = `gray-200`) with a color-matched label below (green / blue-semibold / gray). Dropped the per-card border/badge/connector chrome, the header, and the legend. Selected stage is indicated by a label underline (not a box) to stay clean. Removed now-unused imports (`Check`, `CircleDot`, `Circle`, `Flag`) and the `Legend`/`StageTabButton` components.
+- No change to `TicketDetailPage` wiring — same `StageTabs` props, so selection and the `workflowOpen` toggle behave as before.
+- Verified via an isolated Playwright harness (seeded React Query so `useWorkflow` serves without an API call — `staleTime: Infinity` avoids the 401→`/login` redirect the axios interceptor otherwise triggers) rendering a 7-stage flow (Initiated…Closed, current = Root Cause): bars and labels match the target design. `tsc --noEmit` (client) → exit 0.
+
+### Submitted form data — render as plain text, not disabled form widgets
+
+The read-only submission viewer (`InlineSubmissionViewer`, used by `RequiredFormsCard` + `SubmittedFormsCard`) re-rendered each answer with `<FieldRenderer … disabled>` — i.e. greyed-out inputs/selects/tables. Hard to read. Now it renders values as document-style text.
+
+- **`src/features/forms/FieldValueText.tsx`** (new) — maps a `FormFieldDef` + submitted value to readable output for every field type: text/textarea/richtext → text (multi-line preserved); number/slider/time → text; range/date_range/time_range → "a – b"; date → `DD MMM YYYY`; select/radio → the option **label** (not the raw stored value); compliance → colored dot + label; checkbox/multi_text → chips; switch → Yes/No; color → swatch + hex; file/image → file icon + name; password → masked; table → a read-only bordered grid with per-column cell formatting. Unknown types fall back to `String(value)`.
+- **`src/features/tickets/detail/InlineSubmissionViewer.tsx`** — swapped `FieldRenderer` for `FieldValueText`; the per-field label is now a small uppercase caption above the value, and the "Not answered" placeholder is plain italic text. Removed the `pointer-events-none form-readonly` wrapper. All interactive/builder `FieldRenderer` usages (fill page, preview, builder) are untouched.
+- Verified via an isolated Playwright harness across textarea, select, checkbox, date, compliance, switch, file, multi_text, empty, and a table field — all render as clean text/chips/grid (e.g. select "hi" → "High", compliance → red dot "Non-Conformance", table dates formatted, boolean cell → ✓/—). `tsc --noEmit` (client) → exit 0.
+
+**Follow-up — the ticket actually renders the filled form via `FormFillEmbed`, not `InlineSubmissionViewer`.** `StageFormSection` (the component `TicketDetailPage` mounts) renders `FormFillEmbed` with `readOnly` when a form is submitted (or the user is view-only). In `readOnly` mode `FormFillEmbed` was still using `<FieldRenderer … disabled>` (greyed inputs), so the first change had no visible effect on the ticket.
+- **`src/features/forms/FormFillEmbed.tsx`** — in the field loop, when `readOnly` render `FieldValueText` (with a plain italic "Not answered" for empty answers) instead of the disabled `FieldRenderer`; the interactive (fill) branch is unchanged. Dropped the `pointer-events-none form-readonly` wrapper.
+- Verified end-to-end with a Playwright harness that seeds React Query (`['form', id]` + `['form-submission', id]`) and renders the real `FormFillEmbed` read-only: **0** input/select widgets in the DOM — the submitted form shows as section header + label/value text, compliance dot, multi-select chips, formatted dates, and a read-only table. `tsc --noEmit` (client) → exit 0.
+
 ---
 
 # Ticket form access control — gate the stage-form UI on canRead/canFill — 2026-07-06
