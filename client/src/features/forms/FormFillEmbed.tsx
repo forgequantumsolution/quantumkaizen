@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { App } from 'antd';
 import { Button } from '@/components/ui/Button';
 import FieldRenderer from './FieldRenderer';
+import FieldValueText from './FieldValueText';
 import { useFormDetail, useSubmitForm, useSubmission } from './hooks';
 import { useCreateWorkflowSubmission } from '@/lib/api/stageForm';
 import { evaluateVisibility } from './lib/dependency';
@@ -262,21 +263,34 @@ export default function FormFillEmbed({
                 const span = widthToCols(f.width);
                 const err = errors[sec.section_name]?.[f.name];
                 const helpText = (f as { helpText?: string }).helpText;
+                const value = responses[sec.section_name]?.[f.name];
+                const hasValue =
+                  value !== undefined &&
+                  value !== null &&
+                  value !== '' &&
+                  !(Array.isArray(value) && value.length === 0);
                 return (
                   <div key={f.field_id ?? f.name} className={`col-span-12 ${span} min-w-0`}>
                     <label className="block text-[13px] font-medium text-slate-700 mb-1.5 leading-tight">
                       {f.label}
                       {f.required && <span className="text-rose-500 ml-0.5">*</span>}
                     </label>
-                    <div className={readOnly ? 'pointer-events-none form-readonly' : ''}>
+                    {readOnly ? (
+                      // Submitted / view-only: render the answer as plain readable
+                      // text instead of a disabled input widget.
+                      hasValue ? (
+                        <FieldValueText field={f} value={value} />
+                      ) : (
+                        <span className="text-sm italic text-slate-400">Not answered</span>
+                      )
+                    ) : (
                       <FieldRenderer
                         field={f}
-                        value={responses[sec.section_name]?.[f.name]}
+                        value={value}
                         onChange={(v) => setFieldValue(sec.section_name, f.name, v)}
-                        disabled={readOnly}
                         protectDefaultRows
                       />
-                    </div>
+                    )}
                     {helpText && !err && (
                       <p className="mt-1 text-[11px] text-slate-500 leading-snug">{helpText}</p>
                     )}

@@ -11,11 +11,11 @@ interface Message {
 const RULES: { patterns: RegExp[]; response: string }[] = [
   {
     patterns: [/\b(hello|hi|hey|good morning|good afternoon|good evening)\b/i],
-    response: "Hello! I'm QMS Assistant, your guide to Quantum Kaizen. Ask me about modules like Non-Conformances, CAPA, FMEA, Audits, Complaints, Document Management, Inspection, Calibration, and GMP standards. What would you like to know?",
+    response: "Hello! I'm QMS Assistant, your guide to Quantum Kairoz. Ask me about modules like Non-Conformances, CAPA, FMEA, Audits, Complaints, Document Management, Inspection, Calibration, and GMP standards. What would you like to know?",
   },
   {
-    patterns: [/what.*platform|about.*quantum kaizen|overview.*system|what.*modules/i],
-    response: "**Quantum Kaizen** is a pharma QMS platform covering:\n• **QMS**: Non-Conformances, CAPA, FMEA, Risk, Change Control, Complaints, Suppliers, Audits\n• **DMS**: Document lifecycle (SOPs, BMRs, specs, protocols)\n• **Inspection**: Incoming, in-process & final inspection records\n• **Calibration**: Equipment calibration scheduling & certificates\n• **LMS**: Training & GMP compliance tracking\n• **Analytics**: Real-time KPI dashboard",
+    patterns: [/what.*platform|about.*quantum kairoz|overview.*system|what.*modules/i],
+    response: "**Quantum Kairoz** is a pharma QMS platform covering:\n• **QMS**: Non-Conformances, CAPA, FMEA, Risk, Change Control, Complaints, Suppliers, Audits\n• **DMS**: Document lifecycle (SOPs, BMRs, specs, protocols)\n• **Inspection**: Incoming, in-process & final inspection records\n• **Calibration**: Equipment calibration scheduling & certificates\n• **LMS**: Training & GMP compliance tracking\n• **Analytics**: Real-time KPI dashboard",
   },
   {
     patterns: [/\bnc\b|non.?conform/i],
@@ -107,7 +107,7 @@ const RULES: { patterns: RegExp[]; response: string }[] = [
   },
   {
     patterns: [/help|support|contact|report.*issue/i],
-    response: "**Getting Help**\n• Ask me for module guidance or GMP questions\n• Contact your QA Administrator for user access issues\n• Report bugs to: info@forgequantumsolution.com\n• Platform: **Quantum Kaizen** by Forge Quantum Solutions",
+    response: "**Getting Help**\n• Ask me for module guidance or GMP questions\n• Contact your QA Administrator for user access issues\n• Report bugs to: info@forgequantumsolution.com\n• Platform: **Quantum Kairoz** by Forge Quantum Solutions",
   },
 ];
 
@@ -134,7 +134,7 @@ function BotText({ text }: { text: string }) {
 const INIT: Message = {
   id: 'init',
   role: 'bot',
-  text: "Hi! I'm QMS Assistant. Ask me anything about Quantum Kaizen — modules, GMP standards, navigation, or platform data.",
+  text: "Hi! I'm QMS Assistant. Ask me anything about Quantum Kairoz — modules, GMP standards, navigation, or platform data.",
 };
 
 const SUGGESTIONS = ['What modules are available?', 'Explain CAPA workflow', 'ALCOA+ data integrity', 'OOS handling'];
@@ -207,7 +207,7 @@ export default function ChatBot() {
             </div>
             <div>
               <p className="text-xs font-semibold text-white leading-none">QMS Assistant</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Quantum Kaizen Platform Guide</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Quantum Kairoz Platform Guide</p>
             </div>
           </div>
 

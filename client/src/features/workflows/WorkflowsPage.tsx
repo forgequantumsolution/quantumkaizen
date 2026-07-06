@@ -21,10 +21,12 @@ import {
   useWorkflows,
   useSetWorkflowStatus,
   useSoftDeleteWorkflow,
+  workflowKeys,
   type WorkflowSummary,
   type WorkflowLifecycleStatus,
 } from '@/lib/api/workflow';
 import { useWorkflowTypes } from '@/lib/api/workflowLookups';
+import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import CreateWorkflowModal from './shared/CreateWorkflowModal';
 import WorkflowStatusBadge from './shared/WorkflowStatusBadge';
 
@@ -77,19 +79,17 @@ export default function WorkflowsPage({ onCreateWorkflow }: Props = {}) {
   const { data, isLoading, error } = useWorkflows(filters);
   const { data: types = [] } = useWorkflowTypes();
   const softDelete = useSoftDeleteWorkflow();
+  const confirmDelete = useConfirmDelete();
 
-  const handleDelete = async (wf: WorkflowSummary) => {
-    if (!confirm(`Delete "${wf.name}"? This is a soft-delete and can be undone by an admin.`))
-      return;
-    try {
-      await softDelete.mutateAsync(wf.id);
-      toast.success('Workflow deleted');
-    } catch (err) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message ?? 'Failed to delete';
-      toast.error(msg);
-    }
+  const handleDelete = (wf: WorkflowSummary) => {
+    confirmDelete({
+      entityLabel: 'workflow',
+      name: wf.name,
+      extraWarning: 'This is a soft-delete and can be undone by an admin.',
+      mutate: () => softDelete.mutateAsync(wf.id),
+      invalidateKey: workflowKeys.all,
+      successMessage: 'Workflow deleted',
+    });
   };
 
   const items = data?.items ?? [];

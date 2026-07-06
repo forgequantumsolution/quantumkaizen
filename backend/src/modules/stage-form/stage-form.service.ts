@@ -153,6 +153,12 @@ export const createBinding = async (
         formId: input.formId,
         isRequired: input.isRequired,
         position: input.position,
+        isRestricted: input.isRestricted,
+        fillMode: input.fillMode,
+        allowedFillRoles: { connect: input.fillRoleIds.map((rid) => ({ id: rid })) },
+        allowedFillUsers: { connect: input.fillUserIds.map((uid) => ({ id: uid })) },
+        allowedViewRoles: { connect: input.viewRoleIds.map((rid) => ({ id: rid })) },
+        allowedViewUsers: { connect: input.viewUserIds.map((uid) => ({ id: uid })) },
         createdById,
       },
       select: bindingSelect,
@@ -176,9 +182,18 @@ export const updateBinding = async (id: string, input: UpdateStageFormBindingInp
   if (!existing || existing.isDeleted) {
     throw NotFound(`StageFormBinding ${id} not found`);
   }
+  // Group id arrays (if present) replace the M2M membership; scalar fields pass
+  // straight through. Absent arrays leave the existing membership untouched.
+  const { fillRoleIds, fillUserIds, viewRoleIds, viewUserIds, ...scalar } = input;
   return prisma.stageFormBinding.update({
     where: { id },
-    data: input,
+    data: {
+      ...scalar,
+      ...(fillRoleIds && { allowedFillRoles: { set: fillRoleIds.map((rid) => ({ id: rid })) } }),
+      ...(fillUserIds && { allowedFillUsers: { set: fillUserIds.map((uid) => ({ id: uid })) } }),
+      ...(viewRoleIds && { allowedViewRoles: { set: viewRoleIds.map((rid) => ({ id: rid })) } }),
+      ...(viewUserIds && { allowedViewUsers: { set: viewUserIds.map((uid) => ({ id: uid })) } }),
+    },
     select: bindingSelect,
   });
 };
@@ -272,6 +287,7 @@ export const listForTicket = async (ticketId: string, userId: string) => {
     updatedAt: b.updatedAt,
     stage: b.stage,
     form: b.form,
+    isRestricted: b.isRestricted,
     fillMode: b.fillMode,
     allowedFillRoles: b.allowedFillRoles,
     allowedFillUsers: b.allowedFillUsers,
@@ -311,8 +327,11 @@ export const listForTicket = async (ticketId: string, userId: string) => {
           updatedAt: now,
           stage: { id: stageId, name: meta.name, canonicalId: meta.canonicalId },
           form,
-          // Virtual audit checklists carry no access lists → legacy-open:
-          // every member may read & fill them (ANYONE semantics).
+          // Virtual audit checklists carry no access lists and are intentionally
+          // open-to-all (isRestricted:false) — every member may read & fill them
+          // (ANYONE semantics). Locking these down needs a config surface on the
+          // audit register and is tracked as a separate follow-up.
+          isRestricted: false,
           fillMode: 'ANYONE',
           allowedFillRoles: [],
           allowedFillUsers: [],
@@ -418,6 +437,7 @@ export const listForTicket = async (ticketId: string, userId: string) => {
         ...rest
       } = b;
       const access = {
+        isRestricted: b.isRestricted,
         fillMode: b.fillMode,
         allowedFillRoles,
         allowedFillUsers,

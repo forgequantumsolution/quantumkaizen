@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Check, CircleDot, Circle, Flag, Loader2, Workflow as WorkflowIcon } from 'lucide-react';
+import { Loader2, Workflow as WorkflowIcon } from 'lucide-react';
 import { Card } from '@/components/ui';
 import { useWorkflow } from '@/lib/api/workflow';
 import { deserializeFlow } from '@/features/workflows/builder/builder.serializer';
@@ -144,25 +144,16 @@ export default function StageTabs({
   };
 
   return (
-    <Card noPadding className="overflow-hidden">
-      <div className="flex items-center justify-between px-4 pt-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-          Workflow stages
-        </span>
-        <Legend />
-      </div>
-
+    <Card>
       <div
         role="tablist"
         aria-label="Workflow stages"
-        className="flex items-stretch px-3 py-3"
+        className="flex items-stretch gap-2"
       >
-        {stages.map((s, i) => (
-          <StageTabButton
+        {stages.map((s) => (
+          <StageStep
             key={s.canonicalId}
             stage={s}
-            index={i}
-            total={stages.length}
             isActive={activeId === s.canonicalId}
             onSelect={() => handleSelect(s)}
           />
@@ -172,89 +163,48 @@ export default function StageTabs({
   );
 }
 
-interface TabButtonProps {
+interface StepProps {
   stage: StageTab;
-  index: number;
-  total: number;
   isActive: boolean;
   onSelect: () => void;
 }
 
-function StageTabButton({ stage, index, total, isActive, onSelect }: TabButtonProps) {
+function StageStep({ stage, isActive, onSelect }: StepProps) {
   const { status } = stage;
 
-  const palette =
-    status === 'current'
-      ? 'border-[#C9A84C] bg-[#FBF6E7] text-[#5C4A0F]'
-      : status === 'done'
-        ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
-        : 'border-gray-200 bg-white text-gray-600';
+  const bar =
+    status === 'done'
+      ? 'bg-emerald-500'
+      : status === 'current'
+        ? 'bg-blue-500'
+        : 'bg-gray-200';
 
-  const ring = isActive ? 'ring-2 ring-offset-1 ring-[#C9A84C]' : '';
-
-  const badge =
-    status === 'done' ? (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
-        <Check size={12} strokeWidth={3} />
-      </span>
-    ) : status === 'current' ? (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#C9A84C] text-white">
-        <CircleDot size={12} />
-      </span>
-    ) : (
-      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-300 bg-white text-[10px] font-semibold text-gray-500">
-        {index + 1}
-      </span>
-    );
+  const label =
+    status === 'done'
+      ? 'text-emerald-600'
+      : status === 'current'
+        ? 'text-blue-600 font-semibold'
+        : 'text-gray-400';
 
   return (
-    <div className="flex min-w-0 flex-1 items-center">
-      <button
-        type="button"
-        role="tab"
-        aria-selected={isActive}
-        onClick={onSelect}
-        title={stage.name}
-        className={`group flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left transition-all hover:shadow-sm ${palette} ${ring}`}
+    <button
+      type="button"
+      role="tab"
+      aria-selected={isActive}
+      onClick={onSelect}
+      title={`${stage.name} — ${
+        status === 'current' ? 'Current' : status === 'done' ? 'Completed' : 'Upcoming'
+      }`}
+      className="group flex min-w-0 flex-1 flex-col items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-slate-50/70"
+    >
+      <span className={`h-1.5 w-full rounded-full transition-colors ${bar}`} />
+      <span
+        className={`max-w-full truncate text-center text-xs transition-colors ${label} ${
+          isActive ? 'underline decoration-2 underline-offset-4' : ''
+        }`}
       >
-        {badge}
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-1">
-            <span className="truncate text-sm font-semibold">{stage.name}</span>
-            {stage.isInitial && (
-              <Flag size={11} className="shrink-0 text-slate-400" aria-label="Initial stage" />
-            )}
-          </span>
-          <span className="block text-[10px] font-medium uppercase tracking-wide opacity-70">
-            {status === 'current' ? 'Current' : status === 'done' ? 'Completed' : 'Upcoming'}
-          </span>
-        </span>
-      </button>
-
-      {index < total - 1 && (
-        <span
-          aria-hidden
-          className={`mx-1.5 h-0.5 min-w-[1rem] flex-1 rounded-full ${
-            status === 'done' ? 'bg-emerald-300' : 'bg-gray-200'
-          }`}
-        />
-      )}
-    </div>
-  );
-}
-
-function Legend() {
-  return (
-    <div className="flex items-center gap-3 text-[10px] text-slate-400">
-      <span className="inline-flex items-center gap-1">
-        <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> Done
+        {stage.name}
       </span>
-      <span className="inline-flex items-center gap-1">
-        <span className="inline-block h-2 w-2 rounded-full bg-[#C9A84C]" /> Current
-      </span>
-      <span className="inline-flex items-center gap-1">
-        <Circle size={8} className="text-gray-300" /> Upcoming
-      </span>
-    </div>
+    </button>
   );
 }

@@ -638,7 +638,7 @@ export default function Sidebar() {
         {!sidebarCollapsed && (
           <div className="overflow-hidden">
             <p className="text-white text-base leading-none tracking-tight">
-              Quantum <span style={{ color: ACCENT }}>Kaizen</span>
+              Quantum <span style={{ color: ACCENT }}>Kairoz</span>
             </p>
           </div>
         )}

@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, Edit3, Pause, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Edit3, MousePointerClick, Pause, Trash2, Workflow as WorkflowIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Card, Button, Spinner, EmptyState } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
@@ -11,8 +11,12 @@ import {
   useSetWorkflowStatus,
   useSoftDeleteWorkflow,
   useWorkflow,
+  workflowKeys,
 } from '@/lib/api/workflow';
+import { useActionCriteria } from '@/lib/api/workflowLookups';
+import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import WorkflowStatusBadge from './shared/WorkflowStatusBadge';
+import WorkflowStageDetails from './WorkflowStageDetails';
 import { deserializeFlow } from './builder/builder.serializer';
 import { layoutGraph } from './builder/layout';
 import JsPlumbCanvas from './builder/JsPlumbCanvas';
@@ -27,6 +31,14 @@ export default function WorkflowDetailPage() {
   const { data, isLoading, error } = useWorkflow(id);
   const softDelete = useSoftDeleteWorkflow();
   const setStatus = useSetWorkflowStatus(id);
+  const confirmDelete = useConfirmDelete();
+  const { data: criteria } = useActionCriteria();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const criteriaName = useMemo(() => {
+    const map = new Map((criteria ?? []).map((c) => [c.id, c.name]));
+    return (cid?: string | null) => (cid ? map.get(cid) : undefined);
+  }, [criteria]);
 
   const flowJson = useMemo(() => data?.flow_json ?? { nodes: [], edges: [] }, [data]);
 
@@ -37,19 +49,19 @@ export default function WorkflowDetailPage() {
     return { nodes: layoutGraph(n, e, { direction: 'TB' }), edges: e };
   }, [flowJson]);
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!data) return;
-    if (!confirm(`Delete "${displayWorkflowName(data.workflow)}"? This is a soft-delete.`)) return;
-    try {
-      await softDelete.mutateAsync(data.workflow.id);
-      toast.success('Workflow deleted');
-      navigate('/workflows');
-    } catch (err) {
-      const msg =
-        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data
-          ?.error?.message ?? 'Failed to delete';
-      toast.error(msg);
-    }
+    confirmDelete({
+      entityLabel: 'workflow',
+      name: displayWorkflowName(data.workflow),
+      extraWarning: 'This is a soft-delete and can be undone by an admin.',
+      mutate: async () => {
+        await softDelete.mutateAsync(data.workflow.id);
+        navigate('/workflows');
+      },
+      invalidateKey: workflowKeys.all,
+      successMessage: 'Workflow deleted',
+    });
   };
 
   const handleSetStatus = async (next: 'ACTIVE' | 'INACTIVE' | 'DRAFT') => {
@@ -94,14 +106,18 @@ export default function WorkflowDetailPage() {
   }
 
   const wf = data.workflow;
-  const allActions = flowJson.nodes
-    .filter((n) => (n.data.nodeType ?? n.type ?? 'stage') === 'stage')
-    .map((n) => ({
-      stageName: n.data.label,
-      isInitial: n.data.basic_details?.is_initial_stage === true,
-      primary: n.data.primary_actions ?? [],
-      secondary: n.data.secondary_actions ?? [],
-    }));
+  // Canvas nodes drive both the selectable list and the detail panel so ids
+  // line up with jsPlumb selection.
+  const stageNodes = nodes.filter((n) => n.type === 'stage');
+  const selectedNode = nodes.find((n) => n.id === selectedId) ?? null;
+  const nodeLabel = (nid: string) =>
+    (nodes.find((n) => n.id === nid)?.data as { label?: string } | undefined)?.label ?? '—';
+  const outgoing = selectedNode
+    ? edges.filter((e) => e.source === selectedNode.id).map((e) => nodeLabel(e.target))
+    : [];
+  const incoming = selectedNode
+    ? edges.filter((e) => e.target === selectedNode.id).map((e) => nodeLabel(e.source))
+    : [];
 
   return (
     <PageContainer>
@@ -182,7 +198,7 @@ export default function WorkflowDetailPage() {
           />
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-4">
           <Card noPadding className="overflow-hidden" style={{ height: 600 }}>
             <JsPlumbCanvas
               nodes={nodes}
@@ -190,49 +206,66 @@ export default function WorkflowDetailPage() {
               interactive
               editable={false}
               direction="TB"
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onPaneClick={() => setSelectedId(null)}
             />
           </Card>
 
           <div className="space-y-3 overflow-auto" style={{ maxHeight: 600 }}>
+            {/* Stage navigator */}
             <Card>
-              <h3 className="text-sm font-semibold text-gray-900 mb-3">Stages &amp; actions</h3>
-              {allActions.length === 0 ? (
+              <h3 className="text-sm font-semibold text-gray-900 mb-3">Stages</h3>
+              {stageNodes.length === 0 ? (
                 <p className="text-xs text-gray-500">No stages.</p>
               ) : (
-                <ul className="space-y-3">
-                  {allActions.map((s, i) => (
-                    <li key={i} className="border-b last:border-b-0 border-gray-100 pb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">{s.stageName}</span>
-                        {s.isInitial && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700">
-                            initial
+                <ul className="space-y-1">
+                  {stageNodes.map((n) => {
+                    const d = n.data as { label: string; is_initial_stage?: boolean };
+                    const active = n.id === selectedId;
+                    return (
+                      <li key={n.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(active ? null : n.id)}
+                          className={`w-full flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
+                            active
+                              ? 'bg-gold-50 ring-1 ring-gold-300'
+                              : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <span className="text-sm font-medium text-gray-900 truncate">
+                            {d.label || 'Untitled'}
                           </span>
-                        )}
-                      </div>
-                      {(s.primary.length > 0 || s.secondary.length > 0) && (
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {s.primary.map((a, j) => (
-                            <span
-                              key={`p-${j}`}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700"
-                            >
-                              {a.stage_status_name ?? a.behavior ?? 'action'}
+                          {d.is_initial_stage && (
+                            <span className="ml-auto text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700 shrink-0">
+                              initial
                             </span>
-                          ))}
-                          {s.secondary.map((a, j) => (
-                            <span
-                              key={`s-${j}`}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600"
-                            >
-                              {a.stage_status_name ?? a.behavior ?? 'action'}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </li>
-                  ))}
+                          )}
+                        </button>
+                      </li>
+                    );
+                  })}
                 </ul>
+              )}
+            </Card>
+
+            {/* Selected stage details */}
+            <Card>
+              {selectedNode ? (
+                <WorkflowStageDetails
+                  node={selectedNode}
+                  criteriaName={criteriaName}
+                  incoming={incoming}
+                  outgoing={outgoing}
+                />
+              ) : (
+                <div className="flex flex-col items-center text-center py-6 px-2">
+                  <MousePointerClick size={22} className="text-gray-300 mb-2" />
+                  <p className="text-xs text-gray-500">
+                    Select a stage to see its actions, attached forms, SLA and approval policies.
+                  </p>
+                </div>
               )}
             </Card>
           </div>

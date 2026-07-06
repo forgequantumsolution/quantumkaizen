@@ -163,7 +163,7 @@ export default function LandingPage() {
           </h1>
 
           <p style={{ fontSize: '16px', color: '#6B7280', lineHeight: 1.7, maxWidth: '480px', marginBottom: '40px' }}>
-            Quantum Kaizen is a Quality Management System purpose-built for manufacturing
+            Quantum Kairoz is a Quality Management System purpose-built for manufacturing
             and production facilities — connecting non-conformances, CAPA, production audits,
             equipment, supplier quality, and workforce training in one operational platform.
           </p>
@@ -266,7 +266,7 @@ export default function LandingPage() {
             Every Quality Process.<br />One Production Platform.
           </h2>
           <p style={{ fontSize: '15px', color: '#6B7280', maxWidth: '560px', margin: '0 auto', lineHeight: 1.7 }}>
-            From the production line to the board room — Quantum Kaizen gives manufacturing
+            From the production line to the board room — Quantum Kairoz gives manufacturing
             and production teams a single system to manage, measure, and improve quality
             at every stage of operations.
           </p>
@@ -328,7 +328,7 @@ export default function LandingPage() {
               Audit-Ready.<br />Every Single Day.
             </h2>
             <p style={{ fontSize: '15px', color: '#9CA3AF', lineHeight: 1.7, marginBottom: '36px' }}>
-              Quantum Kaizen keeps your manufacturing facility permanently audit-ready —
+              Quantum Kairoz keeps your manufacturing facility permanently audit-ready —
               with structured records, e-signatures, and traceability baked into every
               workflow, not bolted on at the last minute.
             </p>
@@ -361,7 +361,7 @@ export default function LandingPage() {
             Stop Chasing Quality.<br />Start Building It In.
           </h2>
           <p style={{ fontSize: '15px', color: '#6B7280', marginBottom: '36px', lineHeight: 1.7 }}>
-            Manufacturing teams use Quantum Kaizen to cut defect escape rates, reduce audit
+            Manufacturing teams use Quantum Kairoz to cut defect escape rates, reduce audit
             preparation time, and build a measurable culture of continuous improvement
             across every shift and production line.
           </p>
@@ -396,7 +396,7 @@ export default function LandingPage() {
                 <span style={{ color: '#fff', fontWeight: 800, fontSize: '12px' }}>Q</span>
               </div>
               <div>
-                <p style={{ color: '#fff', fontSize: '14px', fontWeight: 700, margin: 0 }}>Quantum Kaizen</p>
+                <p style={{ color: '#fff', fontSize: '14px', fontWeight: 700, margin: 0 }}>Quantum Kairoz</p>
                 <p style={{ color: '#6B7280', fontSize: '11px', margin: 0 }}>by Forge Quantum Solutions</p>
               </div>
             </div>

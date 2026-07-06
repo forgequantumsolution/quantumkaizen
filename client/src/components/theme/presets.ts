@@ -9,7 +9,7 @@ export interface Preset {
   colors: AppearanceColors;
 }
 
-/** Original Quantum Kaizen palette — values mirror src/index.css :root. */
+/** Original Quantum Kairoz palette — values mirror src/index.css :root. */
 export const defaultColors: AppearanceColors = {
   gold: '#C9A84C',
   goldDark: '#A88937',
@@ -78,7 +78,7 @@ export const presets: Record<PresetKey, Preset> = {
   default: {
     key: 'default',
     label: 'Default Gold',
-    description: 'Original Quantum Kaizen palette',
+    description: 'Original Quantum Kairoz palette',
     colors: defaultColors,
   },
   sapphire: {

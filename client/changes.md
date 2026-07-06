@@ -481,6 +481,26 @@ Adds a user-facing **Appearance** page in the System section of the sidebar that
 - `npx tsc --noEmit` in `client/` — exit 0, no errors.
 - All new files conform to the project's existing TS/React patterns (Zustand for state, lucide-react for icons, `@/` path alias, `cn` utility for class merging, inline `style` for guaranteed render).
 
+---
+
+## 6. Rebrand: "Quantum Kaizen" → "Quantum Kairoz"
+
+Replaced the visible product name across all user-facing surfaces. Infrastructure references left untouched (database names `quantumkaizen`/`kaizen_qms`, the `quantumkaizen.io` email domain and API hostnames, and `client/dist/` build artifacts).
+
+### Files modified
+
+- **`client/index.html`** — `<title>` and `apple-mobile-web-app-title` (`Q-Kaizen` → `Q-Kairoz`).
+- **`client/public/manifest.json`** — PWA `name` and `short_name`.
+- **`client/src/pages/LoginPage.tsx`** — logo `alt`, header wordmark, footer "Powered by" line.
+- **`client/src/pages/LandingPage.tsx`** — all body copy and footer brand mentions.
+- **`client/src/components/layout/Sidebar.tsx`** — sidebar brand wordmark.
+- **`client/src/components/shared/ChatBot.tsx`** — assistant response copy and the intent-match regex.
+- **`client/src/components/theme/presets.ts`** — theme description string and comment.
+- **`client/Dockerfile`** — image `LABEL description`.
+- **`backend/src/openapi/spec.ts`** — API doc `title` and `description`.
+- **`backend/src/openapi/index.ts`** — Swagger `customSiteTitle`.
+- **`backend/Dockerfile`** — header comment.
+
 ### Known limitations / out of scope
 
 - **Tailwind utility classes** (`bg-pharma`, `text-gold`, status pill colors via `bg-status-*`) don't re-theme. They bake at build time.
@@ -1113,3 +1133,78 @@ Backend accepted `sample_test_ids` but there was no attach/detach UI, and `useRe
 
 ### Docs
 - Added `docs/LIMS-module-guide.md` (flow + setup guide) and the §I "disconnected features" backlog in `docs/LIMS-industrial-upgrade-plan.md`.
+
+---
+
+## Session — Workflow canvas rendering fix + delete modal (2026-07-06)
+
+### Workflow detail canvas rendered no node cards (only a stray connector)
+
+**Symptom:** On `/workflows/:id`, an ACTIVE workflow with stages showed an empty canvas with just a floating arrow — no stage cards — even though the "Stages & actions" side panel listed the stages correctly. The builder (`/workflows/:id/builder`) rendered fine.
+
+**Root cause:** `JsPlumbCanvas` renders node `<div>`s via React but hands them to jsPlumb's `manage()`. jsPlumb's `destroy()` → `BrowserJsPlumbInstance.reset()` runs `container.querySelectorAll("[data-jtk-managed], .jtk-endpoint, .jtk-connector, .jtk-overlay").forEach(el => el.remove())`, and jsPlumb tags every managed element with `data-jtk-managed` — including our `.wf-node` divs. So `destroy()` **physically deletes React's node DOM**. Under React 18 `<React.StrictMode>` (`src/main.tsx`), every component mounts twice in dev (mount → unmount → remount); the throwaway unmount fires the effect cleanup → `destroy()` → nodes deleted. On remount the `nodes` array reference is unchanged, so React never rebuilds them → connectors paint, cards don't. Only the read-only detail page showed it — the builder mutates `nodes` on edit, which makes React re-create the DOM and masks the bug.
+
+**Diagnosis:** mounted `JsPlumbCanvas` in isolation via a temporary Vite entry + Playwright, A/B-tested StrictMode on/off (`.wf-node` count 0 vs 2), and patched `Node.prototype.removeChild` to capture the removal stack — which pointed straight at `BrowserJsPlumbInstance.reset()`.
+
+- **`src/features/workflows/builder/JsPlumbCanvas.tsx`** — in the instance-creation effect cleanup, loop `managed` and call `instance.unmanage(el, false)` before `instance.destroy()`. `unmanage(el, false)` strips the `data-jtk-managed` attribute **without** removing the DOM element (removeElement=false), so `reset()`'s selector no longer matches the React node divs and they survive. Also hardens against HMR and any real remount, not just StrictMode.
+- Verified with the isolated Playwright repro: StrictMode ON post-fix → 2 cards render ("INITIAL STAGE first" → "STAGE second") + connector, no page errors; StrictMode OFF unregressed. Temp debug harness removed after diagnosis.
+
+### Workflow delete used the native `confirm()` dialog
+
+Deleting a workflow popped the plain browser `confirm()` instead of the app's styled modal. Rewired both pages to the shared `useConfirmDelete()` hook (`src/components/shared/useConfirmDelete.tsx`) — centered Antd `modal.confirm` with red trash icon, Delete/Cancel, mutation + query invalidation + toast.
+
+- **`src/features/workflows/WorkflowsPage.tsx`** — `handleDelete` now calls `confirmDelete({ entityLabel: 'workflow', name, extraWarning, mutate: () => softDelete.mutateAsync(wf.id), invalidateKey: workflowKeys.all, successMessage: 'Workflow deleted' })` instead of `if (!confirm(...)) return`.
+- **`src/features/workflows/WorkflowDetailPage.tsx`** — same swap; the post-delete `navigate('/workflows')` is folded into the async `mutate` callback so it only runs on success.
+
+### Workflow detail view — clickable stages with full details
+
+The read-only detail view only listed stage names + a couple of action chips — the actions, attached forms, SLA, and approval policies that already ship in `flow_json` weren't surfaced. Made the canvas interactive: clicking a stage selects it (gold ring) and a side panel renders its full configuration.
+
+- **`src/features/workflows/WorkflowStageDetails.tsx`** (new) — read-only stage inspector. Sections: **Primary/Secondary actions** (status name + behavior + criteria name + allowed role/user counts), **Attached forms** (title, version, required/optional, Fill/View access by name via the denormalized `*Labels` on the binding), **SLA** (human-formatted duration + threshold chips), **Approval policies** (mapped to their action, mode label, quorum count, approver role/user counts, approval SLA hours). Non-stage nodes render a small type stub.
+- **`src/features/workflows/WorkflowDetailPage.tsx`** — added `selectedId` state; passes `selectedId`/`onSelect`/`onPaneClick` to `JsPlumbCanvas`. Side panel is now a **Stages** navigator (clickable list, highlights + drives selection, syncs with canvas clicks) plus the selected-stage `WorkflowStageDetails` (or a "select a stage…" hint). Action-criteria ids resolved to names via `useActionCriteria()` (cached lookup). Also computes per-stage incoming/outgoing transition labels from `edges` and passes them to the details panel. Right column widened 320→340px.
+- Verified via an isolated Playwright harness with a data-rich mock stage: clicking the node selects it and the panel renders all sections correctly (actions with counts, form with Fill/View names, SLA `2d` + Warning/Breach thresholds, Quorum policy). `tsc --noEmit` (client) → exit 0.
+
+**Follow-up — "actions not showing" + surface everything.** Confirmed against the live DB (read-only Prisma dump of the "testing users" workflow) that its stages genuinely have `primary_actions: []` / `secondary_actions: []` — there are **no actions** to show; the real content is form bindings. So the panel was reworked to make empty state explicit and show all available detail:
+- Actions and Attached-forms sections now **always render** with an explicit empty line ("No actions on this stage." / "No forms attached.") so a form-only stage reads as intentional rather than broken.
+- Form rows gained a `fillMode` chip ("shared copy" / "one per filler").
+- New **Flow** section shows the stage's incoming ("From: …") and outgoing ("To: …") stage names, derived from the graph edges.
+- Re-verified with the exact real `flow_json`: stage "first" → `initial` · No actions · Effectiveness Verification (v1, required, shared copy, Fill/View QUALITY_ENGINEER) · Flow To: second.
+
+### Ticket workflow — segmented progress stepper instead of stage cards
+
+Inside a ticket the workflow rendered as a row of bordered stage **cards** (`StageTabs`). Reworked the presentation into a horizontal **progress stepper** — a thin colored bar per stage with the label beneath — matching the requested design.
+
+- **`src/features/tickets/detail/StageTabs.tsx`** — kept the existing data pipeline (deserialize → LR layout → order → `done`/`current`/`upcoming` status, plus click-to-select driving the form-history filter) and replaced only the presentation: each stage is now a full-width `rounded-full` bar (done = `emerald-500`, current = `blue-500`, upcoming = `gray-200`) with a color-matched label below (green / blue-semibold / gray). Dropped the per-card border/badge/connector chrome, the header, and the legend. Selected stage is indicated by a label underline (not a box) to stay clean. Removed now-unused imports (`Check`, `CircleDot`, `Circle`, `Flag`) and the `Legend`/`StageTabButton` components.
+- No change to `TicketDetailPage` wiring — same `StageTabs` props, so selection and the `workflowOpen` toggle behave as before.
+- Verified via an isolated Playwright harness (seeded React Query so `useWorkflow` serves without an API call — `staleTime: Infinity` avoids the 401→`/login` redirect the axios interceptor otherwise triggers) rendering a 7-stage flow (Initiated…Closed, current = Root Cause): bars and labels match the target design. `tsc --noEmit` (client) → exit 0.
+
+### Submitted form data — render as plain text, not disabled form widgets
+
+The read-only submission viewer (`InlineSubmissionViewer`, used by `RequiredFormsCard` + `SubmittedFormsCard`) re-rendered each answer with `<FieldRenderer … disabled>` — i.e. greyed-out inputs/selects/tables. Hard to read. Now it renders values as document-style text.
+
+- **`src/features/forms/FieldValueText.tsx`** (new) — maps a `FormFieldDef` + submitted value to readable output for every field type: text/textarea/richtext → text (multi-line preserved); number/slider/time → text; range/date_range/time_range → "a – b"; date → `DD MMM YYYY`; select/radio → the option **label** (not the raw stored value); compliance → colored dot + label; checkbox/multi_text → chips; switch → Yes/No; color → swatch + hex; file/image → file icon + name; password → masked; table → a read-only bordered grid with per-column cell formatting. Unknown types fall back to `String(value)`.
+- **`src/features/tickets/detail/InlineSubmissionViewer.tsx`** — swapped `FieldRenderer` for `FieldValueText`; the per-field label is now a small uppercase caption above the value, and the "Not answered" placeholder is plain italic text. Removed the `pointer-events-none form-readonly` wrapper. All interactive/builder `FieldRenderer` usages (fill page, preview, builder) are untouched.
+- Verified via an isolated Playwright harness across textarea, select, checkbox, date, compliance, switch, file, multi_text, empty, and a table field — all render as clean text/chips/grid (e.g. select "hi" → "High", compliance → red dot "Non-Conformance", table dates formatted, boolean cell → ✓/—). `tsc --noEmit` (client) → exit 0.
+
+**Follow-up — the ticket actually renders the filled form via `FormFillEmbed`, not `InlineSubmissionViewer`.** `StageFormSection` (the component `TicketDetailPage` mounts) renders `FormFillEmbed` with `readOnly` when a form is submitted (or the user is view-only). In `readOnly` mode `FormFillEmbed` was still using `<FieldRenderer … disabled>` (greyed inputs), so the first change had no visible effect on the ticket.
+- **`src/features/forms/FormFillEmbed.tsx`** — in the field loop, when `readOnly` render `FieldValueText` (with a plain italic "Not answered" for empty answers) instead of the disabled `FieldRenderer`; the interactive (fill) branch is unchanged. Dropped the `pointer-events-none form-readonly` wrapper.
+- Verified end-to-end with a Playwright harness that seeds React Query (`['form', id]` + `['form-submission', id]`) and renders the real `FormFillEmbed` read-only: **0** input/select widgets in the DOM — the submitted form shows as section header + label/value text, compliance dot, multi-select chips, formatted dates, and a read-only table. `tsc --noEmit` (client) → exit 0.
+
+---
+
+# Ticket form access control — gate the stage-form UI on canRead/canFill — 2026-07-06
+
+**Problem:** Inside a ticket, users who were **not** in a form's fill/view group could still see the form's content and type into it. The API already returned per-binding `canRead`/`canFill` (and the submit endpoint enforced access), but the live ticket form component ignored those flags entirely. (Backend half — explicit `isRestricted`, secure-by-default, migration with behaviour-preserving backfill — is in `backend/changes.md`.) Working tree only — **not committed**. Verified: `tests/e2e/ticket-form-access.spec.ts` → **3/3 pass**.
+
+**Root cause (frontend):** `src/features/tickets/detail/StageFormSection.tsx` (the component actually rendered by `TicketDetailPage`) rendered every binding's `FormFillEmbed` regardless of `canRead`/`canFill`, gating only on submitted-status. The correctly-gated `RequiredFormsCard.tsx` existed but was dead code (not wired anywhere).
+
+### `src/features/tickets/detail/StageFormSection.tsx` — Part A gate + restricted notice
+- Only forms the user may **read** are shown with content: `bindings = data.bindings.filter(b => b.canRead)`. Non-readable forms are no longer rendered (no chip, no title, no `FormFillEmbed` — so form questions/answers never leak).
+- **View-only** forms (`canRead && !canFill`) render **read-only** — `readOnly = isActiveSubmitted || !active.canFill` is passed to `FormFillEmbed`, and the read-only banner now reads "view access (you cannot fill this form)" for that case.
+- **Restricted notice instead of a blank panel** (UX follow-up): when the stage has forms but the user can read **none** of them, a locked `Card` is shown — "This stage has a form restricted to other users — you don't have permission to view or fill it. Someone with access will complete it." No form title is leaked.
+- **Mixed case:** when the user can read *some* forms but others are restricted, a footer note is appended — "N more form(s) on this stage are restricted to other users."
+- Added the `Lock` icon import from `lucide-react`; derived `totalCount` / `restrictedCount` from the unfiltered `data.bindings`.
+
+### Notes
+- No change needed to the client stage-form types — `TicketStageFormBinding` already exposed `canRead`/`canFill` (the contract was there; only the component ignored it).
+- The submit path was already blocked server-side (403) for restricted forms; this change removes the misleading UI that let unauthorized users view/type before that rejection.

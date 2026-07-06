@@ -1,4 +1,4 @@
-# Quantum Kaizen — backend image (api + worker share this image)
+# Quantum Kairoz — backend image (api + worker share this image)
 #
 # Build context is the REPO ROOT (npm workspaces monorepo).
 # Build:   docker build -f backend/Dockerfile -t qk-backend .

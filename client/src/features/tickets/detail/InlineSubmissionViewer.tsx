@@ -5,7 +5,7 @@
  */
 import { useMemo } from 'react';
 import { Loader2, AlertCircle } from 'lucide-react';
-import FieldRenderer from '@/features/forms/FieldRenderer';
+import FieldValueText from '@/features/forms/FieldValueText';
 import { useFormDetail, useSubmission } from '@/features/forms/hooks';
 import { evaluateVisibility } from '@/features/forms/lib/dependency';
 import type { FormSectionDef } from '@/features/forms/types';
@@ -115,23 +115,14 @@ export default function InlineSubmissionViewer({ formId, submissionId }: Props) 
 
                 return (
                   <div key={f.field_id ?? f.name} className={`col-span-12 ${span}`}>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-gray-400 mb-0.5">
                       {f.label}
                       {f.required && <span className="text-rose-400 ml-0.5">*</span>}
-                    </label>
+                    </div>
                     {hasValue ? (
-                      <div className="pointer-events-none form-readonly">
-                        <FieldRenderer
-                          field={f}
-                          value={value}
-                          onChange={() => undefined}
-                          disabled
-                        />
-                      </div>
+                      <FieldValueText field={f} value={value} />
                     ) : (
-                      <div className="text-xs text-gray-400 italic px-2 py-2 bg-gray-50 rounded border border-dashed border-gray-200">
-                        Not answered
-                      </div>
+                      <span className="text-sm text-gray-400 italic">Not answered</span>
                     )}
                   </div>
                 );

@@ -186,6 +186,21 @@ const JsPlumbCanvas = forwardRef<JsPlumbCanvasHandle, Props>(function JsPlumbCan
     });
 
     return () => {
+      // jsPlumb's destroy() → reset() removes every element still tagged with
+      // `data-jtk-managed` from the DOM — which includes the React-owned
+      // `.wf-node` divs (jsPlumb tags them on manage()). React doesn't rebuild
+      // them (the `nodes` array is unchanged), so the canvas would render only
+      // connectors and no node cards. This bites under React 18 StrictMode's
+      // mount→unmount→remount cycle (and HMR / any real remount). Unmanaging
+      // first with removeElement=false strips that attribute without touching
+      // the DOM, so our nodes survive and the next instance just re-manages them.
+      for (const el of managed.current.values()) {
+        try {
+          instance.unmanage(el, false);
+        } catch {
+          /* element already detached */
+        }
+      }
       instance.destroy();
       instanceRef.current = null;
       managed.current.clear();

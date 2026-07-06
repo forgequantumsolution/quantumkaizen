@@ -78,9 +78,9 @@ export default function LoginPage() {
       <div className="login-card-wrap">
         <div className="login-card">
           <div className="login-card-top">
-            <img src="/golden_blue_logo.png" alt="Quantum Kaizen" className="login-card-logo" />
+            <img src="/golden_blue_logo.png" alt="Quantum Kairoz" className="login-card-logo" />
             <div className="login-card-product">
-              Quantum <span>Kaizen</span>
+              Quantum <span>Kairoz</span>
             </div>
           </div>
 
@@ -154,7 +154,7 @@ export default function LoginPage() {
           </div>
 
           <div className="login-card-footer">
-            Powered by Quantum Kaizen · Forge Quantum Solutions
+            Powered by Quantum Kairoz · Forge Quantum Solutions
           </div>
         </div>
       </div>

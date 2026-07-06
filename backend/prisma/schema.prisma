@@ -814,15 +814,21 @@ model StageFormBinding {
   isRequired Boolean @default(true)
   position   Int     @default(0)
 
+  // Openness is explicit. `isRestricted = true` (default for NEW bindings) means
+  // only the fill/view groups below (plus SUPER_ADMIN) may access the form;
+  // `false` means open-to-all — everyone may read & fill (ANYONE semantics).
+  // Existing rows were backfilled at migration time to preserve behaviour:
+  // bindings that already had a group → restricted; groupless ("legacy open")
+  // ones → open. A brand-new binding with no group is therefore closed.
+  isRestricted Boolean @default(true)
+
   // Per-form access control. `fillMode` decides how the form is satisfied:
   //   ANYONE → one shared copy, any member of the fill group completes it.
   //   EACH   → one copy per person (fill roles expanded to their members,
   //            plus named fill users); the stage stays blocked until everyone
   //            has submitted their own copy.
-  // An empty fill group (no roles AND no users) is treated as "legacy open"
-  // by the engine — everyone may read & fill, ANYONE semantics — so bindings
-  // created before this feature keep working. The "≥1 fill role" rule is
-  // enforced in the builder UI for new/edited bindings, not at the DB level.
+  // The "≥1 fill role" rule is enforced in the builder UI for new/edited
+  // bindings, not at the DB level.
   fillMode FormFillMode @default(ANYONE)
 
   allowedFillRoles Role[] @relation("FormBindingFillRoles")
