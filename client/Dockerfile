@@ -30,7 +30,7 @@ RUN npm run build
 FROM nginx:1.27-alpine AS runner
 
 LABEL maintainer="Forge Quantum Solutions <devops@forgequantum.com>"
-LABEL description="Quantum Kaizen Web Client"
+LABEL description="Quantum Kairoz Web Client"
 LABEL version="1.0.0"
 
 # Remove default nginx config

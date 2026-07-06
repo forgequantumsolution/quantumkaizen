@@ -481,6 +481,26 @@ Adds a user-facing **Appearance** page in the System section of the sidebar that
 - `npx tsc --noEmit` in `client/` — exit 0, no errors.
 - All new files conform to the project's existing TS/React patterns (Zustand for state, lucide-react for icons, `@/` path alias, `cn` utility for class merging, inline `style` for guaranteed render).
 
+---
+
+## 6. Rebrand: "Quantum Kaizen" → "Quantum Kairoz"
+
+Replaced the visible product name across all user-facing surfaces. Infrastructure references left untouched (database names `quantumkaizen`/`kaizen_qms`, the `quantumkaizen.io` email domain and API hostnames, and `client/dist/` build artifacts).
+
+### Files modified
+
+- **`client/index.html`** — `<title>` and `apple-mobile-web-app-title` (`Q-Kaizen` → `Q-Kairoz`).
+- **`client/public/manifest.json`** — PWA `name` and `short_name`.
+- **`client/src/pages/LoginPage.tsx`** — logo `alt`, header wordmark, footer "Powered by" line.
+- **`client/src/pages/LandingPage.tsx`** — all body copy and footer brand mentions.
+- **`client/src/components/layout/Sidebar.tsx`** — sidebar brand wordmark.
+- **`client/src/components/shared/ChatBot.tsx`** — assistant response copy and the intent-match regex.
+- **`client/src/components/theme/presets.ts`** — theme description string and comment.
+- **`client/Dockerfile`** — image `LABEL description`.
+- **`backend/src/openapi/spec.ts`** — API doc `title` and `description`.
+- **`backend/src/openapi/index.ts`** — Swagger `customSiteTitle`.
+- **`backend/Dockerfile`** — header comment.
+
 ### Known limitations / out of scope
 
 - **Tailwind utility classes** (`bg-pharma`, `text-gold`, status pill colors via `bg-status-*`) don't re-theme. They bake at build time.

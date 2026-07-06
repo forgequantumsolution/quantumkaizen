@@ -15,7 +15,7 @@ export const mountOpenApi = (): Router => {
     '/docs',
     swaggerUi.serve,
     swaggerUi.setup(spec, {
-      customSiteTitle: 'Quantum Kaizen API',
+      customSiteTitle: 'Quantum Kairoz API',
       swaggerOptions: {
         persistAuthorization: true,
         docExpansion: 'list',

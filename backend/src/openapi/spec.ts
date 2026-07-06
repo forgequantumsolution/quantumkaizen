@@ -23,10 +23,10 @@ export const buildOpenApiSpec = () => {
   return generator.generateDocument({
     openapi: '3.1.0',
     info: {
-      title: 'Quantum Kaizen API',
+      title: 'Quantum Kairoz API',
       version: '1.0.0',
       description:
-        'REST API for the Quantum Kaizen QMS platform. All endpoints under `/api` (except `/api/auth/login` and `/api/auth/register`) require a Bearer JWT obtained from `/api/auth/login`.',
+        'REST API for the Quantum Kairoz QMS platform. All endpoints under `/api` (except `/api/auth/login` and `/api/auth/register`) require a Bearer JWT obtained from `/api/auth/login`.',
     },
     servers: [
       { url: `http://localhost:${env.PORT}/api`, description: 'Local dev' },
