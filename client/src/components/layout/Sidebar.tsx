@@ -379,7 +379,11 @@ export default function Sidebar() {
     return sections
       .map((s) => ({ ...s, items: gate(s.items) }))
       .filter((s) => s.items.length > 0);
-  }, [workflowTypes, hasPermission, navCounts]);
+    // `user` is a dep because `hasPermission` reads user.permissions but is a
+    // stable Zustand reference — without it the gate wouldn't re-run when an
+    // access-control change refreshes the current user's permissions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowTypes, hasPermission, navCounts, user]);
 
   const [sectionsCollapsed, setSectionsCollapsed] = useState<
     Record<string, boolean>

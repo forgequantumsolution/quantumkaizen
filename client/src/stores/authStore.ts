@@ -23,6 +23,10 @@ interface AuthState {
   login: (email: string, password: string, tenantCode?: string) => Promise<void>;
   logout: () => void;
   setUser: (user: AuthUser) => void;
+  /** Re-fetch the current user from /auth/me and refresh permissions in place.
+   * Used after an access-control change so the sidebar/gates update without a
+   * re-login. No-ops (and stays silent) when not authenticated. */
+  refreshUser: () => Promise<void>;
   hasPermission: (key: string) => boolean;
   /** @deprecated persist middleware handles rehydration automatically */
   loadFromStorage: () => void;
@@ -89,6 +93,19 @@ export const useAuthStore = create<AuthState>()(
       },
 
       setUser: (user) => set({ user }),
+
+      refreshUser: async () => {
+        if (!get().token) return;
+        try {
+          const response = await api.get('/auth/me');
+          const user = mapBackendUser(response.data.user);
+          localStorage.setItem('qk_user', JSON.stringify(user));
+          set({ user });
+        } catch {
+          // Leave the existing user in place on a transient failure — the next
+          // login/refresh will reconcile. A 401 is handled by the api layer.
+        }
+      },
 
       hasPermission: (key) => {
         const u = get().user;

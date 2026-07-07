@@ -15,7 +15,7 @@ import {
   useSetUserPermissions,
   type UserOverrideInput,
 } from './hooks';
-import { useHasPermission } from '@/stores/authStore';
+import { useHasPermission, useAuthStore } from '@/stores/authStore';
 import AccessMatrix, { type TriState } from './AccessMatrix';
 import AccessAnalysisView from './AccessAnalysisView';
 import type { CatalogPerm } from '@/lib/accessActions';
@@ -131,6 +131,9 @@ function RoleSubject() {
     try {
       await setPermissions.mutateAsync({ id: roleId, permissionIds: [...draft] });
       setDraft(null);
+      // If this role belongs to the logged-in user, refresh their permissions so
+      // the sidebar/gates reflect the change without a re-login.
+      await useAuthStore.getState().refreshUser();
     } catch (err) {
       setSaveError(extractError(err));
     }
@@ -247,6 +250,8 @@ function DepartmentSubject() {
     try {
       await setDeptPermissions.mutateAsync({ id: deptId, permissionIds: [...draft] });
       setDraft(null);
+      // Refresh in case the edited department is the logged-in user's own.
+      await useAuthStore.getState().refreshUser();
     } catch (err) {
       setSaveError(extractError(err));
     }
@@ -411,6 +416,8 @@ function UserSubject() {
       await setUserPermissions.mutateAsync({ id: userId, overrides: overridesPayload });
       setDraft(null);
       setReason('');
+      // Refresh in case these overrides target the logged-in user themselves.
+      await useAuthStore.getState().refreshUser();
     } catch (err) {
       setSaveError(extractError(err));
     }
