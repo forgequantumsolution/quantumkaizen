@@ -9,6 +9,7 @@ import {
   resumeTicket as engineResume,
 } from '../workflow/engine/orchestrator';
 import { emitAuditEvent } from '../workflow/engine/audit.emitter';
+import type { TicketTypeScope } from '../../middleware/permissions';
 import type {
   AddCommentInput,
   AttachDocInput,
@@ -78,7 +79,7 @@ const ticketDetailSelect = {
       isCompleted: true,
       completedAt: true,
       statusUpdatedAt: true,
-      workflow: { select: { id: true, name: true, version: true } },
+      workflow: { select: { id: true, name: true, version: true, typeId: true } },
       workflowName: true,
       workflowVersion: true,
       currentStages: {
@@ -95,7 +96,11 @@ const ticketDetailSelect = {
 
 // ─── List / Get ─────────────────────────────────────────────────────────────
 
-export const list = async (query: ListTicketsQuery, userId: string) => {
+export const list = async (
+  query: ListTicketsQuery,
+  userId: string,
+  scope: TicketTypeScope = { all: true, typeIds: [] },
+) => {
   const where: Prisma.TicketWhereInput = {};
   if (query.includeDeleted !== 'true') where.isDeleted = false;
   const flowsSome: Prisma.TicketFlowWhereInput = {};
@@ -103,6 +108,20 @@ export const list = async (query: ListTicketsQuery, userId: string) => {
   if (query.workflowTypeId) flowsSome.workflow = { typeId: query.workflowTypeId };
   if (query.status === 'open') flowsSome.isCompleted = false;
   if (query.status === 'completed') flowsSome.isCompleted = true;
+
+  // Per-type scoping: unless the user holds the global `ticket.read` master,
+  // restrict to the workflow types they can read. A request for a specific,
+  // unreadable type returns an empty page rather than leaking counts.
+  if (!scope.all) {
+    if (query.workflowTypeId) {
+      if (!scope.typeIds.includes(query.workflowTypeId)) {
+        return { items: [], total: 0, page: query.page, pageSize: query.pageSize };
+      }
+    } else {
+      flowsSome.workflow = { typeId: { in: scope.typeIds } };
+    }
+  }
+
   if (Object.keys(flowsSome).length > 0) where.flows = { some: flowsSome };
   if (query.mine === 'true') where.createdById = userId;
   if (query.search) {

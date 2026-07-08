@@ -47,6 +47,12 @@ interface AccessMatrixProps {
   mode: 'binary' | 'tristate';
   /** Flat permission catalog (key/action/description) used to bucket columns. */
   catalog: CatalogPerm[];
+  /**
+   * Extra, DB-driven modules appended after the static NAV_ACCESS list — one per
+   * workflow type, so each module (CAPA, Deviation, …) gets its own switch. Built
+   * by the caller from the workflow-types list.
+   */
+  extraModules?: NavModuleAccess[];
   canEdit: boolean;
   search: string;
   onSearchChange: (s: string) => void;
@@ -71,11 +77,15 @@ interface AccessMatrixProps {
 }
 
 /* ── Build the module → tab → buckets model, filtered by search ─────────── */
-function useMatrixGroups(catalog: CatalogPerm[], search: string): MatrixGroup[] {
+function useMatrixGroups(
+  catalog: CatalogPerm[],
+  search: string,
+  extraModules: NavModuleAccess[],
+): MatrixGroup[] {
   return useMemo(() => {
     const q = search.trim().toLowerCase();
     const groups: MatrixGroup[] = [];
-    for (const module of NAV_ACCESS) {
+    for (const module of [...NAV_ACCESS, ...extraModules]) {
       const rows: MatrixRow[] = [];
       for (const tab of module.tabs) {
         const buckets = bucketActionsForEntity(tab.entity, catalog);
@@ -97,7 +107,7 @@ function useMatrixGroups(catalog: CatalogPerm[], search: string): MatrixGroup[] 
       if (rows.length > 0) groups.push({ module, rows });
     }
     return groups;
-  }, [catalog, search]);
+  }, [catalog, search, extraModules]);
 }
 
 /** Every distinct permission-key a row references (all columns + more). */
@@ -113,11 +123,12 @@ function rowKeys(row: MatrixRow): string[] {
 
 export default function AccessMatrix(props: AccessMatrixProps) {
   const { mode, catalog, canEdit, search, onSearchChange } = props;
-  const groups = useMatrixGroups(catalog, search);
+  const extraModules = useMemo(() => props.extraModules ?? [], [props.extraModules]);
+  const groups = useMatrixGroups(catalog, search, extraModules);
   // Start with every module collapsed — the user opens the ones they need.
   // While a search is active we force-expand so matches are visible.
   const [collapsed, setCollapsed] = useState<Set<string>>(
-    () => new Set(NAV_ACCESS.map((m) => m.key)),
+    () => new Set([...NAV_ACCESS, ...extraModules].map((m) => m.key)),
   );
   const searchActive = search.trim().length > 0;
   const [visible, setVisible] = useState<Set<OptionalColumn>>(new Set(DEFAULT_VISIBLE));

@@ -17,7 +17,12 @@ const router = Router();
 router.use(requireAuth);
 
 // WorkflowType
-router.get('/types', requirePermission('workflow.lookups.read'), asyncHandler(ctrl.listTypes));
+// The type LIST is navigation metadata (module names/ids/icons) that the sidebar
+// needs to render a user's workflow modules — so it's readable by any
+// authenticated user. Requiring `workflow.lookups.read` (a Configuration-admin
+// permission) here would hide EVERY workflow module from anyone who only has
+// per-type ticket access. Create/delete below stay gated on `workflow.lookups.manage`.
+router.get('/types', asyncHandler(ctrl.listTypes));
 router.post(
   '/types',
   requirePermission('workflow.lookups.manage'),

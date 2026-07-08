@@ -16,13 +16,32 @@ import {
   type UserOverrideInput,
 } from './hooks';
 import { useHasPermission, useAuthStore } from '@/stores/authStore';
+import { useWorkflowTypes } from '@/lib/api/workflowLookups';
 import AccessMatrix, { type TriState } from './AccessMatrix';
 import AccessAnalysisView from './AccessAnalysisView';
 import type { CatalogPerm } from '@/lib/accessActions';
+import {
+  type NavModuleAccess,
+  isAuditWorkflowTypeName,
+  workflowTypeModule,
+} from '@/lib/navAccess';
 import { cn } from '@/lib/utils';
 
 type TopView = 'matrix' | 'analysis';
 type Subject = 'role' | 'department' | 'user';
+
+/* Shared: one Access-Control module per (non-Audit, live) workflow type, so
+ * each module gets its own switch. Appended after the static NAV_ACCESS list. */
+function useWorkflowTypeModules(): NavModuleAccess[] {
+  const { data: types = [] } = useWorkflowTypes();
+  return useMemo(
+    () =>
+      types
+        .filter((t) => !t.isDeleted && !isAuditWorkflowTypeName(t.name))
+        .map((t) => workflowTypeModule(t)),
+    [types],
+  );
+}
 
 /* Shared: flatten the grouped catalog into a key→id map + a CatalogPerm list. */
 function useCatalog() {
@@ -80,6 +99,7 @@ export default function AccessControlTab() {
 function RoleSubject() {
   const canEdit = useHasPermission('role.update');
   const { catalog, idByKey, isLoading: catalogLoading } = useCatalog();
+  const extraModules = useWorkflowTypeModules();
   const { data: rolesResp, isLoading: rolesLoading } = useRoles({ pageSize: 200 });
   const roles = useMemo(() => rolesResp?.items ?? [], [rolesResp]);
   const setPermissions = useSetRolePermissions();
@@ -147,6 +167,7 @@ function RoleSubject() {
       <AccessMatrix
         mode="binary"
         catalog={catalog}
+        extraModules={extraModules}
         canEdit={canEdit && !!roleId}
         search={search}
         onSearchChange={setSearch}
@@ -195,6 +216,7 @@ function RoleSubject() {
 function DepartmentSubject() {
   const canEdit = useHasPermission('department.update');
   const { catalog, idByKey, isLoading: catalogLoading } = useCatalog();
+  const extraModules = useWorkflowTypeModules();
   const { data: deptsResp, isLoading: deptsLoading } = useDepartments({ pageSize: 200 });
   const departments = useMemo(() => deptsResp?.items ?? [], [deptsResp]);
 
@@ -269,6 +291,7 @@ function DepartmentSubject() {
       <AccessMatrix
         mode="binary"
         catalog={catalog}
+        extraModules={extraModules}
         canEdit={canEdit && !!deptId}
         search={search}
         onSearchChange={setSearch}
@@ -307,6 +330,7 @@ function DepartmentSubject() {
 function UserSubject() {
   const canEdit = useHasPermission('user.update');
   const { catalog, idByKey, isLoading: catalogLoading } = useCatalog();
+  const extraModules = useWorkflowTypeModules();
 
   // Backend-paginated user picker — 10 users per page (search + pager on the API).
   const [userSearchInput, setUserSearchInput] = useState('');
@@ -470,6 +494,7 @@ function UserSubject() {
           <AccessMatrix
             mode="tristate"
             catalog={catalog}
+            extraModules={extraModules}
             canEdit={canEdit && !!userId}
             search={search}
             onSearchChange={setSearch}

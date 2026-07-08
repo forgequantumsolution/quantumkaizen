@@ -105,7 +105,6 @@ export const NAV_ACCESS: NavModuleAccess[] = [
     description: 'Audit operations — planning, execution, findings and CAPA.',
     tabs: [
       { key: 'audit.dashboard',  label: 'Dashboard',        permission: 'audit_register.read',  entity: 'audit_register' },
-      { key: 'audit.workspace',  label: 'My Workspace',     permission: 'ticket.read',          entity: 'ticket' },
       { key: 'audit.register',   label: 'Audit Register',   permission: 'audit_register.read',  entity: 'audit_register' },
       { key: 'audit.program',    label: 'Audit Program',    permission: 'audit_program.read',   entity: 'audit_program' },
       { key: 'audit.nc',         label: 'Non-Conformance',  permission: 'non_conformance.read', entity: 'non_conformance' },
@@ -137,7 +136,48 @@ export const NAV_ACCESS: NavModuleAccess[] = [
       { key: 'config.workflowTypes', label: 'Workflow Types', permission: 'workflow.lookups.read', entity: 'workflow.lookups' },
     ],
   },
+  {
+    // The global `ticket.*` master. Granting it opens tickets across EVERY
+    // workflow type at once; leave it off and use the per-type module switches
+    // (appended after this list) to restrict a role to specific types.
+    key: 'workflow-tickets-master',
+    label: 'All Workflow Types (ticket master)',
+    description:
+      'Master switch — grants ticket access across every workflow type at once. Leave this off and use the individual workflow-type switches below to restrict a role to specific modules.',
+    tabs: [
+      { key: 'tickets.master', label: 'All Workflow Types', permission: 'ticket.read', entity: 'ticket' },
+    ],
+  },
 ];
+
+/* ── Dynamic per-workflow-type modules ──────────────────────────────────────
+ * Each workflow type (CAPA, Deviation, …) is its own module in Access Control,
+ * gated by DB-driven `wf_type.<id>.*` keys (mirrors backend/src/lib/
+ * rbac-workflow-types.ts). Audit is excluded — it keeps its own audit_* keys. */
+
+/** Audit is special-cased everywhere — never gets a generated per-type row. */
+export const isAuditWorkflowTypeName = (name: string): boolean => /^audit$/i.test(name.trim());
+
+/** Permission-key entity prefix for a workflow type (buckets the matrix columns). */
+export const wfTypeEntity = (typeId: string): string => `wf_type.${typeId}`;
+
+/** The `.read` key that gates a workflow-type module in the sidebar/matrix. */
+export const wfTypeReadKey = (typeId: string): string => `wf_type.${typeId}.read`;
+
+/** Build the Access-Control matrix module for one workflow type. */
+export const workflowTypeModule = (type: { id: string; name: string }): NavModuleAccess => ({
+  key: wfTypeEntity(type.id),
+  label: type.name,
+  description: `${type.name} — workflow tickets`,
+  tabs: [
+    {
+      key: `${wfTypeEntity(type.id)}.tab`,
+      label: type.name,
+      permission: wfTypeReadKey(type.id),
+      entity: wfTypeEntity(type.id),
+    },
+  ],
+});
 
 /** Flat list of every gateable tab (for lookups). */
 export const NAV_ACCESS_TABS: NavTabAccess[] = NAV_ACCESS.flatMap((m) => m.tabs);

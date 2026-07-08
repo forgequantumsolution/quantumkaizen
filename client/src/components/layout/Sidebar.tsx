@@ -42,6 +42,7 @@ import { useUIStore } from "@/stores/uiStore";
 import { useRecentItemsStore } from "@/stores/recentItemsStore";
 import { useAuthStore } from "@/stores/authStore";
 import { useWorkflowTypes } from "@/lib/api/workflowLookups";
+import { wfTypeReadKey } from "@/lib/navAccess";
 import { useNavCounts } from "@/lib/api/navCounts";
 import { useMemo, useState } from "react";
 
@@ -55,6 +56,10 @@ interface NavItem {
    * the user lacks it, the item is hidden. Parents with children stay visible
    * only while at least one child survives gating. */
   permission?: string;
+  /** Visible if the user holds ANY of these keys. Used for the OR-bridge on
+   * workflow-type modules: the per-type key OR the global `ticket.read` master.
+   * Evaluated together with `permission` (both must pass when both are set). */
+  anyPermission?: string[];
   /** Extra pathname prefixes that should also mark this item active — useful
    * for entries that land on one route but share a layout with siblings (e.g.
    * "Audit" points to /audit/register but should stay active on /audit/program). */
@@ -217,9 +222,10 @@ export default function Sidebar() {
           // group; first child becomes the navigation target in collapsed mode.
           path: isAudit ? undefined : `/modules/${t.id}`,
           icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
-          // Workflow-type modules surface ticket workspaces — gate on ticket.read.
-          // Audit gates via its children (audit_register/master.read) instead.
-          permission: isAudit ? undefined : "ticket.read",
+          // Each workflow-type module has its own switch: gate on its per-type
+          // key OR the global `ticket.read` master (OR-bridge). Audit gates via
+          // its children (audit_register/master.read) instead.
+          anyPermission: isAudit ? undefined : [wfTypeReadKey(t.id), "ticket.read"],
           children: isAudit ? auditChildren : undefined,
           count: navCounts?.workflowTypes?.[t.id],
         };
@@ -244,7 +250,7 @@ export default function Sidebar() {
               label: "Document Approval",
               path: `/modules/${docReviewType.id}`,
               icon: ClipboardCheck,
-              permission: "ticket.read",
+              anyPermission: [wfTypeReadKey(docReviewType.id), "ticket.read"],
             },
           ]
         : []),
@@ -373,6 +379,8 @@ export default function Sidebar() {
         .filter((it) => {
           if (it.children && it.children.length === 0 && !it.path) return false;
           if (it.permission && !hasPermission(it.permission)) return false;
+          if (it.anyPermission && !it.anyPermission.some((k) => hasPermission(k)))
+            return false;
           return true;
         });
 

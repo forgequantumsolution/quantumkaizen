@@ -125,8 +125,11 @@ export default function ModulePage({
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const hasPermission = useAuthStore((s) => s.hasPermission);
-  const canCreate = hasPermission('ticket.create');
-  const canDelete = hasPermission('ticket.delete');
+  // Per-type gating with the global `ticket.*` master as the OR-bridge fallback.
+  const canForType = (action: string) =>
+    hasPermission(`wf_type.${typeId}.${action}`) || hasPermission(`ticket.${action}`);
+  const canCreate = canForType('create');
+  const canDelete = canForType('delete');
   const deleteTicket = useDeleteTicket();
   const { modal } = App.useApp();
   const bookmarks = useBookmarkStore();
@@ -198,7 +201,7 @@ export default function ModulePage({
   // "My Workspace" = tickets the user can act on. We treat that as: I created it,
   // OR it's in my department, OR I have a broad transition permission (so admins
   // who don't author tickets still see something useful instead of an empty list).
-  const isWorkspaceWideViewer = hasPermission('ticket.transition');
+  const isWorkspaceWideViewer = canForType('transition');
 
   // Filtering pipeline: tab → kpi → search → priority → workflow
   const filtered = useMemo(() => {

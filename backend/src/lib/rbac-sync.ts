@@ -14,6 +14,7 @@
  */
 import { prisma } from './prisma';
 import { PERMISSIONS } from './rbac-catalog';
+import { syncWorkflowTypePermissions } from './rbac-workflow-types';
 
 const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
 
@@ -25,6 +26,10 @@ export async function ensureRbacCatalog(): Promise<void> {
       create: p,
     });
   }
+
+  // Backfill/prune the dynamic per-workflow-type keys BEFORE the SUPER_ADMIN
+  // "hold everything" step below, so the invariant covers them too.
+  await syncWorkflowTypePermissions();
 
   const all = await prisma.permission.findMany({ select: { id: true } });
   const superAdmin = await prisma.role.findFirst({

@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useAuthStore } from '@/stores/authStore';
 import AppLayout from '@/components/layout/AppLayout';
 import ProtectedRoute from '@/components/layout/ProtectedRoute';
 import LoginPage from '@/pages/LoginPage';
@@ -101,6 +103,16 @@ import AppearanceProvider from '@/components/theme/AppearanceProvider';
 import PageContainer from '@/components/layout/PageContainer';
 
 export default function App() {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
+  // On every full page load, reconcile the cached permissions with the server
+  // (GET /auth/me). Without this a browser refresh only rehydrates the persisted
+  // permissions from the last login, so access granted/revoked in Access Control
+  // wouldn't show until a full re-login. refreshUser no-ops when unauthenticated.
+  useEffect(() => {
+    if (isAuthenticated) void refreshUser();
+  }, [isAuthenticated, refreshUser]);
+
   return (
     <AppearanceProvider>
     <Routes>
