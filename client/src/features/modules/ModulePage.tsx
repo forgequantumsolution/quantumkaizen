@@ -46,7 +46,7 @@ import {
   useTickets,
   type TicketSummary,
 } from '@/lib/api/ticket';
-import { useWorkflows } from '@/lib/api/workflow';
+import { useWorkflowDirectory } from '@/lib/api/workflow';
 import {
   usePriorities,
   useWorkflowTypes,
@@ -177,11 +177,7 @@ export default function ModulePage({
   const allTickets = useMemo(() => data?.items ?? [], [data]);
 
   const { data: priorities = [] } = usePriorities();
-  const { data: workflowsData } = useWorkflows({
-    status: 'ACTIVE',
-    typeId: typeId || undefined,
-    pageSize: 100,
-  });
+  const { data: workflowsData } = useWorkflowDirectory(typeId || undefined);
   const typeWorkflows = workflowsData?.items ?? [];
 
   // KPI counts

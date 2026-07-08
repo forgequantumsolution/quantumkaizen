@@ -14,7 +14,7 @@ import {
   type CapaType,
   type CapaCreate,
 } from '@/lib/api/audit';
-import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useHasPermission } from '@/stores/authStore';
 import { CapaStatusBadge } from './auditStatusBadge';
@@ -192,7 +192,7 @@ const CAPA_COLUMNS: Column<Capa>[] = [
 function CreateCapaModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const nav = useNavigate();
   const createMut = useCreateCapa();
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const { data: deptsResp } = useDepartments({ pageSize: 200 });
   const users = usersData?.items ?? [];
   const departments = deptsResp?.items ?? [];

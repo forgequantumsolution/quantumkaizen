@@ -17,7 +17,7 @@ import {
   type ActionItemStatus,
   type ActionItemUpsert,
 } from '@/lib/api/audit';
-import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useHasPermission } from '@/stores/authStore';
 import { ActionPriorityBadge, ActionStatusBadge } from './auditStatusBadge';
 
@@ -267,7 +267,7 @@ function ActionItemDrawer({
 }) {
   const createMut = useCreateActionItem();
   const updateMut = useUpdateActionItem(record?.id ?? '');
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const users = usersData?.items ?? [];
 
   const [title, setTitle] = useState('');

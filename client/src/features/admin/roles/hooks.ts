@@ -49,6 +49,30 @@ export interface RoleListResponse {
   pageSize: number;
 }
 
+/** One entry in the lightweight role directory (assignment/target pickers). */
+export interface RoleDirectoryEntry {
+  id: string;
+  name: string;
+  isSystem: boolean;
+  _count: { users: number };
+}
+
+/**
+ * Role directory for pickers — readable by any authenticated user, unlike
+ * `useRoles` (needs `role.read`, so its picker 403s → empty for operational
+ * roles). Returns name + user count; no permission keys.
+ */
+export function useRoleDirectory() {
+  return useQuery({
+    queryKey: ['role-directory'],
+    queryFn: async () => {
+      const { data } = await api.get('/roles/directory');
+      const items = data && Array.isArray(data.items) ? (data.items as RoleDirectoryEntry[]) : [];
+      return { items };
+    },
+  });
+}
+
 export function useRoles(filters: RoleFilters = {}) {
   return useQuery({
     queryKey: ['roles', filters],

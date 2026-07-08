@@ -2,6 +2,7 @@ import { env } from './config/env';
 import { buildApp } from './app';
 import { prisma } from './lib/prisma';
 import { ensureRbacCatalog } from './lib/rbac-sync';
+import { ensureDefaultSiteAndBackfill } from './lib/site-defaults';
 
 const app = buildApp();
 
@@ -12,6 +13,11 @@ const server = app.listen(env.PORT, () => {
   ensureRbacCatalog()
     .then(() => console.log('RBAC catalog synced'))
     .catch((err) => console.error('RBAC catalog sync failed:', err));
+  // Guarantee a default Site exists and no user/ticket is left site-less before
+  // Site scoping is enforced. Non-fatal: never take the API down over it.
+  ensureDefaultSiteAndBackfill()
+    .then(() => console.log('Default site ensured + backfilled'))
+    .catch((err) => console.error('Default-site backfill failed:', err));
 });
 
 const shutdown = async (signal: string) => {

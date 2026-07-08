@@ -34,7 +34,7 @@ import {
   type ListTicketsQuery,
   type TicketSummary,
 } from '@/lib/api/ticket';
-import { useWorkflows } from '@/lib/api/workflow';
+import { useWorkflowDirectory } from '@/lib/api/workflow';
 import { usePriorities } from '@/lib/api/workflowLookups';
 import { useSlaTimers, type SlaTimer } from '@/lib/api/sla';
 import RaiseTicketDrawer from './shared/RaiseTicketDrawer';
@@ -127,7 +127,7 @@ export default function TicketsPage() {
 
   const { data, isLoading, error } = useTickets(filters);
   const { data: priorities = [] } = usePriorities();
-  const { data: activeWorkflowsData } = useWorkflows({ status: 'ACTIVE', pageSize: 100 });
+  const { data: activeWorkflowsData } = useWorkflowDirectory();
   const breached = useSlaTimers({ status: 'BREACHED', pageSize: 1 });
   const running = useSlaTimers({ status: 'RUNNING', pageSize: 100 });
 

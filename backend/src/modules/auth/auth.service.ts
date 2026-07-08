@@ -20,6 +20,7 @@ const publicUserSelect = {
   siteId: true,
   createdAt: true,
   updatedAt: true,
+  site: { select: { id: true, code: true, name: true } },
   department: { select: { id: true, code: true, name: true } },
   role: {
     select: {
@@ -39,10 +40,24 @@ type RawUser = Prisma.UserGetPayload<{ select: typeof publicUserSelect }>;
  * route guard. Existing users (no dept grants / overrides) resolve identically.
  */
 const flatten = async (user: RawUser) => {
-  const { role, ...rest } = user;
+  const { role, site, ...rest } = user;
   const permissions = [...(await computeEffectivePermissions(user.id))];
+  // Sites the user may see/switch in the navbar. viewAll holders (admins) get
+  // every active site; everyone else is pinned to their own assigned site.
+  const canViewAll = permissions.includes('site.view_all');
+  const allowedSites = canViewAll
+    ? await prisma.site.findMany({
+        where: { isActive: true },
+        select: { id: true, code: true, name: true },
+        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+      })
+    : site
+      ? [site]
+      : [];
   return {
     ...rest,
+    site: site ?? null,
+    allowedSites,
     role: role ? { id: role.id, name: role.name } : null,
     permissions,
   };

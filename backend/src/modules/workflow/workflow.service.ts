@@ -350,6 +350,32 @@ export const list = async (query: ListWorkflowsQuery) => {
   };
 };
 
+/**
+ * Lightweight picker directory of ACTIVE, latest-version workflows. Readable by
+ * any authenticated user (see workflow.routes) — used by operational forms that
+ * only need to choose a workflow, not inspect its definition. Optional typeId
+ * narrows to one workflow type (e.g. the ticket drawer scoped to a module).
+ */
+export const directory = async (typeId?: string) => {
+  const items = await prisma.workflow.findMany({
+    where: {
+      isDeleted: false,
+      isLatestVersion: true,
+      workflowStatus: 'ACTIVE',
+      ...(typeId ? { typeId } : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      version: true,
+      workflowStatus: true,
+      type: { select: { id: true, name: true } },
+    },
+    orderBy: [{ name: 'asc' }],
+  });
+  return { items };
+};
+
 export const getById = async (id: string) => {
   const wf = await prisma.workflow.findUnique({
     where: { id },

@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { api } from '@/lib/api';
 
+export interface SiteRef {
+  id: string;
+  code: string;
+  name: string;
+}
+
 interface AuthUser {
   id: string;
   tenantId: string;
@@ -10,7 +16,10 @@ interface AuthUser {
   role: string;
   roleName: string | null;
   department?: string;
-  site?: string;
+  /** The user's assigned site (used to default the navbar selector). */
+  site?: SiteRef | null;
+  /** Sites the user may see/switch in the navbar (their own, or all if viewAll). */
+  allowedSites: SiteRef[];
   employeeId: string;
   permissions: string[];
 }
@@ -42,6 +51,8 @@ interface BackendUser {
   roleId: string | null;
   role: { id: string; name: string } | null;
   department?: { id: string; code: string; name: string } | null;
+  site?: SiteRef | null;
+  allowedSites?: SiteRef[];
   permissions: string[];
 }
 
@@ -54,7 +65,8 @@ function mapBackendUser(u: BackendUser): AuthUser {
     role: u.role?.name ?? 'NONE',
     roleName: u.role?.name ?? null,
     department: u.department?.name ?? undefined,
-    site: undefined,
+    site: u.site ?? null,
+    allowedSites: Array.isArray(u.allowedSites) ? u.allowedSites : [],
     employeeId: u.employeeId ?? u.id,
     permissions: Array.isArray(u.permissions) ? u.permissions : [],
   };

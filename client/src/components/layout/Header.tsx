@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Search, Bell, Menu, LogOut, User, ChevronDown,
-  ChevronRight, AlertTriangle, Clock, Shield, PenLine,
+  ChevronRight, AlertTriangle, Clock, Shield, PenLine, Building2, Check,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { useSiteStore } from '@/stores/siteStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useNotificationStore, AppNotification } from '@/stores/notificationStore';
 import { useTicket } from '@/lib/api/ticket';
@@ -57,6 +58,98 @@ const ROLE_LABELS: Record<string, string> = {
   READ_ONLY:           'Read Only',
   SUPER_ADMIN:         'Super Admin',
 };
+
+// Navbar Site selector. Drives ticket-list scoping via the site store. Users
+// pinned to a single site see a static label; users who can view across sites
+// (`site.view_all`) get a dropdown with an "All Sites" option.
+function SiteSelector() {
+  const user = useAuthStore((s) => s.user);
+  const { selectedSiteId, setSelectedSiteId } = useSiteStore();
+  const [open, setOpen] = useState(false);
+
+  const allowedSites = user?.allowedSites ?? [];
+  const canViewAll = user?.permissions.includes('site.view_all') ?? false;
+
+  // Reconcile a persisted selection against this user's allowed sites so a stale
+  // id from another session/user can't linger.
+  useEffect(() => {
+    if (!user) return;
+    const ids = (user.allowedSites ?? []).map((s) => s.id);
+    const valid =
+      (!!selectedSiteId && ids.includes(selectedSiteId)) ||
+      (selectedSiteId === null && canViewAll);
+    if (valid) return;
+    setSelectedSiteId(canViewAll ? null : (user.site?.id ?? ids[0] ?? null));
+  }, [user, selectedSiteId, canViewAll, setSelectedSiteId]);
+
+  if (!user || (allowedSites.length === 0 && !canViewAll)) return null;
+
+  // Single site, no cross-site view → static, non-interactive label.
+  if (!canViewAll && allowedSites.length <= 1) {
+    const only = allowedSites[0];
+    if (!only) return null;
+    return (
+      <span
+        className="hidden sm:inline-flex items-center gap-1.5 px-2 h-6 rounded text-[11px] font-medium text-ink-secondary bg-surface-bg border border-surface-border"
+        title={`Site: ${only.name}`}
+      >
+        <Building2 size={11} className="text-ink-tertiary" />
+        {only.name}
+      </span>
+    );
+  }
+
+  const currentLabel = selectedSiteId
+    ? allowedSites.find((s) => s.id === selectedSiteId)?.name ?? 'Site'
+    : 'All Sites';
+
+  const choose = (id: string | null) => {
+    setSelectedSiteId(id);
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative hidden sm:block">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 px-2 h-6 rounded text-[11px] font-medium text-ink-secondary bg-surface-bg border border-surface-border hover:border-surface-border-strong hover:text-ink transition-colors"
+        aria-label="Select site"
+        aria-expanded={open}
+      >
+        <Building2 size={11} className="text-ink-tertiary" />
+        <span className="max-w-[120px] truncate">{currentLabel}</span>
+        <ChevronDown size={10} className="text-ink-tertiary" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded border border-surface-border shadow-overlay py-1 z-50 animate-slide-down max-h-72 overflow-y-auto">
+            {canViewAll && (
+              <button
+                onClick={() => choose(null)}
+                className="flex items-center justify-between w-full px-3 py-1.5 text-xs text-ink hover:bg-surface-bg transition-colors"
+              >
+                <span className="font-medium">All Sites</span>
+                {selectedSiteId === null && <Check size={13} className="text-pharma-600" />}
+              </button>
+            )}
+            {allowedSites.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => choose(s.id)}
+                className="flex items-center justify-between w-full px-3 py-1.5 text-xs text-ink hover:bg-surface-bg transition-colors"
+              >
+                <span className="truncate">{s.name}</span>
+                {selectedSiteId === s.id && <Check size={13} className="text-pharma-600 shrink-0" />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function Header() {
   const location = useLocation();
@@ -171,6 +264,9 @@ export default function Header() {
           {/* ── role indicator, notifications, user ── */}
           {/* Language */}
           <LanguageSwitcher />
+
+          {/* Site selector — scopes ticket lists to the active site */}
+          <SiteSelector />
 
           {/* FY selector — compact toggle */}
           <div className="hidden sm:flex items-center border border-gray-200 rounded overflow-hidden ml-1">

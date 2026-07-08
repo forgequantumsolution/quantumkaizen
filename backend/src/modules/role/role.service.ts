@@ -40,6 +40,20 @@ export const list = async ({ page, pageSize, search }: ListQuery) => {
   return { items, total, page, pageSize };
 };
 
+/**
+ * Lightweight role directory for assignment/target pickers (LMS assign, training
+ * targeting, reports filters). Readable by any authenticated user — unlike the
+ * admin `list` (needs `role.read`), which empties those pickers for operational
+ * roles. Returns name + user count only; no permission keys.
+ */
+export const directory = async () => {
+  const items = await prisma.role.findMany({
+    select: { id: true, name: true, isSystem: true, _count: { select: { users: true } } },
+    orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
+  });
+  return { items };
+};
+
 export const getById = async (id: string) => {
   const role = await prisma.role.findUnique({ where: { id }, select: baseSelect });
   if (!role) throw NotFound('Role not found');

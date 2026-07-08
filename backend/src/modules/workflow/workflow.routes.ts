@@ -24,6 +24,14 @@ router.get(
   asyncHandler(ctrl.list)
 );
 
+// Lightweight picker list of ACTIVE workflows (id/name/version/type) for
+// operational forms — raising a ticket, attaching a workflow to an audit.
+// Any authenticated user: choosing a workflow to follow isn't a builder-admin
+// capability, and gating it behind `workflow.read` empties the picker for
+// operational roles. Full definitions stay behind `workflow.read` on GET /:id.
+// MUST precede '/:id' so it isn't captured as an id.
+router.get('/directory', asyncHandler(ctrl.directory));
+
 router.post(
   '/',
   requirePermission('workflow.create'),

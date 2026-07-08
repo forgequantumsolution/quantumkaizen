@@ -12,8 +12,8 @@ import {
   type Transcript,
 } from '@/lib/api/lms';
 import { useCourses } from '@/lib/api/lms';
-import { useAdminUsers } from '@/features/admin/users/hooks';
-import { useRoles } from '@/features/admin/roles/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
+import { useRoleDirectory } from '@/features/admin/roles/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useSites } from '@/lib/api/sites';
 
@@ -67,8 +67,8 @@ export default function ReportsPage() {
   const { data: report, isLoading, isFetching } = useComplianceReport(filter);
 
   // Option lists for the filter bar + transcript picker.
-  const { data: usersResp } = useAdminUsers({ isActive: true, pageSize: 200 });
-  const { data: rolesResp } = useRoles({ pageSize: 200 });
+  const { data: usersResp } = useUserDirectory();
+  const { data: rolesResp } = useRoleDirectory();
   const { data: deptResp } = useDepartments({ isActive: true, pageSize: 200 });
   const { data: sitesResp } = useSites({ pageSize: 200 });
   const { data: courses } = useCourses({ status: 'PUBLISHED', latest_only: true });

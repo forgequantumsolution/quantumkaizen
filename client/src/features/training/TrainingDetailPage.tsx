@@ -11,8 +11,8 @@ import {
   useDeleteTrainingItem,
   type TrainingAssignment,
 } from '@/lib/api/training';
-import { useAdminUsers } from '@/features/admin/users/hooks';
-import { useRoles } from '@/features/admin/roles/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
+import { useRoleDirectory } from '@/features/admin/roles/hooks';
 
 export default function TrainingDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -21,9 +21,9 @@ export default function TrainingDetailPage() {
   const canWrite = useHasPermission('training.write');
 
   const { data: item, isLoading } = useTrainingItem(id);
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const users = usersData?.items ?? [];
-  const { data: rolesResp } = useRoles({ pageSize: 200 });
+  const { data: rolesResp } = useRoleDirectory();
   const roles = rolesResp?.items ?? [];
 
   const assignMut = useAssignTraining(id ?? '');

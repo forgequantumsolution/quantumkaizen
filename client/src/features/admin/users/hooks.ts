@@ -53,6 +53,38 @@ export interface CreateUserInput {
 
 export type UpdateUserInput = Omit<Partial<CreateUserInput>, 'password'>;
 
+/** One entry in the people directory (assignment pickers). Site-scoped server-side. */
+export interface DirectoryUser {
+  id: string;
+  name: string;
+  email: string;
+  designation: string | null;
+  employeeId: string | null;
+  roleId: string | null;
+  departmentId: string | null;
+  siteId: string | null;
+  role: { id: string; name: string } | null;
+  department: { id: string; code: string; name: string } | null;
+  site: { id: string; code: string; name: string } | null;
+}
+
+/**
+ * People directory for assignment pickers (Lead Auditor, Approver, CAPA owner,
+ * team members, …). Readable by any authenticated user — unlike `useAdminUsers`
+ * (which needs `user.read` and would 403 → empty for operational roles like
+ * auditors). Use this anywhere you only need "pick a person", not user admin.
+ */
+export function useUserDirectory() {
+  return useQuery({
+    queryKey: ['user-directory'],
+    queryFn: async () => {
+      const { data } = await api.get('/users/directory');
+      const items = data && Array.isArray(data.items) ? (data.items as DirectoryUser[]) : [];
+      return { items };
+    },
+  });
+}
+
 export interface UserFilters {
   search?: string;
   departmentId?: string;

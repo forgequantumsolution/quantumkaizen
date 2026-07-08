@@ -8,7 +8,7 @@ import {
   useCourses, useCurricula,
   type MatrixRule, type MatrixTargetType, type MatrixRequiresType,
 } from '@/lib/api/lms';
-import { useRoles } from '@/features/admin/roles/hooks';
+import { useRoleDirectory } from '@/features/admin/roles/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useSites } from '@/lib/api/sites';
 
@@ -20,7 +20,7 @@ export default function TrainingMatrixPage() {
   const del = useDeleteMatrixRule();
   const sync = useSyncMatrix();
 
-  const { data: rolesResp } = useRoles({ pageSize: 200 });
+  const { data: rolesResp } = useRoleDirectory();
   const { data: deptResp } = useDepartments({ isActive: true, pageSize: 200 });
   const { data: sitesResp } = useSites({ pageSize: 200 });
   const { data: courses } = useCourses({ status: 'PUBLISHED', latest_only: true });

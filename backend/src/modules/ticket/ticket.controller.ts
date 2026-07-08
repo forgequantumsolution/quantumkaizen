@@ -1,6 +1,12 @@
 import type { Request, Response } from 'express';
 import * as service from './ticket.service';
-import { getEffectivePermissionKeys, ticketReadScope } from '../../middleware/permissions';
+import {
+  getEffectivePermissionKeys,
+  ticketReadScope,
+  resolveSiteScope,
+  canUseSite,
+} from '../../middleware/permissions';
+import { Forbidden, NotFound } from '../../lib/httpError';
 import type {
   AddCommentInput,
   AttachDocInput,
@@ -22,20 +28,44 @@ const userId = (req: Request): string => {
 export const list = async (req: Request, res: Response) => {
   const keys = await getEffectivePermissionKeys(userId(req));
   const scope = ticketReadScope(keys);
-  res.json(await service.list(req.query as unknown as ListTicketsQuery, userId(req), scope));
+  const siteScope = await resolveSiteScope(userId(req));
+  res.json(
+    await service.list(req.query as unknown as ListTicketsQuery, userId(req), scope, siteScope),
+  );
 };
 
 export const get = async (req: Request, res: Response) => {
-  res.json(await service.getById(req.params.id as string));
+  const ticket = await service.getById(req.params.id as string);
+  // Hard site boundary: a scoped user can't open another site's ticket by URL.
+  // 404 (not 403) so we don't leak that a ticket exists in a site they can't see.
+  const siteScope = await resolveSiteScope(userId(req));
+  if (!siteScope.all && ticket.site?.id && !siteScope.siteIds.includes(ticket.site.id)) {
+    throw NotFound('Ticket not found');
+  }
+  res.json(ticket);
 };
 
 export const create = async (req: Request, res: Response) => {
-  const result = await service.raiseTicket(req.body as RaiseTicketInput, userId(req));
+  const body = req.body as RaiseTicketInput;
+  if (body.siteId) {
+    const siteScope = await resolveSiteScope(userId(req));
+    if (!canUseSite(siteScope, body.siteId)) {
+      throw Forbidden('You cannot create tickets in the selected site');
+    }
+  }
+  const result = await service.raiseTicket(body, userId(req));
   res.status(201).json(result);
 };
 
 export const patch = async (req: Request, res: Response) => {
-  res.json(await service.update(req.params.id as string, req.body as UpdateTicketInput));
+  const body = req.body as UpdateTicketInput;
+  if (body.siteId) {
+    const siteScope = await resolveSiteScope(userId(req));
+    if (!canUseSite(siteScope, body.siteId)) {
+      throw Forbidden('You cannot move this ticket to the selected site');
+    }
+  }
+  res.json(await service.update(req.params.id as string, body));
 };
 
 export const remove = async (req: Request, res: Response) => {

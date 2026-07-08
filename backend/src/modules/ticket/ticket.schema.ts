@@ -45,6 +45,9 @@ export const ListTicketsQuerySchema = z.object({
   search: z.string().optional(),
   workflowId: z.string().uuid().optional(),
   workflowTypeId: z.string().uuid().optional(),
+  // Navbar site selection. Narrows the list to one site; ignored (never widens)
+  // if the caller isn't allowed to see it. Omit for the caller's full scope.
+  siteId: z.string().uuid().optional(),
   status: z.enum(['open', 'completed', 'all']).optional().default('all'),
   mine: z.enum(['true', 'false']).optional().default('false'),
   includeDeleted: z.enum(['true', 'false']).optional().default('false'),

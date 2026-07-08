@@ -16,8 +16,13 @@ const router = Router();
 
 router.use(requireAuth);
 
-router.get('/tree', requirePermission('department.read'), asyncHandler(ctrl.tree));
-router.get('/', requirePermission('department.read'), validate(ListQuerySchema, 'query'), asyncHandler(ctrl.list));
+// The department list/tree is org reference data that operational forms need
+// as a picker (ticket department, CAPA department, audit scope, doc owner).
+// Readable by any authenticated user — gating it behind `department.read`
+// empties those pickers for operational roles that legitimately assign a
+// department. Detail (`/:id`) and mutations stay gated.
+router.get('/tree', asyncHandler(ctrl.tree));
+router.get('/', validate(ListQuerySchema, 'query'), asyncHandler(ctrl.list));
 router.get('/:id', requirePermission('department.read'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.get));
 router.post('/', requirePermission('department.create'), validate(CreateDepartmentSchema), asyncHandler(ctrl.create));
 router.patch(

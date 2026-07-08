@@ -16,6 +16,7 @@ import * as approvalLayer from './approval.layer';
 import { findUnsatisfiedRequiredForms } from './form.layer';
 import { onTicketHeld, onTicketResumed } from './sla.handler';
 import { resolveLatestVersion } from '../workflow.versioning';
+import { ensureDefaultSite } from '../../../lib/site-defaults';
 import { syncTicketComplianceFindings } from '../../audit/audit-compliance-sync.service';
 import { syncCapaFromTicketId } from '../../audit/capa.service';
 import type {
@@ -145,6 +146,27 @@ export const raiseTicket = async (
     const prefix = workflow.type?.codePrefix?.toUpperCase() || 'WF';
     const uniqueId = await generateUniqueTicketId(tx, workflow.id, prefix);
 
+    // Site is mandatory for scoping — a site-less ticket falls outside every
+    // user's scope and becomes invisible once enforcement is on. Resolve in
+    // order: explicit siteId → parent ticket's site (child/CAPA/OOS spawns) →
+    // the actor's own site → the default HQ site.
+    let resolvedSiteId = input.siteId ?? null;
+    if (!resolvedSiteId && input.parentTicketId) {
+      const parent = await tx.ticket.findUnique({
+        where: { id: input.parentTicketId },
+        select: { siteId: true },
+      });
+      resolvedSiteId = parent?.siteId ?? null;
+    }
+    if (!resolvedSiteId) {
+      const actorUser = await tx.user.findUnique({
+        where: { id: actor.id },
+        select: { siteId: true },
+      });
+      resolvedSiteId = actorUser?.siteId ?? null;
+    }
+    if (!resolvedSiteId) resolvedSiteId = await ensureDefaultSite();
+
     const ticket = await tx.ticket.create({
       data: {
         uniqueId,
@@ -153,7 +175,7 @@ export const raiseTicket = async (
         ticketReason: input.ticketReason ?? null,
         priorityId: input.priorityId ?? null,
         departmentId: input.departmentId ?? null,
-        siteId: input.siteId ?? null,
+        siteId: resolvedSiteId,
         severityId: input.severityId ?? null,
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         classification: input.classification ?? null,

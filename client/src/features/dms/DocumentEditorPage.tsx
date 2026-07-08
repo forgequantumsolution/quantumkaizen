@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Button, Input, Segmented, Select, Spin, message } from 'antd';
 import { ArrowLeft, Save, GitBranch, Upload, FileText, PenLine } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
-import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import {
   useDocument,
@@ -29,7 +29,7 @@ export default function DocumentEditorPage() {
   const fileInput = useRef<HTMLInputElement>(null);
 
   const { data: doc, isLoading } = useDocument(id);
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const users = usersData?.items ?? [];
   const { data: deptData } = useDepartments({ pageSize: 200 });
   const depts = deptData?.items ?? [];

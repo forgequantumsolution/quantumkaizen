@@ -27,6 +27,7 @@ import {
 } from './hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useRoles } from '@/features/admin/roles/hooks';
+import { useSites, useCreateSite } from '@/lib/api/sites';
 import { useHasPermission } from '@/stores/authStore';
 
 interface FormValues {
@@ -39,6 +40,7 @@ interface FormValues {
   designation: string;
   departmentId: string;
   roleId: string;
+  siteId: string;
   managerId: string;
   joinDate: Dayjs | null;
   isActive: boolean;
@@ -54,6 +56,7 @@ const emptyValues: FormValues = {
   designation: '',
   departmentId: '',
   roleId: '',
+  siteId: '',
   managerId: '',
   joinDate: null,
   isActive: true,
@@ -96,6 +99,11 @@ export default function UsersTab() {
   const departments = deptResp?.items ?? [];
   const { data: rolesResp } = useRoles({ pageSize: 200 });
   const roles = rolesResp?.items ?? [];
+  const { data: sitesResp } = useSites({ pageSize: 200, isActive: 'true' });
+  const sites = sitesResp?.items ?? [];
+  const createSite = useCreateSite();
+  const [newSiteName, setNewSiteName] = useState('');
+  const [siteAddError, setSiteAddError] = useState<string | null>(null);
   const { data: managerPool } = useAdminUsers({ isActive: true, pageSize: 200 });
 
   const create = useCreateUser();
@@ -130,6 +138,7 @@ export default function UsersTab() {
       designation: editing.designation ?? '',
       departmentId: editing.departmentId ?? '',
       roleId: editing.roleId ?? '',
+      siteId: editing.siteId ?? '',
       managerId: editing.managerId ?? '',
       joinDate: editing.joinDate ? dayjs(editing.joinDate) : null,
       isActive: editing.isActive,
@@ -177,6 +186,7 @@ export default function UsersTab() {
       designation: values.designation.trim() || null,
       departmentId: values.departmentId || null,
       roleId: values.roleId || null,
+      siteId: values.siteId || null,
       managerId: values.managerId || null,
       joinDate: values.joinDate ? values.joinDate.toISOString() : null,
       isActive: values.isActive,
@@ -187,6 +197,22 @@ export default function UsersTab() {
       closeForm();
     } catch (err) {
       setFormError(extractApiError(err));
+    }
+  };
+
+  // Inline "add a site" from the user form. Derives a code from the name
+  // (backend requires 2–16 chars A-Z0-9_-); on save, selects the new site.
+  const handleAddSite = async () => {
+    const name = newSiteName.trim();
+    if (!name) return;
+    const code = name.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 16).padEnd(2, 'X');
+    setSiteAddError(null);
+    try {
+      const created = await createSite.mutateAsync({ name, code });
+      form.setFieldValue('siteId', created.id);
+      setNewSiteName('');
+    } catch (err) {
+      setSiteAddError(extractApiError(err, 'Could not add site'));
     }
   };
 
@@ -499,6 +525,49 @@ export default function UsersTab() {
                 placeholder="— None —"
                 allowClear
                 options={roles.map((r) => ({ value: r.id, label: r.name }))}
+              />
+            </AppForm.Item>
+            <AppForm.Item label="Site" name="siteId">
+              <AntSelect
+                placeholder="— None —"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={sites.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }))}
+                popupRender={(menu) => (
+                  <>
+                    {menu}
+                    <div style={{ borderTop: '1px solid #f0f0f0', padding: 8 }}>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <AntInput
+                          size="small"
+                          placeholder="New site name"
+                          value={newSiteName}
+                          onChange={(e) => setNewSiteName(e.target.value)}
+                          onKeyDown={(e) => e.stopPropagation()}
+                          onPressEnter={(e) => {
+                            e.preventDefault();
+                            void handleAddSite();
+                          }}
+                        />
+                        <AntButton
+                          size="small"
+                          type="primary"
+                          loading={createSite.isPending}
+                          disabled={!newSiteName.trim()}
+                          onClick={() => void handleAddSite()}
+                        >
+                          Add
+                        </AntButton>
+                      </div>
+                      {siteAddError && (
+                        <div style={{ color: '#dc2626', fontSize: 12, marginTop: 4 }}>
+                          {siteAddError}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               />
             </AppForm.Item>
             <AppForm.Item label="Manager" name="managerId">

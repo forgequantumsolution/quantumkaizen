@@ -28,9 +28,9 @@ import {
   type AuditFrequency,
   type CalendarAudit,
 } from '@/lib/api/audit';
-import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useForms } from '@/features/forms/hooks';
-import { useWorkflows } from '@/lib/api/workflow';
+import { useWorkflowDirectory } from '@/lib/api/workflow';
 import { useHasPermission } from '@/stores/authStore';
 import { AuditStatusBadge } from './auditStatusBadge';
 
@@ -72,7 +72,7 @@ export default function AuditSchedulePage({
   const audits = calResp?.data ?? [];
   const { data: rulesResp, isLoading } = useScheduleRules();
   const rules = rulesResp?.data ?? [];
-  const { data: wfResp } = useWorkflows({ status: 'ACTIVE', pageSize: 200 });
+  const { data: wfResp } = useWorkflowDirectory();
   const workflows = wfResp?.items ?? [];
   const wfName = (id: string | null) =>
     id ? workflows.find((w) => w.id === id)?.name ?? 'Workflow' : '—';
@@ -320,9 +320,9 @@ function RuleDrawer({
   const updateMut = useUpdateScheduleRule(record?.id ?? '');
   const { data: mastersResp } = useAuditMasters({ page_size: 200, is_active: true });
   const masters = mastersResp?.data ?? [];
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const users = usersData?.items ?? [];
-  const { data: wfResp } = useWorkflows({ status: 'ACTIVE', pageSize: 200 });
+  const { data: wfResp } = useWorkflowDirectory();
   const workflows = wfResp?.items ?? [];
   const { data: formsResp } = useForms({ kind: 'CHECKLIST', page_size: 200 });
   const checklists = formsResp?.forms ?? [];

@@ -6,7 +6,7 @@ import {
   useAssignReaders,
   useAcknowledgeRead,
 } from '@/lib/api/dms';
-import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 
 interface Props {
   documentId: string;
@@ -16,7 +16,7 @@ interface Props {
 export default function AcknowledgementPanel({ documentId, canAssign }: Props) {
   const { message } = App.useApp();
   const { data, isLoading } = useDocumentReceipts(documentId);
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const users = usersData?.items ?? [];
 
   const assignMut = useAssignReaders(documentId);

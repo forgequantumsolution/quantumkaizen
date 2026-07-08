@@ -29,6 +29,9 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'department.delete', module: 'DEPARTMENT', action: 'DELETE', description: 'Delete departments' },
   { key: 'org.read',          module: 'ORG',        action: 'READ',   description: 'View organization settings' },
   { key: 'org.update',        module: 'ORG',        action: 'UPDATE', description: 'Edit organization settings' },
+  // Site scoping — holders bypass per-site ticket scoping and may view/switch
+  // across every site. Non-holders are pinned to their own assigned site.
+  { key: 'site.view_all',     module: 'SITE',       action: 'MANAGE', description: 'View data across all sites (bypass per-site scoping)' },
   // ── Dashboard ────────────────────────────────────────
   { key: 'dashboard.read',    module: 'DASHBOARD',  action: 'READ',   description: 'View the dashboard (KPIs & workload overview)' },
   // ── QMS modules ──────────────────────────────────────

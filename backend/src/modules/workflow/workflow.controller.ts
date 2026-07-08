@@ -14,6 +14,11 @@ export const list = async (req: Request, res: Response) => {
   res.json(await service.list(req.query as unknown as ListWorkflowsQuery));
 };
 
+export const directory = async (req: Request, res: Response) => {
+  const typeId = typeof req.query.typeId === 'string' ? req.query.typeId : undefined;
+  res.json(await service.directory(typeId));
+};
+
 export const get = async (req: Request, res: Response) => {
   res.json(await service.getById(req.params.id as string));
 };
