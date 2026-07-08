@@ -1,6 +1,12 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../../lib/httpError';
+import {
+  ensureWorkflowTypePermissions,
+  grantWorkflowTypePermissionsToSuperAdmin,
+  deleteWorkflowTypePermissions,
+} from '../../../lib/rbac-workflow-types';
+import { invalidatePermissionCache } from '../../../middleware/permissions';
 import type {
   CreateNamedInput,
   CreateSeverityInput,
@@ -11,6 +17,15 @@ import type {
 const derivePrefix = (name: string) => {
   const cleaned = name.replace(/[^a-zA-Z0-9]/g, '');
   return cleaned.slice(0, 3).toUpperCase() || 'WF';
+};
+
+// Generate this type's per-type RBAC keys, grant them to SUPER_ADMIN, and drop
+// the permission cache so the new module is immediately grantable in Access
+// Control (see lib/rbac-workflow-types.ts).
+const provisionTypePermissions = async (typeId: string, name: string) => {
+  await ensureWorkflowTypePermissions(typeId, name);
+  await grantWorkflowTypePermissionsToSuperAdmin(typeId, name);
+  invalidatePermissionCache();
 };
 
 // ─── WorkflowType ────────────────────────────────────────────────────────────
@@ -35,11 +50,13 @@ export const createWorkflowType = async (input: CreateWorkflowTypeInput) => {
   const codePrefix = input.codePrefix?.toUpperCase() ?? derivePrefix(input.name);
 
   if (exists?.isDeleted) {
-    return prisma.workflowType.update({
+    const revived = await prisma.workflowType.update({
       where: { id: exists.id },
       data: { isDeleted: false, codePrefix },
       include: { iconConfig: true },
     });
+    await provisionTypePermissions(revived.id, revived.name);
+    return revived;
   }
 
   const created = await prisma.workflowType.create({
@@ -52,6 +69,7 @@ export const createWorkflowType = async (input: CreateWorkflowTypeInput) => {
     },
     include: { iconConfig: true },
   });
+  await provisionTypePermissions(created.id, created.name);
   return created;
 };
 
@@ -72,6 +90,11 @@ export const deleteWorkflowType = async (id: string, hard: boolean) => {
 
   if (hard) {
     await prisma.workflowType.delete({ where: { id } });
+    // Type is gone for good — remove its per-type permission rows (role/dept/user
+    // grants cascade away via the M2M). Soft-delete keeps them so a restore is
+    // seamless.
+    await deleteWorkflowTypePermissions(id);
+    invalidatePermissionCache();
   } else {
     if (type.isDeleted) throw BadRequest('Workflow type already deleted');
     await prisma.workflowType.update({ where: { id }, data: { isDeleted: true } });

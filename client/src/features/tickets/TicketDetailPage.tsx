@@ -21,9 +21,6 @@ export default function TicketDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const hasPermission = useAuthStore((s) => s.hasPermission);
-  const canTransition = hasPermission('ticket.transition');
-  const canUpdate = hasPermission('ticket.update');
-  const canDelete = hasPermission('ticket.delete');
   const deleteTicket = useDeleteTicket();
   const { modal } = App.useApp();
 
@@ -41,6 +38,16 @@ export default function TicketDetailPage() {
   }, [id]);
 
   const { data: ticket, isLoading, error } = useTicket(id);
+
+  // Per-type gating with the global `ticket.*` master as the OR-bridge fallback.
+  // The type comes from the ticket's (root) flow; null → only the global key grants.
+  const typeId = ticket?.flows[0]?.workflow.typeId ?? null;
+  const canForType = (action: string) =>
+    hasPermission(`ticket.${action}`) ||
+    (!!typeId && hasPermission(`wf_type.${typeId}.${action}`));
+  const canTransition = canForType('transition');
+  const canUpdate = canForType('update');
+  const canDelete = canForType('delete');
 
   const handleDelete = () => {
     if (!ticket) return;

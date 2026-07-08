@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 import * as service from './ticket.service';
+import { getEffectivePermissionKeys, ticketReadScope } from '../../middleware/permissions';
 import type {
   AddCommentInput,
   AttachDocInput,
@@ -19,7 +20,9 @@ const userId = (req: Request): string => {
 };
 
 export const list = async (req: Request, res: Response) => {
-  res.json(await service.list(req.query as unknown as ListTicketsQuery, userId(req)));
+  const keys = await getEffectivePermissionKeys(userId(req));
+  const scope = ticketReadScope(keys);
+  res.json(await service.list(req.query as unknown as ListTicketsQuery, userId(req), scope));
 };
 
 export const get = async (req: Request, res: Response) => {

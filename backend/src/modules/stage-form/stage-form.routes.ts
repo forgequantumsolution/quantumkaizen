@@ -21,7 +21,7 @@ import {
 } from './stage-form.schema';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
-import { requirePermission } from '../../middleware/permissions';
+import { requirePermission, requireTicketAction } from '../../middleware/permissions';
 import { asyncHandler } from '../../lib/asyncHandler';
 
 // ─── /api/workflows/:id/stage-form-bindings — list + create ────────────────
@@ -76,7 +76,7 @@ ticketScopedFormsRouter.use(requireAuth);
 
 ticketScopedFormsRouter.get(
   '/:id/stage-forms',
-  requirePermission('ticket.read'),
+  requireTicketAction('read'),
   validate(TicketIdParamSchema, 'params'),
   asyncHandler(ctrl.listForTicket),
 );
@@ -85,7 +85,7 @@ ticketScopedFormsRouter.get(
 // keeps filled forms viewable after the ticket leaves a stage or completes.
 ticketScopedFormsRouter.get(
   '/:id/form-submissions',
-  requirePermission('ticket.read'),
+  requireTicketAction('read'),
   validate(TicketIdParamSchema, 'params'),
   asyncHandler(ctrl.listSubmittedForms),
 );

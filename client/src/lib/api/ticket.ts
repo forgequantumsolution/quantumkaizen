@@ -53,7 +53,7 @@ export interface TicketDetail extends TicketSummary {
   flows: (TicketFlowSummary & {
     completedAt: string | null;
     statusUpdatedAt: string;
-    workflow: { id: string; name: string; version: number };
+    workflow: { id: string; name: string; version: number; typeId: string | null };
   })[];
 }
 
