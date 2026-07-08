@@ -29,9 +29,10 @@ import {
   useRaiseTicket,
   type TicketClassification,
 } from '@/lib/api/ticket';
-import { useWorkflows } from '@/lib/api/workflow';
+import { useWorkflowDirectory } from '@/lib/api/workflow';
 import { usePriorities, useSeverities } from '@/lib/api/workflowLookups';
 import { useSites } from '@/lib/api/sites';
+import { useSiteStore } from '@/stores/siteStore';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { displayWorkflowName } from '@/lib/utils';
 
@@ -76,11 +77,7 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
   const [classification, setClassification] =
     useState<TicketClassification | undefined>(undefined);
 
-  const { data: workflowsData, isLoading: loadingWorkflows } = useWorkflows({
-    status: 'ACTIVE',
-    typeId: workflowTypeId,
-    pageSize: 100,
-  });
+  const { data: workflowsData, isLoading: loadingWorkflows } = useWorkflowDirectory(workflowTypeId);
   const { data: priorities = [] } = usePriorities();
   const { data: severities = [] } = useSeverities();
   const { data: sitesData } = useSites({ isActive: 'true', pageSize: 200 });
@@ -100,6 +97,13 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
       setWorkflowId(activeWorkflows[0].id);
     }
   }, [workflowTypeId, activeWorkflows, workflowId]);
+
+  // Default the new ticket's site to the navbar's active site when the drawer
+  // opens, so tickets are raised in the site the user is currently viewing.
+  const activeSiteId = useSiteStore((s) => s.selectedSiteId);
+  useEffect(() => {
+    if (isOpen && activeSiteId && !siteId) setSiteId(activeSiteId);
+  }, [isOpen, activeSiteId, siteId]);
 
   const selectedWorkflow = useMemo(
     () => activeWorkflows.find((w) => w.id === workflowId),

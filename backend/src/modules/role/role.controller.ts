@@ -10,6 +10,10 @@ export const get = async (req: Request, res: Response) => {
   res.json(await service.getById(req.params.id as string));
 };
 
+export const directory = async (_req: Request, res: Response) => {
+  res.json(await service.directory());
+};
+
 export const create = async (req: Request, res: Response) => {
   res.status(201).json(await service.create(req.body));
 };

@@ -22,7 +22,7 @@ import {
   type CapaUpdate,
 } from '@/lib/api/audit';
 import { useTicket } from '@/lib/api/ticket';
-import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useHasPermission } from '@/stores/authStore';
 import {
@@ -212,7 +212,7 @@ function DetailsTab({ capa, canEdit }: { capa: Capa; canEdit: boolean }) {
 
 function EditCapaModal({ capa, open, onClose }: { capa: Capa; open: boolean; onClose: () => void }) {
   const updateMut = useUpdateCapa(capa.id);
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const { data: deptsResp } = useDepartments({ pageSize: 200 });
   const users = usersData?.items ?? [];
   const departments = deptsResp?.items ?? [];
@@ -318,7 +318,7 @@ function ActionsTab({ capa }: { capa: Capa }) {
   const canUpdate = useHasPermission('action_item.update');
   const createMut = useCreateActionItem();
   const statusMut = useUpdateActionItemStatus();
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const users = usersData?.items ?? [];
 
   const [open, setOpen] = useState(false);

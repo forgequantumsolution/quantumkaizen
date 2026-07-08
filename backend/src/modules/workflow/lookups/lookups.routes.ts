@@ -36,12 +36,16 @@ router.delete(
   asyncHandler(ctrl.deleteType)
 );
 
+// Reference lookups (stage statuses, action types/criteria, priorities,
+// severities) are small pick-lists that operational forms need to render —
+// raising a ticket, filtering a module, running a checklist. Like `/types`,
+// the GET lists are readable by ANY authenticated user; gating them behind the
+// Configuration-admin `workflow.lookups.read` empties those pickers for
+// operational roles (e.g. per-workflow-type ticket access, auditors). Mutations
+// stay on `workflow.lookups.manage`.
+
 // StageStatus
-router.get(
-  '/stage-statuses',
-  requirePermission('workflow.lookups.read'),
-  asyncHandler(ctrl.listStageStatuses)
-);
+router.get('/stage-statuses', asyncHandler(ctrl.listStageStatuses));
 router.post(
   '/stage-statuses',
   requirePermission('workflow.lookups.manage'),
@@ -50,11 +54,7 @@ router.post(
 );
 
 // ActionType
-router.get(
-  '/action-types',
-  requirePermission('workflow.lookups.read'),
-  asyncHandler(ctrl.listActionTypes)
-);
+router.get('/action-types', asyncHandler(ctrl.listActionTypes));
 router.post(
   '/action-types',
   requirePermission('workflow.lookups.manage'),
@@ -63,11 +63,7 @@ router.post(
 );
 
 // ActionCriteria
-router.get(
-  '/action-criteria',
-  requirePermission('workflow.lookups.read'),
-  asyncHandler(ctrl.listActionCriteria)
-);
+router.get('/action-criteria', asyncHandler(ctrl.listActionCriteria));
 router.post(
   '/action-criteria',
   requirePermission('workflow.lookups.manage'),
@@ -76,20 +72,10 @@ router.post(
 );
 
 // Priority
-router.get(
-  '/priorities',
-  requirePermission('workflow.lookups.read'),
-  asyncHandler(ctrl.listPriorities)
-);
+router.get('/priorities', asyncHandler(ctrl.listPriorities));
 
 // Severity — industry-standard impact classification (Critical/Major/Minor).
-// Lives under workflow lookups because it's a small named lookup like the
-// others, and reuses the same `workflow.lookups.*` permissions.
-router.get(
-  '/severities',
-  requirePermission('workflow.lookups.read'),
-  asyncHandler(ctrl.listSeverities)
-);
+router.get('/severities', asyncHandler(ctrl.listSeverities));
 router.post(
   '/severities',
   requirePermission('workflow.lookups.manage'),

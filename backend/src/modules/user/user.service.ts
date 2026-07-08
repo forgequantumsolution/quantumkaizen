@@ -85,6 +85,41 @@ export const getById = async (id: string) => {
   return user;
 };
 
+/**
+ * Lightweight people directory for assignment pickers (Lead Auditor, Approver,
+ * team members, CAPA owner, …). Returns just id/name/designation for active
+ * users. Unlike the admin `list`, this is readable by ANY authenticated user —
+ * picking a colleague to assign work to isn't a user-admin capability, and
+ * gating it behind `user.read` would empty every people-picker for operational
+ * roles (e.g. auditors) that legitimately need it.
+ */
+export const directory = async (siteIds: string[] | null = null) => {
+  const items = await prisma.user.findMany({
+    where: {
+      isActive: true,
+      // null → caller may see every site (viewAll); otherwise limit to their site(s).
+      ...(siteIds ? { siteId: { in: siteIds } } : {}),
+    },
+    // Enough for any assignment picker: name/email to display + role/department/
+    // site to group, filter and label by (LMS bulk-assign, reports, etc.).
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      designation: true,
+      employeeId: true,
+      roleId: true,
+      departmentId: true,
+      siteId: true,
+      role: { select: { id: true, name: true } },
+      department: { select: { id: true, code: true, name: true } },
+      site: { select: { id: true, code: true, name: true } },
+    },
+    orderBy: { name: 'asc' },
+  });
+  return { items };
+};
+
 export const create = async (input: CreateUserInput) => {
   const conflictCheck: Prisma.UserWhereInput[] = [{ email: input.email }];
   if (input.employeeId) conflictCheck.push({ employeeId: input.employeeId });

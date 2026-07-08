@@ -18,8 +18,8 @@ import {
   type ChecklistAssignment,
   type NamedRef,
 } from '@/lib/api/audit';
-import { useAdminUsers } from '@/features/admin/users/hooks';
-import { useWorkflows } from '@/lib/api/workflow';
+import { useUserDirectory } from '@/features/admin/users/hooks';
+import { useWorkflowDirectory } from '@/lib/api/workflow';
 import { fyLabel } from '@/stores/fiscalYearStore';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 
@@ -113,14 +113,14 @@ export default function AuditRegisterFormPage() {
   const { data: focusAreasData } = useFocusAreas({ is_active: true, page_size: 200 });
   const focusAreaOptions = focusAreasData?.data ?? [];
 
-  const { data: usersData } = useAdminUsers({ pageSize: 200, isActive: true });
+  const { data: usersData } = useUserDirectory();
   const users = usersData?.items ?? [];
 
   const { data: isoData } = useIsoStandards();
   const isoStandards = isoData?.data ?? [];
 
   // Workflows the audit can follow — only published/active ones, like Raise Ticket.
-  const { data: workflowsData } = useWorkflows({ pageSize: 200, status: 'ACTIVE' });
+  const { data: workflowsData } = useWorkflowDirectory();
   const activeWorkflows = (workflowsData?.items ?? []).filter(
     (w) => w.workflowStatus === 'ACTIVE',
   );

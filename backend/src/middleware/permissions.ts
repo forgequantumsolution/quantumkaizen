@@ -143,3 +143,54 @@ export const requireTicketListAccess = async (
     next(err);
   }
 };
+
+// ─── Per-site scoping ─────────────────────────────────────────────────────────
+
+/** Holders bypass per-site scoping and may view/switch across every site. */
+export const SITE_VIEW_ALL = 'site.view_all';
+
+export interface SiteScope {
+  /** true → user may see every site (holds `site.view_all`). */
+  all: boolean;
+  /** When !all, the site ids the user is limited to (their own assigned site). */
+  siteIds: string[];
+}
+
+/**
+ * Which sites a user may see. Holders of `site.view_all` (admins) get every
+ * site; everyone else is pinned to their single assigned site. A user with no
+ * site (shouldn't happen post-backfill) gets an empty scope → sees nothing,
+ * the safe closed default.
+ */
+export const resolveSiteScope = async (userId: string): Promise<SiteScope> => {
+  const keys = await loadPermissions(userId);
+  if (keys.has(SITE_VIEW_ALL)) return { all: true, siteIds: [] };
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { siteId: true },
+  });
+  return { all: false, siteIds: user?.siteId ? [user.siteId] : [] };
+};
+
+/**
+ * Build the `where.siteId` clause for a ticket list. Intersects the caller's
+ * allowed scope with an optional requested site (the navbar selection). A
+ * requested site OUTSIDE the allowed scope is ignored — the selection can never
+ * widen access (the hard boundary).
+ *   - undefined  → no constraint (viewAll + no specific request)
+ *   - { in: [...] } → constrained to the resolved set (may be empty → no rows)
+ */
+export const siteFilterFor = (
+  scope: SiteScope,
+  requestedSiteId?: string | null,
+): { in: string[] } | undefined => {
+  if (scope.all) return requestedSiteId ? { in: [requestedSiteId] } : undefined;
+  if (requestedSiteId && scope.siteIds.includes(requestedSiteId)) {
+    return { in: [requestedSiteId] };
+  }
+  return { in: scope.siteIds };
+};
+
+/** Whether the caller may assign a ticket to `siteId` (create / update). */
+export const canUseSite = (scope: SiteScope, siteId: string): boolean =>
+  scope.all || scope.siteIds.includes(siteId);

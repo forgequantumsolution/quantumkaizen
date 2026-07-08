@@ -12,7 +12,7 @@ import {
   type TrainingItemSummary,
 } from '@/lib/api/training';
 import { useDocuments } from '@/lib/api/dms';
-import { useRoles } from '@/features/admin/roles/hooks';
+import { useRoleDirectory } from '@/features/admin/roles/hooks';
 
 export default function TrainingListPage() {
   const nav = useNavigate();
@@ -126,7 +126,7 @@ function CreateTrainingModal({ open, onClose }: { open: boolean; onClose: () => 
   const { message } = App.useApp();
   const createMut = useCreateTrainingItem();
   const { data: docs } = useDocuments({ status: 'EFFECTIVE', page_size: 200 });
-  const { data: rolesResp } = useRoles({ pageSize: 200 });
+  const { data: rolesResp } = useRoleDirectory();
   const roles = rolesResp?.items ?? [];
 
   const [title, setTitle] = useState('');

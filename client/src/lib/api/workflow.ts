@@ -209,6 +209,27 @@ export const useWorkflows = (
     ...options,
   });
 
+/** One entry in the lightweight workflow picker directory. */
+export interface WorkflowDirectoryEntry {
+  id: string;
+  name: string;
+  version: number;
+  workflowStatus: WorkflowLifecycleStatus;
+  type: NamedRef | null;
+}
+
+/**
+ * Picker list of ACTIVE workflows, readable by any authenticated user — unlike
+ * `useWorkflows` (needs `workflow.read`, which operational roles like auditors
+ * lack, so its picker 403s → empty). Use for "choose a workflow to follow/raise".
+ */
+export const useWorkflowDirectory = (typeId?: string) =>
+  useQuery<{ items: WorkflowDirectoryEntry[] }>({
+    queryKey: ['workflows', 'directory', typeId ?? null],
+    queryFn: () =>
+      api.get('/workflows/directory', { params: typeId ? { typeId } : {} }).then((r) => r.data),
+  });
+
 export const useWorkflow = (id: string | undefined) =>
   useQuery<WorkflowDetailResponse>({
     queryKey: workflowKeys.detail(id ?? ''),

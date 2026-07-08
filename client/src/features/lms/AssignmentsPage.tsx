@@ -4,8 +4,8 @@ import { UserPlus, Search, Users as UsersIcon } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
 import { useCourses, useCurricula, useAssignCourse, useAssignCurriculum, type AssignBody } from '@/lib/api/lms';
-import { useAdminUsers, type AdminUser } from '@/features/admin/users/hooks';
-import { useRoles } from '@/features/admin/roles/hooks';
+import { useUserDirectory, type DirectoryUser } from '@/features/admin/users/hooks';
+import { useRoleDirectory } from '@/features/admin/roles/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useSites } from '@/lib/api/sites';
 
@@ -25,8 +25,8 @@ export default function AssignmentsPage() {
 
   const { data: courses } = useCourses({ status: 'PUBLISHED', latest_only: true });
   const { data: curricula } = useCurricula();
-  const { data: usersResp } = useAdminUsers({ isActive: true, pageSize: 200 });
-  const { data: rolesResp } = useRoles({ pageSize: 200 });
+  const { data: usersResp } = useUserDirectory();
+  const { data: rolesResp } = useRoleDirectory();
   const { data: deptResp } = useDepartments({ isActive: true, pageSize: 200 });
   const { data: sitesResp } = useSites({ pageSize: 200 });
 
@@ -40,7 +40,7 @@ export default function AssignmentsPage() {
 
   // Live preview of who the current target resolves to — mirrors the backend's
   // resolveTargetUserIds() (active users matched by the chosen dimension).
-  const recipients = useMemo<AdminUser[]>(() => {
+  const recipients = useMemo<DirectoryUser[]>(() => {
     if (mode === 'Users') return allUsers.filter((u) => userIds.includes(u.id));
     if (mode === 'Role') return roleId ? allUsers.filter((u) => u.roleId === roleId) : [];
     if (mode === 'Department') return deptId ? allUsers.filter((u) => u.departmentId === deptId) : [];
@@ -174,7 +174,7 @@ export default function AssignmentsPage() {
               }
             />
           ) : (
-            <Table<AdminUser>
+            <Table<DirectoryUser>
               rowKey="id"
               size="small"
               dataSource={shownRecipients}

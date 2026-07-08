@@ -9,7 +9,8 @@ import {
   resumeTicket as engineResume,
 } from '../workflow/engine/orchestrator';
 import { emitAuditEvent } from '../workflow/engine/audit.emitter';
-import type { TicketTypeScope } from '../../middleware/permissions';
+import type { TicketTypeScope, SiteScope } from '../../middleware/permissions';
+import { siteFilterFor } from '../../middleware/permissions';
 import type {
   AddCommentInput,
   AttachDocInput,
@@ -100,9 +101,15 @@ export const list = async (
   query: ListTicketsQuery,
   userId: string,
   scope: TicketTypeScope = { all: true, typeIds: [] },
+  siteScope: SiteScope = { all: true, siteIds: [] },
 ) => {
   const where: Prisma.TicketWhereInput = {};
   if (query.includeDeleted !== 'true') where.isDeleted = false;
+
+  // Per-site scoping: constrain to the sites the caller may see, intersected
+  // with any navbar site selection. viewAll + no selection → no constraint.
+  const siteWhere = siteFilterFor(siteScope, query.siteId);
+  if (siteWhere) where.siteId = siteWhere;
   const flowsSome: Prisma.TicketFlowWhereInput = {};
   if (query.workflowId) flowsSome.workflowId = query.workflowId;
   if (query.workflowTypeId) flowsSome.workflow = { typeId: query.workflowTypeId };

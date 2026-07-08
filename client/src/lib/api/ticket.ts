@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { useSiteStore } from '@/stores/siteStore';
 import type { NamedRef, StageActionBehavior, UserRef } from './workflow';
 import { approvalKeys } from './approval';
 import { slaKeys } from './sla';
@@ -138,6 +139,8 @@ export interface ListTicketsQuery {
   search?: string;
   workflowId?: string;
   workflowTypeId?: string;
+  /** Navbar site selection. Narrows to one site; server ignores it if out of scope. */
+  siteId?: string;
   status?: 'open' | 'completed' | 'all';
   mine?: 'true' | 'false';
   includeDeleted?: 'true' | 'false';
@@ -207,11 +210,17 @@ export const ticketKeys = {
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
-export const useTickets = (filters: ListTicketsQuery = {}) =>
-  useQuery<{ items: TicketSummary[]; total: number; page: number; pageSize: number }>({
-    queryKey: ticketKeys.list(filters),
-    queryFn: () => api.get('/tickets', { params: filters }).then((r) => r.data),
+export const useTickets = (filters: ListTicketsQuery = {}) => {
+  // Auto-scope every ticket list to the navbar's active site (unless the caller
+  // pinned one explicitly). Included in the query key so switching site refetches.
+  const activeSiteId = useSiteStore((s) => s.selectedSiteId);
+  const merged: ListTicketsQuery =
+    activeSiteId && !filters.siteId ? { ...filters, siteId: activeSiteId } : filters;
+  return useQuery<{ items: TicketSummary[]; total: number; page: number; pageSize: number }>({
+    queryKey: ticketKeys.list(merged),
+    queryFn: () => api.get('/tickets', { params: merged }).then((r) => r.data),
   });
+};
 
 export const useTicket = (id: string | undefined) =>
   useQuery<TicketDetail>({
