@@ -9,6 +9,7 @@ import { useSiteStore } from '@/stores/siteStore';
 import { useUIStore } from '@/stores/uiStore';
 import { useNotificationStore, AppNotification } from '@/stores/notificationStore';
 import { useTicket } from '@/lib/api/ticket';
+import { useWorkflowTypes } from '@/lib/api/workflowLookups';
 import NotificationPanel from '@/components/shared/NotificationPanel';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { cn } from '@/lib/utils';
@@ -190,8 +191,19 @@ export default function Header() {
     segments[0] === 'tickets' && segments[1] ? segments[1] : undefined;
   const { data: ticket } = useTicket(ticketIdSegment);
 
+  // On /modules/<typeId>, swap the UUID segment for the workflow type name.
+  // The list is served from a localStorage-backed cache, so it's usually
+  // available immediately; hide the segment until it resolves to avoid a
+  // raw-UUID flash.
+  const moduleIdSegment =
+    segments[0] === 'modules' && segments[1] ? segments[1] : undefined;
+  const { data: workflowTypes } = useWorkflowTypes();
+  const moduleName = moduleIdSegment
+    ? workflowTypes?.find((t) => t.id === moduleIdSegment)?.name
+    : undefined;
+
   const visibleSegments =
-    ticketIdSegment && !ticket?.uniqueId
+    (ticketIdSegment && !ticket?.uniqueId) || (moduleIdSegment && !moduleName)
       ? segments.filter((_, i) => i !== 1)
       : segments;
 
@@ -199,7 +211,9 @@ export default function Header() {
     const label =
       seg === ticketIdSegment && ticket?.uniqueId
         ? ticket.uniqueId
-        : breadcrumbMap[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1);
+        : seg === moduleIdSegment && moduleName
+          ? moduleName
+          : breadcrumbMap[seg] ?? seg.charAt(0).toUpperCase() + seg.slice(1);
     return {
       label,
       path: '/' + visibleSegments.slice(0, i + 1).join('/'),
