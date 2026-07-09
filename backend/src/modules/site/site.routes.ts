@@ -8,29 +8,30 @@ import {
 } from './site.schema';
 import { validate } from '../../middleware/validate';
 import { requireAuth } from '../../middleware/auth';
-import { requirePermission } from '../../middleware/permissions';
+import { requirePermission, requireAnyPermission } from '../../middleware/permissions';
 import { asyncHandler } from '../../lib/asyncHandler';
 
-// Sites are organizational data, so we reuse the existing `org.read` /
-// `org.update` permission keys instead of minting new ones. This keeps
-// permission seeds compatible without a re-run.
+// Facilities are their own configurable module (Configuration → Facilities in
+// Access Control), gated by granular `site.*` CRUD keys. The list/detail reads
+// also accept the broader `org.read` so operational pickers (ticket site
+// selector, LMS targeting) — held by roles without `site.read` — keep working.
 const router = Router();
 
 router.use(requireAuth);
 
-router.get('/', requirePermission('org.read'), validate(ListQuerySchema, 'query'), asyncHandler(ctrl.list));
-router.get('/:id', requirePermission('org.read'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.get));
-router.post('/', requirePermission('org.update'), validate(CreateSiteSchema), asyncHandler(ctrl.create));
+router.get('/', requireAnyPermission('site.read', 'org.read'), validate(ListQuerySchema, 'query'), asyncHandler(ctrl.list));
+router.get('/:id', requireAnyPermission('site.read', 'org.read'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.get));
+router.post('/', requirePermission('site.create'), validate(CreateSiteSchema), asyncHandler(ctrl.create));
 router.patch(
   '/:id',
-  requirePermission('org.update'),
+  requirePermission('site.update'),
   validate(IdParamSchema, 'params'),
   validate(UpdateSiteSchema),
   asyncHandler(ctrl.patch),
 );
 router.delete(
   '/:id',
-  requirePermission('org.update'),
+  requirePermission('site.delete'),
   validate(IdParamSchema, 'params'),
   asyncHandler(ctrl.remove),
 );

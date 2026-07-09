@@ -133,6 +133,7 @@ export const NAV_ACCESS: NavModuleAccess[] = [
       { key: 'config.users',         label: 'Users',          permission: 'user.read',             entity: 'user' },
       { key: 'config.roles',         label: 'Roles',          permission: 'role.read',             entity: 'role' },
       { key: 'config.departments',   label: 'Departments',    permission: 'department.read',       entity: 'department' },
+      { key: 'config.sites',         label: 'Facilities',     permission: 'site.read',             entity: 'site' },
       { key: 'config.workflowTypes', label: 'Workflow Types', permission: 'workflow.lookups.read', entity: 'workflow.lookups' },
     ],
   },

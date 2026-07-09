@@ -32,7 +32,7 @@ const masterDataTabs = [
   { key: "general",        label: "Organization Profile", icon: Building2,    permission: undefined },
   { key: "users",          label: "User Management",      icon: UsersIcon,   permission: "user.read" },
   { key: "departments",    label: "Departments",          icon: Layers,      permission: "department.read" },
-  { key: "sites",          label: "Facilities",           icon: MapPin,      permission: undefined },
+  { key: "sites",          label: "Facilities",           icon: MapPin,      permission: "site.read" },
   { key: "roles",          label: "Roles",                icon: KeyRound,    permission: "role.read" },
   { key: "access",         label: "Access Control",       icon: Lock,        permission: "role.read" },
   { key: "workflow-types", label: "Workflow Categories",  icon: Workflow,    permission: "workflow.lookups.read" },

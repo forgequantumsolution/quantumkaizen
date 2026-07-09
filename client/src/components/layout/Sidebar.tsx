@@ -335,9 +335,23 @@ export default function Sidebar() {
         "/lims/spec-versions",
       ],
     };
+    // Configuration only appears when the user can reach at least one of its
+    // set-up surfaces (parent `anyPermission`). A role with no config access
+    // (e.g. an auditor) would otherwise still see the group via the ungated
+    // Master Data / Appearance children. Keep this union in sync with the child
+    // gates below.
     const configItem: NavItem = {
       label: "Configuration",
       icon: Settings,
+      anyPermission: [
+        "workflow.read",
+        "form.read",
+        "user.read",
+        "role.read",
+        "department.read",
+        "site.read",
+        "workflow.lookups.read",
+      ],
       children: [
         {
           label: "Workflows",
@@ -351,7 +365,23 @@ export default function Sidebar() {
           icon: ClipboardList,
           permission: "form.read",
         },
-        { label: "Master Data", path: "/settings", icon: Database },
+        // Master Data holds the admin tabs (Users / Roles / Access Control /
+        // Departments / Facilities / Workflow Categories / …). Show it only when
+        // the user can open at least one of those gated tabs — the always-on
+        // personal tabs (profile / notifications / security) don't warrant the
+        // entry on their own.
+        {
+          label: "Master Data",
+          path: "/settings",
+          icon: Database,
+          anyPermission: [
+            "user.read",
+            "role.read",
+            "department.read",
+            "site.read",
+            "workflow.lookups.read",
+          ],
+        },
         { label: "Appearance", path: "/appearance", icon: Palette },
       ],
     };
