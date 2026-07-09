@@ -1208,3 +1208,14 @@ The read-only submission viewer (`InlineSubmissionViewer`, used by `RequiredForm
 ### Notes
 - No change needed to the client stage-form types — `TicketStageFormBinding` already exposed `canRead`/`canFill` (the contract was there; only the component ignored it).
 - The submit path was already blocked server-side (403) for restricted forms; this change removes the misleading UI that let unauthorized users view/type before that rejection.
+
+---
+
+# Module breadcrumb — show workflow type name instead of UUID — 2026-07-09
+
+**Problem:** Opening a module page (`/modules/<typeId>`, where `typeId` is the workflow type's UUID) showed the raw UUID in the header breadcrumb instead of the module (workflow type) name. The breadcrumb builder only had a static `breadcrumbMap` and otherwise capitalized the raw path segment, so UUID segments passed straight through.
+
+### `src/components/layout/Header.tsx`
+- Detect the `/modules/<typeId>` segment and resolve it to the workflow type name via `useWorkflowTypes()` — the same localStorage-cached list that drives the sidebar's Modules group, so the name is usually available immediately with no extra network flash.
+- Mirrors the existing ticket-UUID handling: the UUID segment is **hidden** until it resolves to a name (rather than flashing the raw UUID), then rendered as the workflow type `name`.
+- Added the `useWorkflowTypes` import from `@/lib/api/workflowLookups`.

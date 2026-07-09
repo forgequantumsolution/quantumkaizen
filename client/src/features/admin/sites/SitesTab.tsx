@@ -66,9 +66,9 @@ export default function SitesTab() {
   const update = useUpdateSite();
   const remove = useDeleteSite();
 
-  const canCreate = useHasPermission('org.update');
-  const canUpdate = useHasPermission('org.update');
-  const canDelete = useHasPermission('org.update');
+  const canCreate = useHasPermission('site.create');
+  const canUpdate = useHasPermission('site.update');
+  const canDelete = useHasPermission('site.delete');
 
   const [editing, setEditing] = useState<Site | null>(null);
   const [showForm, setShowForm] = useState(false);

@@ -40,6 +40,26 @@ export const requirePermission = (key: string) =>
     }
   };
 
+/**
+ * OR-guard: passes when the user holds ANY of the given keys. Used where one
+ * surface is reachable by two audiences with different keys — e.g. the sites
+ * list is served both to admins (`site.read`) and to operational pickers that
+ * only hold the broader `org.read`.
+ */
+export const requireAnyPermission = (...anyOf: string[]) =>
+  async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) return next(Unauthorized());
+    try {
+      const keys = await loadPermissions(req.user.userId);
+      if (!anyOf.some((k) => keys.has(k))) {
+        return next(Forbidden(`Missing required permission: ${anyOf.join(' or ')}`));
+      }
+      next();
+    } catch (err) {
+      next(err);
+    }
+  };
+
 // ─── Per-workflow-type ticket enforcement ────────────────────────────────────
 
 type TicketAction = 'read' | 'create' | 'update' | 'delete' | 'transition';

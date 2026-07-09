@@ -29,6 +29,13 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'department.delete', module: 'DEPARTMENT', action: 'DELETE', description: 'Delete departments' },
   { key: 'org.read',          module: 'ORG',        action: 'READ',   description: 'View organization settings' },
   { key: 'org.update',        module: 'ORG',        action: 'UPDATE', description: 'Edit organization settings' },
+  // Site / Facility master data (Configuration → Facilities). CRUD gates the
+  // admin management surface; the list stays readable via `org.read` too so
+  // operational pickers (ticket site selector, LMS targeting) keep working.
+  { key: 'site.read',         module: 'SITE',       action: 'READ',   description: 'View facilities / sites' },
+  { key: 'site.create',       module: 'SITE',       action: 'CREATE', description: 'Create facilities / sites' },
+  { key: 'site.update',       module: 'SITE',       action: 'UPDATE', description: 'Edit facilities / sites' },
+  { key: 'site.delete',       module: 'SITE',       action: 'DELETE', description: 'Delete facilities / sites' },
   // Site scoping — holders bypass per-site ticket scoping and may view/switch
   // across every site. Non-holders are pinned to their own assigned site.
   { key: 'site.view_all',     module: 'SITE',       action: 'MANAGE', description: 'View data across all sites (bypass per-site scoping)' },

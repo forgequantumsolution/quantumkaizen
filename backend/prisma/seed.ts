@@ -64,7 +64,7 @@ const ROLES = [
     description: 'Day-to-day QMS work: create and edit records, no admin access',
     isSystem: true,
     permissionKeys: [
-      'user.read', 'department.read', 'org.read',
+      'user.read', 'department.read', 'org.read', 'site.read',
       'doc.read', 'doc.write',
       'capa.read', 'capa.write',
       'nc.read', 'nc.write',
@@ -91,7 +91,7 @@ const ROLES = [
     description: 'Conducts audits, reads other QMS records',
     isSystem: true,
     permissionKeys: [
-      'user.read', 'department.read', 'org.read',
+      'user.read', 'department.read', 'org.read', 'site.read',
       'doc.read', 'capa.read', 'nc.read',
       'audit.read', 'audit.write', 'audit.approve',
       'fmea.read', 'risk.read', 'supplier.read',
@@ -111,7 +111,7 @@ const ROLES = [
     description: 'Manages document lifecycle and approvals',
     isSystem: true,
     permissionKeys: [
-      'user.read', 'department.read', 'org.read',
+      'user.read', 'department.read', 'org.read', 'site.read',
       'doc.read', 'doc.write', 'doc.approve',
       'capa.read', 'nc.read', 'audit.read',
       'training.read',
