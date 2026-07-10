@@ -46,6 +46,50 @@ export interface ComplianceItem {
 }
 
 /**
+ * Extract every answered `compliance` checklist item from ONE submission.
+ * The dedupeKey is prefixed so the same submission read via different callers
+ * (ticket vs program) stays idempotent and collision-free.
+ */
+const extractComplianceItems = async (
+  sub: { id: string; formId: string; responses: unknown },
+  dedupePrefix: string,
+): Promise<ComplianceItem[]> => {
+  const form = await prisma.form.findUnique({
+    where: { id: sub.formId },
+    select: {
+      sections: {
+        select: {
+          name: true,
+          fields: {
+            select: { name: true, label: true, typeName: true, type: { select: { name: true } } },
+          },
+        },
+      },
+    },
+  });
+  if (!form) return [];
+  const responses = (sub.responses ?? {}) as Record<string, Record<string, unknown>>;
+  const items: ComplianceItem[] = [];
+  for (const section of form.sections) {
+    const answered = responses[section.name] ?? {};
+    for (const field of section.fields) {
+      if (!isCompliance(field.typeName, field.type?.name ?? null)) continue;
+      const value = answered[field.name] as ComplianceResult | undefined;
+      if (!value || !RESULTS.has(value)) continue;
+      items.push({
+        submissionId: sub.id,
+        sectionName: section.name,
+        fieldName: field.name,
+        label: field.label,
+        dedupeKey: `${dedupePrefix}:${section.name}:${field.name}`,
+        result: value,
+      });
+    }
+  }
+  return items;
+};
+
+/**
  * Read every answered `compliance` checklist item on a ticket's submitted forms.
  * Returns ALL dispositions (including Compliant / N-A) — callers filter as needed.
  */
@@ -60,64 +104,47 @@ export const collectTicketComplianceItems = async (
 
   const items: ComplianceItem[] = [];
   for (const sub of submissions) {
-    const form = await prisma.form.findUnique({
-      where: { id: sub.formId },
-      select: {
-        sections: {
-          select: {
-            name: true,
-            fields: {
-              select: { name: true, label: true, typeName: true, type: { select: { name: true } } },
-            },
-          },
-        },
-      },
-    });
-    if (!form) continue;
-    const responses = (sub.responses ?? {}) as Record<string, Record<string, unknown>>;
-    for (const section of form.sections) {
-      const answered = responses[section.name] ?? {};
-      for (const field of section.fields) {
-        if (!isCompliance(field.typeName, field.type?.name ?? null)) continue;
-        const value = answered[field.name] as ComplianceResult | undefined;
-        if (!value || !RESULTS.has(value)) continue;
-        items.push({
-          submissionId: sub.id,
-          sectionName: section.name,
-          fieldName: field.name,
-          label: field.label,
-          dedupeKey: `${ticketId}:${sub.id}:${section.name}:${field.name}`,
-          result: value,
-        });
-      }
-    }
+    items.push(...(await extractComplianceItems(sub, `${ticketId}:${sub.id}`)));
   }
   return items;
 };
 
 /**
- * On audit-ticket completion, turn NON_CONFORMANCE / OBSERVATION dispositions into
- * Findings (+ NCs for non-conformances). Best-effort and idempotent; callers
- * should swallow errors so a workflow transition is never blocked.
+ * Read compliance items from a single form submission (the checklist an auditor
+ * filled during program execution). Submission id is globally unique, so it is
+ * a sufficient dedupe prefix on its own.
  */
-export const syncTicketComplianceFindings = async (
-  ticketId: string,
-): Promise<{ findingsCreated: number; ncsCreated: number; skipped: number }> => {
-  const result = { findingsCreated: 0, ncsCreated: 0, skipped: 0 };
-
-  const register = await prisma.auditRegister.findFirst({
-    where: { workflowTicketId: ticketId },
-    select: { program: { select: { id: true } } },
+export const collectSubmissionComplianceItems = async (
+  submissionId: string,
+): Promise<ComplianceItem[]> => {
+  const sub = await prisma.formSubmission.findUnique({
+    where: { id: submissionId },
+    select: { id: true, formId: true, responses: true },
   });
-  const programId = register?.program?.id;
-  if (!programId) return result; // not an audit ticket (or no program)
+  if (!sub) return [];
+  return extractComplianceItems(sub, sub.id);
+};
 
-  const marked = (await collectTicketComplianceItems(ticketId)).filter(
-    (i) => i.result === 'NON_CONFORMANCE' || i.result === 'OBSERVATION',
-  );
+export interface SyncResult {
+  findingsCreated: number;
+  ncsCreated: number;
+  skipped: number;
+}
+
+/**
+ * Persist NON_CONFORMANCE / OBSERVATION checklist items as Findings (+ NCs for
+ * non-conformances) under a program. Idempotent: re-running never duplicates
+ * because each finding stores its dedupeKey on `evidence`.
+ */
+const persistFindingsFromItems = async (
+  programId: string,
+  marked: ComplianceItem[],
+  source: string,
+): Promise<SyncResult> => {
+  const result: SyncResult = { findingsCreated: 0, ncsCreated: 0, skipped: 0 };
   if (marked.length === 0) return result;
 
-  // Dedupe against findings already synced from this ticket/program.
+  // Dedupe against findings already synced for this program.
   const existing = await prisma.auditFinding.findMany({
     where: { programId },
     select: { evidence: true },
@@ -146,8 +173,7 @@ export const syncTicketComplianceFindings = async (
     const severity = item.result === 'OBSERVATION' ? 'OBSERVATION' : 'MAJOR';
     const evidence: Prisma.InputJsonValue = {
       dedupeKey: item.dedupeKey,
-      source: 'checklist_compliance',
-      ticketId,
+      source,
       submissionId: item.submissionId,
       section: item.sectionName,
       field: item.fieldName,
@@ -180,6 +206,44 @@ export const syncTicketComplianceFindings = async (
   return result;
 };
 
+/**
+ * On audit-ticket completion, turn NON_CONFORMANCE / OBSERVATION dispositions into
+ * Findings (+ NCs for non-conformances). Best-effort and idempotent; callers
+ * should swallow errors so a workflow transition is never blocked.
+ */
+export const syncTicketComplianceFindings = async (ticketId: string): Promise<SyncResult> => {
+  const register = await prisma.auditRegister.findFirst({
+    where: { workflowTicketId: ticketId },
+    select: { program: { select: { id: true } } },
+  });
+  const programId = register?.program?.id;
+  if (!programId) return { findingsCreated: 0, ncsCreated: 0, skipped: 0 };
+
+  const marked = (await collectTicketComplianceItems(ticketId)).filter(
+    (i) => i.result === 'NON_CONFORMANCE' || i.result === 'OBSERVATION',
+  );
+  return persistFindingsFromItems(programId, marked, 'checklist_compliance_ticket');
+};
+
+/**
+ * On audit-program completion, turn the auditor's checklist dispositions
+ * (stored on program.checklistSubmissionId) into Findings + NCs. This is the
+ * counterpart of syncTicketComplianceFindings for the program-execution flow.
+ * Best-effort and idempotent.
+ */
+export const syncProgramComplianceFindings = async (programId: string): Promise<SyncResult> => {
+  const program = await prisma.auditProgram.findUnique({
+    where: { id: programId },
+    select: { id: true, checklistSubmissionId: true },
+  });
+  if (!program?.checklistSubmissionId) return { findingsCreated: 0, ncsCreated: 0, skipped: 0 };
+
+  const marked = (await collectSubmissionComplianceItems(program.checklistSubmissionId)).filter(
+    (i) => i.result === 'NON_CONFORMANCE' || i.result === 'OBSERVATION',
+  );
+  return persistFindingsFromItems(programId, marked, 'checklist_compliance_program');
+};
+
 // ── Read model for the Non-Conformance tab ──────────────────────────────────
 // Every disposition across audits, so the tab can display Compliant / Observation
 // / N-A alongside the actionable Non-Conformances.
@@ -202,10 +266,82 @@ export interface ComplianceResultRow {
   nc: { id: string; nc_number: string; status: string } | null;
 }
 
+// Map every synced finding's dedupeKey → its NC (if it became one) for a program.
+const ncMapForProgram = async (programId: string) => {
+  const findings = await prisma.auditFinding.findMany({
+    where: { programId },
+    select: {
+      evidence: true,
+      nonConformance: { select: { id: true, ncNumber: true, status: true } },
+    },
+  });
+  const ncByKey = new Map<string, { id: string; ncNumber: string; status: string }>();
+  for (const f of findings) {
+    const key = (f.evidence as { dedupeKey?: string } | null)?.dedupeKey;
+    if (key && f.nonConformance) ncByKey.set(key, f.nonConformance);
+  }
+  return ncByKey;
+};
+
 export const listAuditComplianceResults = async (filter?: {
   register_id?: string;
   program_id?: string;
 }): Promise<{ data: ComplianceResultRow[] }> => {
+  const rows: ComplianceResultRow[] = [];
+  const seenProgramIds = new Set<string>();
+
+  // ── Program-execution audits: checklist stored on program.checklistSubmissionId ──
+  const programs = await prisma.auditProgram.findMany({
+    where: {
+      checklistSubmissionId: { not: null },
+      ...(filter?.program_id ? { id: filter.program_id } : {}),
+      ...(filter?.register_id ? { registerId: filter.register_id } : {}),
+    },
+    select: {
+      id: true,
+      checklistSubmissionId: true,
+      register: {
+        select: {
+          id: true,
+          title: true,
+          registerNumber: true,
+          workflowTicketId: true,
+          auditor: { select: { id: true, name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  for (const prog of programs) {
+    if (!prog.register || !prog.checklistSubmissionId) continue;
+    const items = await collectSubmissionComplianceItems(prog.checklistSubmissionId);
+    if (items.length === 0) continue;
+    seenProgramIds.add(prog.id);
+    const ncByKey = await ncMapForProgram(prog.id);
+    for (const it of items) {
+      const nc = ncByKey.get(it.dedupeKey) ?? null;
+      rows.push({
+        id: it.dedupeKey,
+        result: it.result,
+        label: it.label,
+        section: it.sectionName,
+        ticket_id: prog.register.workflowTicketId ?? prog.id,
+        audit: {
+          register_id: prog.register.id,
+          program_id: prog.id,
+          title: prog.register.title,
+          register_number: prog.register.registerNumber,
+        },
+        auditor: prog.register.auditor
+          ? { id: prog.register.auditor.id, name: prog.register.auditor.name }
+          : null,
+        nc: nc ? { id: nc.id, nc_number: nc.ncNumber, status: nc.status } : null,
+      });
+    }
+  }
+
+  // ── Workflow-ticket audits: checklist on the ticket's submitted forms ──
   const registers = await prisma.auditRegister.findMany({
     where: {
       workflowTicketId: { not: null },
@@ -222,28 +358,14 @@ export const listAuditComplianceResults = async (filter?: {
     orderBy: { createdAt: 'desc' },
   });
 
-  const rows: ComplianceResultRow[] = [];
   for (const reg of registers) {
     if (!reg.program || !reg.workflowTicketId) continue;
     if (filter?.program_id && reg.program.id !== filter.program_id) continue;
+    if (seenProgramIds.has(reg.program.id)) continue; // already covered by program path
 
     const items = await collectTicketComplianceItems(reg.workflowTicketId);
     if (items.length === 0) continue;
-
-    // Map dedupeKey → NC (for the non-conformance items that were synced).
-    const findings = await prisma.auditFinding.findMany({
-      where: { programId: reg.program.id },
-      select: {
-        evidence: true,
-        nonConformance: { select: { id: true, ncNumber: true, status: true } },
-      },
-    });
-    const ncByKey = new Map<string, { id: string; ncNumber: string; status: string }>();
-    for (const f of findings) {
-      const key = (f.evidence as { dedupeKey?: string } | null)?.dedupeKey;
-      if (key && f.nonConformance) ncByKey.set(key, f.nonConformance);
-    }
-
+    const ncByKey = await ncMapForProgram(reg.program.id);
     for (const it of items) {
       const nc = ncByKey.get(it.dedupeKey) ?? null;
       rows.push({
@@ -263,5 +385,6 @@ export const listAuditComplianceResults = async (filter?: {
       });
     }
   }
+
   return { data: rows };
 };

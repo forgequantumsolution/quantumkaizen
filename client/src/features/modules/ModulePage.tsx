@@ -24,6 +24,8 @@ import {
   CheckCircle2,
   History,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -52,7 +54,7 @@ import {
   useWorkflowTypes,
 } from '@/lib/api/workflowLookups';
 import RaiseTicketDrawer from '@/features/tickets/shared/RaiseTicketDrawer';
-import ModuleDashboard from './ModuleDashboard';
+import ModuleDashboard, { computeModuleKpiChips } from './ModuleDashboard';
 
 type KpiId = 'mine' | 'department' | 'createdByMe' | 'all' | 'pending' | 'saved';
 type Tab = 'dashboard' | 'workspace';
@@ -146,6 +148,7 @@ export default function ModulePage({
     embedded || searchParams.get('tab') === 'workspace' ? 'workspace' : 'dashboard';
   const [tab, setTab] = useState<Tab>(initialTab);
   const [activeKpi, setActiveKpi] = useState<KpiId | null>(null);
+  const [showAllKpis, setShowAllKpis] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounced(searchInput, 250);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -343,6 +346,15 @@ export default function ModulePage({
   const isDocReview = /^document\s*review$/i.test(moduleName.trim());
   const showCreate = canCreate && !isDocReview;
 
+  // Summary indicators (Active, Overdue, Closure rate, …) hoisted from the
+  // dashboard so they live in the single top KPI strip, revealed by "Show more".
+  const indicatorChips = useMemo(
+    () => computeModuleKpiChips(allTickets, moduleName),
+    [allTickets, moduleName],
+  );
+  // Cards hidden while collapsed: scope cards beyond the first 4, plus every indicator.
+  const hiddenKpiCount = Math.max(0, KPI_DEFS.length - 4) + indicatorChips.length;
+
   // Download + Customize Columns — shown on its own row on the full page, but
   // tucked to the right of the header row when embedded (Audit My Workspace).
   const tableToolbar = (
@@ -497,26 +509,51 @@ export default function ModulePage({
       {tab === 'dashboard' && (
         <>
           {/* ── KPI cards (hidden for Document Review under DMS) ─────────── */}
+          {/* One-line strip: the 4 primary scopes stay on a single row; the
+              rest are revealed by the "Show more" toggle. */}
           {!isDocReview && (
-            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {KPI_DEFS.map((k) => (
-                <KpiCard
-                  key={k.id}
-                  label={k.label}
-                  value={kpiCounts[k.id]}
-                  icon={k.icon}
-                  accent={k.accent}
-                  selected={activeKpi === k.id}
-                  onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
-                />
-              ))}
+            <div className="mt-4">
+              <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
+                {/* Scope cards — first 4 always shown; the rest appear on expand. */}
+                {(showAllKpis ? KPI_DEFS : KPI_DEFS.slice(0, 4)).map((k) => (
+                  <div key={k.id} className="flex-1 min-w-[168px]">
+                    <KpiCard
+                      label={k.label}
+                      value={kpiCounts[k.id]}
+                      icon={k.icon}
+                      accent={k.accent}
+                      selected={activeKpi === k.id}
+                      onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
+                    />
+                  </div>
+                ))}
+                {/* Summary indicators — only when expanded. */}
+                {showAllKpis &&
+                  indicatorChips.map((c) => (
+                    <div key={c.key} className="flex-1 min-w-[168px]">
+                      <KpiCard label={c.label} value={c.value} icon={c.icon} accent={c.accent} />
+                    </div>
+                  ))}
+                {hiddenKpiCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllKpis((v) => !v)}
+                    className="shrink-0 inline-flex flex-col items-center justify-center gap-1 w-[92px] rounded-xl border border-dashed border-gray-300 bg-white text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+                  >
+                    {showAllKpis ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    <span className="text-[11px] font-medium">
+                      {showAllKpis ? 'Show less' : `+${hiddenKpiCount} more`}
+                    </span>
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
           {/* ── Module dashboard (charts) ──────────────────────────────── */}
           {!activeKpi && (
             <div className="mt-4">
-              <ModuleDashboard tickets={allTickets} moduleName={moduleName} />
+              <ModuleDashboard tickets={allTickets} moduleName={moduleName} showIndicators={false} />
             </div>
           )}
         </>

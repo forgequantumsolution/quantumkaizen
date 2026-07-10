@@ -13,11 +13,10 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     proxy: {
       '/api': {
-        // Use the IPv4 loopback explicitly: on macOS `localhost` resolves to
-        // IPv6 `::1` first, and the proxy stalls ~4s per cold connection before
-        // falling back to IPv4 — which makes freshly-navigated pages look like
-        // their data never loads until you interact.
-        target: 'http://127.0.0.1:4000',
+        // Point the dev proxy at the remote backend so the SPA talks to it
+        // through same-origin /api (no CORS). Swap back to a local target
+        // (e.g. http://127.0.0.1:4000) when running the backend locally.
+        target: 'http://68.178.164.38:8080',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (_err, _req, res) => {
@@ -29,7 +28,7 @@ export default defineConfig(({ mode }) => ({
         },
       },
       '/socket.io': {
-        target: 'http://127.0.0.1:4000',
+        target: 'http://68.178.164.38:8080',
         ws: true,
       },
     },

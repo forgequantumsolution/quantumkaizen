@@ -73,7 +73,19 @@ api.interceptors.response.use(
     if (status === 401 && !isDemoToken && !isLoginRequest) {
       localStorage.removeItem('qk_token');
       localStorage.removeItem('qk_user');
-      window.location.href = '/login';
+      // Also drop the persisted zustand auth store (key: 'qk-auth'). Without
+      // this, `isAuthenticated` rehydrates as `true` on the next load, App
+      // fires refreshUser() → /auth/me → 401 → redirect here again — an
+      // infinite reload loop that makes the login form impossible to use
+      // (e.g. after the backend changes and the old token is rejected).
+      localStorage.removeItem('qk-auth');
+      // Only hard-reload when we're not already sitting on the login screen,
+      // so a stale-token 401 doesn't refresh the page out from under the user
+      // while they're typing their credentials.
+      const path = window.location.pathname;
+      if (path !== '/login' && path !== '/') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

@@ -38,12 +38,17 @@ import {
   SlidersHorizontal,
   RotateCcw,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Card } from '@/components/ui';
+import type { KpiAccent } from '@/components/ui';
 import type { TicketSummary } from '@/lib/api/ticket';
 
 interface Props {
   tickets: TicketSummary[];
   moduleName: string;
+  /** Show the inline indicator strip. ModulePage sets this false because it
+   * hoists the same indicators into its top KPI strip. Defaults to true. */
+  showIndicators?: boolean;
 }
 
 const PALETTE = {
@@ -198,6 +203,56 @@ function profileFor(moduleName: string): Profile {
   return DEFAULT_PROFILE;
 }
 
+// ─── Shared indicator computation ────────────────────────────────────────────
+// Exposed so the parent (ModulePage) can hoist these summary KPIs into its top
+// strip instead of rendering them separately below the filters. Computed from
+// the full ticket list — nothing static.
+export interface ModuleKpiChip {
+  key: KpiKey;
+  icon: LucideIcon;
+  label: string;
+  value: string;
+  accent: KpiAccent;
+}
+
+export function computeModuleKpiChips(
+  tickets: TicketSummary[],
+  moduleName: string,
+): ModuleKpiChip[] {
+  const profile = profileFor(moduleName);
+  const open = tickets.filter((t) => !isCompleted(t));
+  const completedList = tickets.filter(isCompleted);
+  const onHold = open.filter((t) => t.isOnHold).length;
+  let overdue = 0;
+  let ageSum = 0;
+  for (const t of open) {
+    ageSum += daysSince(t.createdAt);
+    if (t.dueDate && daysSince(t.dueDate) > 0) overdue++;
+  }
+  const total = tickets.length;
+  const closureRate = total === 0 ? 0 : Math.round((completedList.length / total) * 100);
+  const avgAge = open.length === 0 ? 0 : Math.round(ageSum / open.length);
+  const now = new Date();
+  const created6mo = tickets.filter((t) => {
+    const b =
+      (now.getFullYear() - new Date(t.createdAt).getFullYear()) * 12 +
+      (now.getMonth() - new Date(t.createdAt).getMonth());
+    return b >= 0 && b < 6;
+  }).length;
+
+  const defs: Record<KpiKey, ModuleKpiChip> = {
+    active:      { key: 'active',      icon: ActivityIcon,  label: 'Active',         value: `${open.length}`,          accent: 'blue'    },
+    completed:   { key: 'completed',   icon: CheckCircle2,  label: 'Completed',      value: `${completedList.length}`, accent: 'emerald' },
+    closureRate: { key: 'closureRate', icon: CheckCircle2,  label: 'Closure rate',   value: `${closureRate}%`,         accent: 'emerald' },
+    overdue:     { key: 'overdue',     icon: AlertTriangle, label: 'Overdue',        value: `${overdue}`,              accent: 'red'     },
+    onHold:      { key: 'onHold',      icon: PauseCircle,   label: 'On hold',        value: `${onHold}`,               accent: 'amber'   },
+    avgAge:      { key: 'avgAge',      icon: Timer,         label: 'Avg age (open)', value: `${avgAge}d`,              accent: 'amber'   },
+    created6mo:  { key: 'created6mo',  icon: TrendingUp,    label: 'Created (6mo)',  value: `${created6mo}`,           accent: 'blue'    },
+    total:       { key: 'total',       icon: ClipboardList, label: 'Total records',  value: `${total}`,                accent: 'blue'    },
+  };
+  return profile.kpis.map((k) => defs[k]);
+}
+
 // ─── Metrics ────────────────────────────────────────────────────────────────
 interface Slice { name: string; value: number; color?: string }
 
@@ -222,7 +277,7 @@ interface Filters {
   severity?: string;
 }
 
-export default function ModuleDashboard({ tickets, moduleName }: Props) {
+export default function ModuleDashboard({ tickets, moduleName, showIndicators = true }: Props) {
   const profile = useMemo(() => profileFor(moduleName), [moduleName]);
   const accent = PALETTE[profile.accent];
   const [filters, setFilters] = useState<Filters>({});
@@ -412,12 +467,15 @@ export default function ModuleDashboard({ tickets, moduleName }: Props) {
         )}
       </div>
 
-      {/* Indicator strip */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        {profile.kpis.map((k) => (
-          <IndicatorChip key={k} {...kpiDefs[k]} />
-        ))}
-      </div>
+      {/* Indicator strip — suppressed when the parent hoists these into its
+          own top KPI strip (ModulePage passes showIndicators={false}). */}
+      {showIndicators && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {profile.kpis.map((k) => (
+            <IndicatorChip key={k} {...kpiDefs[k]} />
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {profile.charts.map((c) => (

@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound, Conflict } from '../../lib/httpError';
 import { writeTrail } from './compliance.service';
+import { syncProgramComplianceFindings } from './audit-compliance-sync.service';
 import { raiseTicket as engineRaiseTicket } from '../workflow/engine/orchestrator';
 import type {
   AuditMasterUpsertInput,
@@ -603,6 +604,15 @@ export const completeAuditProgram = async (id: string, input: CompleteAuditProgr
   const p = await prisma.auditProgram.findUnique({ where: { id } });
   if (!p) throw NotFound('Audit program not found');
   if (p.status !== 'IN_PROGRESS') throw BadRequest('Program is not IN_PROGRESS');
+
+  // Resolve the checklist submission that carries the auditor's compliance
+  // dispositions. Prefer an explicit id; otherwise fall back to the most recent
+  // SUBMITTED submission of this audit's checklist form (filled via "Open
+  // Checklist Form" during execution), so the disposition → findings sync has a
+  // source even though the generic form-fill flow can't set it directly.
+  const checklistSubmissionId =
+    input.checklist_submission_id ?? (await resolveChecklistSubmissionId(p));
+
   await prisma.$transaction([
     prisma.auditProgram.update({
       where: { id },
@@ -611,7 +621,7 @@ export const completeAuditProgram = async (id: string, input: CompleteAuditProgr
         completedAt: new Date(),
         summary: input.summary ?? null,
         score: input.score ?? null,
-        checklistSubmissionId: input.checklist_submission_id ?? null,
+        checklistSubmissionId,
       },
     }),
     prisma.auditRegister.update({
@@ -619,7 +629,42 @@ export const completeAuditProgram = async (id: string, input: CompleteAuditProgr
       data: { status: 'COMPLETED' },
     }),
   ]);
+
+  // Turn NON_CONFORMANCE / OBSERVATION dispositions into Findings (+ NCs).
+  // Best-effort: never block completion if the sync fails.
+  try {
+    await syncProgramComplianceFindings(id);
+  } catch (err) {
+    console.error('[audit] program compliance sync failed', id, err);
+  }
+
   return getAuditProgram(id);
+};
+
+/**
+ * Best-effort lookup of the checklist FormSubmission for a program: the latest
+ * SUBMITTED submission of the register's checklist form, filled since the audit
+ * started. Returns null when there is no checklist or no matching submission.
+ */
+const resolveChecklistSubmissionId = async (program: {
+  registerId: string;
+  startedAt: Date | null;
+}): Promise<string | null> => {
+  const register = await prisma.auditRegister.findUnique({
+    where: { id: program.registerId },
+    select: { checklistFormId: true },
+  });
+  if (!register?.checklistFormId) return null;
+  const sub = await prisma.formSubmission.findFirst({
+    where: {
+      formId: register.checklistFormId,
+      status: 'SUBMITTED',
+      ...(program.startedAt ? { updatedAt: { gte: program.startedAt } } : {}),
+    },
+    orderBy: { updatedAt: 'desc' },
+    select: { id: true },
+  });
+  return sub?.id ?? null;
 };
 
 // ────────────────────── Audit Finding ──────────────────────

@@ -402,8 +402,10 @@ export default function NonConformanceTrackPage() {
           rows={complianceRows}
           loading={crLoading}
           canUpdate={canUpdate}
+          canCreateCapa={canCreateCapa}
           statuses={NC_STATUSES}
           onStatusChange={handleStatusChange}
+          onRaiseCapa={setCapaTarget}
         />
       ) : (
       <>
@@ -491,15 +493,36 @@ function ComplianceResultsView({
   rows,
   loading,
   canUpdate,
+  canCreateCapa,
   statuses,
   onStatusChange,
+  onRaiseCapa,
 }: {
   rows: ComplianceResultRow[];
   loading: boolean;
   canUpdate: boolean;
+  canCreateCapa: boolean;
   statuses: NonConformanceStatus[];
   onStatusChange: (id: string, status: NonConformanceStatus) => void;
+  onRaiseCapa: (nc: NonConformance) => void;
 }) {
+  // Build a NonConformance-shaped target from a compliance row so the shared
+  // RaiseCapaModal can seed its title from the checklist item.
+  const rowToNc = (r: ComplianceResultRow): NonConformance => ({
+    id: r.nc!.id,
+    nc_number: r.nc!.nc_number,
+    status: r.nc!.status as NonConformanceStatus,
+    severity: 'MAJOR',
+    track: null,
+    due_date: null,
+    closed_at: null,
+    finding: { id: '', findingNumber: '', description: r.label },
+    department: null,
+    capa_ticket: null,
+    capa: null,
+    created_at: '',
+    updated_at: '',
+  });
   // Filter by the audit's user (auditor). Options are the distinct auditors
   // present in the results, so no extra lookup is needed.
   const [userId, setUserId] = useState<string>('');
@@ -624,17 +647,30 @@ function ComplianceResultsView({
             sortable: false,
             render: (r) =>
               r.nc ? (
-                canUpdate ? (
-                  <Select
-                    size="small"
-                    value={r.nc.status}
-                    onChange={(v) => onStatusChange(r.nc!.id, v)}
-                    options={statuses.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
-                    style={{ width: '100%', minWidth: 140 }}
-                  />
-                ) : (
-                  <NcStatusBadge status={r.nc.status} />
-                )
+                <div className="flex items-center gap-2 min-w-[160px]">
+                  {canUpdate ? (
+                    <Select
+                      size="small"
+                      value={r.nc.status}
+                      onChange={(v) => onStatusChange(r.nc!.id, v)}
+                      options={statuses.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
+                      style={{ flex: 1, minWidth: 130 }}
+                    />
+                  ) : (
+                    <NcStatusBadge status={r.nc.status} />
+                  )}
+                  {/* Raise CAPA is only offered while the NC is still open. */}
+                  {canCreateCapa && r.nc.status === 'OPEN' && (
+                    <Button
+                      size="small"
+                      type="primary"
+                      icon={<ShieldPlus size={13} />}
+                      onClick={() => onRaiseCapa(rowToNc(r))}
+                    >
+                      CAPA
+                    </Button>
+                  )}
+                </div>
               ) : (
                 <span className="text-xs text-gray-400">No action</span>
               ),
