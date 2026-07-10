@@ -1,6 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Button, DatePicker, Empty, Progress, Segmented, Select, Spin, Table, Tag } from 'antd';
 import { BarChart3, Download, FileText, RotateCcw } from 'lucide-react';
+import {
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
 import dayjs, { type Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
 import {
@@ -143,6 +147,27 @@ export default function ReportsPage() {
             <Kpi label="Matrix coverage" value={`${report.summary.matrix_coverage}%`} />
           </div>
 
+          {/* Charts — enrollment status + assessment outcomes */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+            <ChartPanel title="Enrollment status" subtitle="Across the filtered population">
+              <ReportDonut
+                data={[
+                  { name: 'Completed', value: report.summary.completed, color: '#22c55e' },
+                  { name: 'In progress', value: report.summary.in_progress, color: '#f59e0b' },
+                  { name: 'Overdue', value: report.summary.overdue, color: '#ef4444' },
+                ].filter((d) => d.value > 0)}
+              />
+            </ChartPanel>
+            <ChartPanel title="Assessment outcomes" subtitle="Exam attempts — passed vs failed">
+              <ReportDonut
+                data={[
+                  { name: 'Passed', value: report.assessment.passed, color: '#22c55e' },
+                  { name: 'Failed', value: report.assessment.failed, color: '#ef4444' },
+                ].filter((d) => d.value > 0)}
+              />
+            </ChartPanel>
+          </div>
+
           {/* Assessment (exam) analytics */}
           <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Assessment results</h3>
@@ -163,8 +188,23 @@ export default function ReportsPage() {
               <Segmented options={['Department', 'Role', 'Site']} value={dim} onChange={(v) => setDim(v as Dimension)} />
             </div>
             {breakdown.length === 0 ? <Empty description="No data" /> : (
-              <Table
-                rowKey="key" size="small" pagination={false} dataSource={breakdown}
+              <>
+                <ResponsiveContainer width="100%" height={Math.max(160, breakdown.length * 40)}>
+                  <BarChart data={breakdown} layout="vertical" margin={{ top: 5, right: 40, left: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                    <XAxis type="number" domain={[0, 100]} unit="%" tick={{ fontSize: 11, fill: '#64748B' }} />
+                    <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#64748B' }} width={140} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 11 }} formatter={(v: number) => [`${v}%`, 'Completion']} />
+                    <Bar dataKey="completion_rate" name="Completion" radius={[0, 6, 6, 0]}>
+                      {breakdown.map((r) => (
+                        <Cell key={r.key} fill={r.completion_rate >= 80 ? '#22c55e' : r.completion_rate >= 50 ? '#f59e0b' : '#ef4444'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <Table
+                  className="mt-4"
+                  rowKey="key" size="small" pagination={false} dataSource={breakdown}
                 columns={[
                   { title: dim, dataIndex: 'name' },
                   { title: 'Total', dataIndex: 'total', width: 80 },
@@ -177,7 +217,8 @@ export default function ReportsPage() {
                     </div>
                   ) },
                 ]}
-              />
+                />
+              </>
             )}
           </div>
 
@@ -229,5 +270,39 @@ export default function ReportsPage() {
         </>
       )}
     </PageContainer>
+  );
+}
+
+function ChartPanel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="mb-2">
+        <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
+        {subtitle && <p className="text-[11px] text-gray-400 mt-0.5">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ReportDonut({ data }: { data: Array<{ name: string; value: number; color: string }> }) {
+  if (data.length === 0) return <div className="h-[220px] flex items-center justify-center text-sm text-gray-400">No data yet</div>;
+  const total = data.reduce((s, x) => s + x.value, 0);
+  return (
+    <div className="relative">
+      <ResponsiveContainer width="100%" height={220}>
+        <PieChart>
+          <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={54} outerRadius={86} paddingAngle={2}>
+            {data.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+          </Pie>
+          <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', fontSize: 11 }} />
+          <Legend verticalAlign="bottom" iconType="circle" iconSize={8} />
+        </PieChart>
+      </ResponsiveContainer>
+      <div className="pointer-events-none absolute inset-x-0 top-[86px] flex flex-col items-center">
+        <div className="text-2xl font-bold text-gray-900 leading-none">{total}</div>
+        <div className="text-[10px] uppercase tracking-wide text-gray-400 mt-0.5">Total</div>
+      </div>
+    </div>
   );
 }

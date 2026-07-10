@@ -981,9 +981,20 @@ export interface AuditDashboard {
   registers_by_status: Record<string, number>;
   programs_by_status: Record<string, number>;
   findings_by_severity: Record<string, number>;
+  findings_by_status: Record<string, number>;
   ncs_by_status: Record<string, number>;
   capas_by_status: Record<string, number>;
+  capas_by_type: Record<string, number>;
   actions_by_status: Record<string, number>;
+  ncs_by_department: Array<{ name: string; value: number }>;
+  monthly_trend: Array<{ month: string; planned: number; completed: number }>;
+  findings_trend: Array<{ month: string; findings: number }>;
+  filter_options: {
+    financial_years: string[];
+    plants: string[];
+    audit_types: string[];
+    statuses: string[];
+  };
   upcoming_audits: Array<{
     id: string;
     register_number: string;
@@ -1003,12 +1014,26 @@ export interface AuditDashboard {
   }>;
 }
 
-export const useAuditDashboard = (financialYear?: string) =>
+export interface AuditDashboardFilters {
+  financialYear?: string;
+  plant?: string;
+  auditType?: string;
+  status?: string;
+}
+
+export const useAuditDashboard = (filters: AuditDashboardFilters = {}) =>
   useQuery<{ data: AuditDashboard }>({
-    queryKey: ['audit', 'dashboard', financialYear ?? 'all'],
+    queryKey: ['audit', 'dashboard', filters],
     queryFn: () =>
       api
-        .get('/audit/dashboard', { params: financialYear ? { financial_year: financialYear } : {} })
+        .get('/audit/dashboard', {
+          params: {
+            ...(filters.financialYear ? { financial_year: filters.financialYear } : {}),
+            ...(filters.plant ? { plant: filters.plant } : {}),
+            ...(filters.auditType ? { audit_type: filters.auditType } : {}),
+            ...(filters.status ? { status: filters.status } : {}),
+          },
+        })
         .then((r) => r.data),
   });
 

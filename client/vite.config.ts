@@ -13,7 +13,11 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:4000',
+        // Use the IPv4 loopback explicitly: on macOS `localhost` resolves to
+        // IPv6 `::1` first, and the proxy stalls ~4s per cold connection before
+        // falling back to IPv4 — which makes freshly-navigated pages look like
+        // their data never loads until you interact.
+        target: 'http://127.0.0.1:4000',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (_err, _req, res) => {
@@ -25,7 +29,7 @@ export default defineConfig(({ mode }) => ({
         },
       },
       '/socket.io': {
-        target: 'http://localhost:4000',
+        target: 'http://127.0.0.1:4000',
         ws: true,
       },
     },

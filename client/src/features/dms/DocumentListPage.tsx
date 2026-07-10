@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input, Select, Table, Button } from 'antd';
-import { Search, Plus, FileText, BookOpenCheck } from 'lucide-react';
+import { Search, Plus, FileText, BookOpenCheck, LayoutDashboard, List as ListIcon } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn } from '@/lib/utils';
 import { useHasPermission } from '@/stores/authStore';
@@ -14,6 +14,7 @@ import {
   type DocumentType,
 } from '@/lib/api/dms';
 import DocStatusBadge from './DocStatusBadge';
+import DmsDashboard from './DmsDashboard';
 
 type Tab = DocumentStatus | 'ALL' | 'REVIEW_DUE';
 const STATUS_TABS: { key: Tab; label: string }[] = [
@@ -28,6 +29,7 @@ const STATUS_TABS: { key: Tab; label: string }[] = [
 export default function DocumentListPage() {
   const nav = useNavigate();
   const canCreate = useHasPermission('document.create');
+  const [view, setView] = useState<'dashboard' | 'list'>('dashboard');
   const [status, setStatus] = useState<Tab>('ALL');
   const [type, setType] = useState<DocumentType | undefined>();
   const [search, setSearch] = useState('');
@@ -59,47 +61,60 @@ export default function DocumentListPage() {
               <div className="h-6 w-px bg-gray-200 shrink-0 hidden md:block" />
               <div className="w-fit max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -my-1">
                 <nav className="inline-flex gap-1.5 p-1 rounded-lg bg-gray-100/80 ring-1 ring-gray-200/60">
-                  {STATUS_TABS.map((t) => (
-                    <button
-                      key={t.key}
-                      type="button"
-                      onClick={() => setStatus(t.key)}
-                      className={cn(
-                        'inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold rounded-lg whitespace-nowrap transition-all duration-150',
-                        status === t.key
-                          ? 'bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80'
-                          : 'text-gray-500 hover:text-gray-900 hover:bg-white/70',
-                      )}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setView('dashboard')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold rounded-lg whitespace-nowrap transition-all duration-150',
+                      view === 'dashboard'
+                        ? 'bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-white/70',
+                    )}
+                  >
+                    <LayoutDashboard size={14} /> Dashboard
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setView('list')}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold rounded-lg whitespace-nowrap transition-all duration-150',
+                      view === 'list'
+                        ? 'bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80'
+                        : 'text-gray-500 hover:text-gray-900 hover:bg-white/70',
+                    )}
+                  >
+                    <ListIcon size={14} /> Documents
+                  </button>
                 </nav>
               </div>
             </div>
 
             {/* Actions */}
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              <Select
-                value={type}
-                onChange={setType}
-                allowClear
-                placeholder="All types"
-                style={{ width: 170 }}
-                options={Object.entries(DOC_TYPE_LABELS).map(([v, label]) => ({ value: v, label }))}
-              />
-              <div className="relative w-60">
-                <Search
-                  size={15}
-                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
-                />
-                <Input
-                  placeholder="Search number / title…"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-10 !rounded-full"
-                />
-              </div>
+              {view === 'list' && (
+                <>
+                  <Select
+                    value={type}
+                    onChange={setType}
+                    allowClear
+                    placeholder="All types"
+                    style={{ width: 170 }}
+                    options={Object.entries(DOC_TYPE_LABELS).map(([v, label]) => ({ value: v, label }))}
+                  />
+                  <div className="relative w-60">
+                    <Search
+                      size={15}
+                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
+                    />
+                    <Input
+                      placeholder="Search number / title…"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-10 !rounded-full"
+                    />
+                  </div>
+                </>
+              )}
               {canCreate && (
                 <Button type="primary" icon={<Plus size={14} />} onClick={() => nav('/dms/new')}>
                   New Document
@@ -108,6 +123,54 @@ export default function DocumentListPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {view === 'dashboard' ? (
+        <DmsDashboard />
+      ) : (
+        <DocumentListBody
+          status={status}
+          setStatus={setStatus}
+          rows={rows}
+          isLoading={isLoading}
+          myReads={myReads}
+          nav={nav}
+        />
+      )}
+    </PageContainer>
+  );
+}
+
+interface BodyProps {
+  status: Tab;
+  setStatus: (t: Tab) => void;
+  rows: DocSummary[];
+  isLoading: boolean;
+  myReads: ReturnType<typeof useMyPendingReads>['data'];
+  nav: ReturnType<typeof useNavigate>;
+}
+
+function DocumentListBody({ status, setStatus, rows, isLoading, myReads, nav }: BodyProps) {
+  return (
+    <>
+      <div className="mb-4 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <nav className="inline-flex gap-1.5 p-1 rounded-lg bg-gray-100/80 ring-1 ring-gray-200/60">
+          {STATUS_TABS.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => setStatus(t.key)}
+              className={cn(
+                'inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold rounded-lg whitespace-nowrap transition-all duration-150',
+                status === t.key
+                  ? 'bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80'
+                  : 'text-gray-500 hover:text-gray-900 hover:bg-white/70',
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {myReads && myReads.count > 0 && (
@@ -172,6 +235,6 @@ export default function DocumentListPage() {
           },
         ]}
       />
-    </PageContainer>
+    </>
   );
 }
