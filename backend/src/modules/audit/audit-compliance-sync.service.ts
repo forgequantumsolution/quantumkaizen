@@ -36,6 +36,32 @@ const nextSeq = (prefix: string, year: number, count: number) =>
 const isCompliance = (typeName: string | null, relTypeName: string | null) =>
   typeName === 'compliance' || relTypeName === 'compliance';
 
+const isTable = (typeName: string | null, relTypeName: string | null) =>
+  typeName === 'table' || relTypeName === 'table';
+
+// Table-checklist rows carry a per-row `compliance_status` select whose values
+// differ from the scalar `compliance` field's vocabulary. Normalise both into
+// the shared ComplianceResult enum. `partial_compliance` is treated as a
+// non-conformance (a conformance gap that needs action).
+const TABLE_STATUS_TO_RESULT: Record<string, ComplianceResult> = {
+  compliance: 'COMPLIANT',
+  compliant: 'COMPLIANT',
+  non_compliance: 'NON_CONFORMANCE',
+  noncompliance: 'NON_CONFORMANCE',
+  non_conformance: 'NON_CONFORMANCE',
+  partial_compliance: 'NON_CONFORMANCE',
+  partial: 'NON_CONFORMANCE',
+  observation: 'OBSERVATION',
+  not_applicable: 'NOT_APPLICABLE',
+  na: 'NOT_APPLICABLE',
+};
+
+const normStatus = (v: unknown): string =>
+  String(v ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[\s-]+/g, '_');
+
 export interface ComplianceItem {
   submissionId: string;
   sectionName: string;
@@ -73,17 +99,45 @@ const extractComplianceItems = async (
   for (const section of form.sections) {
     const answered = responses[section.name] ?? {};
     for (const field of section.fields) {
-      if (!isCompliance(field.typeName, field.type?.name ?? null)) continue;
-      const value = answered[field.name] as ComplianceResult | undefined;
-      if (!value || !RESULTS.has(value)) continue;
-      items.push({
-        submissionId: sub.id,
-        sectionName: section.name,
-        fieldName: field.name,
-        label: field.label,
-        dedupeKey: `${dedupePrefix}:${section.name}:${field.name}`,
-        result: value,
-      });
+      const relName = field.type?.name ?? null;
+
+      // Scalar `compliance` field: one disposition stored under the field name.
+      if (isCompliance(field.typeName, relName)) {
+        const value = answered[field.name] as ComplianceResult | undefined;
+        if (!value || !RESULTS.has(value)) continue;
+        items.push({
+          submissionId: sub.id,
+          sectionName: section.name,
+          fieldName: field.name,
+          label: field.label,
+          dedupeKey: `${dedupePrefix}:${section.name}:${field.name}`,
+          result: value,
+        });
+        continue;
+      }
+
+      // Table checklist: an array of rows, each with a `compliance_status`
+      // select column. One disposition per row (dedupe by row index).
+      const rows = answered[field.name];
+      if (isTable(field.typeName, relName) && Array.isArray(rows)) {
+        rows.forEach((row, idx) => {
+          if (!row || typeof row !== 'object') return;
+          const r = row as Record<string, unknown>;
+          const result = TABLE_STATUS_TO_RESULT[normStatus(r.compliance_status)];
+          if (!result) return; // unanswered / unrecognised → not a disposition
+          const label =
+            String(r.check_item_requirement ?? r.requirement ?? '').trim() ||
+            `${field.label} #${idx + 1}`;
+          items.push({
+            submissionId: sub.id,
+            sectionName: section.name,
+            fieldName: field.name,
+            label,
+            dedupeKey: `${dedupePrefix}:${section.name}:${field.name}:${idx}`,
+            result,
+          });
+        });
+      }
     }
   }
   return items;
@@ -242,6 +296,43 @@ export const syncProgramComplianceFindings = async (programId: string): Promise<
     (i) => i.result === 'NON_CONFORMANCE' || i.result === 'OBSERVATION',
   );
   return persistFindingsFromItems(programId, marked, 'checklist_compliance_program');
+};
+
+/**
+ * On checklist submission against an audit's workflow ticket, link the
+ * submission to the register's program and turn NON_CONFORMANCE / OBSERVATION
+ * dispositions into Findings (+ NCs) so they surface immediately — the auditor
+ * doesn't have to complete the program first. Best-effort and idempotent.
+ */
+export const syncSubmissionComplianceFindings = async (
+  registerId: string,
+  submissionId: string,
+): Promise<SyncResult> => {
+  const program = await prisma.auditProgram.findUnique({
+    where: { registerId },
+    select: { id: true, status: true },
+  });
+  if (!program) return { findingsCreated: 0, ncsCreated: 0, skipped: 0 };
+  if (program.status === 'CANCELLED') {
+    return { findingsCreated: 0, ncsCreated: 0, skipped: 0 };
+  }
+
+  // Point the program at this checklist submission (and start it if planned) so
+  // the compliance-results read model and completion sync both resolve it.
+  await prisma.auditProgram.update({
+    where: { id: program.id },
+    data: {
+      checklistSubmissionId: submissionId,
+      ...(program.status === 'PLANNED'
+        ? { status: 'IN_PROGRESS', startedAt: new Date() }
+        : {}),
+    },
+  });
+
+  const marked = (await collectSubmissionComplianceItems(submissionId)).filter(
+    (i) => i.result === 'NON_CONFORMANCE' || i.result === 'OBSERVATION',
+  );
+  return persistFindingsFromItems(program.id, marked, 'checklist_compliance_submission');
 };
 
 // ── Read model for the Non-Conformance tab ──────────────────────────────────

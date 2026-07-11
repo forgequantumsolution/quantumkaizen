@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button, Input, Modal, Select, message } from 'antd';
-import { Plus, Search, SlidersHorizontal, Check } from 'lucide-react';
+import { Button, Input, Modal, Select, Tooltip, message } from 'antd';
+import { Plus, Search, SlidersHorizontal, Check, Eye, Trash2 } from 'lucide-react';
 import { DataTable, type Column } from '@/components/ui';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
@@ -9,6 +9,7 @@ const PAGE_SIZE = 10;
 import {
   useCapas,
   useCreateCapa,
+  useDeleteCapa,
   type Capa,
   type CapaStatus,
   type CapaType,
@@ -34,6 +35,8 @@ const TYPES: CapaType[] = ['CORRECTIVE', 'PREVENTIVE', 'BOTH'];
 export default function CapaListPage() {
   const nav = useNavigate();
   const canCreate = useHasPermission('capa.create');
+  const canDelete = useHasPermission('capa.delete');
+  const deleteMut = useDeleteCapa();
   const [status, setStatus] = useState<CapaStatus | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -52,6 +55,73 @@ export default function CapaListPage() {
   });
   const rows = data?.data ?? [];
   const totalItems = data?.pagination?.total_items ?? rows.length;
+
+  const handleDelete = (capa: Capa) => {
+    Modal.confirm({
+      title: `Delete ${capa.capa_number}?`,
+      content: (
+        <span>
+          This permanently removes the CAPA and its action items. This cannot be undone.
+        </span>
+      ),
+      okText: 'Delete',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancel',
+      onOk: async () => {
+        try {
+          await deleteMut.mutateAsync(capa.id);
+          message.success(`${capa.capa_number} deleted`);
+        } catch (err) {
+          message.error(extractErr(err));
+          throw err; // keep the modal open on failure
+        }
+      },
+    });
+  };
+
+  const columns = useMemo<Column<Capa>[]>(
+    () => [
+      ...CAPA_BASE_COLUMNS,
+      {
+        key: 'actions',
+        header: 'Actions',
+        sortable: false,
+        // Pinned to the right edge so it's always visible while the wide table
+        // scrolls horizontally.
+        className:
+          'sticky right-0 bg-white text-right border-l border-gray-100 ' +
+          'shadow-[-8px_0_10px_-8px_rgba(0,0,0,0.12)]',
+        render: (r) => (
+          <div
+            className="flex items-center justify-end gap-1"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Tooltip title="View">
+              <Button
+                type="text"
+                size="small"
+                icon={<Eye size={15} />}
+                onClick={() => nav(`/audit/capa/${r.id}`)}
+              />
+            </Tooltip>
+            {canDelete && (
+              <Tooltip title="Delete">
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<Trash2 size={15} />}
+                  onClick={() => handleDelete(r)}
+                />
+              </Tooltip>
+            )}
+          </div>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [canDelete],
+  );
 
   return (
     <>
@@ -136,7 +206,7 @@ export default function CapaListPage() {
           isLoading={isLoading}
           emptyMessage="No CAPAs found"
           onRowClick={(r) => nav(`/audit/capa/${r.id}`)}
-          columns={CAPA_COLUMNS}
+          columns={columns}
           serverPagination={{
             page,
             pageSize: PAGE_SIZE,
@@ -151,13 +221,22 @@ export default function CapaListPage() {
   );
 }
 
-const CAPA_COLUMNS: Column<Capa>[] = [
+const CAPA_BASE_COLUMNS: Column<Capa>[] = [
   {
     key: 'capa_number',
     header: 'CAPA #',
     render: (r) => <span className="font-mono text-blue-600">{r.capa_number}</span>,
   },
-  { key: 'title', header: 'Title' },
+  {
+    key: 'title',
+    header: 'Title',
+    className: 'max-w-[360px]',
+    render: (r) => (
+      <span className="block truncate" title={r.title}>
+        {r.title}
+      </span>
+    ),
+  },
   { key: 'type', header: 'Type' },
   {
     key: 'status',
@@ -179,7 +258,7 @@ const CAPA_COLUMNS: Column<Capa>[] = [
   { key: 'owner', header: 'Owner', sortable: false, render: (r) => r.owner?.name ?? '—' },
   {
     key: 'action_item_count',
-    header: 'Actions',
+    header: 'Items',
     render: (r) => r.action_item_count,
   },
   {

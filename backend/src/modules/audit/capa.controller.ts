@@ -18,6 +18,9 @@ export const listCapas = async (req: Request, res: Response) => {
 export const getCapa = async (req: Request, res: Response) => {
   res.json(await service.getCapa(req.params.id as string));
 };
+export const listCapasForRegister = async (req: Request, res: Response) => {
+  res.json(await service.listCapasForRegister(req.params.id as string));
+};
 export const createCapa = async (req: Request, res: Response) => {
   const data = await service.createCapa(req.body as CapaCreateInput, req.user?.userId);
   success(res, 'CAPA created', data, 201);

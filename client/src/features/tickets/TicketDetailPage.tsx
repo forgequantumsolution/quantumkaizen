@@ -11,11 +11,14 @@ import ActionBar from './detail/ActionBar';
 import ApprovalAwaitingCard from './detail/ApprovalAwaitingCard';
 import TicketHeaderCard from './detail/TicketHeaderCard';
 import StageFormSection from './detail/StageFormSection';
+import AuditComplianceCard from './detail/AuditComplianceCard';
+import AuditCapaChildrenCard from './detail/AuditCapaChildrenCard';
 import TicketFormHistory from './detail/TicketFormHistory';
 import { type SelectedStageInfo } from './detail/TicketFlowCanvas';
 import StageTabs from './detail/StageTabs';
 import TicketActivityModal from './detail/TicketActivityModal';
 import TicketDetailsModal from './detail/TicketDetailsModal';
+import TicketSidebar from './detail/TicketSidebar';
 
 export default function TicketDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -113,36 +116,54 @@ export default function TicketDetailPage() {
           isDeleting={deleteTicket.isPending}
         />
 
-        {flow && workflowOpen && (
-          <StageTabs
-            workflowId={flow.workflow.id}
-            currentStageIds={flow.currentStages.map((s) => s.canonicalId)}
-            currentPersistedStageIds={flow.currentStages.map((s) => s.id)}
-            isCompleted={isCompleted}
-            selectedCanonicalId={selectedStage?.canonicalId ?? null}
-            onStageSelect={setSelectedStage}
-          />
-        )}
+        {/* Two-column layout: workflow + forms on the left, a persistent
+            metadata rail on the right — the same shape as the CAPA detail page,
+            shared by every workflow module. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
+          <div className="space-y-4 min-w-0">
+            {flow && workflowOpen && (
+              <StageTabs
+                workflowId={flow.workflow.id}
+                currentStageIds={flow.currentStages.map((s) => s.canonicalId)}
+                currentPersistedStageIds={flow.currentStages.map((s) => s.id)}
+                isCompleted={isCompleted}
+                selectedCanonicalId={selectedStage?.canonicalId ?? null}
+                onStageSelect={setSelectedStage}
+              />
+            )}
 
-        {!isCompleted && (
-          <ActionBar
-            ticketId={ticket.id}
-            isOnHold={ticket.isOnHold}
-            isCompleted={isCompleted}
-            canTransition={canTransition}
-          />
-        )}
+            {!isCompleted && (
+              <ActionBar
+                ticketId={ticket.id}
+                isOnHold={ticket.isOnHold}
+                isCompleted={isCompleted}
+                canTransition={canTransition}
+              />
+            )}
 
-        <StageFormSection ticketId={ticket.id} />
+            <StageFormSection ticketId={ticket.id} />
 
-        <TicketFormHistory
-          ticketId={ticket.id}
-          selectedStageId={selectedStage?.persistedId ?? null}
-          currentStageIds={flow?.currentStages.map((s) => s.id) ?? []}
-          isCompleted={isCompleted}
-        />
+            {typeof ticket.customFields?.audit_register_id === 'string' && (
+              <>
+                <AuditComplianceCard registerId={ticket.customFields.audit_register_id} />
+                <AuditCapaChildrenCard registerId={ticket.customFields.audit_register_id} />
+              </>
+            )}
 
-        <ApprovalAwaitingCard ticketId={ticket.id} />
+            <TicketFormHistory
+              ticketId={ticket.id}
+              selectedStageId={selectedStage?.persistedId ?? null}
+              currentStageIds={flow?.currentStages.map((s) => s.id) ?? []}
+              isCompleted={isCompleted}
+            />
+
+            <ApprovalAwaitingCard ticketId={ticket.id} />
+          </div>
+
+          <div className="lg:sticky lg:top-4">
+            <TicketSidebar ticket={ticket} />
+          </div>
+        </div>
       </div>
 
       <TicketActivityModal

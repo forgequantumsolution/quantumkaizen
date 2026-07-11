@@ -15,6 +15,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, Forbidden, NotFound } from '../../lib/httpError';
 import { isAuditFormsStage } from '../../lib/auditFormsStage';
+import { syncSubmissionComplianceFindings } from '../audit/audit-compliance-sync.service';
 import type {
   CreateStageFormBindingInput,
   CreateWorkflowSubmissionInput,
@@ -601,7 +602,7 @@ export const createWorkflowSubmission = async (
     });
     if (!latest) throw NotFound('Form not found');
 
-    return prisma.formSubmission.create({
+    const auditSubmission = await prisma.formSubmission.create({
       data: {
         formId,
         versionId: latest.versionId,
@@ -628,6 +629,29 @@ export const createWorkflowSubmission = async (
         submittedBy: { select: { id: true, name: true, email: true } },
       },
     });
+
+    // On a completed checklist, surface the auditor's dispositions: Non-
+    // Conformance / Observation rows become Findings (+ NCs), and every
+    // disposition (incl. Compliant / N-A) shows in the Compliance Results tab.
+    // Best-effort + idempotent: a sync failure must not fail the submission the
+    // user just saved, and re-submitting never duplicates.
+    if (input.status === 'SUBMITTED') {
+      const cf = (ticket.customFields ?? {}) as Record<string, unknown>;
+      const registerId =
+        typeof cf.audit_register_id === 'string' ? cf.audit_register_id : null;
+      if (registerId) {
+        try {
+          await syncSubmissionComplianceFindings(registerId, auditSubmission.id);
+        } catch (err) {
+          console.error(
+            `[stage-form] compliance sync failed for submission ${auditSubmission.id}:`,
+            err,
+          );
+        }
+      }
+    }
+
+    return auditSubmission;
   }
 
   // Verify the binding: belongs to a current stage, matches the route's formId.
