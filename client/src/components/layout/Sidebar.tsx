@@ -100,6 +100,14 @@ const ICON_BY_KEY: Record<string, React.ElementType> = {
   risk: ShieldAlert,
   audit: ClipboardCheck,
   document: FileText,
+  // Additional QMS modules — each gets a distinct, recognisable icon so the
+  // sidebar doesn't collapse to a wall of identical `Layers` fallbacks.
+  equipment: Wrench,
+  inspection: ClipboardCheck,
+  maintenance: Settings2,
+  supplierquality: Truck,
+  supplier: Truck,
+  calibration: Ruler,
 };
 
 const normaliseKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
