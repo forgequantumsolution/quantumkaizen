@@ -53,6 +53,13 @@ interface AccessMatrixProps {
    * by the caller from the workflow-types list.
    */
   extraModules?: NavModuleAccess[];
+  /**
+   * Extra tabs folded into an EXISTING module (keyed by module key), rather than
+   * a new group. Used to hang the Audit workflow type's ticket keys as a
+   * "Workflow Tickets" row under the static Audit module instead of rendering a
+   * duplicate standalone "Audit" group.
+   */
+  extraTabsByModule?: Record<string, NavTabAccess[]>;
   canEdit: boolean;
   search: string;
   onSearchChange: (s: string) => void;
@@ -81,13 +88,15 @@ function useMatrixGroups(
   catalog: CatalogPerm[],
   search: string,
   extraModules: NavModuleAccess[],
+  extraTabsByModule: Record<string, NavTabAccess[]>,
 ): MatrixGroup[] {
   return useMemo(() => {
     const q = search.trim().toLowerCase();
     const groups: MatrixGroup[] = [];
     for (const module of [...NAV_ACCESS, ...extraModules]) {
+      const tabs = [...module.tabs, ...(extraTabsByModule[module.key] ?? [])];
       const rows: MatrixRow[] = [];
-      for (const tab of module.tabs) {
+      for (const tab of tabs) {
         const buckets = bucketActionsForEntity(tab.entity, catalog);
         if (q) {
           const hay = [
@@ -107,7 +116,7 @@ function useMatrixGroups(
       if (rows.length > 0) groups.push({ module, rows });
     }
     return groups;
-  }, [catalog, search, extraModules]);
+  }, [catalog, search, extraModules, extraTabsByModule]);
 }
 
 /** Every distinct permission-key a row references (all columns + more). */
@@ -124,7 +133,8 @@ function rowKeys(row: MatrixRow): string[] {
 export default function AccessMatrix(props: AccessMatrixProps) {
   const { mode, catalog, canEdit, search, onSearchChange } = props;
   const extraModules = useMemo(() => props.extraModules ?? [], [props.extraModules]);
-  const groups = useMatrixGroups(catalog, search, extraModules);
+  const extraTabsByModule = useMemo(() => props.extraTabsByModule ?? {}, [props.extraTabsByModule]);
+  const groups = useMatrixGroups(catalog, search, extraModules, extraTabsByModule);
   // Start with every module collapsed — the user opens the ones they need.
   // While a search is active we force-expand so matches are visible.
   const [collapsed, setCollapsed] = useState<Set<string>>(

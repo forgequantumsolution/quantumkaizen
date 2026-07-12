@@ -22,8 +22,11 @@ import AccessAnalysisView from './AccessAnalysisView';
 import type { CatalogPerm } from '@/lib/accessActions';
 import {
   type NavModuleAccess,
+  type NavTabAccess,
   isAuditWorkflowTypeName,
   workflowTypeModule,
+  wfTypeReadKey,
+  wfTypeEntity,
 } from '@/lib/navAccess';
 import { cn } from '@/lib/utils';
 
@@ -41,6 +44,29 @@ function useWorkflowTypeModules(): NavModuleAccess[] {
         .map((t) => workflowTypeModule(t)),
     [types],
   );
+}
+
+/* Shared: the Audit workflow type's ticket keys, folded into the EXISTING static
+ * Audit module as one "Workflow Tickets" row (keyed by that module's key,
+ * 'audit') — instead of a duplicate standalone "Audit" group. Empty until the
+ * audit type exists. See docs/per-module-ticket-master-plan.md. */
+function useAuditTicketTabs(): Record<string, NavTabAccess[]> {
+  const { data: types = [] } = useWorkflowTypes();
+  return useMemo<Record<string, NavTabAccess[]>>(() => {
+    const audit = types.find((t) => !t.isDeleted && isAuditWorkflowTypeName(t.name));
+    const result: Record<string, NavTabAccess[]> = {};
+    if (audit) {
+      result.audit = [
+        {
+          key: 'audit.tickets',
+          label: 'Workflow Tickets',
+          permission: wfTypeReadKey(audit.id),
+          entity: wfTypeEntity(audit.id),
+        },
+      ];
+    }
+    return result;
+  }, [types]);
 }
 
 /* Shared: flatten the grouped catalog into a key→id map + a CatalogPerm list. */
@@ -100,6 +126,7 @@ function RoleSubject() {
   const canEdit = useHasPermission('role.update');
   const { catalog, idByKey, isLoading: catalogLoading } = useCatalog();
   const extraModules = useWorkflowTypeModules();
+  const auditTabs = useAuditTicketTabs();
   const { data: rolesResp, isLoading: rolesLoading } = useRoles({ pageSize: 200 });
   const roles = useMemo(() => rolesResp?.items ?? [], [rolesResp]);
   const setPermissions = useSetRolePermissions();
@@ -168,6 +195,7 @@ function RoleSubject() {
         mode="binary"
         catalog={catalog}
         extraModules={extraModules}
+        extraTabsByModule={auditTabs}
         canEdit={canEdit && !!roleId}
         search={search}
         onSearchChange={setSearch}
@@ -217,6 +245,7 @@ function DepartmentSubject() {
   const canEdit = useHasPermission('department.update');
   const { catalog, idByKey, isLoading: catalogLoading } = useCatalog();
   const extraModules = useWorkflowTypeModules();
+  const auditTabs = useAuditTicketTabs();
   const { data: deptsResp, isLoading: deptsLoading } = useDepartments({ pageSize: 200 });
   const departments = useMemo(() => deptsResp?.items ?? [], [deptsResp]);
 
@@ -292,6 +321,7 @@ function DepartmentSubject() {
         mode="binary"
         catalog={catalog}
         extraModules={extraModules}
+        extraTabsByModule={auditTabs}
         canEdit={canEdit && !!deptId}
         search={search}
         onSearchChange={setSearch}
@@ -331,6 +361,7 @@ function UserSubject() {
   const canEdit = useHasPermission('user.update');
   const { catalog, idByKey, isLoading: catalogLoading } = useCatalog();
   const extraModules = useWorkflowTypeModules();
+  const auditTabs = useAuditTicketTabs();
 
   // Backend-paginated user picker — 10 users per page (search + pager on the API).
   const [userSearchInput, setUserSearchInput] = useState('');
@@ -495,6 +526,7 @@ function UserSubject() {
             mode="tristate"
             catalog={catalog}
             extraModules={extraModules}
+            extraTabsByModule={auditTabs}
             canEdit={canEdit && !!userId}
             search={search}
             onSearchChange={setSearch}

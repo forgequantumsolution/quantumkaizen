@@ -1,3 +1,63 @@
+# Changes — Per-module ticket master (retire the global switch)
+
+Follow-on to *Per-Workflow-Type Access Control* (below). Goal: retire the single
+global **"All Workflow Types (ticket master)"** switch so ticket access is
+controlled **strictly per module**. Rolled out in phases so no one loses access.
+
+> Status: **Phases 1–2 implemented + verified** on local `kaizen_qms` (incl.
+> Playwright through the live app). Phases 3–4 (flip enforcement to per-type only,
+> then remove the master) **NOT yet done**. **Not committed** — working tree only.
+> Full plan + rollout/rollback: `docs/per-module-ticket-master-plan.md`.
+
+## Phase 1 — Audit now gets per-type ticket keys (supersedes "Audit excluded")
+
+The earlier feature deliberately excluded Audit from per-type keys. Reversed: the
+Audit workflow type now generates `wf_type.<auditId>.*` keys like every other
+type, so audit tickets keep working once the master is removed.
+
+- `backend/src/lib/rbac-workflow-types.ts` — dropped the `isAuditTypeName`
+  early-returns in `ensureWorkflowTypePermissions`,
+  `grantWorkflowTypePermissionsToSuperAdmin`, and the filter in
+  `syncWorkflowTypePermissions`. `isAuditTypeName` kept for non-ticket callers.
+- `client/src/features/admin/access-control/AccessMatrix.tsx` — new
+  `extraTabsByModule` prop folds extra tabs into an existing module.
+- `client/src/features/admin/access-control/AccessControlTab.tsx` —
+  `useAuditTicketTabs()` surfaces the audit keys as a **"Workflow Tickets"** row
+  **inside the existing Audit module** (avoids a duplicate "Audit" group).
+- Verified: boot backfills the 5 audit keys + grants SUPER_ADMIN; the row renders.
+
+## Phase 2 — Backfill existing grants (so removing the master won't lock anyone out)
+
+`backend/src/lib/rbac-ticket-migration.ts` **(new)** —
+`backfillPerTypeTicketGrants()` mirrors every `ticket.<verb>` grant onto
+`wf_type.<id>.<verb>` for every type, across roles, departments and user
+overrides (replicates GRANT **and** DENY; never clobbers an existing per-type
+override). Idempotent + self-terminating (no-op once `ticket.*` is removed in
+Phase 4). Wired into `backend/src/lib/rbac-sync.ts` at boot, after
+`syncWorkflowTypePermissions()`.
+
+- Verified on local DB (6 types): every role holding `ticket.<verb>` went 0/6 →
+  6/6; department + GRANT/DENY-override + non-clobber paths proven with a
+  self-cleaning test.
+- `seed.ts` + `ticket.*` catalog removal deliberately **deferred to Phase 4**; the
+  master is kept live so Phase 2 stays purely additive.
+
+## Phase 2 → 3 GO/NO-GO gate
+
+`backend/src/scripts/check-ticket-grants.ts` **(new)** + `npm run gate:ticket-grants`
+(`backend/package.json`). Exits **0 = GREEN** (safe to ship Phase 3) / **1 = RED**
+(prints each gap). Needed because the boot backfill is fire-and-forget
+(`backend/src/index.ts:13`), so "server up" ≠ "grants migrated". Run it, and be
+GREEN, on **each** environment before Phase 3 lands there. Verified GREEN/RED +
+exit codes locally.
+
+**Rollout:** ship Phase 1+2 → boot → gate GREEN per environment → then ship Phase
+3+4 as a **separate** release (backfill is idempotent, so no boot-window race).
+Startup left non-blocking by design.
+
+---
+---
+
 # Changes — Per-Workflow-Type Access Control
 
 Each workflow type (CAPA, Deviation, Complaints, …) now gets its **own switch** in
@@ -262,3 +322,103 @@ All previously-403 endpoints now return **200**: `/workflows/directory` (8),
 - **Flag:** the user directory exposes colleagues' **email** to any authenticated
   user within their site — normal for an internal QMS staff picker, but trivially
   removable if undesired.
+
+---
+---
+
+# Changes — Facilities (Sites) as a Configuration module in Access Control
+
+**Facilities / Sites** is now a first-class, permission-gated module in Access
+Control (Configuration → Facilities), instead of an always-on tab backed by
+borrowed `org.*` keys. Managing facilities is gated by granular `site.*` CRUD
+keys; the list stays broadly readable so the operational site pickers keep working.
+
+> Status: implemented + verified end-to-end with Playwright (5/5). Backend +
+> frontend typecheck clean. **Not committed** — all changes are in the working tree.
+
+## Design decisions
+
+- **Granular `site.*` keys** (`site.read/create/update/delete`, module `SITE`) live
+  under the **same `site.` prefix** as the existing `site.view_all`, so the Access
+  Matrix buckets them into **one "Facilities" row** (View/Create/Edit/Delete, with
+  `site.view_all` overflowing to the "More" popover).
+- **Non-breaking list access** — the sites **list/detail** is served both to admins
+  (`site.read`) and to operational pickers that only hold the broader `org.read`
+  (ticket site selector, LMS targeting). A new `requireAnyPermission(...)` OR-guard
+  keeps both audiences working **with no re-seed and no regression**; only the
+  writes moved to the granular keys.
+
+## Backend
+
+| File | Change |
+|------|--------|
+| `backend/src/lib/rbac-catalog.ts` | New `site.read/create/update/delete` (module `SITE`), alongside `site.view_all`. QMS_ADMIN gets them via its module filter; SUPER_ADMIN via the rbac-sync invariant. |
+| `backend/src/middleware/permissions.ts` | New `requireAnyPermission(...anyOf)` guard — passes when the user holds **any** of the given keys. |
+| `backend/src/modules/site/site.routes.ts` | List/detail → `requireAnyPermission('site.read','org.read')`; `POST/PATCH/DELETE` → `site.create/update/delete` (was `org.read`/`org.update` throughout). |
+| `backend/prisma/seed.ts` | Granted `site.read` to the operational roles that already hold `department.read` (QUALITY_ENGINEER, AUDITOR, DOCUMENT_CONTROLLER). |
+
+## Frontend
+
+| File | Change |
+|------|--------|
+| `client/src/lib/navAccess.ts` | Added a **Facilities** tab to the **Configuration** module (entity `site`, gate `site.read`) — renders in the Access Matrix with the standard action columns. |
+| `client/src/pages/SettingsPage.tsx` | The Facilities settings tab is now gated on `site.read` (was `permission: undefined` = always shown). |
+| `client/src/features/admin/sites/SitesTab.tsx` | Create/Update/Delete buttons gate on `site.create/update/delete` (was `org.update` for all three). |
+
+## Testing
+
+- `tests/e2e/site-access.spec.ts` **(new)** — Playwright e2e, **5/5 passing**:
+  1. catalog exposes the granular `site.*` keys with the right module/action;
+  2. SUPER_ADMIN holds every `site.*` key and can list facilities;
+  3. write guards — full CRUD lifecycle on a throwaway site (201 → 200 → 204 → 404);
+  4. **non-breaking** — DOCUMENT_CONTROLLER (holds `org.read`, not `site.create`)
+     lists sites **200** via the OR-fallback but is **403** on create;
+  5. UI — the Facilities row renders in the Access Matrix and the gated Facilities
+     tab is reachable by a `site.read` holder.
+- Idempotent (throwaway site with a PID-derived code, deleted in `finally`).
+
+## Operational notes
+
+- On an already-seeded live DB the new keys reach the catalog at startup
+  (`ensureRbacCatalog`) and are granted to **SUPER_ADMIN** immediately. **QMS_ADMIN
+  and the operational roles** get `site.read` on the next `prisma db seed`; until
+  then only SUPER_ADMIN sees the Facilities *tab*, but the sites **list API already
+  works for everyone** (via the `org.read` fallback), so no picker breaks.
+
+---
+---
+
+# Changes — Sidebar "Configuration" hidden for roles with no config access
+
+**Bug (reported):** an AUDITOR with **no** configuration permissions still saw the
+**Configuration** group in the sidebar.
+
+**Root cause:** the Configuration parent had no gate of its own — it relied on its
+children — but two children, **"Master Data"** and **"Appearance"**, had *no
+permission* set, so they always survived the gate and kept the group visible for
+every role. (The header's "Profile & Preferences" button is a dead no-op, so those
+were the only home for personal settings.)
+
+**Fix:** mirror the existing "LIMS Configuration" pattern (which gates its parent) —
+
+| File | Change |
+|------|--------|
+| `client/src/components/layout/Sidebar.tsx` | The **Configuration** parent now carries `anyPermission` = the union of its config keys (`workflow.read`, `form.read`, `user.read`, `role.read`, `department.read`, `site.read`, `workflow.lookups.read`) → the whole group hides when the user holds none. The **Master Data** child gates on the admin-tab keys (`user/role/department/site.read`, `workflow.lookups.read`) so it isn't shown to a workflow-only user. |
+
+## Testing
+
+- `tests/e2e/sidebar-config-access.spec.ts` **(new)** — Playwright e2e (passing):
+  a real browser login shows Configuration → deny every config key (user override)
+  → **Configuration disappears** → restore → it comes back. Idempotent (overrides
+  cleared in `finally`).
+- Cross-checked against **live role data**: AUDITOR → hidden; every role holding ≥1
+  config key (DOCUMENT_CONTROLLER, QMS_ADMIN, QUALITY_ENGINEER, READ_ONLY,
+  SUPER_ADMIN) → shown. Frontend typecheck clean.
+
+## Consequence to note
+
+For a role with **no** config keys, "Appearance" (theme) and the always-on personal
+tabs (Notifications / Security / Org Profile) are now hidden too, since they were
+only reachable via this group. If theming should stay universal, relocate
+"Appearance" out of Configuration — e.g. wire the currently-dead **"Profile &
+Preferences"** header button to `/appearance`. (Not done — flagged for a decision.)

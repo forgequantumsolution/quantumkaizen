@@ -15,6 +15,7 @@
 import { prisma } from './prisma';
 import { PERMISSIONS } from './rbac-catalog';
 import { syncWorkflowTypePermissions } from './rbac-workflow-types';
+import { backfillPerTypeTicketGrants } from './rbac-ticket-migration';
 
 const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
 
@@ -42,4 +43,10 @@ export async function ensureRbacCatalog(): Promise<void> {
       data: { permissions: { set: all.map((p) => ({ id: p.id })) } },
     });
   }
+
+  // Phase 2 (per-module ticket master): mirror global `ticket.*` grants onto the
+  // per-type keys so effective access survives the later retirement of the
+  // master. Additive + idempotent + self-terminating (no-op once `ticket.*` is
+  // removed in Phase 4). See lib/rbac-ticket-migration.ts.
+  await backfillPerTypeTicketGrants();
 }
