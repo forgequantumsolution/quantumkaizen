@@ -279,10 +279,10 @@ caveat).
    but review the **WorkflowsPage type filter** and **CreateWorkflowModal** to
    decide whether to narrow their type options to `workflowTypeReadScope` (low
    priority — the list rows are already scoped).
-4. **Stale cleanup:** `client/src/features/modules/ModulePage.tsx:130-132` still
-   ORs the retired global `ticket.${action}` key into `canForType` — remove it
-   (dead post-Phase-3 of the ticket-master retirement; this file was touched by the
-   "Operational-access fixes" but the stale OR survived).
+4. **Stale cleanup:** ✅ DONE (2026-07-12) — `ModulePage.tsx` `canForType` dropped
+   the retired-`ticket.${action}` OR-bridge (now strictly `wf_type.<id>.<action>`);
+   also fixed a stale `ticket.read` doc comment in `stage-form.service.ts`.
+   See `client/changes.md`.
 
 ### Phase 5 — Verify end-to-end + docs
 
