@@ -322,8 +322,10 @@ function RuleDrawer({
   const masters = mastersResp?.data ?? [];
   const { data: usersData } = useUserDirectory();
   const users = usersData?.items ?? [];
+  // Only Audit-type workflows may drive a scheduled audit (not CAPA / Change
+  // Control / etc.) — the type is assigned when the workflow is built.
   const { data: wfResp } = useWorkflowDirectory();
-  const workflows = wfResp?.items ?? [];
+  const workflows = (wfResp?.items ?? []).filter((w) => w.type?.name === 'Audit');
   const { data: formsResp } = useForms({ kind: 'CHECKLIST', page_size: 200 });
   const checklists = formsResp?.forms ?? [];
 
