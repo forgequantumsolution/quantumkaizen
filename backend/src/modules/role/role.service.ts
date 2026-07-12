@@ -45,9 +45,18 @@ export const list = async ({ page, pageSize, search }: ListQuery) => {
  * targeting, reports filters). Readable by any authenticated user — unlike the
  * admin `list` (needs `role.read`), which empties those pickers for operational
  * roles. Returns name + user count only; no permission keys.
+ *
+ * Site scoping (docs/access-control-data-scoping-plan.md, role picker): roles have
+ * no site column, so `siteIds` filters to roles held by ≥1 ACTIVE user in those
+ * sites. `null` (viewAll / no scope) returns every role. Caveat: a brand-new role
+ * with no users yet appears in no site — expected, see the plan.
  */
-export const directory = async () => {
+export const directory = async (siteIds: string[] | null = null) => {
+  const where: Prisma.RoleWhereInput = siteIds
+    ? { users: { some: { isActive: true, siteId: { in: siteIds } } } }
+    : {};
   const items = await prisma.role.findMany({
+    where,
     select: { id: true, name: true, isSystem: true, _count: { select: { users: true } } },
     orderBy: [{ isSystem: 'desc' }, { name: 'asc' }],
   });

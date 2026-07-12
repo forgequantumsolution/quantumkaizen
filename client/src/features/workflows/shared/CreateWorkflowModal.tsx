@@ -5,6 +5,7 @@ import { Plus } from 'lucide-react';
 import { Button, Input, Select, Modal } from '@/components/ui';
 import { useCreateWorkflow } from '@/lib/api/workflow';
 import { useCreateWorkflowType, useWorkflowTypes } from '@/lib/api/workflowLookups';
+import { useAuthStore, useHasPermission } from '@/stores/authStore';
 
 interface Props {
   isOpen: boolean;
@@ -15,13 +16,20 @@ export default function CreateWorkflowModal({ isOpen, onClose }: Props) {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [typeId, setTypeId] = useState('');
+  const [siteId, setSiteId] = useState(''); // '' = Global (all sites)
   const [newTypeOpen, setNewTypeOpen] = useState(false);
   const { data: types = [], isLoading: typesLoading } = useWorkflowTypes();
   const create = useCreateWorkflow();
 
+  // Only Super Admin (site.view_all) chooses the owning site; scoped users' new
+  // workflows are forced to their own site server-side (workflow-site-ownership).
+  const canPickSite = useHasPermission('site.view_all');
+  const allowedSites = useAuthStore((s) => s.user?.allowedSites ?? []);
+
   const reset = () => {
     setName('');
     setTypeId('');
+    setSiteId('');
     setNewTypeOpen(false);
   };
 
@@ -38,6 +46,9 @@ export default function CreateWorkflowModal({ isOpen, onClose }: Props) {
       const result = await create.mutateAsync({
         name: name.trim(),
         typeId: typeId || null,
+        // Only send siteId when the user may choose it; '' = Global (null).
+        // Scoped creators omit it → server forces their own site.
+        ...(canPickSite ? { siteId: siteId || null } : {}),
       });
       toast.success('Workflow created');
       reset();
@@ -110,6 +121,23 @@ export default function CreateWorkflowModal({ isOpen, onClose }: Props) {
               Type provides the ticket-id prefix (e.g. <code>DOC</code>).
             </p>
           </div>
+          {canPickSite && (
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">Site</label>
+              <Select
+                value={siteId}
+                onChange={(e) => setSiteId(e.target.value)}
+                options={[
+                  { value: '', label: 'Global (all sites)' },
+                  ...allowedSites.map((s) => ({ value: s.id, label: `${s.name} (${s.code})` })),
+                ]}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                <strong>Global</strong> is usable by every site. Pinning to a site limits
+                this workflow — and its role/user pickers — to that site.
+              </p>
+            </div>
+          )}
         </form>
       </Modal>
 

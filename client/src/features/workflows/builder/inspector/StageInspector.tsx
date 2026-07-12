@@ -33,6 +33,8 @@ import StageFormBindingEditor from './StageFormBindingEditor';
 
 interface Props {
   workflowId: string;
+  /** Owning site of the workflow (null = global) — scopes role/user pickers. */
+  workflowSiteId?: string | null;
   data: StageNodeData;
   onChange: (next: StageNodeData) => void;
   stageStatuses: WorkflowStageStatus[];
@@ -174,6 +176,7 @@ const summariseAccess = (
 
 export default function StageInspector({
   workflowId,
+  workflowSiteId,
   data,
   onChange,
   stageStatuses,
@@ -587,6 +590,7 @@ export default function StageInspector({
         onClose={() => setFormBindingOpen(false)}
         stageName={data.label}
         existing={formBindings}
+        workflowSiteId={workflowSiteId}
         editIndex={formEditIndex}
         onSave={(b, editIndex) =>
           update(
@@ -603,6 +607,7 @@ export default function StageInspector({
           isOpen={!!approvalEditFor}
           onClose={() => setApprovalEditFor(null)}
           workflowId={workflowId}
+          workflowSiteId={workflowSiteId}
           actionLabel={approvalEditFor.actionLabel}
           value={
             findPolicy({

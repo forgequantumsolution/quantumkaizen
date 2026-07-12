@@ -16,14 +16,16 @@ import { Trash2 } from 'lucide-react';
 import { Select as AntSelect, Spin } from 'antd';
 import { Button, Input, Modal, Select } from '@/components/ui';
 import type { EmbeddedApprovalPolicy } from '../builder.types';
-import { useRoles } from '@/features/admin/roles/hooks';
-import { useAdminUsers } from '@/features/admin/users/hooks';
-import { useDebouncedValue } from '@/hooks/useDebouncedValue';
+import { useRoleDirectory } from '@/features/admin/roles/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   workflowId: string;
+  /** The workflow's owning site (null = global). Scopes the approver pickers to
+   *  that site's roles/users (docs/workflow-site-ownership-plan.md, Phase D/E). */
+  workflowSiteId?: string | null;
   actionLabel?: string;
   value: Omit<EmbeddedApprovalPolicy, 'actionType' | 'actionIndex'> | null;
   /** `null` removes the policy; otherwise persists the new shape. */
@@ -51,25 +53,21 @@ const explainMode = (m: ApprovalMode): string => {
 export default function ApprovalPolicyEditor({
   isOpen,
   onClose,
+  workflowSiteId,
   actionLabel,
   value,
   onSave,
 }: Props) {
-  // Search state for the two pickers (backend-driven, debounced).
-  const [roleSearch, setRoleSearch] = useState('');
-  const [userSearch, setUserSearch] = useState('');
-  const debouncedRoleSearch = useDebouncedValue(roleSearch, 250);
-  const debouncedUserSearch = useDebouncedValue(userSearch, 250);
-
-  const { data: rolesData, isFetching: rolesFetching } = useRoles({
-    search: debouncedRoleSearch || undefined,
-    pageSize: 50,
-  });
-  const { data: usersData, isFetching: usersFetching } = useAdminUsers({
-    search: debouncedUserSearch || undefined,
-    isActive: true,
-    pageSize: 50,
-  });
+  // Site-scoped role/user directories (docs/workflow-site-ownership-plan.md):
+  // the pickers show only the WORKFLOW's-site roles/users. Global workflow
+  // (siteId null) → all sites. The directory returns a bounded set, so the
+  // AntSelect filters client-side (no server search needed).
+  const { data: rolesData, isFetching: rolesFetching } = useRoleDirectory(
+    workflowSiteId || undefined,
+  );
+  const { data: usersData, isFetching: usersFetching } = useUserDirectory(
+    workflowSiteId || undefined,
+  );
   const roles = rolesData?.items ?? [];
   const users = usersData?.items ?? [];
 
@@ -237,9 +235,7 @@ export default function ApprovalPolicyEditor({
                 placeholder="Search roles…"
                 value={approverRoleIds}
                 onChange={(vals: string[]) => setApproverRoleIds(vals)}
-                onSearch={setRoleSearch}
-                onBlur={() => setRoleSearch('')}
-                filterOption={false}
+                optionFilterProp="label"
                 notFoundContent={
                   rolesFetching ? <Spin size="small" /> : <span>No roles match</span>
                 }
@@ -259,9 +255,7 @@ export default function ApprovalPolicyEditor({
                 placeholder="Search users by name or email…"
                 value={approverUserIds}
                 onChange={(vals: string[]) => setApproverUserIds(vals)}
-                onSearch={setUserSearch}
-                onBlur={() => setUserSearch('')}
-                filterOption={false}
+                optionFilterProp="label"
                 notFoundContent={
                   usersFetching ? <Spin size="small" /> : <span>No users match</span>
                 }

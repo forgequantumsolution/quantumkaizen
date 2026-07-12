@@ -29,6 +29,8 @@ import type { WorkflowStageStatus } from '@/lib/api/workflowLookups';
 
 interface Props {
   workflowId: string;
+  /** Owning site of the workflow (null = global) — scopes stage role/user pickers. */
+  workflowSiteId?: string | null;
   selectedNode: WorkflowFlowNode | null;
   onNodeUpdate: (id: string, data: WorkflowNodeData) => void;
   onNodeDelete: (id: string) => void;
@@ -207,6 +209,7 @@ const Shell = ({ children }: { children: React.ReactNode }) => (
 
 export default function InspectorPanel({
   workflowId,
+  workflowSiteId,
   selectedNode,
   onNodeUpdate,
   onNodeDelete,
@@ -283,6 +286,7 @@ export default function InspectorPanel({
         {kind === 'stage' && (
           <StageInspector
             workflowId={workflowId}
+            workflowSiteId={workflowSiteId}
             data={selectedNode.data as StageNodeData}
             onChange={handleChange}
             stageStatuses={stageStatuses}

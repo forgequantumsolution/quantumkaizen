@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import * as service from './user.service';
 import type { ListQuery } from './user.schema';
-import { resolveSiteScope } from '../../middleware/permissions';
+import { resolveSiteScope, siteFilterFor } from '../../middleware/permissions';
 
 const userId = (req: Request): string => {
   const id = req.user?.userId;
@@ -20,8 +20,16 @@ export const get = async (req: Request, res: Response) => {
 export const directory = async (req: Request, res: Response) => {
   // Site-scoped: a user pinned to a site only sees colleagues in their own
   // site(s); viewAll holders see everyone. Mirrors ticket site scoping.
+  //
+  // Optional `?siteId=` lets a caller target a specific site — used by the
+  // workflow builder to show the WORKFLOW's-site people, not just the caller's
+  // (docs/workflow-site-ownership-plan.md, Phase D). `siteFilterFor` bounds it to
+  // the caller's scope: a scoped user can't reach another site; a viewAll user may
+  // target any site (or all sites when no siteId is given, e.g. a global workflow).
   const scope = await resolveSiteScope(userId(req));
-  res.json(await service.directory(scope.all ? null : scope.siteIds));
+  const requestedSiteId = typeof req.query.siteId === 'string' ? req.query.siteId : undefined;
+  const filter = siteFilterFor(scope, requestedSiteId);
+  res.json(await service.directory(filter ? filter.in : null));
 };
 
 export const create = async (req: Request, res: Response) => {

@@ -1,6 +1,12 @@
 import type { Request, Response } from 'express';
 import * as service from './workflow.service';
 import { WorkflowValidationError } from './workflow.service';
+import {
+  getEffectivePermissionKeys,
+  workflowTypeReadScope,
+  resolveSiteScope,
+  type TicketTypeScope,
+} from '../../middleware/permissions';
 import type {
   CreateWorkflowShellInput,
   ListWorkflowsQuery,
@@ -10,13 +16,31 @@ import type {
 
 const userId = (req: Request): string | null => req.user?.userId ?? null;
 
+// Resolve which workflow types the caller may see. No user (shouldn't happen after
+// requireAuth) → closed default (sees nothing scoped, matching ticket behaviour).
+const scopeFor = async (req: Request): Promise<TicketTypeScope> => {
+  const uid = userId(req);
+  if (!uid) return { all: false, typeIds: [] };
+  return workflowTypeReadScope(await getEffectivePermissionKeys(uid));
+};
+
 export const list = async (req: Request, res: Response) => {
-  res.json(await service.list(req.query as unknown as ListWorkflowsQuery));
+  const uid = userId(req);
+  const [scope, siteScope] = await Promise.all([
+    scopeFor(req),
+    uid ? resolveSiteScope(uid) : Promise.resolve({ all: false, siteIds: [] }),
+  ]);
+  res.json(await service.list(req.query as unknown as ListWorkflowsQuery, scope, uid, siteScope));
 };
 
 export const directory = async (req: Request, res: Response) => {
   const typeId = typeof req.query.typeId === 'string' ? req.query.typeId : undefined;
-  res.json(await service.directory(typeId));
+  const uid = userId(req);
+  const [scope, siteScope] = await Promise.all([
+    scopeFor(req),
+    uid ? resolveSiteScope(uid) : Promise.resolve({ all: false, siteIds: [] }),
+  ]);
+  res.json(await service.directory(typeId, scope, siteScope));
 };
 
 export const get = async (req: Request, res: Response) => {

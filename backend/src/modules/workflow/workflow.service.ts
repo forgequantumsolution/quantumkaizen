@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound } from '../../lib/httpError';
+import type { TicketTypeScope, SiteScope } from '../../middleware/permissions';
+import { resolveSiteScope } from '../../middleware/permissions';
 import { validateWorkflowStructure } from './workflow.validator';
 import { applyWorkflowSettings, buildWorkflowGraph } from './workflow.builder';
 import { cloneIntoNewVersion } from './workflow.versioning';
@@ -27,6 +29,7 @@ const workflowSummarySelect = {
   createdAt: true,
   updatedAt: true,
   type: { select: { id: true, name: true } },
+  site: { select: { id: true, code: true, name: true } },
   createdBy: { select: { id: true, name: true, email: true } },
   _count: { select: { stages: true, transitions: true } },
 } satisfies Prisma.WorkflowSelect;
@@ -47,6 +50,7 @@ const workflowDetailSelect = {
   createdAt: true,
   updatedAt: true,
   type: { select: { id: true, name: true } },
+  site: { select: { id: true, code: true, name: true } },
   createdBy: { select: { id: true, name: true, email: true } },
   stages: {
     where: { isDeleted: false },
@@ -306,18 +310,50 @@ const toFlowJson = (wf: WorkflowDetail) => {
   return { nodes, edges };
 };
 
-export const list = async (query: ListWorkflowsQuery) => {
+export const list = async (
+  query: ListWorkflowsQuery,
+  scope: TicketTypeScope = { all: false, typeIds: [] },
+  userId: string | null = null,
+  siteScope: SiteScope = { all: true, siteIds: [] },
+) => {
   const where: Prisma.WorkflowWhereInput = {};
   if (query.includeDeleted !== 'true') where.isDeleted = false;
   // Versioning: by default we only show the head of each lineage so the list
   // doesn't grow by N every time someone re-saves. Pass `includeAllVersions`
   // to see the full history.
   if (query.includeAllVersions !== 'true') where.isLatestVersion = true;
-  if (query.typeId) where.typeId = query.typeId;
   if (query.status) where.workflowStatus = query.status;
   if (query.search) {
     where.name = { contains: query.search, mode: 'insensitive' };
   }
+
+  const and: Prisma.WorkflowWhereInput[] = [];
+
+  // Per-type scoping (docs/access-control-data-scoping-plan.md, Phase 1): restrict
+  // to the workflow types the caller can read (SUPER_ADMIN holds every
+  // `wf_type.*.read` key, so its scope covers all types). A caller-chosen `typeId`
+  // may only NARROW within that scope, never widen it. Typeless workflows have no
+  // per-type key that governs them — they surface only to their own author (an
+  // in-progress draft before a type is assigned), never to other users.
+  if (query.typeId) {
+    if (!scope.typeIds.includes(query.typeId)) {
+      return { items: [], total: 0, page: query.page, pageSize: query.pageSize };
+    }
+    and.push({ typeId: query.typeId });
+  } else {
+    const typeOr: Prisma.WorkflowWhereInput[] = [{ typeId: { in: scope.typeIds } }];
+    if (userId) typeOr.push({ typeId: null, createdById: userId });
+    and.push({ OR: typeOr });
+  }
+
+  // Per-site scoping (docs/workflow-site-ownership-plan.md): a caller sees GLOBAL
+  // workflows (siteId null) plus those owned by a site they may see. `site.view_all`
+  // (Super Admin) skips the constraint entirely.
+  if (!siteScope.all) {
+    and.push({ OR: [{ siteId: null }, { siteId: { in: siteScope.siteIds } }] });
+  }
+
+  if (and.length > 0) where.AND = and;
 
   const [items, total] = await Promise.all([
     prisma.workflow.findMany({
@@ -338,6 +374,7 @@ export const list = async (query: ListWorkflowsQuery) => {
       workflowStatus: w.workflowStatus,
       version: w.version,
       type: w.type,
+      site: w.site,
       stageCount: w._count.stages,
       transitionCount: w._count.transitions,
       createdAt: w.createdAt.toISOString(),
@@ -353,23 +390,43 @@ export const list = async (query: ListWorkflowsQuery) => {
 /**
  * Lightweight picker directory of ACTIVE, latest-version workflows. Readable by
  * any authenticated user (see workflow.routes) — used by operational forms that
- * only need to choose a workflow, not inspect its definition. Optional typeId
- * narrows to one workflow type (e.g. the ticket drawer scoped to a module).
+ * only need to choose a workflow, not inspect its definition.
+ *
+ * Per-type scoping (docs/access-control-data-scoping-plan.md, Phase 1): the picker
+ * only lists workflows whose type the caller can read. An optional `typeId`
+ * narrows to one type (e.g. the ticket drawer scoped to a module) but only if it
+ * is inside the caller's readable scope — a type outside scope yields nothing (the
+ * picker can't be used to widen access). Typeless workflows are excluded entirely:
+ * no per-type key can grant a ticket on them, so they'd be unraisable anyway.
+ *
+ * Per-site scoping (docs/workflow-site-ownership-plan.md): also restricts to GLOBAL
+ * workflows (siteId null) + those owned by a site the caller may see; `site.view_all`
+ * skips the site constraint.
  */
-export const directory = async (typeId?: string) => {
+export const directory = async (
+  typeId: string | undefined,
+  scope: TicketTypeScope = { all: false, typeIds: [] },
+  siteScope: SiteScope = { all: true, siteIds: [] },
+) => {
+  if (typeId && !scope.typeIds.includes(typeId)) return { items: [] };
+  const where: Prisma.WorkflowWhereInput = {
+    isDeleted: false,
+    isLatestVersion: true,
+    workflowStatus: 'ACTIVE',
+    typeId: typeId ? typeId : { in: scope.typeIds },
+  };
+  if (!siteScope.all) {
+    where.OR = [{ siteId: null }, { siteId: { in: siteScope.siteIds } }];
+  }
   const items = await prisma.workflow.findMany({
-    where: {
-      isDeleted: false,
-      isLatestVersion: true,
-      workflowStatus: 'ACTIVE',
-      ...(typeId ? { typeId } : {}),
-    },
+    where,
     select: {
       id: true,
       name: true,
       version: true,
       workflowStatus: true,
       type: { select: { id: true, name: true } },
+      site: { select: { id: true, code: true, name: true } },
     },
     orderBy: [{ name: 'asc' }],
   });
@@ -390,6 +447,7 @@ export const getById = async (id: string) => {
       status: wf.status,
       workflowStatus: wf.workflowStatus,
       type: wf.type,
+      site: wf.site,
       createdBy: wf.createdBy,
       createdAt: wf.createdAt.toISOString(),
       updatedAt: wf.updatedAt.toISOString(),
@@ -423,10 +481,32 @@ export const createShell = async (
     if (!type || type.isDeleted) throw NotFound('Workflow type not found');
   }
 
+  // Site ownership (docs/workflow-site-ownership-plan.md):
+  //  - Super Admin / `site.view_all` → honour the requested site: null = GLOBAL
+  //    (visible everywhere), or a specific real site to build on its behalf.
+  //  - Everyone else → the workflow belongs to the creator's OWN site; any client
+  //    `siteId` is ignored (a scoped user can't create for another site).
+  const siteScope = createdById
+    ? await resolveSiteScope(createdById)
+    : { all: false, siteIds: [] as string[] };
+  let siteId: string | null;
+  if (siteScope.all) {
+    if (input.siteId) {
+      const site = await prisma.site.findUnique({ where: { id: input.siteId }, select: { id: true } });
+      if (!site) throw NotFound('Site not found');
+      siteId = input.siteId;
+    } else {
+      siteId = null; // global
+    }
+  } else {
+    siteId = siteScope.siteIds[0] ?? null; // own site (null only if user is siteless)
+  }
+
   const wf = await prisma.workflow.create({
     data: {
       name: input.name,
       typeId: input.typeId ?? null,
+      siteId,
       createdById,
     },
     select: workflowDetailSelect,
@@ -439,6 +519,7 @@ export const createShell = async (
       status: wf.status,
       workflowStatus: wf.workflowStatus,
       type: wf.type,
+      site: wf.site,
       createdAt: wf.createdAt.toISOString(),
     },
   };

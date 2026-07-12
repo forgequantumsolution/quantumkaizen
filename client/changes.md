@@ -1,5 +1,51 @@
 # Changes Log
 
+## Stale `ticket.*` fallback cleanup — 2026-07-12
+
+Dead code left over from the per-module ticket master retirement (the global
+`ticket.*` keys were removed from the catalog, so these always resolved false).
+
+- **`src/features/modules/ModulePage.tsx`** — `canForType` dropped the
+  `|| hasPermission('ticket.<action>')` OR-bridge; now strictly
+  `wf_type.<typeId>.<action>`.
+- **`backend/src/modules/stage-form/stage-form.service.ts`** — corrected a stale
+  doc comment ("`ticket.read` is enforced…") to name the per-type
+  `wf_type.<typeId>.read` via `requireTicketAction('read')`.
+
+`tsc --noEmit` clean (client). Not committed.
+
+## Workflow site-ownership (frontend, Phase E) — 2026-07-12
+
+Frontend for workflow site-ownership (backend: `backend/changes.md`; plan:
+`docs/workflow-site-ownership-plan.md`). Workflows now belong to a site (or are
+global); the create flow, list, and builder role/user pickers reflect it. Working
+tree only.
+
+- **`src/lib/api/workflow.ts`** — new `SiteRef`; `site: SiteRef | null` added to
+  `WorkflowSummary`, `WorkflowDetailResponse.workflow`, `WorkflowDirectoryEntry`,
+  and the create-mutation return; `siteId?: string | null` added to the create
+  input (only honoured for `site.view_all`).
+- **`src/features/admin/users/hooks.ts`** — `useUserDirectory(siteId?)`: optional
+  `siteId` query param (keyed into the query). **`src/features/admin/roles/hooks.ts`**
+  — `useRoleDirectory(siteId?)` likewise. Both stay backward-compatible (no arg =
+  caller's own site).
+- **`src/features/workflows/shared/CreateWorkflowModal.tsx`** — Super Admin
+  (`site.view_all`) gets a **Site** picker (Global / a specific site from
+  `allowedSites`); sends `siteId` only then. Scoped users see no picker (server
+  forces their own site).
+- **`src/features/workflows/WorkflowsPage.tsx`** — each card shows a **Global**
+  (blue) or **site-code** (grey) chip with an explanatory tooltip.
+- **Builder role/user pickers now site-scoped.** `ApprovalPolicyEditor.tsx`
+  (approver roles/users) and `StageFormBindingEditor.tsx` (fill/view roles+users)
+  switched from the admin `useRoles`/`useAdminUsers` (server-search) to the
+  site-scoped `useRoleDirectory(siteId)`/`useUserDirectory(siteId)` with client-side
+  `optionFilterProp="label"` search. The workflow's `siteId` is threaded
+  `WorkflowBuilderPage → InspectorPanel → StageInspector →` both editors (new
+  `workflowSiteId` prop at each level). Global workflow (null) → all sites.
+
+**Verified:** `tsc --noEmit` clean; backend contracts these consume verified live
+(create with `siteId`, `?siteId=` on both directories). Not committed.
+
 ## Per-module ticket master (frontend) — 2026-07-12
 
 Access Control matrix changes supporting the retirement of the global ticket

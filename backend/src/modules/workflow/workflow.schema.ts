@@ -153,6 +153,10 @@ export const SaveWorkflowBodySchema = z.object({
 export const CreateWorkflowShellSchema = z.object({
   name: z.string().min(1).max(200),
   typeId: z.string().uuid().optional().nullable(),
+  // Site ownership (docs/workflow-site-ownership-plan.md). Only honoured for
+  // `site.view_all` creators: null/absent = GLOBAL, or a specific site to pin to.
+  // Ignored for scoped creators (forced to their own site server-side).
+  siteId: z.string().uuid().optional().nullable(),
 });
 
 export const ListWorkflowsQuerySchema = z.object({

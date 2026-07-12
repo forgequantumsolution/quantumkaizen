@@ -289,6 +289,21 @@ function WorkflowCard({
             <p className="text-xs text-gray-500 mt-0.5 truncate">
               {workflow.type?.name ?? 'No type'}
             </p>
+            <span
+              className={cn(
+                'inline-block mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                workflow.site
+                  ? 'bg-gray-100 text-gray-600'
+                  : 'bg-blue-50 text-blue-700',
+              )}
+              title={
+                workflow.site
+                  ? `Owned by ${workflow.site.name} — only this site sees it`
+                  : 'Global — available to every site'
+              }
+            >
+              {workflow.site ? workflow.site.code : 'Global'}
+            </span>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <WorkflowStatusBadge status={workflow.workflowStatus} />
