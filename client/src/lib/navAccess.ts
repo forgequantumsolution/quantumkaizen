@@ -165,7 +165,13 @@ export const wfTypeEntity = (typeId: string): string => `wf_type.${typeId}`;
 /** The `.read` key that gates a workflow-type module in the sidebar/matrix. */
 export const wfTypeReadKey = (typeId: string): string => `wf_type.${typeId}.read`;
 
-/** Build the Access-Control matrix module for one workflow type. */
+/**
+ * Build the Access-Control matrix module for one workflow type. The module
+ * itself is named after the type (e.g. "CAPA"); its single row is labeled
+ * "Workflow Tickets" — not the type name again — so it doesn't read as a
+ * duplicate of the module header, and matches the row Audit gets for the same
+ * `wf_type.*` keys (see AccessControlTab's `useAuditTicketTabs`).
+ */
 export const workflowTypeModule = (type: { id: string; name: string }): NavModuleAccess => ({
   key: wfTypeEntity(type.id),
   label: type.name,
@@ -173,7 +179,7 @@ export const workflowTypeModule = (type: { id: string; name: string }): NavModul
   tabs: [
     {
       key: `${wfTypeEntity(type.id)}.tab`,
-      label: type.name,
+      label: 'Workflow Tickets',
       permission: wfTypeReadKey(type.id),
       entity: wfTypeEntity(type.id),
     },
