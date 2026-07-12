@@ -41,7 +41,7 @@ export default function TicketFormHistory({
   currentStageIds = [],
   isCompleted,
 }: Props) {
-  const { data } = useTicketFormHistory(ticketId);
+  const { data, isLoading } = useTicketFormHistory(ticketId);
   const submissions = useMemo(() => data?.submissions ?? [], [data]);
 
   // Group by stage (order of first appearance), keeping the latest submission
@@ -89,6 +89,16 @@ export default function TicketFormHistory({
 
   // The current stage's forms are shown (actionable) above — don't duplicate.
   if (currentStageIds.includes(effectiveStageId)) return null;
+
+  // Query still loading (e.g. this panel just mounted after a stage click) —
+  // show a loading note rather than briefly flashing the empty message.
+  if (isLoading && submissions.length === 0) {
+    return (
+      <Card className="!py-4">
+        <div className="text-xs text-gray-400">Loading submitted forms…</div>
+      </Card>
+    );
+  }
 
   // A stage was selected (or defaulted) but has no submitted forms.
   if (!group) {

@@ -185,12 +185,27 @@ export default function FormFillEmbed({
     setErrors({});
 
     modal.confirm({
-      title: 'Submit form',
-      content:
-        'Are you sure you want to submit this form? Once submitted you will not be able to edit your responses.',
+      icon: null,
+      title: null,
+      width: 420,
+      centered: true,
       okText: 'Submit',
       cancelText: 'Cancel',
-      centered: true,
+      className: 'qk-center-confirm',
+      content: (
+        <div className="flex flex-col items-center text-center px-2 py-1">
+          <div className="w-12 h-12 rounded-full bg-gold-50 flex items-center justify-center mb-3 ring-1 ring-gold-200">
+            <Send size={20} className="text-gold-600" />
+          </div>
+          <h3 className="text-base font-semibold text-gray-900 mb-1.5">Submit this form?</h3>
+          <p className="text-sm text-gray-600">
+            Once submitted, your responses are{' '}
+            <span className="font-semibold text-gray-900">locked</span> and can't be edited.
+            <br />
+            Please make sure everything looks right.
+          </p>
+        </div>
+      ),
       onOk: () => runSubmit('SUBMITTED'),
     });
   };
@@ -322,7 +337,7 @@ export default function FormFillEmbed({
             disabled={isBusy}
           >
             <Save className="h-4 w-4" />
-            <span className="ml-1.5">Save Draft</span>
+            <span className="ml-1.5">Keep Draft</span>
           </Button>
           <Button
             variant="primary"
@@ -331,7 +346,7 @@ export default function FormFillEmbed({
             disabled={isBusy}
           >
             <Send className="h-4 w-4" />
-            <span className="ml-1.5">Submit Section</span>
+            <span className="ml-1.5">Submit</span>
           </Button>
         </div>
       )}

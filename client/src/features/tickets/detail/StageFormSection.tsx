@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ClipboardList, Lock, Printer } from 'lucide-react';
-import { Button, Card } from '@/components/ui';
+import { CheckCircle2, ClipboardList, Lock } from 'lucide-react';
+import { Card } from '@/components/ui';
 import {
   useTicketStageForms,
   type TicketStageFormBinding,
@@ -112,16 +112,6 @@ export default function StageFormSection({ ticketId }: Props) {
             {doneBindings}/{totalBindings} · {overallPct}%
           </span>
         </div>
-
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => window.print()}
-          title="Print this view"
-        >
-          <Printer size={13} />
-          <span className="ml-1">Print</span>
-        </Button>
       </div>
 
       {/* Read-only banner — submitted responses, or view-only access */}

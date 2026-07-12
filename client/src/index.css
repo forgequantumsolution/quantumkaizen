@@ -428,6 +428,37 @@ html.dark {
 .qk-center-confirm .ant-modal-confirm-content { margin-inline-start: 0 !important; }
 .qk-center-confirm .ant-modal-confirm-btns { display: flex; justify-content: center; gap: 8px; }
 
+/* ── Global modal polish ──
+   Every dialog (modals + confirm/delete popups) gets a soft, blurred, dimmed
+   backdrop and a more elevated, rounded surface — so the page recedes behind
+   the dialog and the focus lands on the content. */
+.ant-modal-mask {
+  background: rgba(15, 23, 42, 0.45) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.ant-modal .ant-modal-content,
+.ant-modal-confirm .ant-modal-content {
+  border-radius: 16px;
+  box-shadow: 0 24px 60px -12px rgba(15, 23, 42, 0.35),
+              0 8px 24px -12px rgba(15, 23, 42, 0.2);
+}
+/* Roomier confirm layout: larger title/icon, clearer body, tidy action row. */
+.ant-modal-confirm .ant-modal-confirm-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.ant-modal-confirm .ant-modal-confirm-content {
+  color: #475569;
+  margin-top: 6px;
+}
+.ant-modal-confirm .ant-modal-confirm-body > .anticon {
+  font-size: 22px;
+}
+.ant-modal-confirm .ant-modal-confirm-btns {
+  margin-top: 22px;
+}
+
 /* ── DMS online document editor (TipTap / ProseMirror) ── */
 .dms-doc .ProseMirror { outline: none; color: #1f2937; line-height: 1.7; font-size: 14px; }
 .dms-doc .ProseMirror > * + * { margin-top: 0.75em; }

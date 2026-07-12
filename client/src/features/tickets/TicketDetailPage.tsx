@@ -111,6 +111,14 @@ export default function TicketDetailPage() {
   const flow = ticket.flows[0];
   const isCompleted = !!flow?.isCompleted;
 
+  // Stage clicked in the workflow band. When it's a stage the ticket has already
+  // moved past, the Stage Forms tab shows that stage's submitted (read-only)
+  // forms instead of the current stage's fillable form.
+  const currentCanonicalIds = flow?.currentStages.map((s) => s.canonicalId) ?? [];
+  const currentPersistedIds = flow?.currentStages.map((s) => s.id) ?? [];
+  const viewingPastStage =
+    !!selectedStage && !currentCanonicalIds.includes(selectedStage.canonicalId);
+
   return (
     <PageContainer>
       <div className="space-y-4">
@@ -156,11 +164,24 @@ export default function TicketDetailPage() {
 
             {tab === 'forms' && (
               <div className="space-y-4">
-                <StageFormSection ticketId={ticket.id} />
-                {typeof ticket.customFields?.audit_register_id === 'string' && (
+                {viewingPastStage ? (
+                  // A completed/earlier stage is selected in the band → show that
+                  // stage's submitted forms (read-only) rather than the current one.
+                  <TicketFormHistory
+                    ticketId={ticket.id}
+                    selectedStageId={selectedStage?.persistedId ?? null}
+                    currentStageIds={currentPersistedIds}
+                    isCompleted={isCompleted}
+                  />
+                ) : (
                   <>
-                    <AuditComplianceCard registerId={ticket.customFields.audit_register_id} />
-                    <AuditCapaChildrenCard registerId={ticket.customFields.audit_register_id} />
+                    <StageFormSection ticketId={ticket.id} />
+                    {typeof ticket.customFields?.audit_register_id === 'string' && (
+                      <>
+                        <AuditComplianceCard registerId={ticket.customFields.audit_register_id} />
+                        <AuditCapaChildrenCard registerId={ticket.customFields.audit_register_id} />
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -171,7 +192,7 @@ export default function TicketDetailPage() {
                 <TicketFormHistory
                   ticketId={ticket.id}
                   selectedStageId={selectedStage?.persistedId ?? null}
-                  currentStageIds={flow?.currentStages.map((s) => s.id) ?? []}
+                  currentStageIds={currentPersistedIds}
                   isCompleted={isCompleted}
                 />
                 <ApprovalAwaitingCard ticketId={ticket.id} />
