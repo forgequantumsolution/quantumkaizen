@@ -23,6 +23,10 @@ import { useWorkflowDirectory } from '@/lib/api/workflow';
 import { fyLabel } from '@/stores/fiscalYearStore';
 import { useFiscalYearStore } from '@/stores/fiscalYearStore';
 
+// The workflow type that scopes the "Audit Workflow" picker — a register may
+// only follow a workflow whose type is Audit (matches the AUD code-prefix type).
+const AUDIT_WORKFLOW_TYPE = 'Audit';
+
 // Audit method is a fixed vocabulary — a dropdown prevents free-text typos that
 // break downstream reporting/filtering.
 const AUDIT_METHOD_OPTIONS = [
@@ -119,10 +123,12 @@ export default function AuditRegisterFormPage() {
   const { data: isoData } = useIsoStandards();
   const isoStandards = isoData?.data ?? [];
 
-  // Workflows the audit can follow — only published/active ones, like Raise Ticket.
+  // Workflows the audit can follow — only published/active ones of the Audit
+  // workflow type, so the picker shows audit workflows (not CAPA / Change
+  // Control / Deviation / etc.). The type is assigned when a workflow is built.
   const { data: workflowsData } = useWorkflowDirectory();
   const activeWorkflows = (workflowsData?.items ?? []).filter(
-    (w) => w.workflowStatus === 'ACTIVE',
+    (w) => w.workflowStatus === 'ACTIVE' && w.type?.name === AUDIT_WORKFLOW_TYPE,
   );
 
   const createMut = useCreateAuditRegister();

@@ -3,7 +3,7 @@ import toast from 'react-hot-toast';
 import { App } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { Button, Card, Spinner } from '@/components/ui';
+import { Button, Card, Spinner, Tabs } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { useAuthStore } from '@/stores/authStore';
 import { useDeleteTicket, useTicket } from '@/lib/api/ticket';
@@ -19,6 +19,13 @@ import StageTabs from './detail/StageTabs';
 import TicketActivityModal from './detail/TicketActivityModal';
 import TicketDetailsModal from './detail/TicketDetailsModal';
 import TicketSidebar from './detail/TicketSidebar';
+import TicketDetailsTab from './detail/TicketDetailsTab';
+
+const TABS = [
+  { id: 'details', label: 'Details' },
+  { id: 'forms', label: 'Stage Forms' },
+  { id: 'history', label: 'History' },
+];
 
 export default function TicketDetailPage() {
   const { id = '' } = useParams<{ id: string }>();
@@ -32,12 +39,14 @@ export default function TicketDetailPage() {
   const [activityOpen, setActivityOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [selectedStage, setSelectedStage] = useState<SelectedStageInfo | null>(null);
+  const [tab, setTab] = useState('details');
 
   useEffect(() => {
     setSelectedStage(null);
     setWorkflowOpen(true);
     setActivityOpen(false);
     setDetailsOpen(false);
+    setTab('details');
   }, [id]);
 
   const { data: ticket, isLoading, error } = useTicket(id);
@@ -116,48 +125,58 @@ export default function TicketDetailPage() {
           isDeleting={deleteTicket.isPending}
         />
 
-        {/* Two-column layout: workflow + forms on the left, a persistent
-            metadata rail on the right — the same shape as the CAPA detail page,
-            shared by every workflow module. */}
+        {/* Workflow flow band — stage selector + stage actions. */}
+        {flow && workflowOpen && (
+          <StageTabs
+            workflowId={flow.workflow.id}
+            currentStageIds={flow.currentStages.map((s) => s.canonicalId)}
+            currentPersistedStageIds={flow.currentStages.map((s) => s.id)}
+            isCompleted={isCompleted}
+            selectedCanonicalId={selectedStage?.canonicalId ?? null}
+            onStageSelect={setSelectedStage}
+          />
+        )}
+        {!isCompleted && (
+          <ActionBar
+            ticketId={ticket.id}
+            isOnHold={ticket.isOnHold}
+            isCompleted={isCompleted}
+            canTransition={canTransition}
+          />
+        )}
+
+        {/* Body: tabbed content + persistent metadata sidebar (CAPA-style). */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
-          <div className="space-y-4 min-w-0">
-            {flow && workflowOpen && (
-              <StageTabs
-                workflowId={flow.workflow.id}
-                currentStageIds={flow.currentStages.map((s) => s.canonicalId)}
-                currentPersistedStageIds={flow.currentStages.map((s) => s.id)}
-                isCompleted={isCompleted}
-                selectedCanonicalId={selectedStage?.canonicalId ?? null}
-                onStageSelect={setSelectedStage}
-              />
+          <div className="min-w-0">
+            <div className="mb-3">
+              <Tabs tabs={TABS} activeTab={tab} onTabChange={setTab} />
+            </div>
+
+            {tab === 'details' && <TicketDetailsTab ticket={ticket} canEdit={canUpdate} />}
+
+            {tab === 'forms' && (
+              <div className="space-y-4">
+                <StageFormSection ticketId={ticket.id} />
+                {typeof ticket.customFields?.audit_register_id === 'string' && (
+                  <>
+                    <AuditComplianceCard registerId={ticket.customFields.audit_register_id} />
+                    <AuditCapaChildrenCard registerId={ticket.customFields.audit_register_id} />
+                  </>
+                )}
+              </div>
             )}
 
-            {!isCompleted && (
-              <ActionBar
-                ticketId={ticket.id}
-                isOnHold={ticket.isOnHold}
-                isCompleted={isCompleted}
-                canTransition={canTransition}
-              />
+            {tab === 'history' && (
+              <div className="space-y-4">
+                <TicketFormHistory
+                  ticketId={ticket.id}
+                  selectedStageId={selectedStage?.persistedId ?? null}
+                  currentStageIds={flow?.currentStages.map((s) => s.id) ?? []}
+                  isCompleted={isCompleted}
+                />
+                <ApprovalAwaitingCard ticketId={ticket.id} />
+              </div>
             )}
-
-            <StageFormSection ticketId={ticket.id} />
-
-            {typeof ticket.customFields?.audit_register_id === 'string' && (
-              <>
-                <AuditComplianceCard registerId={ticket.customFields.audit_register_id} />
-                <AuditCapaChildrenCard registerId={ticket.customFields.audit_register_id} />
-              </>
-            )}
-
-            <TicketFormHistory
-              ticketId={ticket.id}
-              selectedStageId={selectedStage?.persistedId ?? null}
-              currentStageIds={flow?.currentStages.map((s) => s.id) ?? []}
-              isCompleted={isCompleted}
-            />
-
-            <ApprovalAwaitingCard ticketId={ticket.id} />
           </div>
 
           <div className="lg:sticky lg:top-4">

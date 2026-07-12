@@ -485,7 +485,9 @@ export default function ModulePage({
                   <History size={14} />
                   <span className="ml-1.5">Recent Records</span>
                 </Button>
-                {showCreate && (
+                {/* Create lives on the My Tasks tab only — the Overview tab is
+                    read-only reporting. */}
+                {showCreate && tab === 'workspace' && (
                   <Button
                     variant="primary"
                     size="sm"
