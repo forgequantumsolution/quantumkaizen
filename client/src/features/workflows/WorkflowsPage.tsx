@@ -269,55 +269,66 @@ function WorkflowCard({
   return (
     <div
       onClick={onOpen}
-      className="group relative flex flex-col rounded-2xl border border-gray-200/80 bg-white shadow-sm hover:shadow-lg hover:-translate-y-0.5 hover:border-gray-300 transition-all duration-200 cursor-pointer overflow-hidden"
+      className="group relative flex flex-col rounded-2xl border border-gray-200/80 bg-white shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-gray-300 transition-all duration-200 cursor-pointer overflow-hidden"
     >
-      {/* Status accent bar */}
-      <span className="absolute inset-x-0 top-0 h-1" style={{ background: accent.bar }} />
+      <div className="p-4 flex flex-col gap-3.5 flex-1">
+        {/* Row 1 — status + version */}
+        <div className="flex items-center justify-between gap-2">
+          <WorkflowStatusBadge status={workflow.workflowStatus} />
+          <span
+            className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-md tabular-nums"
+            title={`Workflow version ${workflow.version}`}
+          >
+            v{workflow.version}
+          </span>
+        </div>
 
-      <div className="p-4 pt-5 flex flex-col gap-3 flex-1">
+        {/* Row 2 — identity */}
         <div className="flex items-start gap-3">
           <span
-            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ring-1"
+            className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: accent.iconBg, color: accent.iconColor, boxShadow: `0 0 0 1px ${accent.ring}` }}
           >
-            <WorkflowIcon size={18} strokeWidth={2} />
+            <WorkflowIcon size={19} strokeWidth={2} />
           </span>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-sm font-semibold text-gray-900 truncate leading-tight">
+          <div className="min-w-0 flex-1 pt-0.5">
+            <h3 className="text-[15px] font-semibold text-gray-900 truncate leading-tight group-hover:text-gold-700 transition-colors">
               {displayWorkflowName(workflow)}
             </h3>
-            <p className="text-xs text-gray-500 mt-0.5 truncate">
-              {workflow.type?.name ?? 'No type'}
-            </p>
-          </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <WorkflowStatusBadge status={workflow.workflowStatus} />
             <span
-              className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded"
-              title={`Workflow version ${workflow.version}`}
+              className={cn(
+                'inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium mt-1.5',
+                workflow.type?.name
+                  ? 'bg-gray-100 text-gray-600'
+                  : 'bg-gray-50 text-gray-400 italic',
+              )}
             >
-              v{workflow.version}
+              {workflow.type?.name ?? 'No type'}
             </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1.5">
+        {/* Row 3 — meta */}
+        <div className="mt-auto flex items-center gap-2 text-xs text-gray-500 pt-1">
+          <span className="inline-flex items-center gap-1.5">
             <Network size={13} className="text-gray-400" />
             {workflow.stageCount} {workflow.stageCount === 1 ? 'stage' : 'stages'}
           </span>
-          <span className="flex items-center gap-1.5">
+          <span className="text-gray-300">·</span>
+          <span className="inline-flex items-center gap-1.5">
             <Clock size={13} className="text-gray-400" />
             {formatDate(workflow.updatedAt)}
           </span>
+          {workflow.createdBy && (
+            <span className="ml-auto truncate text-[11px] text-gray-400" title={`Created by ${workflow.createdBy.name}`}>
+              {workflow.createdBy.name}
+            </span>
+          )}
         </div>
-
-        {workflow.createdBy && (
-          <p className="text-[11px] text-gray-400 truncate">by {workflow.createdBy.name}</p>
-        )}
       </div>
 
-      <div className="flex items-center gap-1 px-2.5 py-2 border-t border-gray-100 bg-gray-50/60">
+      {/* Footer — actions */}
+      <div className="flex items-center gap-0.5 px-2.5 py-2 border-t border-gray-100 bg-gray-50/60">
         {canUpdate && (
           <Button
             variant="ghost"

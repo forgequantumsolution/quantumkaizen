@@ -15,6 +15,15 @@ const WORKFLOW_STAGE_STATUSES: { name: string; behavior: StageActionBehavior }[]
 
 const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
 
+// Severity — impact classification pick-list (distinct from Priority). Higher
+// `level` = more severe (used for sorting); colours drive the UI badges.
+const SEVERITIES: { name: string; level: number; color: string }[] = [
+  { name: 'Critical', level: 30, color: '#DC2626' },
+  { name: 'Major', level: 20, color: '#D97706' },
+  { name: 'Minor', level: 10, color: '#2563EB' },
+  { name: 'Observation', level: 0, color: '#64748B' },
+];
+
 const ACTION_CRITERIA = ['Anyone'];
 
 
@@ -371,6 +380,15 @@ async function main() {
       where: { name },
       update: {},
       create: { name },
+    });
+  }
+
+  console.log('🌱  Seeding Severities...');
+  for (const s of SEVERITIES) {
+    await prisma.severity.upsert({
+      where: { name: s.name },
+      update: { level: s.level, color: s.color, isDeleted: false },
+      create: { name: s.name, level: s.level, color: s.color },
     });
   }
 
