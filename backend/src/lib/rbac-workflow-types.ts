@@ -14,9 +14,12 @@
  * `ticket.<action>` key. The global key therefore acts as an "All Workflow
  * Types" master, which keeps every existing role working (backward-compatible).
  *
- * Audit is deliberately excluded: it has its own `audit_*` catalog + bespoke
- * sidebar/matrix treatment, so it keeps using the global `ticket.*` keys and
- * never gets a generated per-type row.
+ * Audit was historically excluded (it has its own `audit_*` catalog + bespoke
+ * sidebar/matrix treatment). As of the per-module-ticket-master work it now
+ * ALSO gets per-type ticket keys like every other type, so audit tickets keep
+ * working once the global `ticket.*` master is retired (see
+ * docs/per-module-ticket-master-plan.md). `isAuditTypeName` stays exported for
+ * callers that still need to detect the audit type for non-ticket reasons.
  */
 import { prisma } from './prisma';
 
@@ -31,7 +34,8 @@ const VERB_ACTION: Record<string, string> = {
 export const WF_TYPE_MODULE = 'WF_TYPE';
 export const WF_TYPE_VERBS = Object.keys(VERB_ACTION);
 
-/** Audit is special-cased everywhere (its own keys) — never gets per-type keys. */
+/** Detect the Audit workflow type by name. Audit now gets per-type ticket keys
+ *  like any other type; this stays for non-ticket callers that special-case it. */
 export const isAuditTypeName = (name: string): boolean => /^audit$/i.test(name.trim());
 
 export const wfTypeKey = (typeId: string, verb: string): string => `wf_type.${typeId}.${verb}`;
@@ -52,7 +56,7 @@ export const wfTypePermsFor = (typeId: string, name: string) =>
   }));
 
 /**
- * Upsert the permission rows for one workflow type. No-op for Audit. Safe to
+ * Upsert the permission rows for one workflow type (Audit included). Safe to
  * call from create / un-delete paths. Does NOT grant to any role — SUPER_ADMIN
  * is granted separately (rbac-sync at startup, or the create hook).
  */
@@ -60,7 +64,6 @@ export const ensureWorkflowTypePermissions = async (
   typeId: string,
   name: string,
 ): Promise<void> => {
-  if (isAuditTypeName(name)) return;
   for (const p of wfTypePermsFor(typeId, name)) {
     await prisma.permission.upsert({
       where: { key: p.key },
@@ -75,7 +78,6 @@ export const grantWorkflowTypePermissionsToSuperAdmin = async (
   typeId: string,
   name: string,
 ): Promise<void> => {
-  if (isAuditTypeName(name)) return;
   const superAdmin = await prisma.role.findFirst({
     where: { name: 'SUPER_ADMIN' },
     select: { id: true },
@@ -104,17 +106,15 @@ export const deleteWorkflowTypePermissions = async (typeId: string): Promise<voi
  * SUPER_ADMIN "hold everything" step) so existing types are backfilled on
  * deploy without a manual seed.
  *
- * - Upserts keys for every non-Audit workflow type, INCLUDING soft-deleted ones,
- *   so a soft-delete → restore keeps its role grants intact.
- * - Prunes orphan `wf_type.*` rows whose type no longer exists (hard-deleted) or
- *   was renamed to "Audit".
+ * - Upserts keys for every workflow type (Audit included), INCLUDING soft-deleted
+ *   ones, so a soft-delete → restore keeps its role grants intact.
+ * - Prunes orphan `wf_type.*` rows whose type no longer exists (hard-deleted).
  */
 export const syncWorkflowTypePermissions = async (): Promise<void> => {
   const types = await prisma.workflowType.findMany({ select: { id: true, name: true } });
-  const wanted = types.filter((t) => !isAuditTypeName(t.name));
-  const wantedIds = new Set(wanted.map((t) => t.id));
+  const wantedIds = new Set(types.map((t) => t.id));
 
-  for (const t of wanted) {
+  for (const t of types) {
     await ensureWorkflowTypePermissions(t.id, t.name);
   }
 

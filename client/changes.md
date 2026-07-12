@@ -1,5 +1,27 @@
 # Changes Log
 
+## Per-module ticket master (frontend) — 2026-07-12
+
+Access Control matrix changes supporting the retirement of the global ticket
+master (backend + overall plan: repo-root `changes.md` top section and
+`docs/per-module-ticket-master-plan.md`). Working tree only.
+
+- **`src/features/admin/access-control/AccessMatrix.tsx`** — new optional
+  `extraTabsByModule?: Record<string, NavTabAccess[]>` prop; the group builder
+  merges those tabs into the matching existing module (used to fold the Audit
+  ticket keys into the Audit module instead of a duplicate "Audit" group).
+- **`src/features/admin/access-control/AccessControlTab.tsx`** — new
+  `useAuditTicketTabs()` hook resolves the live Audit workflow-type id and emits a
+  **"Workflow Tickets"** row (`entity = wf_type.<auditId>`) under the static
+  `audit` module; passed as `extraTabsByModule` to the Role / Department / User
+  matrices.
+
+Verified via Playwright in the live app: for a role holding the ticket master,
+the Audit "Workflow Tickets" row + per-type modules show read/create/update
+checked (delete off) — matching the role's grants. `tsc --noEmit` clean.
+
+---
+
 Summary of changes made across all six Quantum frontends in this session.
 
 ## Objective

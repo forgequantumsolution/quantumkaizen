@@ -4,6 +4,43 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Per-module ticket master — Phases 1–2 + gate — 2026-07-12
+
+Follow-on to per-workflow-type access control: retiring the global `ticket.*`
+master in phases so ticket access becomes strictly per module. Phases 1–2 done +
+verified on local `kaizen_qms` (6 types); working tree only. Full plan:
+`docs/per-module-ticket-master-plan.md`.
+
+- **`src/lib/rbac-workflow-types.ts`** — Audit no longer excluded: removed the
+  `isAuditTypeName` early-returns in `ensureWorkflowTypePermissions`,
+  `grantWorkflowTypePermissionsToSuperAdmin`, and the filter in
+  `syncWorkflowTypePermissions`, so the Audit type gets `wf_type.<id>.*` keys like
+  any other. `isAuditTypeName` kept exported for non-ticket callers.
+- **`src/lib/rbac-ticket-migration.ts`** (new) — `backfillPerTypeTicketGrants()`:
+  idempotent, self-terminating backfill mirroring each `ticket.<verb>` grant onto
+  `wf_type.<id>.<verb>` for every type — roles + departments (additive connect)
+  and user overrides (replicates GRANT/DENY, never clobbers an existing per-type
+  override). SUPER_ADMIN skipped (holds all via sync + resolver bypass).
+- **`src/lib/rbac-sync.ts`** — `ensureRbacCatalog()` now calls
+  `backfillPerTypeTicketGrants()` after `syncWorkflowTypePermissions()` and the
+  SUPER_ADMIN hold-all step.
+- **`src/scripts/check-ticket-grants.ts`** (new) + **`package.json`** script
+  `gate:ticket-grants` — Phase 3 GO/NO-GO gate: exits 0 (GREEN) when every
+  `ticket.*` subject has full per-type coverage, else 1 (RED) listing gaps. Run
+  per environment before Phase 3 (the boot backfill is fire-and-forget in
+  `src/index.ts:13`, so "server up" ≠ "grants migrated").
+
+**Verified:** roles holding `ticket.<verb>` 0/6 → 6/6 after backfill (idempotent
+on re-run); dept + GRANT/DENY-override + non-clobber paths proven with a
+self-cleaning test; gate GREEN when clean, RED (exit 1) when a per-type key is
+removed; `tsc --noEmit` clean. Not committed.
+
+**Deferred (NOT done):** Phase 3 — remove the `ticket.*` OR-bridge in
+`src/middleware/permissions.ts` (per-type enforcement only). Phase 4 — remove
+`ticket.*` from `src/lib/rbac-catalog.ts` + update `prisma/seed.ts` system roles.
+
+---
+
 # Ticket form access control — enforce per-form fill/view groups — 2026-07-06
 
 **Problem:** Inside a ticket, users who were **not** in a form's fill/view group could still see and interact with the form. The backend resolver already returned the right `canRead`/`canFill` and the submit endpoint enforced `assertCanFillForm`, but "openness" was inferred from an *empty fill group* — so any binding created without a group (and every virtual audit checklist) was silently open to everyone. Working tree only — **not committed**.
