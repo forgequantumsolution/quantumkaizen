@@ -15,9 +15,30 @@
 import { prisma } from './prisma';
 import { PERMISSIONS } from './rbac-catalog';
 import { syncWorkflowTypePermissions } from './rbac-workflow-types';
-import { backfillPerTypeTicketGrants } from './rbac-ticket-migration';
+import { backfillPerTypeTicketGrants, findUnmigratedTicketGrants } from './rbac-ticket-migration';
+import { ensureSystemRoleTicketGrants } from './rbac-system-role-tickets';
 
 const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
+
+/**
+ * Delete any `TICKET`-module permission row no longer in the code catalog —
+ * i.e. the retired global `ticket.*` master keys (Phase 4 of
+ * docs/per-module-ticket-master-plan.md). Cascades to remove role/department/
+ * user-override grants referencing them; harmless, since enforcement stopped
+ * reading these keys in Phase 3 and every effective grant was already mirrored
+ * onto `wf_type.*` keys during the Phase 2 rollout (verified via the gate).
+ * A no-op once nothing with module `TICKET` remains.
+ */
+const pruneRetiredTicketMasterKeys = async (): Promise<void> => {
+  const currentTicketKeys = PERMISSIONS.filter((p) => p.module === 'TICKET').map((p) => p.key);
+  const orphaned = await prisma.permission.findMany({
+    where: { module: 'TICKET', key: { notIn: currentTicketKeys.length ? currentTicketKeys : ['__none__'] } },
+    select: { id: true },
+  });
+  if (orphaned.length > 0) {
+    await prisma.permission.deleteMany({ where: { id: { in: orphaned.map((p) => p.id) } } });
+  }
+};
 
 export async function ensureRbacCatalog(): Promise<void> {
   for (const p of PERMISSIONS) {
@@ -27,6 +48,8 @@ export async function ensureRbacCatalog(): Promise<void> {
       create: p,
     });
   }
+
+  await pruneRetiredTicketMasterKeys();
 
   // Backfill/prune the dynamic per-workflow-type keys BEFORE the SUPER_ADMIN
   // "hold everything" step below, so the invariant covers them too.
@@ -44,9 +67,27 @@ export async function ensureRbacCatalog(): Promise<void> {
     });
   }
 
-  // Phase 2 (per-module ticket master): mirror global `ticket.*` grants onto the
-  // per-type keys so effective access survives the later retirement of the
-  // master. Additive + idempotent + self-terminating (no-op once `ticket.*` is
-  // removed in Phase 4). See lib/rbac-ticket-migration.ts.
+  // Phase 2 (per-module ticket master): mirror any remaining global `ticket.*`
+  // grants onto the per-type keys. Additive + idempotent + self-terminating —
+  // a no-op now that `ticket.*` is pruned above on every environment that has
+  // rolled forward past Phase 4. See lib/rbac-ticket-migration.ts.
   await backfillPerTypeTicketGrants();
+
+  // Phase 4 fresh-install safety net: grant the documented default ticket
+  // verbs to system roles that have never held any per-type key at all (i.e.
+  // never migrated because `ticket.*` never existed here). See
+  // lib/rbac-system-role-tickets.ts.
+  await ensureSystemRoleTicketGrants();
+
+  // Observability net: warn (non-fatal) if any subject still relies on
+  // `ticket.*` without full per-type coverage. Should be empty on every boot
+  // once the environment has rolled past Phase 4 (see pruneRetiredTicketMasterKeys
+  // above) — kept as cheap insurance against a partial/mixed rollout.
+  const { gaps } = await findUnmigratedTicketGrants();
+  if (gaps.length > 0) {
+    console.warn(
+      `⚠️  RBAC: ${gaps.length} subject(s) still have incomplete per-type ticket coverage:`,
+      gaps.map((g) => `${g.subjectType} "${g.subject}" · ticket.${g.verb} (missing ${g.missingTypeIds.length} type(s))`),
+    );
+  }
 }

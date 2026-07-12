@@ -100,7 +100,7 @@ const ticketDetailSelect = {
 export const list = async (
   query: ListTicketsQuery,
   userId: string,
-  scope: TicketTypeScope = { all: true, typeIds: [] },
+  scope: TicketTypeScope = { all: false, typeIds: [] },
   siteScope: SiteScope = { all: true, siteIds: [] },
 ) => {
   const where: Prisma.TicketWhereInput = {};
@@ -116,17 +116,16 @@ export const list = async (
   if (query.status === 'open') flowsSome.isCompleted = false;
   if (query.status === 'completed') flowsSome.isCompleted = true;
 
-  // Per-type scoping: unless the user holds the global `ticket.read` master,
-  // restrict to the workflow types they can read. A request for a specific,
-  // unreadable type returns an empty page rather than leaking counts.
-  if (!scope.all) {
-    if (query.workflowTypeId) {
-      if (!scope.typeIds.includes(query.workflowTypeId)) {
-        return { items: [], total: 0, page: query.page, pageSize: query.pageSize };
-      }
-    } else {
-      flowsSome.workflow = { typeId: { in: scope.typeIds } };
+  // Per-type scoping: always restrict to the workflow types the user can read
+  // (SUPER_ADMIN holds every `wf_type.*.read` key, so `scope.typeIds` covers
+  // all of them). A request for a specific, unreadable type returns an empty
+  // page rather than leaking counts.
+  if (query.workflowTypeId) {
+    if (!scope.typeIds.includes(query.workflowTypeId)) {
+      return { items: [], total: 0, page: query.page, pageSize: query.pageSize };
     }
+  } else {
+    flowsSome.workflow = { typeId: { in: scope.typeIds } };
   }
 
   if (Object.keys(flowsSome).length > 0) where.flows = { some: flowsSome };

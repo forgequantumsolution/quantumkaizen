@@ -1,16 +1,20 @@
+import { useMemo } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Briefcase, ClipboardCheck, PlayCircle, AlertOctagon, ShieldCheck } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useAuthStore } from '@/stores/authStore';
+import { useWorkflowTypes } from '@/lib/api/workflowLookups';
+import { isAuditWorkflowTypeName, wfTypeReadKey } from '@/lib/navAccess';
 import { cn } from '@/lib/utils';
 
 // Schedule lives as a section on the Audit Program page (Register → Program flow),
 // so it's no longer a top-level tab. "My Workspace" surfaces the audit workflow
 // tickets (PRs) on the generic module workspace, embedded under these tabs.
 // `permission` gates each tab — see lib/navAccess.ts + Access Control → Menu Access.
-const TABS = [
+// "My Tasks" is spliced in below since its permission key is DB-driven (the
+// Audit workflow type's per-type read key — no more global `ticket.read`).
+const STATIC_TABS = [
   { to: '/audit/dashboard', label: 'Overview', icon: LayoutDashboard, permission: 'audit_register.read' },
-  { to: '/audit/workspace', label: 'My Tasks', icon: Briefcase, permission: 'ticket.read' },
   { to: '/audit/register', label: 'Audit Planner', icon: ClipboardCheck, permission: 'audit_register.read' },
   { to: '/audit/program', label: 'Audit Execution', icon: PlayCircle, permission: 'audit_program.read' },
   { to: '/audit/non-conformance', label: 'Findings', icon: AlertOctagon, permission: 'non_conformance.read' },
@@ -19,7 +23,22 @@ const TABS = [
 
 export default function AuditModuleLayout() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
-  const tabs = TABS.filter((t) => hasPermission(t.permission));
+  const { data: workflowTypes = [] } = useWorkflowTypes();
+  const auditType = workflowTypes.find((t) => !t.isDeleted && isAuditWorkflowTypeName(t.name));
+
+  const allTabs = useMemo(() => {
+    const myTasks = {
+      to: '/audit/workspace',
+      label: 'My Tasks',
+      icon: Briefcase,
+      // Empty until the audit type loads — hasPermission('') is always false,
+      // so the tab simply stays hidden rather than momentarily over-showing.
+      permission: auditType ? wfTypeReadKey(auditType.id) : '',
+    };
+    return [STATIC_TABS[0]!, myTasks, ...STATIC_TABS.slice(1)];
+  }, [auditType]);
+
+  const tabs = allTabs.filter((t) => hasPermission(t.permission));
   return (
     <PageContainer>
       {/* Compact single-row header: identity + tabs share one line. */}

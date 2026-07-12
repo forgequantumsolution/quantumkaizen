@@ -6,6 +6,7 @@ import { Card, Button, Badge, Modal, Spinner } from '@/components/ui';
 import { useHasPermission } from '@/stores/authStore';
 import { useTicket } from '@/lib/api/ticket';
 import { useAttachCapaWorkflow, useUpdateCapaStatus, auditKeys, type Capa } from '@/lib/api/audit';
+import { wfTypeTransitionKey } from '@/lib/navAccess';
 import ActionBar from '@/features/tickets/detail/ActionBar';
 import TicketFlowCanvas from '@/features/tickets/detail/TicketFlowCanvas';
 import CapaEnumStepper, { CAPA_ENUM_FLOW } from './CapaEnumStepper';
@@ -23,7 +24,10 @@ export default function CapaWorkflowBand({ capa }: { capa: Capa }) {
   const [flowOpen, setFlowOpen] = useState(false);
   const attachMut = useAttachCapaWorkflow();
   const statusMut = useUpdateCapaStatus();
-  const canTransition = useHasPermission('ticket.transition');
+  // Empty key while the ticket is still loading — hasPermission('') is always
+  // false, so the action bar simply stays disabled until the type resolves.
+  const ticketTypeId = ticket?.flows?.[0]?.workflow?.typeId ?? null;
+  const canTransition = useHasPermission(ticketTypeId ? wfTypeTransitionKey(ticketTypeId) : '');
   const canUpdate = useHasPermission('capa.update');
   const qc = useQueryClient();
 

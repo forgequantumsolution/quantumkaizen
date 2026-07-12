@@ -19,76 +19,28 @@
  *    `wf_type.<id>.<verb>` override row (any effect) for ALL live types. Effect
  *    correctness is guaranteed by the backfill (mirrors the global effect and
  *    preserves pre-existing per-type overrides), so this only checks presence.
+ *
+ * Once Phase 4 removes the `ticket.*` catalog rows entirely, this trivially
+ * finds zero subjects to check and always reports GREEN — safe to keep running.
  */
 import { prisma } from '../lib/prisma';
-
-const VERBS = ['read', 'create', 'update', 'delete', 'transition'] as const;
-
-interface Gap {
-  subjectType: 'role' | 'department' | 'user';
-  subject: string;
-  verb: string;
-  missingTypeIds: string[];
-}
-
-async function findGaps(): Promise<{ gaps: Gap[]; typeCount: number }> {
-  const types = await prisma.workflowType.findMany({ select: { id: true, name: true } });
-  const typeIds = types.map((t) => t.id);
-  const gaps: Gap[] = [];
-  if (typeIds.length === 0) return { gaps, typeCount: 0 };
-
-  for (const verb of VERBS) {
-    const wantKeys = new Set(typeIds.map((id) => `wf_type.${id}.${verb}`));
-    const missingFrom = (heldKeys: Set<string>): string[] =>
-      typeIds.filter((id) => !heldKeys.has(`wf_type.${id}.${verb}`));
-
-    // ── Roles ──
-    const roles = await prisma.role.findMany({
-      where: { permissions: { some: { key: `ticket.${verb}` } }, name: { not: 'SUPER_ADMIN' } },
-      select: { name: true, permissions: { where: { key: { in: [...wantKeys] } }, select: { key: true } } },
-    });
-    for (const r of roles) {
-      const missing = missingFrom(new Set(r.permissions.map((p) => p.key)));
-      if (missing.length) gaps.push({ subjectType: 'role', subject: r.name, verb, missingTypeIds: missing });
-    }
-
-    // ── Departments ──
-    const depts = await prisma.department.findMany({
-      where: { permissions: { some: { key: `ticket.${verb}` } } },
-      select: { name: true, permissions: { where: { key: { in: [...wantKeys] } }, select: { key: true } } },
-    });
-    for (const d of depts) {
-      const missing = missingFrom(new Set(d.permissions.map((p) => p.key)));
-      if (missing.length) gaps.push({ subjectType: 'department', subject: d.name, verb, missingTypeIds: missing });
-    }
-
-    // ── User overrides (presence of a per-type override, any effect) ──
-    const overs = await prisma.userPermission.findMany({
-      where: { permission: { key: `ticket.${verb}` } },
-      select: { userId: true, user: { select: { email: true } } },
-    });
-    for (const o of overs) {
-      const held = await prisma.userPermission.findMany({
-        where: { userId: o.userId, permission: { key: { in: [...wantKeys] } } },
-        select: { permission: { select: { key: true } } },
-      });
-      const missing = missingFrom(new Set(held.map((h) => h.permission.key)));
-      if (missing.length) gaps.push({ subjectType: 'user', subject: o.user?.email ?? o.userId, verb, missingTypeIds: missing });
-    }
-  }
-  return { gaps, typeCount: typeIds.length };
-}
+import { findUnmigratedTicketGrants } from '../lib/rbac-ticket-migration';
 
 async function main() {
   const db = (await prisma.$queryRawUnsafe<{ db: string }[]>('SELECT current_database() as db'))[0]!.db;
-  const { gaps, typeCount } = await findGaps();
+  const { gaps, typeCount } = await findUnmigratedTicketGrants();
   console.log(`Ticket-grant migration gate — DB: ${db}, live workflow types: ${typeCount}`);
   if (typeCount === 0) {
     console.log('No workflow types — nothing to gate. (Trivially green.)');
     return;
   }
   if (gaps.length === 0) {
-    console.log('\n✅ GREEN — every ticket.* subject has full per-type coverage. Safe to ship Phase 3.');
+    const ticketRows = await prisma.permission.count({ where: { module: 'TICKET' } });
+    console.log(
+      ticketRows === 0
+        ? '\n✅ GREEN — no `ticket.*` master keys remain here (Phase 4 already applied). Nothing to gate.'
+        : '\n✅ GREEN — every ticket.* subject has full per-type coverage. Safe to ship Phase 3.',
+    );
     return;
   }
   console.log(`\n❌ RED — ${gaps.length} gap(s). Do NOT ship Phase 3 until the Phase 2 backfill completes here.\n`);

@@ -27,7 +27,7 @@ import {
 } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn, formatDate, displayWorkflowName } from '@/lib/utils';
-import { useAuthStore } from '@/stores/authStore';
+import { useHasAnyPermissionMatching } from '@/stores/authStore';
 import {
   useDeleteTicket,
   useTickets,
@@ -77,9 +77,11 @@ function useDebounced<T>(value: T, ms = 250) {
 
 export default function TicketsPage() {
   const navigate = useNavigate();
-  const hasPermission = useAuthStore((s) => s.hasPermission);
-  const canCreate = hasPermission('ticket.create');
-  const canDelete = hasPermission('ticket.delete');
+  // No more global `ticket.create`/`ticket.delete` master — show the button if
+  // the user holds create/delete for AT LEAST ONE workflow type; the actual
+  // create/delete is still enforced per-type at the API regardless.
+  const canCreate = useHasAnyPermissionMatching((k) => /^wf_type\.[^.]+\.create$/.test(k));
+  const canDelete = useHasAnyPermissionMatching((k) => /^wf_type\.[^.]+\.delete$/.test(k));
   const deleteTicket = useDeleteTicket();
   const { modal } = App.useApp();
 

@@ -20,6 +20,49 @@ Verified via Playwright in the live app: for a role holding the ticket master,
 the Audit "Workflow Tickets" row + per-type modules show read/create/update
 checked (delete off) — matching the role's grants. `tsc --noEmit` clean.
 
+**Follow-up fix (same day):** every generated per-type module's single row was
+labeled with the type's name again (e.g. module "CAPA" → row "CAPA"), reading
+as a duplicate of the module header. `src/lib/navAccess.ts`'s
+`workflowTypeModule()` now labels that row **"Workflow Tickets"** — matching
+Audit's row — for every type. Verified via Playwright across all 6 live
+workflow-type modules (Audit, CAPA, Document Review, gdgdgdg, teest, testing
+workflow): no module's row duplicates its own header anymore.
+
+## Per-module ticket master — Phase 4 (frontend) — 2026-07-12
+
+Completes the frontend side of the master's retirement (backend: `backend/changes.md`;
+overall plan: `docs/per-module-ticket-master-plan.md`). Working tree only.
+
+- **`src/lib/navAccess.ts`** — deleted the `workflow-tickets-master` module
+  block ("All Workflow Types (ticket master)"). Added `wfTypeCreateKey` /
+  `wfTypeUpdateKey` / `wfTypeDeleteKey` / `wfTypeTransitionKey` next to the
+  existing `wfTypeReadKey`.
+- **`src/components/layout/Sidebar.tsx`** — both workflow-type nav entries
+  (the generic per-type modules and "Document Approval") switched from
+  `anyPermission: [wfTypeReadKey(id), "ticket.read"]` to a plain `permission:
+  wfTypeReadKey(id)` — visibility is strictly the per-type read key now.
+- **`src/features/audit/AuditModuleLayout.tsx`** — "My Tasks" moved out of the
+  static tab list; now resolves the Audit workflow type via `useWorkflowTypes()`
+  and gates on `wfTypeReadKey(auditTypeId)` (empty key, i.e. hidden, until the
+  type loads).
+- **`src/features/audit/capa/CapaWorkflowBand.tsx`** — the transition-button
+  gate switched from `useHasPermission('ticket.transition')` to
+  `useHasPermission(ticketTypeId ? wfTypeTransitionKey(ticketTypeId) : '')`,
+  reading the ticket's own `flows[0].workflow.typeId`.
+- **`src/features/tickets/TicketsPage.tsx`** — `canCreate`/`canDelete` (button
+  visibility only — the API always enforced per-type) now use a new
+  `useHasAnyPermissionMatching(predicate)` selector (added to
+  `src/stores/authStore.ts`), checking for any held key matching
+  `/^wf_type\.[^.]+\.(create|delete)$/` — there's no single master key to check
+  against anymore.
+
+**Verified:** full Playwright pass (9/9, see `backend/changes.md` for the full
+list) — the master module is gone from the Access Control matrix; no row with
+bare entity `ticket` remains anywhere; CAPA/Audit per-type rows for
+QUALITY_ENGINEER are unchanged (regression check); SUPER_ADMIN's "Raise
+Ticket" button is visible; DOCUMENT_CONTROLLER's (read+transition only, no
+create grant on any type) is hidden. `tsc --noEmit` clean.
+
 ---
 
 Summary of changes made across all six Quantum frontends in this session.

@@ -65,19 +65,20 @@ export const requireAnyPermission = (...anyOf: string[]) =>
 type TicketAction = 'read' | 'create' | 'update' | 'delete' | 'transition';
 
 /**
- * OR-bridge: a ticket action is allowed when the user holds EITHER the
- * per-type key (`wf_type.<typeId>.<action>`) OR the global `ticket.<action>`
- * master key. `typeId` is null for workflows with no type (or Audit, which has
- * no generated per-type key) → only the global key grants.
+ * A ticket action is allowed only when the user holds the per-type key
+ * (`wf_type.<typeId>.<action>`) — the global `ticket.<action>` master was
+ * retired (docs/per-module-ticket-master-plan.md, Phase 3). `typeId` is null
+ * for a workflow with no assigned type — such a ticket has no per-type key
+ * that can ever grant it, so only SUPER_ADMIN (which bypasses this check
+ * entirely via the effective-permission resolver) can reach it.
  */
 export const hasTicketAction = (
   keys: Set<string>,
   typeId: string | null,
   action: TicketAction,
 ): boolean => {
-  if (keys.has(`ticket.${action}`)) return true;
-  if (typeId && keys.has(wfTypeKey(typeId, action))) return true;
-  return false;
+  if (!typeId) return false;
+  return keys.has(wfTypeKey(typeId, action));
 };
 
 const typeIdForTicket = async (ticketId: string): Promise<string | null> => {
@@ -108,31 +109,39 @@ export const requireTicketAction = (action: TicketAction, from: 'ticket' | 'work
     if (!req.user) return next(Unauthorized());
     try {
       const keys = await loadPermissions(req.user.userId);
-      // Fast path: the global master key grants regardless of type.
-      if (keys.has(`ticket.${action}`)) return next();
-
       const typeId =
         from === 'workflow'
           ? await typeIdForWorkflow((req.body as { workflowId?: string })?.workflowId)
           : await typeIdForTicket(req.params.id as string);
 
       if (hasTicketAction(keys, typeId, action)) return next();
-      return next(Forbidden(`Missing required permission: ticket.${action}`));
+      return next(
+        Forbidden(
+          typeId
+            ? `Missing required permission: ${wfTypeKey(typeId, action)}`
+            : `Ticket has no workflow type — no per-module key can grant ${action}`,
+        ),
+      );
     } catch (err) {
       next(err);
     }
   };
 
 export interface TicketTypeScope {
-  /** true → user may read every type (holds the global `ticket.read` master). */
+  /**
+   * Always `false` since the per-module ticket master retirement (Phase 3) —
+   * there is no key that grants every type at once anymore. Kept in the type
+   * (rather than removed) so `ticket.service.ts` and its caller don't need a
+   * shape change; SUPER_ADMIN still reads everything because it holds every
+   * `wf_type.*.read` key via the effective-permission bypass, not via `all`.
+   */
   all: boolean;
-  /** When !all, the set of workflow-type ids the user may read. */
+  /** The workflow-type ids the user may read. */
   typeIds: string[];
 }
 
 /** Which workflow types a permission set may READ (for scoping ticket lists). */
 export const ticketReadScope = (keys: Set<string>): TicketTypeScope => {
-  if (keys.has('ticket.read')) return { all: true, typeIds: [] };
   const typeIds = new Set<string>();
   for (const key of keys) {
     if (key.endsWith('.read')) {
@@ -144,9 +153,9 @@ export const ticketReadScope = (keys: Set<string>): TicketTypeScope => {
 };
 
 /**
- * Guard for the ticket LIST route. Passes when the user can read either every
- * type (global master) or at least one type; the service then scopes the
- * results to that set (see ticket.service.list).
+ * Guard for the ticket LIST route. Passes when the user can read at least one
+ * workflow type; the service then scopes the results to that set (see
+ * ticket.service.list).
  */
 export const requireTicketListAccess = async (
   req: Request,
@@ -157,8 +166,8 @@ export const requireTicketListAccess = async (
   try {
     const keys = await loadPermissions(req.user.userId);
     const scope = ticketReadScope(keys);
-    if (scope.all || scope.typeIds.length > 0) return next();
-    return next(Forbidden('Missing required permission: ticket.read'));
+    if (scope.typeIds.length > 0) return next();
+    return next(Forbidden('No ticket read access — grant at least one workflow-type module'));
   } catch (err) {
     next(err);
   }

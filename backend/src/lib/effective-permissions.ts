@@ -8,18 +8,19 @@
  *   denies  = user DENY overrides
  *   effective = grants \ denies            (deny wins)
  *
- *   SUPER_ADMIN role → ALL catalog keys, deny ignored (bypass preserved).
+ *   SUPER_ADMIN role → every permission its DB role.permissions relation holds,
+ *   deny ignored (bypass preserved). rbac-sync.ts guarantees that relation
+ *   includes EVERY permission row — static catalog AND dynamically-generated
+ *   (e.g. `wf_type.*`) — as an invariant enforced on every boot. Reading it here
+ *   (rather than the static code catalog) is what makes the bypass correct for
+ *   dynamic keys; using the static list alone under-counts them.
  *
  * Department inheritance is intentionally direct-only (user.departmentId, not
  * ancestors) — see §3.3. Adding ancestor inheritance is a localized change here.
  */
 import { prisma } from './prisma';
-import { PERMISSIONS } from './rbac-catalog';
 
 const SUPER_ADMIN_ROLE = 'SUPER_ADMIN';
-
-/** Every permission key in the code catalog — used for the SUPER_ADMIN bypass. */
-export const ALL_KEYS: string[] = PERMISSIONS.map((p) => p.key);
 
 const userSelect = {
   role: { select: { name: true, permissions: { select: { key: true } } } },
@@ -39,7 +40,10 @@ export const computeEffectivePermissions = async (userId: string): Promise<Set<s
     select: userSelect,
   });
   if (!user) return new Set<string>();
-  if (user.role?.name === SUPER_ADMIN_ROLE) return new Set(ALL_KEYS); // §3.1 bypass
+  // §3.1 bypass — see the model note above for why this reads the DB relation.
+  if (user.role?.name === SUPER_ADMIN_ROLE) {
+    return new Set(user.role.permissions.map((p) => p.key));
+  }
 
   const grants = new Set<string>();
   user.role?.permissions.forEach((p) => grants.add(p.key));
@@ -81,9 +85,10 @@ export const computeEffectiveWithSources = async (
   }
 
   if (user.role?.name === SUPER_ADMIN_ROLE) {
+    const keys = user.role.permissions.map((p) => p.key).sort();
     return {
-      effective: [...ALL_KEYS],
-      sources: { role: [...ALL_KEYS], department: [], grants: [], denies: [] },
+      effective: keys,
+      sources: { role: keys, department: [], grants: [], denies: [] },
     };
   }
 
