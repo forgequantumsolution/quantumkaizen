@@ -1,5 +1,26 @@
 # Changes Log
 
+## Modal portals to `document.body` — 2026-07-12
+
+The shared `Modal` used `position: fixed` but rendered in-place in the React tree.
+Inside the workflow builder's inspector (an `overflow-hidden` panel nested under
+transformed ancestors), a `fixed` child resolves against the transformed ancestor,
+not the viewport — so the "Attach form" / "Edit form access" modal was trapped and
+crushed inside the narrow inspector column.
+
+- **`src/components/ui/Modal.tsx`** — wrapped the dialog in `createPortal(…,
+  document.body)`. It now escapes every `transform`/`overflow` ancestor and centers
+  on the full viewport. Fixes the builder form-binding editor and any other modal
+  mounted inside a transformed/clipped subtree. Behaviour is otherwise unchanged
+  (React context and events still flow through the React tree).
+- **`StageFormBindingEditor.tsx` / `ApprovalPolicyEditor.tsx`** — both inspector
+  modals bumped from the default `md` to `size="lg"` (max-w-2xl) for breathing room.
+- **`src/index.css`** — added `* { scrollbar-width: thin; scrollbar-color: … }`.
+  The "thin, clean" scrollbar was only styled for WebKit (`::-webkit-scrollbar`);
+  Firefox fell back to the chunky OS bar. Now both are slim app-wide.
+
+`tsc --noEmit` clean (client). Not committed.
+
 ## Stale `ticket.*` fallback cleanup — 2026-07-12
 
 Dead code left over from the per-module ticket master retirement (the global

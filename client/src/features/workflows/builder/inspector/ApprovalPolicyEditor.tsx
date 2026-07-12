@@ -194,6 +194,7 @@ export default function ApprovalPolicyEditor({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      size="lg"
       title={`${value ? 'Edit' : 'Add'} approval policy${actionLabel ? ` — ${actionLabel}` : ''}`}
     >
       <div className="space-y-4">

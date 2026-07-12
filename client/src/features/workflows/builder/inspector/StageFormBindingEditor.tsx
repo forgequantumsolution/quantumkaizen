@@ -282,6 +282,7 @@ export default function StageFormBindingEditor({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
+      size="lg"
       title={`${isEdit ? 'Edit form access' : 'Attach form'} — ${stageName}`}
     >
       <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
