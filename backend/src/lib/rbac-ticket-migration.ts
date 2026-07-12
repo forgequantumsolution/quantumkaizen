@@ -23,6 +23,65 @@ const TICKET_VERBS = ['read', 'create', 'update', 'delete', 'transition'] as con
 const ticketKey = (verb: string): string => `ticket.${verb}`;
 const wfKey = (typeId: string, verb: string): string => `wf_type.${typeId}.${verb}`;
 
+export interface TicketGrantGap {
+  subjectType: 'role' | 'department' | 'user';
+  subject: string;
+  verb: string;
+  missingTypeIds: string[];
+}
+
+/**
+ * Find every subject that holds a global `ticket.<verb>` grant but is missing
+ * the equivalent `wf_type.<id>.<verb>` for one or more live workflow types —
+ * i.e. the Phase 2 backfill hasn't (yet) fully covered them. Shared by the
+ * `gate:ticket-grants` CLI (pre-Phase-3 go/no-go) and the boot-time warning in
+ * `rbac-sync.ts` (post-Phase-3/4 observability net).
+ */
+export async function findUnmigratedTicketGrants(): Promise<{ gaps: TicketGrantGap[]; typeCount: number }> {
+  const types = await prisma.workflowType.findMany({ select: { id: true } });
+  const typeIds = types.map((t) => t.id);
+  const gaps: TicketGrantGap[] = [];
+  if (typeIds.length === 0) return { gaps, typeCount: 0 };
+
+  for (const verb of TICKET_VERBS) {
+    const wantKeys = new Set(typeIds.map((id) => wfKey(id, verb)));
+    const missingFrom = (heldKeys: Set<string>): string[] =>
+      typeIds.filter((id) => !heldKeys.has(wfKey(id, verb)));
+
+    const roles = await prisma.role.findMany({
+      where: { permissions: { some: { key: ticketKey(verb) } }, name: { not: 'SUPER_ADMIN' } },
+      select: { name: true, permissions: { where: { key: { in: [...wantKeys] } }, select: { key: true } } },
+    });
+    for (const r of roles) {
+      const missing = missingFrom(new Set(r.permissions.map((p) => p.key)));
+      if (missing.length) gaps.push({ subjectType: 'role', subject: r.name, verb, missingTypeIds: missing });
+    }
+
+    const depts = await prisma.department.findMany({
+      where: { permissions: { some: { key: ticketKey(verb) } } },
+      select: { name: true, permissions: { where: { key: { in: [...wantKeys] } }, select: { key: true } } },
+    });
+    for (const d of depts) {
+      const missing = missingFrom(new Set(d.permissions.map((p) => p.key)));
+      if (missing.length) gaps.push({ subjectType: 'department', subject: d.name, verb, missingTypeIds: missing });
+    }
+
+    const overs = await prisma.userPermission.findMany({
+      where: { permission: { key: ticketKey(verb) } },
+      select: { userId: true, user: { select: { email: true } } },
+    });
+    for (const o of overs) {
+      const held = await prisma.userPermission.findMany({
+        where: { userId: o.userId, permission: { key: { in: [...wantKeys] } } },
+        select: { permission: { select: { key: true } } },
+      });
+      const missing = missingFrom(new Set(held.map((h) => h.permission.key)));
+      if (missing.length) gaps.push({ subjectType: 'user', subject: o.user?.email ?? o.userId, verb, missingTypeIds: missing });
+    }
+  }
+  return { gaps, typeCount: typeIds.length };
+}
+
 export const backfillPerTypeTicketGrants = async (): Promise<void> => {
   const types = await prisma.workflowType.findMany({ select: { id: true } });
   if (types.length === 0) return;

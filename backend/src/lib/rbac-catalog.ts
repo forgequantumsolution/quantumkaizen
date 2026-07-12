@@ -74,11 +74,9 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'workflow.lookups.read',   module: 'WORKFLOW', action: 'READ',   description: 'View workflow lookup tables' },
   { key: 'workflow.lookups.manage', module: 'WORKFLOW', action: 'MANAGE', description: 'Manage workflow lookup tables (types, statuses, criteria)' },
   // ── Ticket ───────────────────────────────────────────
-  { key: 'ticket.read',       module: 'TICKET', action: 'READ',       description: 'View tickets' },
-  { key: 'ticket.create',     module: 'TICKET', action: 'CREATE',     description: 'Raise tickets' },
-  { key: 'ticket.update',     module: 'TICKET', action: 'UPDATE',     description: 'Edit ticket fields, comments, docs' },
-  { key: 'ticket.delete',     module: 'TICKET', action: 'DELETE',     description: 'Soft-delete tickets' },
-  { key: 'ticket.transition', module: 'TICKET', action: 'TRANSITION', description: 'Perform stage actions on tickets' },
+  // The global `ticket.*` "All Workflow Types" master was retired — ticket
+  // access is granted exclusively via the per-type `wf_type.<id>.*` keys (see
+  // lib/rbac-workflow-types.ts + docs/per-module-ticket-master-plan.md).
   // ── Dynamic Forms ────────────────────────────────────
   { key: 'form.read',             module: 'FORM',            action: 'READ',   description: 'View form templates' },
   { key: 'form.create',           module: 'FORM',            action: 'CREATE', description: 'Create form templates' },

@@ -55,6 +55,10 @@ const ROLES = [
     name: 'QMS_ADMIN',
     description: 'Quality Management System administrator',
     isSystem: true,
+    // Full ticket access (all 5 verbs, across all workflow types) is granted
+    // post-seed by ensureSystemRoleTicketGrants() — the `TICKET` module has no
+    // catalog rows anymore for this filter to pick up (see
+    // lib/rbac-system-role-tickets.ts).
     permissionKeys: PERMISSIONS.filter(p =>
       p.module !== 'USER' && p.module !== 'ROLE' || p.action === 'READ'
     ).map(p => p.key),
@@ -76,7 +80,10 @@ const ROLES = [
       'inspection.read', 'inspection.write',
       'calibration.read', 'calibration.write',
       'workflow.read', 'workflow.lookups.read',
-      'ticket.read', 'ticket.create', 'ticket.update', 'ticket.transition',
+      // Ticket access (read/create/update/transition, across all workflow
+      // types) is granted post-seed by ensureSystemRoleTicketGrants() in
+      // lib/rbac-system-role-tickets.ts — the global `ticket.*` master this
+      // used to reference was retired (docs/per-module-ticket-master-plan.md).
       // Phase 3 — approve as participant + read everything + extend timers
       'approval.read', 'approval.decide', 'approval.policy.read',
       'sla.policy.read', 'sla.timer.read', 'sla.timer.extend',
@@ -97,7 +104,8 @@ const ROLES = [
       'fmea.read', 'risk.read', 'supplier.read',
       'training.read', 'inspection.read', 'calibration.read',
       'workflow.read', 'workflow.lookups.read',
-      'ticket.read', 'ticket.transition',
+      // Ticket access (read/transition, across all workflow types) is granted
+      // post-seed by ensureSystemRoleTicketGrants() — see QUALITY_ENGINEER above.
       // Phase 3 — read-only on governance primitives
       'approval.read', 'approval.policy.read',
       'sla.policy.read', 'sla.timer.read',
@@ -116,7 +124,8 @@ const ROLES = [
       'capa.read', 'nc.read', 'audit.read',
       'training.read',
       'workflow.read', 'workflow.lookups.read',
-      'ticket.read', 'ticket.transition',
+      // Ticket access (read/transition, across all workflow types) is granted
+      // post-seed by ensureSystemRoleTicketGrants() — see QUALITY_ENGINEER above.
       // Phase 3 — read + decide as approver
       'approval.read', 'approval.decide', 'approval.policy.read',
       'sla.policy.read', 'sla.timer.read',
@@ -130,6 +139,8 @@ const ROLES = [
     name: 'READ_ONLY',
     description: 'View-only access across all modules',
     isSystem: true,
+    // Ticket read (across all workflow types) is granted post-seed by
+    // ensureSystemRoleTicketGrants() — see QMS_ADMIN above.
     permissionKeys: PERMISSIONS.filter(p => p.action === 'READ').map(p => p.key),
   },
 ];

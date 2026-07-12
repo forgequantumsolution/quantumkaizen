@@ -23,7 +23,7 @@ const router = Router();
 
 router.use(requireAuth);
 
-// CRUD — gated per workflow type (OR the global `ticket.*` master key).
+// CRUD — gated strictly per workflow type (see middleware/permissions.ts).
 router.get('/', requireTicketListAccess,
   validate(ListTicketsQuerySchema, 'query'), asyncHandler(ctrl.list));
 

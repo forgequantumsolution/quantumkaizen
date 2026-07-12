@@ -35,9 +35,82 @@ on re-run); dept + GRANT/DENY-override + non-clobber paths proven with a
 self-cleaning test; gate GREEN when clean, RED (exit 1) when a per-type key is
 removed; `tsc --noEmit` clean. Not committed.
 
-**Deferred (NOT done):** Phase 3 — remove the `ticket.*` OR-bridge in
-`src/middleware/permissions.ts` (per-type enforcement only). Phase 4 — remove
-`ticket.*` from `src/lib/rbac-catalog.ts` + update `prisma/seed.ts` system roles.
+---
+
+# Per-module ticket master — Phases 3–4 (retirement complete) — 2026-07-12
+
+Completes the per-module ticket master work above: enforcement now grants
+ticket access **only** via per-type `wf_type.<id>.<verb>` keys; the global
+`ticket.*` master is gone from the catalog. Verified end-to-end on local
+`kaizen_qms`; working tree only. Full plan: `docs/per-module-ticket-master-plan.md`.
+Production has only Phase 1–2 so far — see the plan doc's rollout section.
+
+- **`src/middleware/permissions.ts`** — `hasTicketAction` / `requireTicketAction`
+  dropped the global `ticket.<action>` fast-path; only the per-type key grants
+  now. `ticketReadScope` always returns `all: false`. Forbid messages name the
+  specific missing `wf_type.<id>.<verb>` key.
+- **`src/modules/ticket/ticket.service.ts`** — default scope hard-falsed
+  (`{ all: false, typeIds: [] }`); removed the now-dead `if (!scope.all)` wrapper.
+- **`src/lib/effective-permissions.ts`** — **bug fix (pre-existing, found during
+  verification):** the SUPER_ADMIN bypass returned `new Set(ALL_KEYS)` where
+  `ALL_KEYS` was the **static** catalog only — it never included the
+  dynamically-generated `wf_type.*` keys (DB-only rows, never part of the
+  static array). This was invisible before because SUPER_ADMIN also always held
+  the static `ticket.*` key, and the old OR-bridge let that alone grant every
+  ticket action. Once the OR-bridge and `ticket.*` were removed, SUPER_ADMIN's
+  bypassed set granted *no* ticket action. Fixed: both
+  `computeEffectivePermissions` and `computeEffectiveWithSources`'s SUPER_ADMIN
+  branches now read `user.role.permissions` (the actual DB relation) instead of
+  the static list — correct because `rbac-sync.ts` already guarantees that
+  relation holds every permission row, static and dynamic, as a boot invariant.
+  `ALL_KEYS` export removed (no other consumers).
+- **`src/lib/rbac-catalog.ts`** — removed the 5 `ticket.*` rows.
+- **`src/lib/rbac-sync.ts`** — new `pruneRetiredTicketMasterKeys()` (deletes any
+  `module: 'TICKET'` permission row not in the current catalog — the upsert
+  loop never deleted orphans on its own); calls the new
+  `ensureSystemRoleTicketGrants()` after the Phase 2 backfill; calls
+  `findUnmigratedTicketGrants()` at the end and `console.warn`s (non-fatal) if
+  anything is still uncovered.
+- **`src/lib/rbac-system-role-tickets.ts`** (new) — fresh-install safety net:
+  grants the documented default ticket verbs to each of the 5 named system
+  roles, per current workflow type, but **only** when that role currently holds
+  zero `wf_type.*` permissions — so an admin's deliberate per-type customization
+  is never overwritten on a later boot.
+- **`src/lib/rbac-ticket-migration.ts`** — extracted `findUnmigratedTicketGrants()`
+  (previously duplicated inline in the gate script) so the boot warning and the
+  CLI gate share one implementation.
+- **`src/scripts/check-ticket-grants.ts`** — now imports the shared gap-finder;
+  GREEN message distinguishes "fully migrated" from "master already retired,
+  nothing to gate".
+- **`prisma/seed.ts`** — removed the literal `'ticket.*'` strings from
+  QUALITY_ENGINEER/AUDITOR/DOCUMENT_CONTROLLER; added comments on all 5 system
+  roles pointing at `ensureSystemRoleTicketGrants()` as the new source of
+  fresh-install ticket access.
+
+**Verified:**
+- `pruneRetiredTicketMasterKeys()`: 5 → 0 `TICKET`-module rows; every role's
+  `wf_type.*` set byte-identical before/after (only `ticket.*` rows removed).
+- `ensureSystemRoleTicketGrants()`: stripped READ_ONLY's `wf_type.*` grants →
+  function restored the **exact** original set; a role with existing grants
+  (QUALITY_ENGINEER) left completely untouched.
+- `gate:ticket-grants`: GREEN, "no master keys remain here — nothing to gate".
+- Full Playwright pass (9/9): master module gone from the Access Control UI; no
+  row with bare entity `ticket`; CAPA/Audit per-type rows for QUALITY_ENGINEER
+  unchanged (regression); SUPER_ADMIN's Raise Ticket button visible;
+  DOCUMENT_CONTROLLER's hidden (read+transition only, no create anywhere).
+- Direct API calls (bypassing the UI): DOCUMENT_CONTROLLER `POST /tickets` on a
+  real CAPA workflow → `403 {"message":"Missing required permission:
+  wf_type.<capaId>.create"}`; SUPER_ADMIN same call → `201`, then cleaned up
+  (soft-deleted).
+- `tsc --noEmit` clean (backend + client); `npx tsc` (full build) clean,
+  `dist/` rebuilt.
+
+**Methodology note:** the local dev backend was discovered to be a stale,
+non-watching `tsx src/index.ts` process (started before this session's edits,
+not via `npm run dev`'s `tsx watch`). Restarted properly before Phase 3
+verification — that restart is what surfaced the SUPER_ADMIN bug above; earlier
+phases' checks had passed against the stale process because they only
+exercised unmodified DB-reading endpoints, never live enforcement code.
 
 ---
 

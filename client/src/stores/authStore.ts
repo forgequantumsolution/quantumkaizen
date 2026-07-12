@@ -168,3 +168,12 @@ export const useAuthStore = create<AuthState>()(
 
 export const useHasPermission = (key: string): boolean =>
   useAuthStore((s) => s.user?.permissions.includes(key) ?? false);
+
+/**
+ * True if ANY held permission key matches `predicate`. Used where a single
+ * exact key can't express "any workflow type" — e.g. whether to show the
+ * "Raise Ticket" button at all, aggregating across every `wf_type.<id>.create`
+ * a user might hold, since there's no longer a single master key for that.
+ */
+export const useHasAnyPermissionMatching = (predicate: (key: string) => boolean): boolean =>
+  useAuthStore((s) => (s.user?.permissions ?? []).some(predicate));

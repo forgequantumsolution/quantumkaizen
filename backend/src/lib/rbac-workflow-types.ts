@@ -9,17 +9,17 @@
  * Key scheme (keyed on the type's stable id, so renames never break grants):
  *   wf_type.<typeId>.read | create | update | delete | transition
  *
- * Enforcement is an OR-bridge (see middleware/permissions.ts): a ticket action
- * is allowed when the user holds EITHER the per-type key OR the global
- * `ticket.<action>` key. The global key therefore acts as an "All Workflow
- * Types" master, which keeps every existing role working (backward-compatible).
+ * These are the ONLY keys that grant ticket access (see middleware/permissions.ts
+ * `hasTicketAction`) — the global `ticket.<action>` "All Workflow Types" master
+ * was retired in Phase 3 of docs/per-module-ticket-master-plan.md. A rollout
+ * (Phase 1-2) mirrored every existing `ticket.*` grant onto these per-type keys
+ * before enforcement flipped, so no existing role lost access.
  *
  * Audit was historically excluded (it has its own `audit_*` catalog + bespoke
- * sidebar/matrix treatment). As of the per-module-ticket-master work it now
- * ALSO gets per-type ticket keys like every other type, so audit tickets keep
- * working once the global `ticket.*` master is retired (see
- * docs/per-module-ticket-master-plan.md). `isAuditTypeName` stays exported for
- * callers that still need to detect the audit type for non-ticket reasons.
+ * sidebar/matrix treatment). It now ALSO gets per-type ticket keys like every
+ * other type, so audit tickets remain reachable now that the global master is
+ * gone. `isAuditTypeName` stays exported for callers that still need to detect
+ * the audit type for non-ticket reasons.
  */
 import { prisma } from './prisma';
 

@@ -137,18 +137,9 @@ export const NAV_ACCESS: NavModuleAccess[] = [
       { key: 'config.workflowTypes', label: 'Workflow Types', permission: 'workflow.lookups.read', entity: 'workflow.lookups' },
     ],
   },
-  {
-    // The global `ticket.*` master. Granting it opens tickets across EVERY
-    // workflow type at once; leave it off and use the per-type module switches
-    // (appended after this list) to restrict a role to specific types.
-    key: 'workflow-tickets-master',
-    label: 'All Workflow Types (ticket master)',
-    description:
-      'Master switch — grants ticket access across every workflow type at once. Leave this off and use the individual workflow-type switches below to restrict a role to specific modules.',
-    tabs: [
-      { key: 'tickets.master', label: 'All Workflow Types', permission: 'ticket.read', entity: 'ticket' },
-    ],
-  },
+  // The global `ticket.*` "All Workflow Types" master was retired — ticket
+  // access is granted exclusively via the per-workflow-type module switches
+  // below (docs/per-module-ticket-master-plan.md).
 ];
 
 /* ── Dynamic per-workflow-type modules ──────────────────────────────────────
@@ -164,6 +155,12 @@ export const wfTypeEntity = (typeId: string): string => `wf_type.${typeId}`;
 
 /** The `.read` key that gates a workflow-type module in the sidebar/matrix. */
 export const wfTypeReadKey = (typeId: string): string => `wf_type.${typeId}.read`;
+
+/** The remaining per-type ticket action keys, alongside `wfTypeReadKey`. */
+export const wfTypeCreateKey = (typeId: string): string => `wf_type.${typeId}.create`;
+export const wfTypeUpdateKey = (typeId: string): string => `wf_type.${typeId}.update`;
+export const wfTypeDeleteKey = (typeId: string): string => `wf_type.${typeId}.delete`;
+export const wfTypeTransitionKey = (typeId: string): string => `wf_type.${typeId}.transition`;
 
 /**
  * Build the Access-Control matrix module for one workflow type. The module

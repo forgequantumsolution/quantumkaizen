@@ -56,9 +56,8 @@ interface NavItem {
    * the user lacks it, the item is hidden. Parents with children stay visible
    * only while at least one child survives gating. */
   permission?: string;
-  /** Visible if the user holds ANY of these keys. Used for the OR-bridge on
-   * workflow-type modules: the per-type key OR the global `ticket.read` master.
-   * Evaluated together with `permission` (both must pass when both are set). */
+  /** Visible if the user holds ANY of these keys. Evaluated together with
+   * `permission` (both must pass when both are set). */
   anyPermission?: string[];
   /** Extra pathname prefixes that should also mark this item active — useful
    * for entries that land on one route but share a layout with siblings (e.g.
@@ -230,10 +229,10 @@ export default function Sidebar() {
           // group; first child becomes the navigation target in collapsed mode.
           path: isAudit ? undefined : `/modules/${t.id}`,
           icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
-          // Each workflow-type module has its own switch: gate on its per-type
-          // key OR the global `ticket.read` master (OR-bridge). Audit gates via
-          // its children (audit_register/master.read) instead.
-          anyPermission: isAudit ? undefined : [wfTypeReadKey(t.id), "ticket.read"],
+          // Each workflow-type module has its own switch: gate strictly on its
+          // per-type read key. Audit gates via its children
+          // (audit_register.read etc) instead.
+          permission: isAudit ? undefined : wfTypeReadKey(t.id),
           children: isAudit ? auditChildren : undefined,
           count: navCounts?.workflowTypes?.[t.id],
         };
@@ -258,7 +257,7 @@ export default function Sidebar() {
               label: "Document Approval",
               path: `/modules/${docReviewType.id}`,
               icon: ClipboardCheck,
-              anyPermission: [wfTypeReadKey(docReviewType.id), "ticket.read"],
+              permission: wfTypeReadKey(docReviewType.id),
             },
           ]
         : []),
