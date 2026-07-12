@@ -73,12 +73,19 @@ export interface DirectoryUser {
  * team members, …). Readable by any authenticated user — unlike `useAdminUsers`
  * (which needs `user.read` and would 403 → empty for operational roles like
  * auditors). Use this anywhere you only need "pick a person", not user admin.
+ *
+ * Site-scoped server-side to the caller's own site(s). Pass an optional `siteId`
+ * to target a specific site (e.g. the workflow builder scoping to the WORKFLOW's
+ * site — docs/workflow-site-ownership-plan.md). The server bounds it to the
+ * caller's scope, so a scoped user can never widen past their own site.
  */
-export function useUserDirectory() {
+export function useUserDirectory(siteId?: string) {
   return useQuery({
-    queryKey: ['user-directory'],
+    queryKey: ['user-directory', siteId ?? null],
     queryFn: async () => {
-      const { data } = await api.get('/users/directory');
+      const { data } = await api.get('/users/directory', {
+        params: siteId ? { siteId } : {},
+      });
       const items = data && Array.isArray(data.items) ? (data.items as DirectoryUser[]) : [];
       return { items };
     },

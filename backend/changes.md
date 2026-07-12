@@ -4,6 +4,84 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Workflow site-ownership — backend (Phases A–D) — 2026-07-12
+
+Workflows gain a **site owner** so different sites can have their own workflows,
+while Super Admin can still make **global** ones. Layers on top of Phase 1
+type-scoping. Full plan: `docs/workflow-site-ownership-plan.md`. Working tree only.
+
+- **`prisma/schema.prisma` + migration `20260712111749_workflow_site_ownership`** —
+  `Workflow.siteId String?` (nullable) + FK to `Site` (`onDelete: SetNull`) +
+  `@@index([siteId])`; reverse relation `Site.workflows`. Nullable, no default →
+  **every existing workflow is global** (`null`). No data backfill.
+- **`src/modules/workflow/workflow.service.ts`**
+  - `workflowSummarySelect` / `workflowDetailSelect` now select `site {id,code,name}`.
+  - `createShell` sets `siteId`: `site.view_all` (Super Admin) → honours the
+    requested `siteId` (null = global, or a validated real site); everyone else →
+    **forced to the creator's own site** (client `siteId` ignored — hard boundary).
+  - `list(query, scope, userId, siteScope)` and `directory(typeId, scope, siteScope)`
+    add a site filter — `siteId IS NULL (global) OR siteId ∈ caller's sites` —
+    composed with the Phase 1 type filter via `AND`. `site.view_all` skips it.
+    Both now return `site` on each item; `getById` exposes `site`.
+- **`src/modules/workflow/workflow.versioning.ts`** — `cloneIntoNewVersion` carries
+  `siteId` onto the new version (a re-save must not globalize a site-owned workflow).
+- **`src/modules/workflow/workflow.schema.ts`** — `CreateWorkflowShellSchema` gains
+  optional `siteId` (only honoured for `site.view_all`).
+- **`src/modules/workflow/workflow.controller.ts`** — `list`/`directory` resolve
+  `resolveSiteScope(userId)` and pass it alongside the type scope.
+- **`src/modules/user/user.controller.ts`** — `/users/directory` accepts optional
+  `?siteId=`, bounded by the caller's scope via `siteFilterFor` (a scoped user can't
+  reach another site; `view_all` may target any site, or all sites when omitted).
+  Lets the workflow builder show the WORKFLOW's-site people, not just the caller's.
+- **`src/modules/role/role.{controller,service}.ts`** — `/roles/directory` is now
+  **site-scoped**: roles have no site column, so it returns roles held by ≥1 active
+  user in the caller's site(s) (or a bounded `?siteId=`); `view_all` → all roles.
+
+**Verified:** service-level 6/6 on local `kaizen_qms` — scoped PUNE user's new
+workflow is forced to PUNE even when it requests HQ; Super Admin creates global
+(null) or pins to any site; PUNE user's list shows global + PUNE with no HQ leak;
+Super Admin sees HQ-owned; version-clone carries `siteId`. `tsc --noEmit` clean.
+Frontend (create site picker, list badge, builder pickers passing the workflow's
+site) is Phase E — pending. Not committed.
+
+---
+
+# Access-control data scoping — Phase 1 (workflow lists) — 2026-07-12
+
+Follow-on to the per-module ticket work: the surfaces *around* tickets never got
+row-filtered by access, so a user could see workflows of types they can't access.
+Phase 1 scopes the workflow list + picker directory to the caller's readable types.
+Full plan + decisions: `docs/access-control-data-scoping-plan.md`.
+
+- **`src/middleware/permissions.ts`** — added `workflowTypeReadScope`, an alias of
+  `ticketReadScope` (holding `wf_type.<id>.read` = "can see this type"). Aliased,
+  not duplicated, so workflow- and ticket-list scoping share one source of truth.
+- **`src/modules/workflow/workflow.service.ts`** — `list(query, scope, userId)` and
+  `directory(typeId, scope)` now take the caller's type scope. List restricts to
+  `typeId IN scope` (a requested `typeId` outside scope → empty page, can't widen);
+  typeless workflows surface only to their own author (`typeId=null AND createdById`)
+  as in-progress drafts. Directory restricts to `typeId IN scope`, honours an
+  in-scope `typeId`, and excludes typeless entirely (unraisable — no per-type key).
+- **`src/modules/workflow/workflow.controller.ts`** — `list`/`directory` resolve the
+  scope via `workflowTypeReadScope(getEffectivePermissionKeys(userId))` and pass it
+  down (mirrors `ticket.controller.list`). No user → closed default.
+
+**Behaviour note:** `GET /workflows` stays behind `workflow.read`; it is now ALSO
+type-scoped, so an admin with `workflow.read` but no `wf_type.*.read` sees only
+their own typeless drafts. SUPER_ADMIN holds every type key → sees all (unchanged).
+In production every user currently holds every type key (per-module access not yet
+tailored), so this is invisible there until grants are narrowed.
+
+**Verified:** service-level checks (8/8) on local `kaizen_qms` — empty scope →
+nothing; single-type scope → only that type; out-of-scope `typeId` can't widen
+(directory + list); typeless excluded from directory; full scope → all active
+workflows. **Live HTTP check** (throwaway CAPA-only user vs SUPER_ADMIN, cleaned
+up after): scoped user's `/workflows/directory` + `/workflows` return only CAPA,
+SUPER_ADMIN sees all active types with no typeless — 3/3 PASS. `tsc --noEmit`
+clean. Not committed.
+
+---
+
 # Per-module ticket master — Phases 1–2 + gate — 2026-07-12
 
 Follow-on to per-workflow-type access control: retiring the global `ticket.*`

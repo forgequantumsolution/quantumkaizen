@@ -127,9 +127,10 @@ export default function ModulePage({
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const hasPermission = useAuthStore((s) => s.hasPermission);
-  // Per-type gating with the global `ticket.*` master as the OR-bridge fallback.
-  const canForType = (action: string) =>
-    hasPermission(`wf_type.${typeId}.${action}`) || hasPermission(`ticket.${action}`);
+  // Strictly per-type gating. The global `ticket.*` master was retired
+  // (docs/per-module-ticket-master-plan.md, Phase 3-4) — the only key that grants
+  // a ticket action is `wf_type.<typeId>.<action>`.
+  const canForType = (action: string) => hasPermission(`wf_type.${typeId}.${action}`);
   const canCreate = canForType('create');
   const canDelete = canForType('delete');
   const deleteTicket = useDeleteTicket();

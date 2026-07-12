@@ -21,6 +21,13 @@ export interface NamedRef {
   name: string;
 }
 
+/** A site reference. `site: null` on a workflow means GLOBAL (all sites). */
+export interface SiteRef {
+  id: string;
+  code: string;
+  name: string;
+}
+
 export interface WorkflowSummary {
   id: string;
   name: string;
@@ -28,6 +35,7 @@ export interface WorkflowSummary {
   workflowStatus: WorkflowLifecycleStatus;
   version: number;
   type: NamedRef | null;
+  site: SiteRef | null;
   stageCount: number;
   transitionCount: number;
   createdAt: string;
@@ -131,6 +139,7 @@ export interface WorkflowDetailResponse {
     status: WorkflowStatus;
     workflowStatus: WorkflowLifecycleStatus;
     type: NamedRef | null;
+    site: SiteRef | null;
     createdBy: UserRef | null;
     createdAt: string;
     updatedAt: string;
@@ -216,6 +225,7 @@ export interface WorkflowDirectoryEntry {
   version: number;
   workflowStatus: WorkflowLifecycleStatus;
   type: NamedRef | null;
+  site: SiteRef | null;
 }
 
 /**
@@ -240,9 +250,11 @@ export const useWorkflow = (id: string | undefined) =>
 export const useCreateWorkflow = () => {
   const qc = useQueryClient();
   return useMutation<
-    { workflow: { id: string; name: string; status: WorkflowStatus; workflowStatus: WorkflowLifecycleStatus; type: NamedRef | null; createdAt: string } },
+    { workflow: { id: string; name: string; status: WorkflowStatus; workflowStatus: WorkflowLifecycleStatus; type: NamedRef | null; site: SiteRef | null; createdAt: string } },
     unknown,
-    { name: string; typeId?: string | null }
+    // `siteId` is only honoured for `site.view_all` (Super Admin): null/absent =
+    // GLOBAL, or a specific site to pin to. Scoped users' server forces own-site.
+    { name: string; typeId?: string | null; siteId?: string | null }
   >({
     mutationFn: (input) => api.post('/workflows', input).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: workflowKeys.all }),

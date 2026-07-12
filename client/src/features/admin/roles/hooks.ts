@@ -61,12 +61,19 @@ export interface RoleDirectoryEntry {
  * Role directory for pickers — readable by any authenticated user, unlike
  * `useRoles` (needs `role.read`, so its picker 403s → empty for operational
  * roles). Returns name + user count; no permission keys.
+ *
+ * Site-scoped server-side: returns roles held by ≥1 active user in the caller's
+ * site(s). Pass an optional `siteId` to target a specific site (e.g. the workflow
+ * builder scoping to the WORKFLOW's site — docs/workflow-site-ownership-plan.md);
+ * the server bounds it to the caller's scope.
  */
-export function useRoleDirectory() {
+export function useRoleDirectory(siteId?: string) {
   return useQuery({
-    queryKey: ['role-directory'],
+    queryKey: ['role-directory', siteId ?? null],
     queryFn: async () => {
-      const { data } = await api.get('/roles/directory');
+      const { data } = await api.get('/roles/directory', {
+        params: siteId ? { siteId } : {},
+      });
       const items = data && Array.isArray(data.items) ? (data.items as RoleDirectoryEntry[]) : [];
       return { items };
     },

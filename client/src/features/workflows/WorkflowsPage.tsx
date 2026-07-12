@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -295,16 +296,33 @@ function WorkflowCard({
             <h3 className="text-[15px] font-semibold text-gray-900 truncate leading-tight group-hover:text-gold-700 transition-colors">
               {displayWorkflowName(workflow)}
             </h3>
-            <span
-              className={cn(
-                'inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium mt-1.5',
-                workflow.type?.name
-                  ? 'bg-gray-100 text-gray-600'
-                  : 'bg-gray-50 text-gray-400 italic',
-              )}
-            >
-              {workflow.type?.name ?? 'No type'}
-            </span>
+            <div className="flex items-center gap-1.5 mt-1.5">
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium',
+                  workflow.type?.name
+                    ? 'bg-gray-100 text-gray-600'
+                    : 'bg-gray-50 text-gray-400 italic',
+                )}
+              >
+                {workflow.type?.name ?? 'No type'}
+              </span>
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-semibold',
+                  workflow.site
+                    ? 'bg-gray-100 text-gray-600'
+                    : 'bg-blue-50 text-blue-700',
+                )}
+                title={
+                  workflow.site
+                    ? `Owned by ${workflow.site.name} — only this site sees it`
+                    : 'Global — available to every site'
+                }
+              >
+                {workflow.site ? workflow.site.code : 'Global'}
+              </span>
+            </div>
           </div>
         </div>
 

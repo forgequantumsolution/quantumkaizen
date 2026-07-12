@@ -21,8 +21,8 @@ import type {
   FormFillMode,
 } from '../builder.types';
 import { useForms } from '@/features/forms/hooks';
-import { useRoles } from '@/features/admin/roles/hooks';
-import { useAdminUsers } from '@/features/admin/users/hooks';
+import { useRoleDirectory } from '@/features/admin/roles/hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 
 interface Props {
@@ -30,6 +30,9 @@ interface Props {
   onClose: () => void;
   stageName: string;
   existing: EmbeddedFormBinding[];
+  /** The workflow's owning site (null = global). Scopes the form fill/view
+   *  role & user pickers to that site (docs/workflow-site-ownership-plan.md). */
+  workflowSiteId?: string | null;
   /** When non-null, the editor edits the binding at this index (form locked). */
   editIndex?: number | null;
   onSave: (binding: EmbeddedFormBinding, editIndex?: number | null) => void;
@@ -51,15 +54,17 @@ function RoleMultiSelect({
   onChange,
   onLabels,
   placeholder,
+  siteId,
 }: {
   value: string[];
   onChange: (ids: string[]) => void;
   onLabels: (map: Record<string, string>) => void;
   placeholder: string;
+  siteId?: string | null;
 }) {
-  const [search, setSearch] = useState('');
-  const debounced = useDebouncedValue(search, 250);
-  const { data, isFetching } = useRoles({ search: debounced || undefined, pageSize: 50 });
+  // Site-scoped role directory (workflow-site-ownership Phase D/E). Bounded set →
+  // AntSelect filters client-side.
+  const { data, isFetching } = useRoleDirectory(siteId || undefined);
   const roles = data?.items ?? [];
   const [cache, setCache] = useState<Record<string, string>>({});
 
@@ -90,9 +95,7 @@ function RoleMultiSelect({
       placeholder={placeholder}
       value={value}
       onChange={(vals: string[]) => onChange(vals)}
-      onSearch={setSearch}
-      onBlur={() => setSearch('')}
-      filterOption={false}
+      optionFilterProp="label"
       notFoundContent={isFetching ? <Spin size="small" /> : <span>No roles match</span>}
       options={options}
       maxTagCount="responsive"
@@ -105,19 +108,16 @@ function UserMultiSelect({
   onChange,
   onLabels,
   placeholder,
+  siteId,
 }: {
   value: string[];
   onChange: (ids: string[]) => void;
   onLabels: (map: Record<string, string>) => void;
   placeholder: string;
+  siteId?: string | null;
 }) {
-  const [search, setSearch] = useState('');
-  const debounced = useDebouncedValue(search, 250);
-  const { data, isFetching } = useAdminUsers({
-    search: debounced || undefined,
-    isActive: true,
-    pageSize: 50,
-  });
+  // Site-scoped people directory (workflow-site-ownership Phase D/E).
+  const { data, isFetching } = useUserDirectory(siteId || undefined);
   const users = data?.items ?? [];
   const [cache, setCache] = useState<Record<string, string>>({});
 
@@ -148,9 +148,7 @@ function UserMultiSelect({
       placeholder={placeholder}
       value={value}
       onChange={(vals: string[]) => onChange(vals)}
-      onSearch={setSearch}
-      onBlur={() => setSearch('')}
-      filterOption={false}
+      optionFilterProp="label"
       notFoundContent={isFetching ? <Spin size="small" /> : <span>No users match</span>}
       options={options}
       maxTagCount="responsive"
@@ -166,6 +164,7 @@ export default function StageFormBindingEditor({
   onClose,
   stageName,
   existing,
+  workflowSiteId,
   editIndex = null,
   onSave,
 }: Props) {
@@ -361,6 +360,7 @@ export default function StageFormBindingEditor({
               onChange={setFillRoleIds}
               onLabels={mergeRoleLabels}
               placeholder="Search roles…"
+              siteId={workflowSiteId}
             />
           </div>
           <div>
@@ -372,6 +372,7 @@ export default function StageFormBindingEditor({
               onChange={setFillUserIds}
               onLabels={mergeUserLabels}
               placeholder="Search users by name or email…"
+              siteId={workflowSiteId}
             />
           </div>
           <div>
@@ -406,6 +407,7 @@ export default function StageFormBindingEditor({
               onChange={setViewRoleIds}
               onLabels={mergeRoleLabels}
               placeholder="Search roles…"
+              siteId={workflowSiteId}
             />
           </div>
           <div>
@@ -417,6 +419,7 @@ export default function StageFormBindingEditor({
               onChange={setViewUserIds}
               onLabels={mergeUserLabels}
               placeholder="Search users by name or email…"
+              siteId={workflowSiteId}
             />
           </div>
           <p className="text-[11px] text-gray-500">

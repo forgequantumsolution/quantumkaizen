@@ -547,7 +547,8 @@ export const listSubmittedFormsForTicket = async (ticketId: string) => {
  * Create a `FormSubmission` row with the workflow context populated. The
  * route's `formId` URL param must match the body's binding form id; the
  * binding's stage must be a current stage of the ticket; and the caller must
- * be able to reach the ticket (`ticket.read` is enforced at the route layer).
+ * be able to reach the ticket (per-type `wf_type.<typeId>.read` is enforced at the
+ * route layer via `requireTicketAction('read')`).
  */
 export const createWorkflowSubmission = async (
   ticketId: string,

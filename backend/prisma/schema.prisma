@@ -211,8 +211,9 @@ model Site {
   address  String?
   isActive Boolean @default(true)
 
-  users   User[]
-  tickets Ticket[] @relation("TicketSite")
+  users     User[]
+  tickets   Ticket[]   @relation("TicketSite")
+  workflows Workflow[] @relation("WorkflowSite")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -377,6 +378,13 @@ model Workflow {
   typeId String?
   type   WorkflowType? @relation(fields: [typeId], references: [id], onDelete: SetNull)
 
+  // Site ownership (docs/workflow-site-ownership-plan.md). null = GLOBAL (visible
+  // to every site); a value = owned by that one site (only that site sees/uses it).
+  // Set from the creator's site for scoped users; Super Admin (site.view_all) may
+  // create global or pin to a chosen site. Existing rows default null (global).
+  siteId String?
+  site   Site?   @relation("WorkflowSite", fields: [siteId], references: [id], onDelete: SetNull)
+
   status         WorkflowApprovalStatus  @default(PENDING)
   workflowStatus WorkflowLifecycleStatus @default(DRAFT)
 
@@ -429,6 +437,7 @@ model Workflow {
 
   @@index([isLatestVersion, isDeleted])
   @@index([typeId])
+  @@index([siteId])
   @@index([parentWorkflowId])
   @@index([draftOfId])
 }

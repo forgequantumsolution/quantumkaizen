@@ -458,6 +458,7 @@ export default function WorkflowBuilderPage() {
         <div className="h-full min-h-0 overflow-hidden">
           <InspectorPanel
             workflowId={id}
+            workflowSiteId={data?.workflow.site?.id ?? null}
             selectedNode={selectedNode}
             onNodeUpdate={handleNodeUpdate}
             onNodeDelete={handleNodeDelete}

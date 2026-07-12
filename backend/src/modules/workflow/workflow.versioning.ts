@@ -98,6 +98,7 @@ export const cloneIntoNewVersion = async (
       id: true,
       name: true,
       typeId: true,
+      siteId: true,
       status: true,
       workflowStatus: true,
       maxExecutionsPerDay: true,
@@ -136,6 +137,9 @@ export const cloneIntoNewVersion = async (
     data: {
       name: old.name,
       typeId: old.typeId,
+      // Carry site ownership across versions — a re-save must not silently
+      // globalize a site-owned workflow (docs/workflow-site-ownership-plan.md).
+      siteId: old.siteId,
       status: old.status,
       workflowStatus: old.workflowStatus,
       maxExecutionsPerDay: old.maxExecutionsPerDay,

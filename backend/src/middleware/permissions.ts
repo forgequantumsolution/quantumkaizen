@@ -153,6 +153,15 @@ export const ticketReadScope = (keys: Set<string>): TicketTypeScope => {
 };
 
 /**
+ * Which workflow types a caller may SEE in workflow lists / pickers — the same
+ * set as the ticket read scope (holding `wf_type.<id>.read` = "can access this
+ * type"). Aliased rather than duplicated so workflow list/directory scoping
+ * (docs/access-control-data-scoping-plan.md, Phase 1) and ticket list scoping
+ * share one source of truth and can never drift.
+ */
+export const workflowTypeReadScope = ticketReadScope;
+
+/**
  * Guard for the ticket LIST route. Passes when the user can read at least one
  * workflow type; the service then scopes the results to that set (see
  * ticket.service.list).
