@@ -117,6 +117,8 @@ html.dark {
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #C4CAD4; border-radius: 2px; }
   ::-webkit-scrollbar-thumb:hover { background: #9AA3AE; }
+  /* Firefox — mirror the thin WebKit look (else it falls back to the chunky OS bar) */
+  * { scrollbar-width: thin; scrollbar-color: #C4CAD4 transparent; }
 
   /* ── Selection ── */
   ::selection {
