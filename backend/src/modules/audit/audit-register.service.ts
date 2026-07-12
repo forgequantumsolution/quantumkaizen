@@ -30,10 +30,42 @@ const jsonOrNull = (
 ): Prisma.InputJsonValue | typeof Prisma.JsonNull =>
   v === null || v === undefined ? Prisma.JsonNull : (v as Prisma.InputJsonValue);
 
-// Generate next sequence number for register/program/finding/NC.
-// Simple count-based scheme; fine for current scale, swap for a sequence table later.
-const nextSeq = async (prefix: string, year: number, count: number) =>
-  `${prefix}-${year}-${String(count + 1).padStart(4, '0')}`;
+// Generate the next sequence number for register/program/finding/NC.
+// Derives from the highest existing suffix (not the row count) so gaps left by
+// deleted rows can't reproduce an existing number and trip the unique
+// constraint. Suffixes are fixed-width zero-padded, so a lexical desc sort on
+// the number field yields the true max.
+const nextSeq = async (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  model: { findFirst: (args: any) => Promise<any> },
+  field: string,
+  prefix: string,
+  year: number,
+): Promise<string> => {
+  const latest = await model.findFirst({
+    where: { [field]: { startsWith: `${prefix}-${year}-` } },
+    orderBy: { [field]: 'desc' },
+    select: { [field]: true },
+  });
+  const parsed = latest ? Number(String(latest[field]).split('-').pop()) : 0;
+  const max = Number.isFinite(parsed) ? parsed : 0;
+  return `${prefix}-${year}-${String(max + 1).padStart(4, '0')}`;
+};
+
+// Retry a create whose generated number can race with a concurrent insert.
+// `run` regenerates the number on each attempt so the retry picks up the row
+// that won the race.
+const withUniqueRetry = async <T>(run: () => Promise<T>, tries = 5): Promise<T> => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (e) {
+      const isDup =
+        e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
+      if (!isDup || attempt >= tries - 1) throw e;
+    }
+  }
+};
 
 // ────────────────────── Audit Master ──────────────────────
 
@@ -297,12 +329,10 @@ export const getAuditRegister = async (id: string) => {
 
 export const createAuditRegister = async (input: AuditRegisterUpsertInput, userId?: string) => {
   const year = new Date(input.planned_date).getFullYear();
-  const count = await prisma.auditRegister.count({
-    where: { registerNumber: { startsWith: `AR-${year}-` } },
-  });
-  const registerNumber = await nextSeq('AR', year, count);
 
-  const created = await prisma.auditRegister.create({
+  const created = await withUniqueRetry(async () => {
+    const registerNumber = await nextSeq(prisma.auditRegister, 'registerNumber', 'AR', year);
+    return prisma.auditRegister.create({
     data: {
       registerNumber,
       title: input.title,
@@ -334,6 +364,7 @@ export const createAuditRegister = async (input: AuditRegisterUpsertInput, userI
       workflowId: input.workflow_id ?? null,
       createdById: userId ?? null,
     },
+    });
   });
   return getAuditRegister(created.id);
 };
@@ -395,10 +426,7 @@ export const approveAuditRegister = async (id: string, userId: string) => {
   if (r.status !== 'PENDING_APPROVAL') throw BadRequest('Register is not awaiting approval');
 
   const year = (r.plannedDate ?? new Date()).getFullYear();
-  const programCount = await prisma.auditProgram.count({
-    where: { programNumber: { startsWith: `AP-${year}-` } },
-  });
-  const programNumber = await nextSeq('AP', year, programCount);
+  const programNumber = await nextSeq(prisma.auditProgram, 'programNumber', 'AP', year);
 
   await prisma.$transaction(async (tx) => {
     await tx.auditRegister.update({
@@ -694,10 +722,7 @@ export const createFinding = async (input: FindingUpsertInput, userId?: string) 
     throw BadRequest('Cannot add findings to a completed/cancelled program');
   }
   const year = new Date().getFullYear();
-  const count = await prisma.auditFinding.count({
-    where: { findingNumber: { startsWith: `AF-${year}-` } },
-  });
-  const findingNumber = await nextSeq('AF', year, count);
+  const findingNumber = await nextSeq(prisma.auditFinding, 'findingNumber', 'AF', year);
   const created = await prisma.auditFinding.create({
     data: {
       findingNumber,
@@ -759,10 +784,7 @@ export const promoteFindingToNc = async (
     throw BadRequest('Observations cannot be promoted to non-conformance');
   }
   const year = new Date().getFullYear();
-  const count = await prisma.nonConformance.count({
-    where: { ncNumber: { startsWith: `NC-${year}-` } },
-  });
-  const ncNumber = await nextSeq('NC', year, count);
+  const ncNumber = await nextSeq(prisma.nonConformance, 'ncNumber', 'NC', year);
   const nc = await prisma.nonConformance.create({
     data: {
       ncNumber,

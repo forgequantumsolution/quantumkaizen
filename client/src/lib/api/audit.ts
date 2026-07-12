@@ -696,6 +696,16 @@ export const useComplianceResults = (q: Record<string, string> = {}) =>
       api.get('/audit/compliance-results', { params: q }).then((r) => r.data),
   });
 
+// Every CAPA raised from a non-conformance of this audit register — the
+// audit ticket's child corrective actions.
+export const useRegisterCapas = (registerId: string | undefined) =>
+  useQuery<{ data: Capa[] }>({
+    queryKey: ['audit', 'register-capas', registerId] as const,
+    enabled: !!registerId,
+    queryFn: () =>
+      api.get(`/audit/registers/${registerId}/capas`).then((r) => r.data),
+  });
+
 export const usePromoteFindingToNc = () => {
   const qc = useQueryClient();
   return useMutation({

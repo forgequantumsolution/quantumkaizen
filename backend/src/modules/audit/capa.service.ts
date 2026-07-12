@@ -18,8 +18,38 @@ const jsonOrNull = (
 ): Prisma.InputJsonValue | typeof Prisma.JsonNull =>
   v === null || v === undefined ? Prisma.JsonNull : (v as Prisma.InputJsonValue);
 
-const nextSeq = (prefix: string, year: number, count: number) =>
-  `${prefix}-${year}-${String(count + 1).padStart(4, '0')}`;
+// Next sequence number derived from the highest EXISTING value — not a row
+// count, which collides the moment any earlier row is deleted and leaves a gap.
+const nextNumber = async (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  model: { findFirst: (args: any) => Promise<any> },
+  field: string,
+  prefix: string,
+  year: number,
+): Promise<string> => {
+  const latest = await model.findFirst({
+    where: { [field]: { startsWith: `${prefix}-${year}-` } },
+    orderBy: { [field]: 'desc' },
+    select: { [field]: true },
+  });
+  const parsed = latest ? Number(String(latest[field]).split('-').pop()) : 0;
+  const max = Number.isFinite(parsed) ? parsed : 0;
+  return `${prefix}-${year}-${String(max + 1).padStart(4, '0')}`;
+};
+
+// Retry a create whose generated number can still race with a concurrent insert.
+// `run` regenerates the number on each attempt so the retry picks a fresh value.
+const withUniqueRetry = async <T>(run: () => Promise<T>, tries = 5): Promise<T> => {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await run();
+    } catch (e) {
+      const isDup =
+        e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
+      if (!isDup || attempt >= tries - 1) throw e;
+    }
+  }
+};
 
 // CAPA status → the NC status it should drive the source non-conformance to.
 const NC_STATUS_FOR_CAPA: Partial<Record<CapaStatus, NonConformanceStatus>> = {
@@ -239,6 +269,18 @@ const serializeCapa = (c: CapaRow) => ({
   updated_at: c.updatedAt,
 });
 
+// Every CAPA raised from a non-conformance of a given audit register — i.e. the
+// audit ticket's "child" corrective actions, so the parent audit can surface
+// all of them in one place regardless of how many were raised.
+export const listCapasForRegister = async (registerId: string) => {
+  const items = await prisma.capa.findMany({
+    where: { nonConformance: { finding: { program: { registerId } } } },
+    include: capaInclude,
+    orderBy: { createdAt: 'desc' },
+  });
+  return { data: items.map(serializeCapa) };
+};
+
 export const listCapas = async (q: ListCapaQuery) => {
   const where: Prisma.CapaWhereInput = {};
   if (q.status) where.status = q.status;
@@ -365,30 +407,31 @@ export const createCapa = async (input: CapaCreateInput, userId?: string) => {
   }
 
   const year = new Date().getFullYear();
-  const count = await prisma.capa.count({ where: { capaNumber: { startsWith: `CAPA-${year}-` } } });
-  const capaNumber = nextSeq('CAPA', year, count);
 
-  const capa = await prisma.$transaction(async (tx) => {
-    const created = await tx.capa.create({
-      data: {
-        capaNumber,
-        title: input.title,
-        description: input.description ?? null,
-        type: input.type,
-        nonConformanceId: input.non_conformance_id ?? null,
-        ownerId: input.owner_id ?? null,
-        departmentId: input.department_id ?? null,
-        dueDate: input.due_date ? new Date(input.due_date) : null,
-        createdById: userId ?? null,
-      },
-    });
-    if (input.non_conformance_id) {
-      await tx.nonConformance.update({
-        where: { id: input.non_conformance_id },
-        data: { status: 'CAPA_RAISED' },
+  const capa = await withUniqueRetry(async () => {
+    const capaNumber = await nextNumber(prisma.capa, 'capaNumber', 'CAPA', year);
+    return prisma.$transaction(async (tx) => {
+      const created = await tx.capa.create({
+        data: {
+          capaNumber,
+          title: input.title,
+          description: input.description ?? null,
+          type: input.type,
+          nonConformanceId: input.non_conformance_id ?? null,
+          ownerId: input.owner_id ?? null,
+          departmentId: input.department_id ?? null,
+          dueDate: input.due_date ? new Date(input.due_date) : null,
+          createdById: userId ?? null,
+        },
       });
-    }
-    return created;
+      if (input.non_conformance_id) {
+        await tx.nonConformance.update({
+          where: { id: input.non_conformance_id },
+          data: { status: 'CAPA_RAISED' },
+        });
+      }
+      return created;
+    });
   });
   await writeTrail(
     { entityType: 'Capa', entityId: capa.id, action: 'CREATE', newValue: capa.capaNumber },
@@ -596,25 +639,24 @@ export const listActionItems = async (q: ListActionItemQuery) => {
 
 export const createActionItem = async (input: ActionItemUpsertInput, userId?: string) => {
   const year = new Date().getFullYear();
-  const count = await prisma.actionItem.count({
-    where: { actionNumber: { startsWith: `AI-${year}-` } },
-  });
-  const actionNumber = nextSeq('AI', year, count);
-  const created = await prisma.actionItem.create({
-    data: {
-      actionNumber,
-      title: input.title,
-      description: input.description ?? null,
-      status: input.status ?? 'OPEN',
-      priority: input.priority,
-      ownerId: input.owner_id ?? null,
-      dueDate: input.due_date ? new Date(input.due_date) : null,
-      capaId: input.capa_id ?? null,
-      nonConformanceId: input.non_conformance_id ?? null,
-      findingId: input.finding_id ?? null,
-      createdById: userId ?? null,
-    },
-    include: actionInclude,
+  const created = await withUniqueRetry(async () => {
+    const actionNumber = await nextNumber(prisma.actionItem, 'actionNumber', 'AI', year);
+    return prisma.actionItem.create({
+      data: {
+        actionNumber,
+        title: input.title,
+        description: input.description ?? null,
+        status: input.status ?? 'OPEN',
+        priority: input.priority,
+        ownerId: input.owner_id ?? null,
+        dueDate: input.due_date ? new Date(input.due_date) : null,
+        capaId: input.capa_id ?? null,
+        nonConformanceId: input.non_conformance_id ?? null,
+        findingId: input.finding_id ?? null,
+        createdById: userId ?? null,
+      },
+      include: actionInclude,
+    });
   });
   return serializeAction(created);
 };

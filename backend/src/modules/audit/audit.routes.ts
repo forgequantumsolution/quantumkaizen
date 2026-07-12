@@ -133,6 +133,7 @@ router.post('/audit/non-conformances/:id/raise-capa', requirePermission('non_con
 router.patch('/audit/non-conformances/:id/status', requirePermission('non_conformance.update'), validate(IdParamSchema, 'params'), validate(UpdateNcStatusSchema), asyncHandler(registerCtrl.updateNcStatus));
 
 // ── CAPA (first-class) ──
+router.get('/audit/registers/:id/capas', requirePermission('capa.read'), validate(IdParamSchema, 'params'), asyncHandler(capaCtrl.listCapasForRegister));
 router.get('/audit/capas', requirePermission('capa.read'), validate(ListCapaQuerySchema, 'query'), asyncHandler(capaCtrl.listCapas));
 router.get('/audit/capas/:id', requirePermission('capa.read'), validate(IdParamSchema, 'params'), asyncHandler(capaCtrl.getCapa));
 router.post('/audit/capas', requirePermission('capa.create'), validate(CapaCreateSchema), asyncHandler(capaCtrl.createCapa));

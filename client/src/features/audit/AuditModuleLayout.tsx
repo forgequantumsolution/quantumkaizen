@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, ClipboardCheck, PlayCircle, AlertOctagon, ShieldCheck, ListTodo } from 'lucide-react';
+import { LayoutDashboard, Briefcase, ClipboardCheck, PlayCircle, AlertOctagon, ShieldCheck } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,6 @@ const TABS = [
   { to: '/audit/program', label: 'Audit Execution', icon: PlayCircle, permission: 'audit_program.read' },
   { to: '/audit/non-conformance', label: 'Findings', icon: AlertOctagon, permission: 'non_conformance.read' },
   { to: '/audit/capa', label: 'Corrective Actions', icon: ShieldCheck, permission: 'capa.read' },
-  { to: '/audit/actions', label: 'Action Tracker', icon: ListTodo, permission: 'action_item.read' },
 ];
 
 export default function AuditModuleLayout() {

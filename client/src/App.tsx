@@ -88,7 +88,6 @@ import LimsModuleLayout from '@/features/lims/LimsModuleLayout';
 import AuditReportPage from '@/features/audit/AuditReportPage';
 import CapaListPage from '@/features/audit/CapaListPage';
 import CapaDetailPage from '@/features/audit/CapaDetailPage';
-import ActionItemsPage from '@/features/audit/ActionItemsPage';
 import AuditConfigLayout from '@/features/audit/AuditConfigLayout';
 import AuditMasterPage from '@/features/audit/AuditMasterPage';
 import AuditMasterFormPage from '@/features/audit/AuditMasterFormPage';
@@ -234,7 +233,6 @@ export default function App() {
             <Route path="/audit/program" element={<AuditProgramListPage />} />
             <Route path="/audit/non-conformance" element={<NonConformanceTrackPage />} />
             <Route path="/audit/capa" element={<CapaListPage />} />
-            <Route path="/audit/actions" element={<ActionItemsPage />} />
           </Route>
           <Route path="/audit/capa/:id" element={<CapaDetailPage />} />
           <Route path="/audit/register/new" element={<AuditRegisterFormPage />} />
