@@ -51,16 +51,19 @@ export default function CoaListPage() {
 
       <Table<Coa>
         size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}
+        scroll={{ x: 'max-content' }}
         onRow={(r) => ({ onClick: () => nav(`/lims/coa/${r.id}`), style: { cursor: 'pointer' } })}
         columns={[
           { title: 'Code', dataIndex: 'coa_number', width: 170, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Product', dataIndex: 'product_name', ellipsis: true },
-          { title: 'Batch', dataIndex: 'batch_no', width: 120, render: (v: string | null) => v ?? '—' },
+          { title: 'Product', dataIndex: 'product_name', ellipsis: true, width: 300 },
+          { title: 'Batch', dataIndex: 'batch_no', width: 120, render: (v: string | null) => v ? <span className="font-mono">{v}</span> : '—' },
+          { title: 'Customer', dataIndex: 'customer_name', width: 190, ellipsis: true, render: (v: string | null | undefined) => v || '—' },
           {
             title: 'Status', width: 110,
             render: (_: unknown, r) => <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${COA_STATUS_BADGE[r.status]}`}>{r.status}</span>,
           },
-          { title: 'Issued', width: 110, render: (_: unknown, r) => (r.issued_at ? new Date(r.issued_at).toLocaleDateString() : '—') },
+          { title: 'Created', width: 120, render: (_: unknown, r) => new Date(r.created_at).toLocaleDateString() },
+          { title: 'Issued', width: 120, render: (_: unknown, r) => (r.issued_at ? new Date(r.issued_at).toLocaleDateString() : '—') },
         ]}
       />
 

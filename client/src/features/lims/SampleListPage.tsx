@@ -27,6 +27,13 @@ export const STATUS_BADGE: Record<SampleStatus, string> = {
 const SAMPLE_TYPES = ['Raw Material', 'Finished Product', 'In-Process', 'Stability', 'Water', 'Environmental'];
 const PRIORITIES = ['Low', 'Normal', 'High', 'Urgent'];
 
+const PRIORITY_BADGE: Record<string, string> = {
+  Low: 'bg-slate-100 text-slate-600 border-slate-200',
+  Normal: 'bg-blue-50 text-blue-700 border-blue-200',
+  High: 'bg-amber-50 text-amber-700 border-amber-200',
+  Urgent: 'bg-red-50 text-red-700 border-red-200',
+};
+
 export default function SampleListPage() {
   const nav = useNavigate();
   const canCreate = useHasPermission('sample.create');
@@ -56,18 +63,28 @@ export default function SampleListPage() {
 
       <Table<SampleSummary>
         size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}
+        scroll={{ x: 'max-content' }}
         onRow={(r) => ({ onClick: () => nav(`/lims/samples/${r.id}`), style: { cursor: 'pointer' } })}
         columns={[
           { title: 'Sample No.', dataIndex: 'sample_number', width: 150, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Product', dataIndex: 'product_name', ellipsis: true },
-          { title: 'Batch', dataIndex: 'batch_no', width: 110, render: (v: string | null) => v ? <span className="font-mono">{v}</span> : '—' },
-          { title: 'Type', dataIndex: 'sample_type', width: 130, render: (v: string | null) => v ?? '—' },
-          { title: 'Aliquots', dataIndex: 'aliquot_count', width: 80 },
+          { title: 'Barcode', dataIndex: 'barcode', width: 150, render: (v: string | null) => v ? <span className="font-mono text-gray-600 text-xs">{v}</span> : '—' },
+          { title: 'Product', dataIndex: 'product_name', ellipsis: true, width: 240 },
+          { title: 'Batch', dataIndex: 'batch_no', width: 120, render: (v: string | null) => v ? <span className="font-mono">{v}</span> : '—' },
+          { title: 'Type', dataIndex: 'sample_type', width: 140, render: (v: string | null) => v ?? '—' },
+          {
+            title: 'Priority', dataIndex: 'priority', width: 100,
+            render: (v: string | null) => v ? <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${PRIORITY_BADGE[v] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>{v}</span> : '—',
+          },
+          {
+            title: 'Quantity', width: 110, align: 'right',
+            render: (_: unknown, r) => r.quantity != null ? <span className="font-mono text-gray-700">{r.quantity}{r.unit ? ` ${r.unit}` : ''}</span> : '—',
+          },
+          { title: 'Aliquots', dataIndex: 'aliquot_count', width: 90, align: 'right' },
           {
             title: 'Status', width: 120,
             render: (_: unknown, r) => <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${STATUS_BADGE[r.status]}`}>{SAMPLE_STATUS_LABELS[r.status]}</span>,
           },
-          { title: 'Registered', width: 110, render: (_: unknown, r) => new Date(r.created_at).toLocaleDateString() },
+          { title: 'Registered', width: 120, render: (_: unknown, r) => new Date(r.created_at).toLocaleDateString() },
         ]}
       />
 
@@ -79,18 +96,6 @@ export default function SampleListPage() {
 function RegisterDrawer({ open, onClose, onDone }: { open: boolean; onClose: () => void; onDone: (id: string) => void }) {
   const { message } = App.useApp();
   const registerMut = useRegisterSample();
-  const { data: specs } = useSpecs({ status: 'APPROVED' });
-  const { data: labsData } = useLabs({ is_active: true });
-  const { data: storage } = useStorageLocations();
-  const { data: productsData } = useProducts();
-  const { data: customersData } = useCustomers();
-  const { data: suppliersData } = useSuppliers();
-  const { data: samplingPointsData } = useSamplingPoints();
-  const products = productsData?.data ?? [];
-  const labs = labsData?.data ?? [];
-  const customers = customersData?.data ?? [];
-  const suppliers = suppliersData?.data ?? [];
-  const samplingPoints = samplingPointsData?.data ?? [];
 
   const [f, setF] = useState<RegisterSampleBody>({ product_name: '' });
   const [collected, setCollected] = useState<Dayjs | null>(null);
@@ -110,6 +115,46 @@ function RegisterDrawer({ open, onClose, onDone }: { open: boolean; onClose: () 
   return (
     <Drawer title="Register Sample" open={open} onClose={onClose} width={480} destroyOnClose
       footer={<Space className="flex justify-end"><Button onClick={onClose}>Cancel</Button><Button type="primary" onClick={submit} loading={registerMut.isPending}>Register</Button></Space>}>
+      {/* The dropdown lookup queries live in RegisterFields, which only mounts
+          while the drawer is open — so those 7 fetches fire on first open, not on
+          page load. The Drawer shell stays mounted so its open/close animation is
+          preserved. */}
+      {open && (
+        <RegisterFields
+          f={f} setF={setF} set={set}
+          collected={collected} setCollected={setCollected}
+          received={received} setReceived={setReceived}
+        />
+      )}
+    </Drawer>
+  );
+}
+
+interface RegisterFieldsProps {
+  f: RegisterSampleBody;
+  setF: React.Dispatch<React.SetStateAction<RegisterSampleBody>>;
+  set: <K extends keyof RegisterSampleBody>(k: K, v: RegisterSampleBody[K]) => void;
+  collected: Dayjs | null;
+  setCollected: (d: Dayjs | null) => void;
+  received: Dayjs | null;
+  setReceived: (d: Dayjs | null) => void;
+}
+
+function RegisterFields({ f, setF, set, collected, setCollected, received, setReceived }: RegisterFieldsProps) {
+  const { data: specs } = useSpecs({ status: 'APPROVED' });
+  const { data: labsData } = useLabs({ is_active: true });
+  const { data: storage } = useStorageLocations();
+  const { data: productsData } = useProducts();
+  const { data: customersData } = useCustomers();
+  const { data: suppliersData } = useSuppliers();
+  const { data: samplingPointsData } = useSamplingPoints();
+  const products = productsData?.data ?? [];
+  const labs = labsData?.data ?? [];
+  const customers = customersData?.data ?? [];
+  const suppliers = suppliersData?.data ?? [];
+  const samplingPoints = samplingPointsData?.data ?? [];
+
+  return (
       <div className="space-y-3">
         <F label="Product (master)">
           <Select
@@ -149,7 +194,6 @@ function RegisterDrawer({ open, onClose, onDone }: { open: boolean; onClose: () 
         <F label="Initial Storage"><Select value={f.current_location_id ?? undefined} onChange={(v) => set('current_location_id', v ?? null)} allowClear showSearch optionFilterProp="label" className="w-full" options={(storage?.data ?? []).map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))} /></F>
         <F label="Remarks"><Input.TextArea rows={2} value={f.remarks ?? ''} onChange={(e) => set('remarks', e.target.value)} /></F>
       </div>
-    </Drawer>
   );
 }
 
