@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import ScrollToTop from './ScrollToTop';
 import { useUIStore } from '@/stores/uiStore';
 import { cn } from '@/lib/utils';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
@@ -15,6 +16,7 @@ export default function AppLayout() {
   // propagates to every page that uses it.
   return (
     <div className="min-h-screen bg-surface-bg">
+      <ScrollToTop />
       <Sidebar />
 
       <div

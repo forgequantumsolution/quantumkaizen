@@ -45,17 +45,19 @@ export default function WorklistsPage() {
 
       <Table<Worklist>
         size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}
+        scroll={{ x: 'max-content' }}
         onRow={(r) => ({ onClick: () => setDetailId(r.id), style: { cursor: 'pointer' } })}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 140, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Name', dataIndex: 'name', ellipsis: true },
-          { title: 'Analyst', dataIndex: 'analyst_name', width: 150, render: (v: string | null) => v ?? '—' },
-          { title: '# Tests', dataIndex: 'test_count', width: 80 },
+          { title: 'Name', dataIndex: 'name', ellipsis: true, width: 300 },
+          { title: 'Analyst', dataIndex: 'analyst_name', width: 160, render: (v: string | null) => v ?? '—' },
+          { title: 'Instrument', dataIndex: 'instrument_id', width: 160, ellipsis: true, render: (v: string | null) => v ?? '—' },
+          { title: '# Tests', dataIndex: 'test_count', width: 90, align: 'right' },
           {
             title: 'Status', width: 120,
             render: (_: unknown, r) => <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${WORKLIST_STATUS_BADGE[r.status]}`}>{WORKLIST_STATUS_LABELS[r.status]}</span>,
           },
-          { title: 'Created', width: 110, render: (_: unknown, r) => new Date(r.created_at).toLocaleDateString() },
+          { title: 'Created', width: 120, render: (_: unknown, r) => new Date(r.created_at).toLocaleDateString() },
         ]}
       />
 

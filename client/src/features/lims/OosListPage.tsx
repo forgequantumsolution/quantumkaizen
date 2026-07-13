@@ -81,6 +81,7 @@ export default function OosListPage() {
         loading={isLoading}
         dataSource={rows}
         pagination={{ pageSize: 20, showSizeChanger: false }}
+        scroll={{ x: 'max-content' }}
         onRow={(r) => ({ onClick: () => nav(`/lims/oos/${r.id}`), style: { cursor: 'pointer' } })}
         columns={[
           {
@@ -89,7 +90,7 @@ export default function OosListPage() {
             width: 150,
             render: (v: string) => <span className="font-mono text-blue-600">{v}</span>,
           },
-          { title: 'Title', dataIndex: 'title', ellipsis: true },
+          { title: 'Title', dataIndex: 'title', ellipsis: true, width: 320 },
           {
             title: 'Phase',
             width: 150,
@@ -110,15 +111,23 @@ export default function OosListPage() {
           },
           {
             title: 'Classification',
-            width: 140,
+            width: 150,
             render: (_: unknown, r) =>
               r.classification
                 ? CLASSIFICATION_LABELS[r.classification as OosClassification] ?? r.classification
                 : '—',
           },
           {
+            title: 'CAPA',
+            width: 140,
+            render: (_: unknown, r) =>
+              r.capa?.capa_number
+                ? <span className="font-mono text-xs text-blue-600">{r.capa.capa_number}</span>
+                : '—',
+          },
+          {
             title: 'Opened',
-            width: 110,
+            width: 120,
             render: (_: unknown, r) => new Date(r.opened_at).toLocaleDateString(),
           },
         ]}
