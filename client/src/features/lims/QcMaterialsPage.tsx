@@ -51,14 +51,15 @@ export default function QcMaterialsPage() {
 
       <Table<QcMaterial>
         size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}
-        rowClassName="cursor-pointer"
+        rowClassName="cursor-pointer" scroll={{ x: 'max-content' }}
         onRow={(r) => ({ onClick: () => navigate(`/lims/qc/${r.id}`) })}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 120, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Name', dataIndex: 'name', ellipsis: true },
+          { title: 'Name', dataIndex: 'name', ellipsis: true, width: 260 },
           { title: 'Analyte', dataIndex: 'analyte_name', width: 150, render: (v: string | null) => v ?? '—' },
+          { title: 'Lot No', dataIndex: 'lot_no', width: 130, render: (v: string | null) => v ? <span className="font-mono text-xs">{v}</span> : '—' },
           { title: 'Mean ± SD', width: 140, render: (_: unknown, r) => fmtMeanSd(r) },
-          { title: '#Results', dataIndex: 'result_count', width: 90, render: (v: number) => v },
+          { title: '#Results', dataIndex: 'result_count', width: 90, align: 'right', render: (v: number) => v },
           { title: 'Active', dataIndex: 'is_active', width: 70, render: (v: boolean) => (v ? 'Yes' : 'No') },
           {
             title: '', width: 90,

@@ -45,17 +45,18 @@ export default function StabilityListPage() {
 
       <Table<StudySummary>
         size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}
+        scroll={{ x: 'max-content' }}
         onRow={(r) => ({ onClick: () => nav(`/lims/stability/${r.id}`), style: { cursor: 'pointer' } })}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 130, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Title', dataIndex: 'title', ellipsis: true },
-          { title: 'Product', dataIndex: 'product_name', width: 180, ellipsis: true },
-          { title: 'Batch', dataIndex: 'batch_no', width: 110, render: (v: string | null) => v ?? '—' },
+          { title: 'Title', dataIndex: 'title', ellipsis: true, width: 300 },
+          { title: 'Product', dataIndex: 'product_name', width: 200, ellipsis: true },
+          { title: 'Batch', dataIndex: 'batch_no', width: 120, render: (v: string | null) => v ? <span className="font-mono">{v}</span> : '—' },
           {
             title: 'Status', width: 120,
             render: (_: unknown, r) => <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${STUDY_STATUS_BADGE[r.status]}`}>{r.status}</span>,
           },
-          { title: 'Pulls', dataIndex: 'pull_count', width: 70 },
+          { title: 'Pulls', dataIndex: 'pull_count', width: 80, align: 'right' },
           { title: 'Started', width: 110, render: (_: unknown, r) => (r.start_date ? new Date(r.start_date).toLocaleDateString() : '—') },
         ]}
       />
