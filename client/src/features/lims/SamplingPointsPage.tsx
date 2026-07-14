@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Drawer, Input, Space, Switch, Table } from 'antd';
 import { MapPin, Plus, Search, Edit3, Trash2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import { ActiveBadge } from '@/components/ui';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useSamplingPoints, useCreateSamplingPoint, useUpdateSamplingPoint, useDeleteSamplingPoint,
@@ -46,10 +47,10 @@ export default function SamplingPointsPage() {
         size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 110, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Name', dataIndex: 'name', ellipsis: true },
+          { title: 'Name', dataIndex: 'name', width: 220, ellipsis: true },
           { title: 'Area', dataIndex: 'area', width: 160, render: (v: string | null) => v ?? '—' },
-          { title: 'Description', dataIndex: 'description', ellipsis: true, render: (v: string | null) => v ?? '—' },
-          { title: 'Active', dataIndex: 'is_active', width: 70, render: (v: boolean) => (v ? 'Yes' : 'No') },
+          { title: 'Description', dataIndex: 'description', width: 260, ellipsis: true, render: (v: string | null) => v ?? '—' },
+          { title: 'Active', dataIndex: 'is_active', width: 90, render: (v: boolean) => <ActiveBadge active={v} /> },
           {
             title: '', width: 90,
             render: (_: unknown, r) => (

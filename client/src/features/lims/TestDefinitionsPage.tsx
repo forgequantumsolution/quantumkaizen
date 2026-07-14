@@ -49,9 +49,9 @@ export default function TestDefinitionsPage() {
         onRow={(r) => ({ onClick: () => setOpenId(r.id), style: { cursor: 'pointer' } })}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 120, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Name', dataIndex: 'name', ellipsis: true },
-          { title: 'Technique', dataIndex: 'technique', width: 160, render: (v: string | null) => v ?? '—' },
-          { title: 'Analytes', dataIndex: 'analyte_count', width: 90 },
+          { title: 'Name', dataIndex: 'name', width: 320, ellipsis: true },
+          { title: 'Technique', dataIndex: 'technique', width: 200, render: (v: string | null) => v ?? '—' },
+          { title: 'Analytes', dataIndex: 'analyte_count', width: 120 },
           {
             title: 'Status', width: 110,
             render: (_: unknown, r) => <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${TEST_STATUS_BADGE[r.status]}`}>{r.status}</span>,

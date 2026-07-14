@@ -2,7 +2,7 @@
 export { Button } from './Button';
 export type { ButtonProps } from './Button';
 export { Card, CardHeader, CardTitle } from './Card';
-export { Badge, StatusBadge, SeverityBadge, TypeBadge } from './Badge';
+export { Badge, StatusBadge, SeverityBadge, TypeBadge, ActiveBadge } from './Badge';
 export type { BadgeVariant } from './Badge';
 export { KpiCard } from './KpiCard';
 export type { KpiAccent, KpiCardProps, KpiTrend } from './KpiCard';

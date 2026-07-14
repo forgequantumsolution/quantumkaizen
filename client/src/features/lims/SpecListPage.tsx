@@ -43,9 +43,9 @@ export default function SpecListPage() {
         onRow={(r) => ({ onClick: () => nav(`/lims/specifications/${r.id}`), style: { cursor: 'pointer' } })}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 120, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Product', dataIndex: 'product_name', ellipsis: true },
-          { title: 'Version', dataIndex: 'version', width: 80, render: (v: number) => `v${v}` },
-          { title: 'Pharmacopoeia', dataIndex: 'pharmacopoeia', width: 120, render: (v: string | null) => v ?? '—' },
+          { title: 'Product', dataIndex: 'product_name', width: 300, ellipsis: true },
+          { title: 'Version', dataIndex: 'version', width: 90, render: (v: number) => `v${v}` },
+          { title: 'Pharmacopoeia', dataIndex: 'pharmacopoeia', width: 140, render: (v: string | null) => v ?? '—' },
           { title: 'Parameters', dataIndex: 'parameter_count', width: 100 },
           {
             title: 'Status', width: 110,

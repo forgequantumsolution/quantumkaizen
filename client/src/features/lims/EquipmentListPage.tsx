@@ -81,9 +81,9 @@ export default function EquipmentListPage() {
         onRow={(r) => ({ onClick: () => nav(`/lims/equipment/${r.id}`), style: { cursor: 'pointer' } })}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 110, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Name', dataIndex: 'name', ellipsis: true },
+          { title: 'Name', dataIndex: 'name', width: 240, ellipsis: true },
           { title: 'Category', dataIndex: 'category', width: 120, render: (v: string | null) => v ?? '—' },
-          { title: 'Lab', width: 140, render: (_: unknown, r) => r.lab_name ?? '—' },
+          { title: 'Lab', width: 190, ellipsis: true, render: (_: unknown, r) => r.lab_name ?? '—' },
           {
             title: 'Status',
             dataIndex: 'status',
