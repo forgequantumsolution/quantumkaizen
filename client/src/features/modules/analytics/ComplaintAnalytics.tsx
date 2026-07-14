@@ -1,0 +1,116 @@
+/**
+ * Product Complaint analytics panel (spec §6.3.3).
+ *
+ * A read-only projection of the Complaint module's own already-loaded records:
+ * every KPI and chart is derived client-side from the passed TicketSummary[].
+ * No fetching, no sample data — sparse modules show honest empty states.
+ */
+import { useMemo } from 'react';
+import { Activity, AlertTriangle, Timer, CheckCircle2, Megaphone } from 'lucide-react';
+import type { ModuleAnalyticsProps } from './types';
+import type { TicketSummary } from '@/lib/api/ticket';
+import {
+  isCompleted, isOverdue, countBy, monthlyCount,
+  onTimeClosureRate, closureRate, avgCycleDays,
+  ChartCard, StatTile,
+  TrendLineChart, DonutChart, ComplianceGauge, CategoryParetoChart, CalendarList,
+  type Slice, type CalendarEntry,
+} from '@/components/analytics';
+import { useTicketFilters } from './useTicketFilters';
+
+const REPORTABLE = /report|regulator/i;
+
+export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
+  const { filtered, toolbar } = useTicketFilters(tickets);
+
+  const k = useMemo(() => {
+    const open = filtered.filter((t) => !isCompleted(t));
+    const reportable = filtered.filter((t) => REPORTABLE.test(t.title));
+    const capaConverted = filtered.filter((t) => /capa/i.test(t.title)).length;
+    const conversionRate = filtered.length ? Math.round((capaConverted / filtered.length) * 100) : 0;
+
+    const monthly = monthlyCount(filtered, () => true, (t) => t.createdAt);
+    const trend = monthly.map((p) => ({ month: p.month, count: p.value }));
+    const avgMonthly = monthly.length
+      ? Math.round(monthly.reduce((s, p) => s + p.value, 0) / monthly.length)
+      : 0;
+
+    const category: Slice[] = countBy(filtered, (t) => t.classification);
+    const productSite: Slice[] = countBy(filtered, (t) => t.site?.name || t.department?.name);
+
+    const reportableEntries: CalendarEntry[] = reportable
+      .filter((t) => !isCompleted(t))
+      .map((t) => ({
+        id: t.id,
+        title: t.title,
+        meta: `${t.uniqueId}${t.department?.name ? ` · ${t.department.name}` : ''}`,
+        date: t.dueDate,
+      }));
+
+    return {
+      active: open.length,
+      overdue: filtered.filter(isOverdue).length,
+      cycle: avgCycleDays(filtered),
+      closure: closureRate(filtered),
+      reportable: reportable.length,
+      onTime: onTimeClosureRate(filtered),
+      conversionRate,
+      trend,
+      avgMonthly,
+      category,
+      productSite,
+      reportableEntries,
+    };
+  }, [filtered]);
+
+  return (
+    <div className="space-y-4">
+      {/* Right-aligned Filter popover */}
+      {toolbar}
+
+      {/* Top KPI strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <StatTile icon={<Activity size={16} />} label="Active" value={k.active} tone="blue" onClick={onDrill && (() => onDrill('open'))} />
+        <StatTile icon={<AlertTriangle size={16} />} label="Overdue" value={k.overdue} tone="red" onClick={onDrill && (() => onDrill('overdue'))} />
+        <StatTile icon={<Timer size={16} />} label="Avg cycle" value={`${k.cycle}d`} tone="amber" onClick={onDrill && (() => onDrill('all'))} />
+        <StatTile icon={<CheckCircle2 size={16} />} label="Closure" value={`${k.closure}%`} tone="emerald" onClick={onDrill && (() => onDrill('completed'))} />
+        <StatTile icon={<Megaphone size={16} />} label="Reportable" value={k.reportable} tone="purple" onClick={onDrill && (() => onDrill('all'))} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <ChartCard title="Complaint volume" subtitle="Complaints received per month (last 6 months)">
+          <TrendLineChart data={k.trend} series={[{ key: 'count', name: 'Complaints', area: true }]} />
+        </ChartCard>
+
+        <ChartCard title="Complaint rate" subtitle="Monthly volume vs. average benchmark">
+          <TrendLineChart
+            data={k.trend}
+            series={[{ key: 'count', name: 'Complaints', area: false }]}
+            benchmarkValue={k.avgMonthly}
+            benchmarkLabel="Avg"
+          />
+        </ChartCard>
+
+        <ChartCard title="Category split" subtitle="By classification — Quality / Packaging / Labeling">
+          <DonutChart data={k.category} emptyLabel="No classification data" />
+        </ChartCard>
+
+        <ChartCard title="Investigation cycle time" subtitle="Closed on or before due date">
+          <ComplianceGauge value={k.onTime} target={90} label="On-time closure" caption={`Avg cycle ${k.cycle}d`} />
+        </ChartCard>
+
+        <ChartCard title="Complaint-to-CAPA conversion" subtitle="Share of complaints escalated to a CAPA">
+          <ComplianceGauge value={k.conversionRate} target={90} label="CAPA conversion" />
+        </ChartCard>
+
+        <ChartCard title="By product / site" subtitle="Pareto of complaints by product or site">
+          <CategoryParetoChart data={k.productSite} cumulativeLine emptyLabel="No product/site data" />
+        </ChartCard>
+
+        <ChartCard title="Regulatory-reportable tracker" subtitle="Open complaints flagged reportable, by due date">
+          <CalendarList entries={k.reportableEntries} emptyLabel="No reportable complaints" />
+        </ChartCard>
+      </div>
+    </div>
+  );
+}

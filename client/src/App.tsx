@@ -97,6 +97,7 @@ import IsoStandardsPage from '@/features/audit/IsoStandardsPage';
 // System
 import SettingsPage from '@/pages/SettingsPage';
 import AppearancePage from '@/pages/AppearancePage';
+import IntegrationsPage from '@/pages/IntegrationsPage';
 // Theme bridge — applies appearance store to the live document
 import AppearanceProvider from '@/components/theme/AppearanceProvider';
 import PageContainer from '@/components/layout/PageContainer';
@@ -252,6 +253,7 @@ export default function App() {
           {/* System */}
           <Route path="/appearance" element={<AppearancePage />} />
           <Route path="/settings"   element={<SettingsPage />} />
+          <Route path="/integrations" element={<IntegrationsPage />} />
 
           {/* Catch-all → dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

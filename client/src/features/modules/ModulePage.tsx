@@ -54,10 +54,19 @@ import {
   useWorkflowTypes,
 } from '@/lib/api/workflowLookups';
 import RaiseTicketDrawer from '@/features/tickets/shared/RaiseTicketDrawer';
-import ModuleDashboard, { computeModuleKpiChips } from './ModuleDashboard';
+import ModuleAnalytics from './analytics';
 
 type KpiId = 'mine' | 'department' | 'createdByMe' | 'all' | 'pending' | 'saved';
 type Tab = 'dashboard' | 'workspace';
+type StatusView = 'all' | 'open' | 'overdue' | 'onhold' | 'completed';
+
+const STATUS_VIEW_LABEL: Record<StatusView, string> = {
+  all: 'All records',
+  open: 'Active / open',
+  overdue: 'Overdue',
+  onhold: 'On hold',
+  completed: 'Completed',
+};
 
 interface ColumnConfig {
   id: string;
@@ -149,6 +158,8 @@ export default function ModulePage({
     embedded || searchParams.get('tab') === 'workspace' ? 'workspace' : 'dashboard';
   const [tab, setTab] = useState<Tab>(initialTab);
   const [activeKpi, setActiveKpi] = useState<KpiId | null>(null);
+  // Drill-through target set when a KPI card on the Overview is clicked.
+  const [statusView, setStatusView] = useState<StatusView | null>(null);
   const [showAllKpis, setShowAllKpis] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const search = useDebounced(searchInput, 250);
@@ -169,7 +180,15 @@ export default function ModulePage({
     setSearchInput('');
     setPriorityId('');
     setWorkflowFilterId('');
+    setStatusView(null);
   }, [typeId, searchParams, embedded]);
+
+  // Overview KPI card → jump to the My Tasks list filtered to that slice.
+  const handleDrill = (view: StatusView) => {
+    setActiveKpi(null);
+    setStatusView(view);
+    setTab('workspace');
+  };
 
   // Single fetch for the module — KPIs and table are derived from this.
   // Backend caps pageSize at 200; KPI counts beyond that will under-report.
@@ -256,8 +275,23 @@ export default function ModulePage({
       list = list.filter((t) => t.flows.some((f) => f.workflowId === workflowFilterId));
     }
 
+    // Drill-through from an Overview KPI card (Active / Overdue / …).
+    if (statusView && statusView !== 'all') {
+      list = list.filter((t) => {
+        const completed = !!t.flows[0]?.isCompleted;
+        switch (statusView) {
+          case 'open':      return !completed;
+          case 'completed': return completed;
+          case 'onhold':    return !completed && t.isOnHold;
+          case 'overdue':
+            return !completed && !!t.dueDate && new Date(t.dueDate).getTime() < Date.now();
+          default:          return true;
+        }
+      });
+    }
+
     return list;
-  }, [allTickets, tab, activeKpi, search, priorityId, workflowFilterId, user, bookmarks, isWorkspaceWideViewer]);
+  }, [allTickets, tab, activeKpi, search, priorityId, workflowFilterId, statusView, user, bookmarks, isWorkspaceWideViewer]);
 
   // Paginate the visible table (10 / page). The KPI counts still come from the
   // full `allTickets` set, so they stay accurate regardless of the page shown.
@@ -265,7 +299,7 @@ export default function ModulePage({
   const tableTotalPages = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
   useEffect(() => {
     setTablePage(1);
-  }, [activeKpi, search, priorityId, workflowFilterId, tab]);
+  }, [activeKpi, search, priorityId, workflowFilterId, statusView, tab]);
   const pagedTickets = useMemo(
     () => filtered.slice((tablePage - 1) * TABLE_PAGE_SIZE, tablePage * TABLE_PAGE_SIZE),
     [filtered, tablePage],
@@ -347,14 +381,10 @@ export default function ModulePage({
   const isDocReview = /^document\s*review$/i.test(moduleName.trim());
   const showCreate = canCreate && !isDocReview;
 
-  // Summary indicators (Active, Overdue, Closure rate, …) hoisted from the
-  // dashboard so they live in the single top KPI strip, revealed by "Show more".
-  const indicatorChips = useMemo(
-    () => computeModuleKpiChips(allTickets, moduleName),
-    [allTickets, moduleName],
-  );
-  // Cards hidden while collapsed: scope cards beyond the first 4, plus every indicator.
-  const hiddenKpiCount = Math.max(0, KPI_DEFS.length - 4) + indicatorChips.length;
+  // Scope cards hidden while collapsed: the ones beyond the first 4. Module
+  // performance KPIs (Active, Overdue, Closure rate, …) now live inside the
+  // Overview analytics panel, so they're no longer duplicated here.
+  const hiddenKpiCount = Math.max(0, KPI_DEFS.length - 4);
 
   // Download + Customize Columns — shown on its own row on the full page, but
   // tucked to the right of the header row when embedded (Audit My Workspace).
@@ -509,62 +539,50 @@ export default function ModulePage({
         </div>
       )}
 
+      {/* ── Overview tab: purely the module analytics panel ─────────────── */}
       {tab === 'dashboard' && (
-        <>
-          {/* ── KPI cards (hidden for Document Review under DMS) ─────────── */}
-          {/* One-line strip: the 4 primary scopes stay on a single row; the
-              rest are revealed by the "Show more" toggle. */}
-          {!isDocReview && (
-            <div className="mt-4">
-              <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
-                {/* Scope cards — first 4 always shown; the rest appear on expand. */}
-                {(showAllKpis ? KPI_DEFS : KPI_DEFS.slice(0, 4)).map((k) => (
-                  <div key={k.id} className="flex-1 min-w-[168px]">
-                    <KpiCard
-                      label={k.label}
-                      value={kpiCounts[k.id]}
-                      icon={k.icon}
-                      accent={k.accent}
-                      selected={activeKpi === k.id}
-                      onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
-                    />
-                  </div>
-                ))}
-                {/* Summary indicators — only when expanded. */}
-                {showAllKpis &&
-                  indicatorChips.map((c) => (
-                    <div key={c.key} className="flex-1 min-w-[168px]">
-                      <KpiCard label={c.label} value={c.value} icon={c.icon} accent={c.accent} />
-                    </div>
-                  ))}
-                {hiddenKpiCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllKpis((v) => !v)}
-                    className="shrink-0 inline-flex flex-col items-center justify-center gap-1 w-[92px] rounded-xl border border-dashed border-gray-300 bg-white text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-colors"
-                  >
-                    {showAllKpis ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    <span className="text-[11px] font-medium">
-                      {showAllKpis ? 'Show less' : `+${hiddenKpiCount} more`}
-                    </span>
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+        <div className="mt-4">
+          <ModuleAnalytics tickets={allTickets} moduleName={moduleName} onDrill={handleDrill} />
+        </div>
+      )}
 
-          {/* ── Module dashboard (charts) ──────────────────────────────── */}
-          {!activeKpi && (
-            <div className="mt-4">
-              <ModuleDashboard tickets={allTickets} moduleName={moduleName} showIndicators={false} />
-            </div>
-          )}
-        </>
+      {/* ── My Tasks tab: scope quick-filter cards above the ticket list ── */}
+      {/* First 4 scopes on one row; Pending / Saved revealed by "Show more".
+          Clicking a card filters the table below. */}
+      {tab === 'workspace' && !embedded && !isDocReview && (
+        <div className="mt-4">
+          <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
+            {(showAllKpis ? KPI_DEFS : KPI_DEFS.slice(0, 4)).map((k) => (
+              <div key={k.id} className="flex-1 min-w-[168px]">
+                <KpiCard
+                  label={k.label}
+                  value={kpiCounts[k.id]}
+                  icon={k.icon}
+                  accent={k.accent}
+                  selected={activeKpi === k.id}
+                  onClick={() => setActiveKpi((prev) => (prev === k.id ? null : k.id))}
+                />
+              </div>
+            ))}
+            {hiddenKpiCount > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAllKpis((v) => !v)}
+                className="shrink-0 inline-flex flex-col items-center justify-center gap-1 w-[92px] rounded-xl border border-dashed border-gray-300 bg-white text-gray-500 hover:text-gray-900 hover:border-gray-400 hover:bg-gray-50 transition-colors"
+              >
+                {showAllKpis ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                <span className="text-[11px] font-medium">
+                  {showAllKpis ? 'Show less' : `+${hiddenKpiCount} more`}
+                </span>
+              </button>
+            )}
+          </div>
+        </div>
       )}
 
       {/* ── Toolbar (Download + Customize Columns) — own row on the full page;
            embedded mode renders these in the header row above instead. ──── */}
-      {!embedded && (tab === 'workspace' || activeKpi) && (
+      {!embedded && tab === 'workspace' && (
         <div className="mt-4 flex items-center justify-end gap-2 flex-wrap">
           {tableToolbar}
         </div>
@@ -630,8 +648,25 @@ export default function ModulePage({
         </div>
       </Modal>
 
-      {/* ── Table (workspace tab, or when a KPI is filtered) ────────────── */}
-      {(tab === 'workspace' || activeKpi) && (
+      {/* Drill-through indicator — set when an Overview KPI card was clicked. */}
+      {tab === 'workspace' && statusView && (
+        <div className="mt-3 flex items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gold-50 border border-gold-200 px-3 py-1 text-[12px] font-medium text-gold-800">
+            Showing: {STATUS_VIEW_LABEL[statusView]}
+            <button
+              type="button"
+              onClick={() => setStatusView(null)}
+              className="ml-0.5 text-gold-500 hover:text-gold-800"
+              aria-label="Clear filter"
+            >
+              <X size={13} />
+            </button>
+          </span>
+        </div>
+      )}
+
+      {/* ── Table (My Tasks tab) ────────────────────────────────────────── */}
+      {tab === 'workspace' && (
       <div className="mt-3">
         {isLoading ? (
           <div className="flex justify-center py-16">

@@ -36,6 +36,7 @@ import {
   Settings2,
   MessageSquareWarning,
   RefreshCw,
+  Plug,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/uiStore";
@@ -389,6 +390,7 @@ export default function Sidebar() {
             "workflow.lookups.read",
           ],
         },
+        { label: "Integrations", path: "/integrations", icon: Plug },
         { label: "Appearance", path: "/appearance", icon: Palette },
       ],
     };
