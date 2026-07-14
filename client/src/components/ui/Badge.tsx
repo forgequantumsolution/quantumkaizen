@@ -113,6 +113,12 @@ export function StatusBadge({ status }: { status: string }) {
   return <Badge variant={variant} dot>{label}</Badge>;
 }
 
+// Boolean "is_active" flag on master data → a badge that visually rhymes with
+// the lifecycle StatusBadge, so every LIMS config table reads as one family.
+export function ActiveBadge({ active }: { active: boolean }) {
+  return <Badge variant={active ? 'success' : 'default'} dot>{active ? 'Active' : 'Inactive'}</Badge>;
+}
+
 const severityBadgeMap: Record<string, BadgeVariant> = {
   CRITICAL: 'danger',
   MAJOR:    'warning',

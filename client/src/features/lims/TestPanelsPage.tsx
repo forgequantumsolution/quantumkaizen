@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Drawer, Input, Select, Spin, Table } from 'antd';
 import { Layers, Plus, Search, Save, Trash2, X, ArrowUp, ArrowDown } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import { ActiveBadge } from '@/components/ui';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useTestPanels, useTestPanel, useCreateTestPanel, useUpdateTestPanel, useDeleteTestPanel,
@@ -41,8 +42,10 @@ export default function TestPanelsPage() {
         onRow={(r) => ({ onClick: () => setOpenId(r.id), style: { cursor: 'pointer' } })}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 120, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Name', dataIndex: 'name', ellipsis: true },
+          { title: 'Name', dataIndex: 'name', width: 260, ellipsis: true },
+          { title: 'Description', dataIndex: 'description', width: 280, ellipsis: true, render: (v: string | null) => v ?? '—' },
           { title: 'Tests', dataIndex: 'item_count', width: 90 },
+          { title: 'Active', dataIndex: 'is_active', width: 90, render: (v: boolean) => <ActiveBadge active={v} /> },
         ]}
       />
 

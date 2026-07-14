@@ -1,5 +1,47 @@
 # Changes Log
 
+## LIMS Configuration table consistency — 2026-07-14
+
+Layout/visual cleanup across the LIMS Configuration list tables so they read as
+one family: fix a wrapping cell, standardize the "active" flag, and kill the big
+empty gaps from unbounded flex columns. Verified page-by-page with Playwright
+(local `kaizen_qms`, login `admin@forgequantum.com`).
+
+- **`src/features/lims/EquipmentListPage.tsx`** — the **Lab** column (`width: 140`)
+  wrapped names like "Central QC Laboratory" onto 2–3 lines. Widened to `190` +
+  `ellipsis: true`. `Name` also bounded (`width: 240`) — see gap fix.
+- **`src/components/ui/Badge.tsx` + `index.ts`** — new `ActiveBadge({ active })`:
+  a dotted `success`/`default` `Badge` (green **Active** / muted **Inactive**)
+  that matches the existing `StatusBadge`. Master-data tables showed the boolean
+  `is_active` as plain **"Yes"/"No"** text — inconsistent with the lifecycle
+  badges. Swapped `(v ? 'Yes' : 'No')` → `<ActiveBadge active={v} />` (col
+  `width: 90`) in `AnalytesPage`, `CustomersPage`, `LabRegistryPage`,
+  `MethodsPage`, `ProductsPage`, `SamplingPointsPage`, `StorageLocationsPage`,
+  `SuppliersPage`, `UnitsPage`.
+- **Column-gap fix** — each sparse table had one column with **no `width`**
+  (usually `Name`) that swallowed all leftover space → one big mid-table gap.
+  Gave the descriptive column(s) an explicit `width` so AntD distributes leftover
+  **proportionally across all columns** (full width, even spacing): `UnitsPage`,
+  `AnalytesPage`, `CustomersPage`, `MethodsPage`, `ProductsPage`, `SuppliersPage`
+  (Name 240); `SamplingPointsPage` (Name 220 / Description 260);
+  `StorageLocationsPage` (Name 220 / Location 200); `CertificationsPage`
+  (Number 160 / Lab 220); `TestDefinitionsPage` (Name 320, Technique 200,
+  Analytes 120); `SpecListPage` (Product 300; `Pharmacopoeia` 120 → 140, which
+  also stopped its header wrapping).
+- **`LabRegistryPage` — intentionally NOT bounded.** Bounding its columns pushed
+  the dense 8-col table past the container and clipped the actions column (no
+  horizontal scroll); reverted. `SpecVersionsPage` left as-is (already balanced).
+- **`src/features/lims/TestPanelsPage.tsx`** — was only `Code | Name | Tests`
+  (looked bare). Added a **Description** column (280) and an **Active** column
+  (`is_active` via `ActiveBadge` — the only config table missing it); bounded
+  `Name` (260). Now `Code | Name | Description | Tests | Active`.
+
+Trade-offs: bounded widths mean long values ellipsize with a hover tooltip;
+Test Definitions has only 5 columns so it keeps some even inter-column spacing on
+wide screens.
+
+`tsc --noEmit` clean (client). Not committed.
+
 ## Modal portals to `document.body` — 2026-07-12
 
 The shared `Modal` used `position: fixed` but rendered in-place in the React tree.

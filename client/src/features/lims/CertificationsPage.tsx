@@ -57,8 +57,8 @@ export default function CertificationsPage() {
         columns={[
           { title: 'Code', dataIndex: 'code', width: 110, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
           { title: 'Type', dataIndex: 'type', width: 120 },
-          { title: 'Number', dataIndex: 'number', render: (v: string | null) => v ?? '—' },
-          { title: 'Lab', render: (_: unknown, r) => r.lab_name ?? '—' },
+          { title: 'Number', dataIndex: 'number', width: 160, ellipsis: true, render: (v: string | null) => v ?? '—' },
+          { title: 'Lab', width: 220, ellipsis: true, render: (_: unknown, r) => r.lab_name ?? '—' },
           { title: 'Expiry', width: 120, render: (_: unknown, r) => new Date(r.expiry_date).toLocaleDateString() },
           {
             title: 'Status', width: 130,

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { App, Button, Drawer, Input, InputNumber, Space, Switch, Table } from 'antd';
 import { Beaker, Plus, Search, Edit3, Trash2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import { ActiveBadge } from '@/components/ui';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useMethods, useCreateMethod, useUpdateMethod, useDeleteMethod,
@@ -46,12 +47,12 @@ export default function MethodsPage() {
         size="small" rowKey="id" loading={isLoading} dataSource={rows} pagination={{ pageSize: 20, showSizeChanger: false }}
         columns={[
           { title: 'Code', dataIndex: 'code', width: 110, render: (v: string) => <span className="font-mono text-blue-600">{v}</span> },
-          { title: 'Name', dataIndex: 'name', ellipsis: true },
+          { title: 'Name', dataIndex: 'name', width: 240, ellipsis: true },
           { title: 'Technique', dataIndex: 'technique', width: 130, render: (v: string | null) => v ?? '—' },
           { title: 'SOP Ref', dataIndex: 'sop_ref', width: 130, render: (v: string | null) => v ?? '—' },
           { title: 'Unit', dataIndex: 'default_unit', width: 80, render: (v: string | null) => v ?? '—' },
           { title: 'Price', dataIndex: 'price', width: 90, render: (v: number | null) => (v != null ? v : '—') },
-          { title: 'Active', dataIndex: 'is_active', width: 70, render: (v: boolean) => (v ? 'Yes' : 'No') },
+          { title: 'Active', dataIndex: 'is_active', width: 90, render: (v: boolean) => <ActiveBadge active={v} /> },
           {
             title: '', width: 90,
             render: (_: unknown, r) => (
