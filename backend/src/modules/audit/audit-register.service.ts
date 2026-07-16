@@ -1,6 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
-import { BadRequest, NotFound, Conflict } from '../../lib/httpError';
+import { BadRequest, NotFound, Conflict, Forbidden } from '../../lib/httpError';
 import { writeTrail } from './compliance.service';
 import { syncProgramComplianceFindings } from './audit-compliance-sync.service';
 import { raiseTicket as engineRaiseTicket } from '../workflow/engine/orchestrator';
@@ -420,10 +420,34 @@ export const submitAuditRegister = async (id: string) => {
   return getAuditRegister(id);
 };
 
+/**
+ * Only the register's named approver may decide an approval (approve/reject).
+ * Holding the `audit_register.approve` permission lets the route be reached, but
+ * the decision itself is bound to the specific person named on the register —
+ * otherwise the "Approver" field is decorative and anyone with the permission
+ * can approve anyone's audit. SUPER_ADMIN bypasses, matching the rest of the
+ * codebase (see stage-form.access.ts / approval.layer.ts).
+ */
+const assertIsNamedApprover = async (
+  r: { approverId: string | null },
+  userId: string,
+) => {
+  const actor = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { role: { select: { name: true } } },
+  });
+  if (actor?.role?.name === 'SUPER_ADMIN') return;
+  if (!r.approverId) throw BadRequest('No approver is assigned to this register');
+  if (r.approverId !== userId) {
+    throw Forbidden('Only the assigned approver can decide this audit register');
+  }
+};
+
 export const approveAuditRegister = async (id: string, userId: string) => {
   const r = await prisma.auditRegister.findUnique({ where: { id } });
   if (!r) throw NotFound('Audit register not found');
   if (r.status !== 'PENDING_APPROVAL') throw BadRequest('Register is not awaiting approval');
+  await assertIsNamedApprover(r, userId);
 
   const year = (r.plannedDate ?? new Date()).getFullYear();
   const programNumber = await nextSeq(prisma.auditProgram, 'programNumber', 'AP', year);
@@ -503,6 +527,7 @@ export const rejectAuditRegister = async (
   const r = await prisma.auditRegister.findUnique({ where: { id } });
   if (!r) throw NotFound('Audit register not found');
   if (r.status !== 'PENDING_APPROVAL') throw BadRequest('Register is not awaiting approval');
+  await assertIsNamedApprover(r, userId);
   await prisma.auditRegister.update({
     where: { id },
     data: {

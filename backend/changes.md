@@ -4,6 +4,65 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Audit approval + checklist access — enforce the named approver & tie checklists to assignments — 2026-07-16
+
+Fixes two audit-module holes surfaced by a multi-user Playwright diagnostic
+(`tests/e2e/audit-access-diagnostic.spec.ts`): (1) the register's **Approver**
+field was decorative — any holder of `audit_register.approve` could approve any
+audit; (2) an audit's **checklists were open to everyone** — the per-ticket
+virtual bindings were hardcoded `isRestricted:false`, so the `checklistAssignments`
+you set on the register granted nobody access and blocked nobody. Working tree
+only (not committed). Verified end-to-end against a throwaway backend on :4100
+(the dev server's `tsx watch` was not hot-reloading) with the seed users.
+
+- **`src/modules/audit/audit-register.service.ts`** — **fix #1: enforce the named
+  approver.** New `assertIsNamedApprover(register, userId)` requires
+  `userId === approverId` (SUPER_ADMIN bypasses, matching
+  `stage-form.access.ts` / `approval.layer.ts`); called at the top of
+  `approveAuditRegister` and `rejectAuditRegister`. Holding
+  `audit_register.approve` now only gets you to the route — the decision is bound
+  to the person named on the register. Added `Forbidden` to the httpError import.
+  Verified: a non-super permission holder who isn't the approver → 403; the named
+  approver (auditor@, who holds the perm) approves their own audit → 200; super
+  admin bypasses.
+- **`src/modules/stage-form/stage-form.service.ts`** — **fix #2: checklist access
+  follows the register's assignments.** Replaced `auditChecklistFormIds` with
+  `auditChecklistAccess(customFields)`, which derives per-ticket access from the
+  linked `AuditRegister`: assigned members (∪ lead auditor ∪ team) may **fill**
+  each checklist, the approver may **view** (read-only); `restrict` is true iff
+  there's any basis to lock down by, so an unconfigured audit stays open-to-all
+  (nobody locked out). `listForTicket` now builds the virtual `audit:<stageId>:<formId>`
+  bindings with real `allowedFillUsers`/`allowedViewUsers` + `isRestricted` (was
+  hardcoded open), and `createWorkflowSubmission` calls `assertCanFillForm` on the
+  audit branch so the fill gate is enforced server-side, not just in the UI. This
+  is per-ticket (from the register) and does NOT touch the shared per-workflow
+  `StageFormBinding` rows, so one audit's audience never leaks onto another audit
+  on the same workflow. Verified: assigning a login user to one checklist grants
+  fill on THAT checklist only, gives the approver read-only, blocks unassigned
+  users (canFill=false + 403 on submit); SUPER_ADMIN bypasses.
+- **`prisma/seed.ts`** — **option (a): keep AUDITOR able to approve.** The AUDITOR
+  role already holds `audit_register.approve` at the role level in the live DB, but
+  the seed still granted only the legacy `audit.approve` key — a re-seed would have
+  regressed it and (with fix #1) left only super admins able to approve. Added the
+  real `audit_register.*` / `audit_master.*` / `audit_program.*` / `audit_finding.*`
+  / `audit_schedule.*` / `audit_type.*` + `non_conformance.*` keys the live AUDITOR
+  role holds to its `permissionKeys`, so the source of truth matches the working
+  system. Approver-eligible roles remain SUPER_ADMIN, QMS_ADMIN, AUDITOR.
+- **`tests/e2e/audit-access-diagnostic.spec.ts`** *(new, repo root `tests/`)* —
+  multi-user diagnostic + regression: logs in as all 7 seed users, reports the
+  register inventory + pre-existing data debt (approver-less approved registers,
+  dangling/`404` checklist tickets — report-only, not fixed here), prints the
+  checklist access matrix, and hard-asserts the approval enforcement (fix #1).
+  `API_BASE` env overrides the target host. Green (5/5) against a patched server.
+
+Not addressed (pre-existing data debt, needs a backfill not code): 15 historical
+registers that reached APPROVED with `approverId=null`, and 2 registers whose
+workflow ticket resolves but `/stage-forms` 404s (broken stage wiring). `tsc
+--noEmit` clean. **The running `:4000` dev server must be restarted to pick up
+these changes.**
+
+---
+
 # Phase 6 follow-up — childCount on the ticket list (for list nesting) — 2026-07-16
 
 - **`src/modules/ticket/ticket.service.ts`** — `list()` now returns `childCount`

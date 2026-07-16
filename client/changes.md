@@ -1,5 +1,20 @@
 # Changes Log
 
+## Sidebar fix — Master Data no longer stays highlighted across Configuration — 2026-07-16
+
+Not committed.
+
+- **`src/components/layout/Sidebar.tsx`** — the Configuration accordion's **Master
+  Data** child pointed at bare `/settings`, while its siblings **Workflows** /
+  **Forms** use `/settings?section=…`. In `isItemActive`, the "loose match" branch
+  (`location.pathname.startsWith(item.path)` for query-less paths) fired for
+  `/settings` on every `/settings*` URL, so Master Data stayed highlighted while on
+  the Workflows and Forms sub-sections. Changed Master Data's path to
+  `/settings?section=master-data` so it exact-matches only its own section
+  (`SettingsPage` already treats any non-workflows/forms section as master-data, so
+  the rendered view is unchanged). Now each Configuration child highlights only on
+  its own section.
+
 ## Phase 6 follow-ups — stage-scoped Raise button + child nesting in the list — 2026-07-16
 
 Two fixes from testing the raise-child feature. Not committed.

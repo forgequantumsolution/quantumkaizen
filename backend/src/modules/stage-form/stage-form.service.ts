@@ -68,31 +68,90 @@ const bindingSelect = {
 // track + render through the same StageFormSection as real bindings.
 const AUDIT_BINDING_PREFIX = 'audit:';
 
-/** Distinct checklist Form ids selected on the audit register linked to this
- *  ticket (via customFields.audit_register_id). [] if not an audit ticket. */
-const auditChecklistFormIds = async (
+/**
+ * Per-ticket access for an audit's virtual checklist bindings, derived from the
+ * linked AuditRegister (customFields.audit_register_id). This is what ties the
+ * register's "who's assigned to this checklist" fields to real read/fill access,
+ * WITHOUT touching the shared per-workflow StageFormBindings (which would leak
+ * one audit's audience onto every other audit on the same workflow).
+ *
+ * Model:
+ *   - fill  = the checklist's assigned members ∪ the lead auditor ∪ team members.
+ *   - view  = the approver (oversight; read-only).
+ *   - `restrict` is true iff there is *some* basis to lock down by (any assigned
+ *     member, lead auditor, team member, or approver). A register with none of
+ *     these stays open-to-all, so an unconfigured audit never locks everyone out.
+ * SUPER_ADMIN still bypasses everything via the shared access resolver.
+ */
+interface AuditChecklistAccess {
+  formIds: string[];
+  fillUsersByForm: Map<string, Set<string>>;
+  viewUsers: Set<string>;
+  restrict: boolean;
+}
+
+const memberIds = (v: unknown): string[] =>
+  Array.isArray(v)
+    ? v
+        .filter((m): m is { id: string } => !!m && typeof (m as { id?: unknown }).id === 'string')
+        .map((m) => m.id)
+    : [];
+
+const auditChecklistAccess = async (
   customFields: Prisma.JsonValue | null | undefined,
-): Promise<string[]> => {
+): Promise<AuditChecklistAccess> => {
+  const empty: AuditChecklistAccess = {
+    formIds: [],
+    fillUsersByForm: new Map(),
+    viewUsers: new Set(),
+    restrict: false,
+  };
   const cf = (customFields ?? {}) as Record<string, unknown>;
   const registerId =
     typeof cf.audit_register_id === 'string' ? cf.audit_register_id : null;
-  if (!registerId) return [];
+  if (!registerId) return empty;
 
   const reg = await prisma.auditRegister.findUnique({
     where: { id: registerId },
-    select: { checklistFormId: true, checklistAssignments: true },
+    select: {
+      checklistFormId: true,
+      checklistAssignments: true,
+      auditorId: true,
+      approverId: true,
+      teamMembers: true,
+    },
   });
-  if (!reg) return [];
+  if (!reg) return empty;
 
-  const ids = new Set<string>();
+  // People who may fill EVERY checklist on this audit: the lead auditor and the
+  // named team members run the audit regardless of per-checklist assignment.
+  const globalFill = new Set<string>(memberIds(reg.teamMembers));
+  if (reg.auditorId) globalFill.add(reg.auditorId);
+
+  const formIds = new Set<string>();
+  const fillUsersByForm = new Map<string, Set<string>>();
   const assignments = Array.isArray(reg.checklistAssignments)
-    ? (reg.checklistAssignments as Array<{ checklist_form_id?: unknown }>)
+    ? (reg.checklistAssignments as Array<{ checklist_form_id?: unknown; members?: unknown }>)
     : [];
   for (const a of assignments) {
-    if (a && typeof a.checklist_form_id === 'string') ids.add(a.checklist_form_id);
+    if (!a || typeof a.checklist_form_id !== 'string') continue;
+    formIds.add(a.checklist_form_id);
+    const set = fillUsersByForm.get(a.checklist_form_id) ?? new Set<string>(globalFill);
+    for (const id of memberIds(a.members)) set.add(id);
+    fillUsersByForm.set(a.checklist_form_id, set);
   }
-  if (reg.checklistFormId) ids.add(reg.checklistFormId);
-  return [...ids];
+  if (reg.checklistFormId) {
+    formIds.add(reg.checklistFormId);
+    if (!fillUsersByForm.has(reg.checklistFormId)) {
+      fillUsersByForm.set(reg.checklistFormId, new Set<string>(globalFill));
+    }
+  }
+
+  const viewUsers = new Set<string>();
+  if (reg.approverId) viewUsers.add(reg.approverId);
+
+  const anyFill = [...fillUsersByForm.values()].some((s) => s.size > 0);
+  return { formIds: [...formIds], fillUsersByForm, viewUsers, restrict: anyFill || viewUsers.size > 0 };
 };
 
 // ─── Binding CRUD ──────────────────────────────────────────────────────────
@@ -299,10 +358,10 @@ export const listForTicket = async (ticketId: string, userId: string) => {
 
   // Append the audit register's checklist(s) as per-ticket virtual bindings on
   // every current stage (deduped against any real binding for the same form).
-  const auditFormIds = await auditChecklistFormIds(ticket.customFields);
-  if (auditFormIds.length) {
+  const auditAccess = await auditChecklistAccess(ticket.customFields);
+  if (auditAccess.formIds.length) {
     const auditForms = await prisma.form.findMany({
-      where: { id: { in: auditFormIds } },
+      where: { id: { in: auditAccess.formIds } },
       select: { id: true, title: true, version: true, versionId: true, status: true },
     });
     const realKeys = new Set(bindings.map((b) => `${b.stageId}:${b.formId}`));
@@ -316,6 +375,12 @@ export const listForTicket = async (ticketId: string, userId: string) => {
       let position = 1000;
       for (const form of auditForms) {
         if (realKeys.has(`${stageId}:${form.id}`)) continue;
+        // Per-ticket access from the register: assigned members (∪ lead auditor
+        // ∪ team) may FILL this checklist, the approver may VIEW it. Falls back
+        // to open-to-all (isRestricted:false) only when the register configured
+        // no audience at all, so an unconfigured audit doesn't lock everyone out.
+        const fillUsers = [...(auditAccess.fillUsersByForm.get(form.id) ?? new Set<string>())].map((id) => ({ id }));
+        const viewUsers = [...auditAccess.viewUsers].map((id) => ({ id }));
         bindings.push({
           id: `${AUDIT_BINDING_PREFIX}${stageId}:${form.id}`,
           workflowId: meta.workflowId,
@@ -329,16 +394,12 @@ export const listForTicket = async (ticketId: string, userId: string) => {
           updatedAt: now,
           stage: { id: stageId, name: meta.name, canonicalId: meta.canonicalId },
           form,
-          // Virtual audit checklists carry no access lists and are intentionally
-          // open-to-all (isRestricted:false) — every member may read & fill them
-          // (ANYONE semantics). Locking these down needs a config surface on the
-          // audit register and is tracked as a separate follow-up.
-          isRestricted: false,
+          isRestricted: auditAccess.restrict,
           fillMode: 'ANYONE',
           allowedFillRoles: [],
-          allowedFillUsers: [],
+          allowedFillUsers: fillUsers,
           allowedViewRoles: [],
-          allowedViewUsers: [],
+          allowedViewUsers: viewUsers,
         });
       }
     }
@@ -591,10 +652,22 @@ export const createWorkflowSubmission = async (
     if (!currentStageIds.has(stageId)) {
       throw Forbidden('This checklist is not on the ticket’s current stage');
     }
-    const allowed = await auditChecklistFormIds(ticket.customFields);
-    if (!allowed.includes(formId)) {
+    const auditAccess = await auditChecklistAccess(ticket.customFields);
+    if (!auditAccess.formIds.includes(formId)) {
       throw Forbidden('Form is not part of this audit’s checklist');
     }
+    // Enforce the per-checklist fill audience server-side (not just in the UI):
+    // only assigned members / lead auditor / team (or SUPER_ADMIN) may submit.
+    // Open-to-all audits (restrict:false) let anyone who can reach the ticket fill.
+    const auditFillAccess = {
+      isRestricted: auditAccess.restrict,
+      fillMode: 'ANYONE' as const,
+      allowedFillRoles: [],
+      allowedFillUsers: [...(auditAccess.fillUsersByForm.get(formId) ?? new Set<string>())].map((id) => ({ id })),
+      allowedViewRoles: [],
+      allowedViewUsers: [...auditAccess.viewUsers].map((id) => ({ id })),
+    };
+    await assertCanFillForm(prisma, auditFillAccess, submittedById);
     const flow = ticket.flows.find((f) =>
       f.currentStages.some((s) => s.id === stageId),
     );
