@@ -111,6 +111,10 @@ const raiseCapaWorkflowTicket = async (
     description: string | null;
     departmentId: string | null;
     nonConformanceId: string | null;
+    findingId?: string | null;
+    // When raised from a generic finding, nest the CAPA's workflow ticket under
+    // the source module ticket so it shows as a child there.
+    parentTicketId?: string | null;
   },
   userId: string,
 ): Promise<{ workflowId: string; ticketId: string; uniqueId: string } | null> => {
@@ -122,14 +126,24 @@ const raiseCapaWorkflowTicket = async (
       title: `${capa.capaNumber} — ${capa.title}`,
       description: capa.description ?? undefined,
       departmentId: capa.departmentId ?? undefined,
+      parentTicketId: capa.parentTicketId ?? undefined,
       customFields: {
         capa_id: capa.id,
         capa_number: capa.capaNumber,
         non_conformance_id: capa.nonConformanceId ?? null,
+        finding_id: capa.findingId ?? null,
       },
     },
     { id: userId },
   );
+  // Link the spawned CAPA workflow ticket back to its origin finding so the
+  // finding's children query and the source ticket's child list resolve it.
+  if (capa.findingId) {
+    await prisma.ticket.update({
+      where: { id: t.ticketId },
+      data: { sourceFindingId: capa.findingId },
+    });
+  }
   await prisma.capa.update({
     where: { id: capa.id },
     data: {
@@ -418,6 +432,7 @@ export const createCapa = async (input: CapaCreateInput, userId?: string) => {
           description: input.description ?? null,
           type: input.type,
           nonConformanceId: input.non_conformance_id ?? null,
+          findingId: input.finding_id ?? null,
           ownerId: input.owner_id ?? null,
           departmentId: input.department_id ?? null,
           dueDate: input.due_date ? new Date(input.due_date) : null,
@@ -443,7 +458,10 @@ export const createCapa = async (input: CapaCreateInput, userId?: string) => {
   // CAPA workflow must never block CAPA creation.
   if (userId) {
     try {
-      await raiseCapaWorkflowTicket(capa, userId);
+      await raiseCapaWorkflowTicket(
+        { ...capa, parentTicketId: input.parent_ticket_id ?? null },
+        userId,
+      );
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error(

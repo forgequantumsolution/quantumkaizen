@@ -4,6 +4,164 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Phase 6 follow-up — childCount on the ticket list (for list nesting) — 2026-07-16
+
+- **`src/modules/ticket/ticket.service.ts`** — `list()` now returns `childCount`
+  per row: one `prisma.ticket.groupBy(['parentTicketId'])` over the page's ticket
+  ids counts direct children. Lets the module list show an expander on parents and
+  nest their children (which may be a different workflow type, e.g. a CAPA under a
+  Change Control ticket, and so aren't in the module's own list). Cheap — one extra
+  grouped query per page. `tsc --noEmit` clean.
+
+---
+
+# Findings Phase 6 — generic per-stage "raise child ticket" — backend — 2026-07-16
+
+The generic entry point for child tickets: attach **allowed child workflows to a
+stage** in the builder, and the ticket's stage view shows a "Raise <workflow>"
+control that spawns a child (CAPA / Deviation / any workflow) nested under the
+parent — no finding required. Reuses the existing `ChildWorkflowTrigger` model +
+`spawnChild`; the work was (a) folding trigger config into the flow_json
+embedded-policy pipeline and (b) a runtime endpoint to list a stage's triggers.
+Plan: `docs/workflow/findings-child-tickets-plan.md` §Phase 6. Working tree only.
+
+- **`src/modules/workflow/workflow.schema.ts`** — new typed
+  `EmbeddedChildTriggerSchema` (`childWorkflowId`, `triggerMode` MANUAL|AUTO,
+  `isBlocking`, `allowMultiple`, `order`) + `childTriggers` on `NodeSchema.data`
+  (the old untyped `child_workflow_triggers` passthrough is kept for legacy JSON).
+  Exports `EmbeddedChildTrigger`.
+- **`src/modules/workflow/workflow.builder.ts`** — `buildWorkflowGraph` now
+  collects `node.data.childTriggers` in Pass 1 and materialises them as
+  `ChildWorkflowTrigger` rows in the execute phase (validating each
+  `childWorkflowId` exists — FK is `onDelete: Restrict` — dropping missing ones
+  with a warning). Removed the "child workflow triggers deferred to Engine phase"
+  warning.
+- **`src/modules/workflow/workflow.versioning.ts`** — deleted the explicit
+  stage-by-stage `ChildWorkflowTrigger` clone (and the `old.stages.childTriggers`
+  select + `newStageByCanonical` map that fed it). Triggers now ride flow_json,
+  so `buildWorkflowGraph` re-materialises them on every version clone like every
+  other policy; keeping the explicit clone would double-insert. Header docs updated.
+- **`src/modules/workflow/workflow.service.ts`** — `workflowDetailSelect` selects
+  `stage.childTriggers` (with `childWorkflow.name`); `toFlowJson` maps them back
+  onto the node as `childTriggers` (incl. display-only `childWorkflowName`) so the
+  builder round-trips them across edit/publish.
+- **`src/modules/ticket/ticket.service.ts`** —
+  - `listStageChildTriggers(ticketId)` (new): for the ticket's CURRENT stage(s),
+    returns the MANUAL triggers, each resolved to the child workflow's **latest
+    version** (workflows re-version on save), with an `already_raised` flag from
+    the `allowMultiple=false` gate.
+  - `spawnChild` now enforces `allowMultiple`: if a matching trigger
+    (same stage, same workflow lineage) is `allowMultiple=false` and a child was
+    already raised, it 400s. Findings-driven spawns (no matching trigger) are
+    unaffected. Added a `workflowLineage()` helper (lineage root + latest version).
+- **`src/modules/ticket/ticket.controller.ts` + `.routes.ts`** — new
+  `GET /tickets/:id/child-triggers` (gated `requireTicketAction('read')`).
+
+**Verified (API, local `kaizen_qms2`):** saved a `childTriggers` config into the
+Inspection workflow's first stage → reloaded latest (v5) round-trips it with the
+hydrated name; raised a fresh Inspection ticket → `GET /child-triggers` returns
+the CAPA trigger → `spawn-child` 201 nested `CAPA-FQS-082` → `already_raised`
+flips true → second spawn 400 (allowMultiple gate). `tsc --noEmit` clean.
+
+---
+
+# Generic findings → child tickets (CAPA / Deviation) — backend — 2026-07-16
+
+Bring the audit module's "findings → child ticket" capability to every other QMS
+module as ONE reusable mechanism, instead of cloning audit's bespoke tables per
+module. A **Finding** is auto-generated from a ticket's checklist dispositions
+(non-conformance → severity finding; observation too), then a **CAPA** or
+**Deviation** child ticket is raised from it and nests under the parent. Applies
+to types flagged `supportsFindings` (Inspection, Change Control, Deviation,
+Supplier Quality). Full plan: `docs/workflow/findings-child-tickets-plan.md`. Verified on
+local `kaizen_qms2` (all-modules dump). Working tree only — **not committed**.
+
+- **`prisma/schema.prisma` + migration `20260716080013_add_generic_findings`** —
+  new **`Finding`** model (`findingNumber` `F-YYYY-NNNN`, `sourceTicketId`,
+  `sourceStageId?`, `severity`, `status`, `title/description/evidence?/
+  recommendation?/reference?`, `childTickets`, `capas`, `createdById?`). Added
+  `Ticket.sourceFindingId`/`sourceFinding`/`findings`, `Capa.findingId`/`finding`,
+  `User.findingsCreated`, and **`WorkflowType.supportsFindings Boolean @default(false)`**
+  (the per-type opt-in flag). Additive migration — 3 columns, 1 table, indexes, 4
+  FKs, no drops.
+- **`src/modules/finding/` (new)** — the whole module:
+  - `finding.schema.ts` — Zod: `FindingUpsertSchema`, `FindingUpdateSchema`,
+    `ListFindingQuerySchema` (`workflow_type_id`, `source_ticket_id`, `status`,
+    `severity`, `department_id`, paging), `RaiseChildSchema`
+    (`child_type: CAPA|DEVIATION` + capa_type/owner/dept/due), id/param schemas.
+  - `finding-sync.service.ts` — auto-generation. Reuses audit's
+    `collectSubmissionComplianceItems`/`collectTicketComplianceItems`;
+    `syncSubmissionFindings(ticketId, submissionId)` +
+    `syncTicketFindingsOnComplete(ticketId)` persist generic `Finding` rows with
+    `F-YYYY-NNNN` numbering, deduped by `evidence.dedupeKey`.
+  - `finding.service.ts` — `listFindingsForTicket`, `listFindings` (module
+    register), `createFinding`/`updateFinding`/`deleteFinding`, `raiseChild`
+    (CAPA → `createCapa` with `finding_id` + `parent_ticket_id`; DEVIATION →
+    resolve the Deviation workflow + `spawnChild`, set `sourceFindingId`),
+    `listFindingChildren`.
+  - `finding.controller.ts` / `finding.routes.ts` — `GET /findings`,
+    `GET /tickets/:ticketId/findings`, `POST/PUT/DELETE /findings`,
+    `POST /findings/:id/raise-child`, `GET /findings/:id/children`.
+- **`src/modules/audit/capa.service.ts`** — `raiseCapaWorkflowTicket` accepts
+  `findingId` + `parentTicketId` (threaded to `engineRaiseTicket`; sets
+  `ticket.sourceFindingId`); `createCapa` persists `findingId` and passes
+  `parent_ticket_id` so a CAPA raised from a finding nests under the source ticket.
+- **`src/modules/audit/audit.schema.ts`** — `CapaCreateSchema` gains optional
+  `finding_id` + `parent_ticket_id`.
+- **`src/modules/ticket/ticket.service.ts` + `.controller.ts` + `.routes.ts`** —
+  new `listChildren(parentTicketId)` (resolves `capa_id`, dedups) + `GET
+  /tickets/:id/children` powering the sidebar CHILD RECORDS card.
+- **`src/modules/stage-form/stage-form.service.ts`** — best-effort
+  `syncSubmissionFindings` hook after a generic submission is created.
+- **`src/modules/workflow/engine/orchestrator.ts`** — `syncTicketFindingsOnComplete`
+  hook on ticket completion.
+- **`src/app.ts`** — mount `findingRoutes` under `/api`.
+
+**Verified:** manual finding `F-2026-0001`; raise `CAPA-2026-0008` + `DEV-FQS-047`;
+children dedupe. Auto-gen on `INS-FQS-051` (submitted checklist → `F-2026-0002`
+MAJOR from non-conformance, `F-2026-0003` OBSERVATION; compliant items ignored).
+`tsc --noEmit` clean.
+
+---
+
+# Findings access control — per-workflow-type (not one global key) — 2026-07-16
+
+Follow-on to the feature above. Findings started with a single global `finding.*`
+permission set; converted to **per-workflow-type** keys so Access Control can
+grant/deny findings on each module independently — mirroring the per-module
+**ticket** keys (`wf_type.<id>.*`). Key scheme `finding.<typeId>.{read,create,
+update,delete}` (module `FINDING_TYPE`), only for `supportsFindings` types.
+Working tree only — **not committed**.
+
+- **`src/lib/rbac-findings.ts` (new)** — mirrors `rbac-workflow-types.ts` for
+  findings: `findingTypeKey`, `typeIdFromFindingKey`, `ensure/grant/delete`
+  helpers, and `syncFindingTypePermissions()` — upserts 4 keys for every
+  `supportsFindings` type, prunes orphans (type gone OR findings turned off).
+  Deliberately namespaced under `finding.` (not `wf_type.`) so no ticket-key
+  logic (migration / system-role / `ticketReadScope`) ever picks it up.
+- **`src/lib/rbac-sync.ts`** — call `syncFindingTypePermissions()` before the
+  SUPER_ADMIN "hold everything" step (so the invariant covers it); new
+  `pruneRetiredGlobalFindingKeys()` deletes the old module-`FINDING` master keys.
+- **`src/lib/rbac-catalog.ts`** — removed the 4 static global `finding.*` rows
+  (replaced by the dynamic per-type keys).
+- **`src/middleware/permissions.ts`** — new `requireFindingAction(action, from)`
+  guard: resolves the workflow type from the request (`ticketParam` /`body`
+  `source_ticket_id` / `finding` id / `query` `workflow_type_id`) and checks
+  `finding.<typeId>.<action>`. No type / non-findings type → no key can grant it.
+- **`src/modules/finding/finding.routes.ts`** — swapped every
+  `requirePermission('finding.*')` for `requireFindingAction(...)` (validate runs
+  first so the resolver sees parsed params/body/query).
+- **`src/modules/workflow/lookups/lookups.service.ts`** — hard-deleting a type now
+  also `deleteFindingTypePermissions(id)`.
+
+**Verified:** boot sync created **16 keys** (4 types × 4 verbs) for Inspection /
+Change Control / Deviation / Supplier Quality; old global keys pruned. Enforcement
+as admin: inspection & deviation findings → **200**, Batch Disposition
+(non-findings type) → **403**. Migrated the demo `QMS_ADMIN` role's retired global
+grant onto the 16 per-type keys so it keeps working. `tsc --noEmit` clean.
+
+---
+
 # Workflow site-ownership — backend (Phases A–D) — 2026-07-12
 
 Workflows gain a **site owner** so different sites can have their own workflows,

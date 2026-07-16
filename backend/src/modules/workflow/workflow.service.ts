@@ -136,6 +136,21 @@ const workflowDetailSelect = {
           allowedViewUsers: { select: { id: true, name: true } },
         },
       },
+      // Phase 6 — child-workflow triggers on this stage (round-trip so editing
+      // + re-publishing preserves them). Child workflow name hydrated for the
+      // inspector chip.
+      childTriggers: {
+        orderBy: { order: 'asc' },
+        select: {
+          id: true,
+          childWorkflowId: true,
+          triggerMode: true,
+          isBlocking: true,
+          allowMultiple: true,
+          order: true,
+          childWorkflow: { select: { name: true } },
+        },
+      },
     },
   },
   transitions: {
@@ -278,6 +293,16 @@ const toFlowJson = (wf: WorkflowDetail) => {
           }
         : null,
       approvalPolicies: embeddedApprovalPolicies,
+      // Phase 6 — child-workflow triggers round-trip. `childWorkflowName` drives
+      // the inspector chip; only the id is re-materialised on save.
+      childTriggers: stage.childTriggers.map((ct) => ({
+        childWorkflowId: ct.childWorkflowId,
+        childWorkflowName: ct.childWorkflow.name,
+        triggerMode: ct.triggerMode,
+        isBlocking: ct.isBlocking,
+        allowMultiple: ct.allowMultiple,
+        order: ct.order,
+      })),
       parallelConfig:
         stage.stageType === 'FORK' || stage.stageType === 'JOIN'
           ? {

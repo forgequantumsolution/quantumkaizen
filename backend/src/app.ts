@@ -17,6 +17,7 @@ import ticketRoutes from './modules/ticket/ticket.routes';
 import dynamicFormRoutes from './modules/dynamic-form/dynamic-form.routes';
 import formSubmissionRoutes from './modules/dynamic-form/submission.routes';
 import auditRoutes from './modules/audit/audit.routes';
+import findingRoutes from './modules/finding/finding.routes';
 import dmsRoutes from './modules/dms/dms.routes';
 import trainingRoutes from './modules/training/training.routes';
 import lmsRoutes from './modules/lms/lms.routes';
@@ -105,6 +106,7 @@ export const buildApp = () => {
   app.use('/api/forms', dynamicFormRoutes);
   app.use('/api/form-submissions', formSubmissionRoutes);
   app.use('/api', auditRoutes); // ISO standards + audit schedules
+  app.use('/api', findingRoutes); // generic findings → child tickets (CAPA/Deviation)
   app.use('/api/dms', dmsRoutes); // controlled document management
   app.use('/api/training', trainingRoutes); // training & competency
   app.use('/api/lms', lmsRoutes); // LMS — learning management (courses, content)

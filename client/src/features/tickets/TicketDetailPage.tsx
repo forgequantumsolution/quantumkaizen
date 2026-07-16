@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { App } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -7,6 +7,9 @@ import { Button, Card, Spinner, Tabs } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { useAuthStore } from '@/stores/authStore';
 import { useDeleteTicket, useTicket } from '@/lib/api/ticket';
+import { useWorkflowTypes } from '@/lib/api/workflowLookups';
+import { findingTypeReadKey, findingTypeCreateKey } from '@/lib/navAccess';
+import FindingsTab from './detail/FindingsTab';
 import ActionBar from './detail/ActionBar';
 import ApprovalAwaitingCard from './detail/ApprovalAwaitingCard';
 import TicketHeaderCard from './detail/TicketHeaderCard';
@@ -60,6 +63,20 @@ export default function TicketDetailPage() {
   const canTransition = canForType('transition');
   const canUpdate = canForType('update');
   const canDelete = canForType('delete');
+
+  // Findings capability is per WorkflowType (flag on the type) AND per-type
+  // RBAC: the tab shows only when the type supports findings and the user holds
+  // this type's `finding.<id>.read` key; the Add/Raise buttons need `.create`.
+  const { data: wfTypes } = useWorkflowTypes();
+  const supportsFindings =
+    wfTypes?.find((t) => t.id === typeId)?.supportsFindings ?? false;
+  const canReadFindings = !!typeId && hasPermission(findingTypeReadKey(typeId));
+  const canManageFindings = !!typeId && hasPermission(findingTypeCreateKey(typeId));
+  const showFindings = supportsFindings && canReadFindings;
+  const tabs = useMemo(
+    () => [...TABS, ...(showFindings ? [{ id: 'findings', label: 'Findings' }] : [])],
+    [showFindings],
+  );
 
   const handleDelete = () => {
     if (!ticket) return;
@@ -150,6 +167,7 @@ export default function TicketDetailPage() {
             isOnHold={ticket.isOnHold}
             isCompleted={isCompleted}
             canTransition={canTransition}
+            selectedStageCanonicalId={selectedStage?.canonicalId ?? null}
           />
         )}
 
@@ -157,10 +175,14 @@ export default function TicketDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 items-start">
           <div className="min-w-0">
             <div className="mb-3">
-              <Tabs tabs={TABS} activeTab={tab} onTabChange={setTab} />
+              <Tabs tabs={tabs} activeTab={tab} onTabChange={setTab} />
             </div>
 
             {tab === 'details' && <TicketDetailsTab ticket={ticket} canEdit={canUpdate} />}
+
+            {tab === 'findings' && (
+              <FindingsTab ticketId={ticket.id} canCreate={canManageFindings} />
+            )}
 
             {tab === 'forms' && (
               <div className="space-y-4">

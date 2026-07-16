@@ -15,6 +15,7 @@
 import { prisma } from './prisma';
 import { PERMISSIONS } from './rbac-catalog';
 import { syncWorkflowTypePermissions } from './rbac-workflow-types';
+import { syncFindingTypePermissions } from './rbac-findings';
 import { backfillPerTypeTicketGrants, findUnmigratedTicketGrants } from './rbac-ticket-migration';
 import { ensureSystemRoleTicketGrants } from './rbac-system-role-tickets';
 
@@ -40,6 +41,24 @@ const pruneRetiredTicketMasterKeys = async (): Promise<void> => {
   }
 };
 
+/**
+ * Delete the retired global `FINDING`-module keys (`finding.read/create/update/
+ * delete`). Findings access is now per-workflow-type (`finding.<typeId>.*`,
+ * module `FINDING_TYPE`), so the single shared master was dropped. Cascades to
+ * remove any lingering grants; a no-op once nothing with module `FINDING`
+ * remains. Note module `FINDING_TYPE` is a different module, so the per-type
+ * keys are never touched here.
+ */
+const pruneRetiredGlobalFindingKeys = async (): Promise<void> => {
+  const orphaned = await prisma.permission.findMany({
+    where: { module: 'FINDING' },
+    select: { id: true },
+  });
+  if (orphaned.length > 0) {
+    await prisma.permission.deleteMany({ where: { id: { in: orphaned.map((p) => p.id) } } });
+  }
+};
+
 export async function ensureRbacCatalog(): Promise<void> {
   for (const p of PERMISSIONS) {
     await prisma.permission.upsert({
@@ -50,10 +69,13 @@ export async function ensureRbacCatalog(): Promise<void> {
   }
 
   await pruneRetiredTicketMasterKeys();
+  await pruneRetiredGlobalFindingKeys();
 
   // Backfill/prune the dynamic per-workflow-type keys BEFORE the SUPER_ADMIN
   // "hold everything" step below, so the invariant covers them too.
   await syncWorkflowTypePermissions();
+  // Same for the per-type FINDINGS keys (findings.<typeId>.*).
+  await syncFindingTypePermissions();
 
   const all = await prisma.permission.findMany({ select: { id: true } });
   const superAdmin = await prisma.role.findFirst({

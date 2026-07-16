@@ -38,9 +38,11 @@ export default function Modal({ isOpen, onClose, title, children, size = 'md', f
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
+      {/* Backdrop — plain dim, NO backdrop-blur: blurring the (heavy) page
+          behind forces a full-viewport GPU recomposite on every repaint, which
+          makes the dialog janky to open and laggy to type in. */}
       <div
-        className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm animate-fade-in"
+        className="fixed inset-0 bg-slate-900/60 animate-fade-in"
         onClick={onClose}
       />
 

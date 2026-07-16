@@ -18,16 +18,14 @@
  *
  * NOTE on what gets cloned. `buildWorkflowGraph` already re-creates
  * `WorkflowStage`, `WorkflowStageAction`, `WorkflowTransition`,
- * `StageFormBinding`, `ApprovalPolicy`, and `SlaPolicy` (with thresholds)
- * from the embedded data the FE includes in `flow_json` per stage. So we do
- * NOT clone those — doing so would duplicate rows and trip the
- * `@@unique([stageId, formId])` constraint on form bindings (and similar
- * implicit collisions on actions/policies).
+ * `StageFormBinding`, `ApprovalPolicy`, `SlaPolicy` (with thresholds), and
+ * `ChildWorkflowTrigger` from the embedded data the FE includes in `flow_json`
+ * per stage. So we do NOT clone those — doing so would duplicate rows and trip
+ * the `@@unique([stageId, formId])` constraint on form bindings (and similar
+ * implicit collisions on actions/policies/triggers).
  *
- * What we *do* clone explicitly: `ChildWorkflowTrigger`, since the builder
- * doesn't process its embedded representation yet (just warns about it).
- * Without this clone, a re-save would silently drop any child triggers
- * configured outside the builder.
+ * (There are no longer any associations we clone explicitly — everything the
+ * builder can round-trip through flow_json is rebuilt by `buildWorkflowGraph`.)
  */
 import { Prisma } from '@prisma/client';
 import { buildWorkflowGraph, applyWorkflowSettings } from './workflow.builder';
@@ -75,10 +73,9 @@ export const resolveLatestVersion = async (tx: Tx, workflowId: string) => {
 };
 
 /**
- * Clone the workflow into a new version row, rebuild its graph from the
- * supplied flow_json, and copy over only the associations that
- * `buildWorkflowGraph` doesn't already materialise from embedded flow_json
- * data (currently just `ChildWorkflowTrigger`).
+ * Clone the workflow into a new version row and rebuild its graph from the
+ * supplied flow_json. `buildWorkflowGraph` materialises every association from
+ * the embedded per-stage data, so there is nothing left to copy explicitly.
  *
  * Returns the new workflow id (the canonical "latest" id callers should
  * navigate to).
@@ -106,25 +103,6 @@ export const cloneIntoNewVersion = async (
       version: true,
       parentWorkflowId: true,
       isDeleted: true,
-      stages: {
-        where: { isDeleted: false },
-        select: {
-          id: true,
-          canonicalId: true,
-          // ChildWorkflowTrigger is the one association the builder doesn't
-          // re-materialise from flow_json yet, so we have to carry it.
-          childTriggers: {
-            select: {
-              id: true,
-              childWorkflowId: true,
-              triggerMode: true,
-              isBlocking: true,
-              allowMultiple: true,
-              order: true,
-            },
-          },
-        },
-      },
     },
   });
 
@@ -169,35 +147,9 @@ export const cloneIntoNewVersion = async (
     warnings.push('Participant roles deferred to compliance phase');
   }
 
-  // Map old stages → new stages by canonicalId so the explicit clone below
-  // can resolve targets.
-  const newStages = await tx.workflowStage.findMany({
-    where: { workflowId: newWf.id, isDeleted: false },
-    select: { id: true, canonicalId: true },
-  });
-  const newStageByCanonical = new Map<string, string>();
-  for (const s of newStages) newStageByCanonical.set(s.canonicalId, s.id);
-
-  // ── Clone ChildWorkflowTriggers ────────────────────────────────────────
-  // These aren't carried in flow_json (the builder only emits a deferred
-  // warning for them). If we didn't copy them, a re-save would silently
-  // strip every trigger a workflow had attached.
-  for (const oldStage of old.stages) {
-    const newStageId = newStageByCanonical.get(oldStage.canonicalId);
-    if (!newStageId) continue;
-    for (const ct of oldStage.childTriggers) {
-      await tx.childWorkflowTrigger.create({
-        data: {
-          parentStageId: newStageId,
-          childWorkflowId: ct.childWorkflowId,
-          triggerMode: ct.triggerMode,
-          isBlocking: ct.isBlocking,
-          allowMultiple: ct.allowMultiple,
-          order: ct.order,
-        },
-      });
-    }
-  }
+  // ChildWorkflowTriggers are now carried in flow_json and re-materialised by
+  // buildWorkflowGraph above (like form bindings / SLA / approvals), so the old
+  // explicit stage-by-stage clone is gone.
 
   // Mark old as no-longer-latest. New tickets land on newWf.id; in-flight
   // tickets stay pinned to the old id via their TicketFlow.workflowId.

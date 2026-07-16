@@ -335,6 +335,11 @@ export const CapaCreateSchema = z.object({
   type: CapaTypeEnum.default('CORRECTIVE'),
   // Origin NC — when set, the CAPA is linked and the NC is moved to CAPA_RAISED.
   non_conformance_id: z.string().optional().nullable(),
+  // Origin finding (generic non-audit modules) — links Capa.findingId.
+  finding_id: z.string().optional().nullable(),
+  // When raised from a finding, the source module ticket to nest this CAPA's
+  // spawned workflow ticket under (Ticket.parentTicketId).
+  parent_ticket_id: z.string().optional().nullable(),
   owner_id: z.string().optional().nullable(),
   department_id: z.string().optional().nullable(),
   due_date: z.string().optional().nullable(),

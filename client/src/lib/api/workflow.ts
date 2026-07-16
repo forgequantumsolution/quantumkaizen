@@ -107,6 +107,16 @@ export interface BuilderNode {
       isActive: boolean;
       approvalSequence?: unknown;
     }>;
+    /** Phase 6 — child-workflow triggers. childWorkflowName is display-only
+     *  (added by the backend round-trip). */
+    childTriggers?: Array<{
+      childWorkflowId: string;
+      childWorkflowName?: string;
+      triggerMode?: 'MANUAL' | 'AUTO';
+      isBlocking: boolean;
+      allowMultiple: boolean;
+      order?: number;
+    }>;
     parallelConfig?: {
       branchCount?: number;
       splitType?: SplitType;

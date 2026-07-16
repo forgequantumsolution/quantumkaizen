@@ -1,5 +1,126 @@
 # Changes Log
 
+## Phase 6 follow-ups — stage-scoped Raise button + child nesting in the list — 2026-07-16
+
+Two fixes from testing the raise-child feature. Not committed.
+
+- **Raise button now follows the viewed stage.** `src/features/tickets/detail/ActionBar.tsx`
+  gained a `selectedStageCanonicalId` prop (passed from `TicketDetailPage`); the
+  "Raise <workflow>" buttons render only when the stage selected in the flow band
+  matches the trigger's stage (or nothing is explicitly selected = current stage).
+  Before, the button stayed visible while clicking through other stages in the
+  band. Verified: on a Change Control ticket at Impact Assessment the button shows;
+  selecting **Change Initiation** hides it; selecting **Impact Assessment** brings
+  it back.
+- **Child tickets now nest in the module list.** `src/features/modules/ModulePage.tsx`
+  `TicketTable` rows with `childCount > 0` show an expander chevron in the ID cell;
+  expanding renders the direct children (lazily via `useTicketChildren`) as indented
+  rows directly under the parent — even when the child is a different workflow type
+  (e.g. a CAPA under a Change Control ticket, which isn't in the module's own list).
+  `TicketSummary` gained `childCount` (backend companion). Verified: expanding
+  CC-FQS-047 reveals CAPA-FQS-084 nested below it. `tsc --noEmit` clean.
+
+## Findings Phase 6 — per-stage "raise child ticket" — frontend — 2026-07-16
+
+Configure allowed child workflows on a stage in the builder; the ticket's stage
+view then shows a "Raise <workflow>" button that spawns a nested child (backend
+companion in `backend/changes.md`). Verified end-to-end via Playwright + API on
+local `kaizen_qms2`. Not committed.
+
+- **`src/features/workflows/builder/builder.types.ts`** — new `EmbeddedChildTrigger`
+  interface + `childTriggers?` on `StageNodeData`.
+- **`src/features/workflows/builder/builder.serializer.ts`** — pass `childTriggers`
+  through both ways (deserialize onto the node; serialize into the save payload,
+  stripping the display-only `childWorkflowName`).
+- **`src/features/workflows/builder/inspector/ChildTriggerEditor.tsx` (new)** —
+  modal to allow a child workflow on a stage (workflow picker via
+  `useWorkflowDirectory`, + Allow-multiple / Blocking toggles). No POST — writes to
+  `node.data.childTriggers`, materialised on Publish.
+- **`src/features/workflows/builder/inspector/StageInspector.tsx`** — new
+  **"Child tickets"** section (list + add/edit/remove) mounting the editor,
+  mirroring the Forms section.
+- **`src/lib/api/workflow.ts`** — `BuilderNode.data.childTriggers` typed for the
+  round-trip.
+- **`src/lib/api/ticket.ts`** — `StageChildTrigger`/`SpawnChildInput` types,
+  `ticketKeys.childTriggers`, `useStageChildTriggers(id)` query, `useSpawnChild(id)`
+  mutation (invalidates detail + child-triggers + sidebar `['ticket-children']`).
+- **`src/features/tickets/detail/ActionBar.tsx`** — per current-stage row now
+  renders a **"Raise <workflow>"** button for each configured trigger (disabled +
+  "Already raised" when the allowMultiple gate is hit); clicking opens a title/
+  description modal → spawn-child → navigates to the new child (which nests in the
+  sidebar CHILD RECORDS).
+
+**Verified (Playwright):** on a fresh Inspection ticket at "Inspection Request",
+the **Raise CAPA Management** button appears in Stage Actions; raising it creates
+the CAPA and it shows under CHILD RECORDS; the builder stage inspector shows the
+"Child tickets" section. `tsc --noEmit` clean.
+
+## Generic findings → child tickets (CAPA / Deviation) — frontend — 2026-07-16
+
+Surfaces the generic findings feature (backend companion in `backend/changes.md`)
+in the UI: a **Findings** tab on tickets of `supportsFindings` types, a
+**Findings register** per module, and **child records** nested under the parent
+ticket. Findings auto-generate from checklist dispositions; from one you raise a
+CAPA/Deviation child. Verified end-to-end via Playwright on local `kaizen_qms2`
+(login `admin@forgequantum.com`). Not committed.
+
+- **`src/lib/api/finding.ts` (new)** — React Query hooks: `useTicketFindings`,
+  `useFindingsRegister`, `useFindingChildren`, `useCreateFinding`,
+  `useUpdateFinding`, `useDeleteFinding`, `useRaiseChild`, `useTicketChildren` +
+  `Finding`/`FindingSeverity`/`FindingStatus` types.
+- **`src/features/tickets/detail/FindingsTab.tsx` (new)** — `DataTable` of a
+  ticket's findings (severity/status/source badges; "Checklist" vs "Manual"
+  origin) + `FindingDrawer` (manual add/edit fallback) + `RaiseChildDrawer`
+  (raise CAPA/Deviation → routes to the created record). Delete via shared
+  `useConfirmDelete`.
+- **`src/features/modules/ModuleFindingsRegister.tsx` (new)** — module-wide
+  findings register (severity/status filters, source-ticket + department columns,
+  server pagination).
+- **`src/features/tickets/detail/TicketSidebar.tsx`** — new **CHILD RECORDS** list
+  in the Linked Records card (via `useTicketChildren`) — CAPAs/Deviations raised
+  from this ticket's findings, one level deep.
+- **`src/features/tickets/TicketDetailPage.tsx`** — Findings tab wired in
+  (see per-type gating below).
+- **`src/features/modules/ModulePage.tsx`** — Findings tab + register wired in
+  (per-type gated).
+- **`src/lib/api/workflowLookups.ts`** — `WorkflowType` gains `supportsFindings`.
+- **`src/hooks/useCountdown.ts` (bug fix, found during this work)** — a
+  *"Maximum update depth exceeded"* infinite render loop on ticket-detail pages
+  with an active SLA: the effect dep array held a fresh `Date` each render.
+  Changed deps to `[deadlineMs]` and rebuild the `Date` inside the effect.
+
+**Verified (Playwright):** Findings tab shows the 2 auto-generated findings on
+`INS-FQS-051`; "Raise" → CAPA drawer → `CAPA-2026-0009` created; back on the
+ticket the sidebar shows **CHILD RECORDS (1)**; module **Findings** register lists
+all findings. Note: the workflow-types lookup is cached in `localStorage`, so an
+open tab needs a hard refresh to pick up the new `supportsFindings` flag.
+`tsc --noEmit` clean.
+
+## Findings access control — per-workflow-type rows in the matrix — 2026-07-16
+
+Findings permission went from one global switch to **per-workflow-type** (backend
+companion in `backend/changes.md`). The Access Control matrix now shows a
+**Findings** row nested under each supporting module (Inspection, Change Control,
+Deviation, Supplier Quality), granted independently of ticket access. Not committed.
+
+- **`src/lib/navAccess.ts`** — added `findingTypeEntity` + `findingType{Read,
+  Create,Update,Delete}Key` helpers. `workflowTypeModule(type)` now takes
+  `supportsFindings` and, when true, appends a second **"Findings"** tab (entity
+  `finding.<id>`, gate `finding.<id>.read`) beside "Workflow Tickets". (Reverted
+  the interim single global "Findings" nav group.)
+- **`src/features/admin/access-control/AccessControlTab.tsx`** — no change needed:
+  `useWorkflowTypeModules` already passes the full type object, so `supportsFindings`
+  flows through and the extra row renders per module.
+- **`src/features/tickets/TicketDetailPage.tsx`** — Findings tab now shows only
+  when `supportsFindings && hasPermission(finding.<typeId>.read)`; Add/Raise gated
+  on `finding.<typeId>.create` (was the global `finding.create`).
+- **`src/features/modules/ModulePage.tsx`** — module Findings tab + register gated
+  on `finding.<typeId>.read`.
+
+**Verified (Playwright):** Access Control → Master Data → search "finding" shows a
+**Findings** row under all four modules (each with Read/Create/Update/Delete);
+ticket Findings tab still renders for the admin. `tsc --noEmit` clean.
+
 ## LIMS Configuration table consistency — 2026-07-14
 
 Layout/visual cleanup across the LIMS Configuration list tables so they read as

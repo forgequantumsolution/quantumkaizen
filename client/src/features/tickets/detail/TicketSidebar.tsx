@@ -11,6 +11,42 @@ import {
 } from 'lucide-react';
 import { Card } from '@/components/ui';
 import type { TicketDetail } from '@/lib/api/ticket';
+import { useTicketChildren } from '@/lib/api/finding';
+
+// Child records (CAPA / Deviation raised from this ticket's findings), nested
+// under the parent. One level deep — click a child to see its own children.
+function ChildRecords({ ticketId }: { ticketId: string }) {
+  const { data } = useTicketChildren(ticketId);
+  const children = data?.data ?? [];
+  if (children.length === 0) return null;
+  return (
+    <div className="pt-1">
+      <span className="block text-[11px] uppercase tracking-wide text-gray-500 mb-1.5">
+        Child records ({children.length})
+      </span>
+      <div className="space-y-1.5">
+        {children.map((c) => (
+          <Link
+            key={c.id}
+            to={c.capa_id ? `/audit/capa/${c.capa_id}` : `/tickets/${c.id}`}
+            className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/50 px-3 py-2 text-sm hover:bg-emerald-50"
+          >
+            <GitBranch size={14} className="text-emerald-500 shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="font-mono text-emerald-700 truncate block">
+                {c.capa_number ?? c.unique_id}
+              </span>
+              <span className="text-[11px] text-gray-500 truncate block">
+                {c.module}
+                {c.stage ? ` · ${c.stage}` : ''}
+              </span>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 const fmtDate = (d: string | null | undefined) =>
   d
@@ -115,6 +151,8 @@ export default function TicketSidebar({ ticket }: { ticket: TicketDetail }) {
               No parent ticket
             </div>
           )}
+
+          <ChildRecords ticketId={ticket.id} />
         </div>
       </Card>
 

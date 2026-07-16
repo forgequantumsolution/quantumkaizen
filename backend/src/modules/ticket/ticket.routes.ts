@@ -87,4 +87,12 @@ router.delete('/:id/docs/:docId', requireTicketAction('update'),
 router.post('/:id/spawn-child', requireTicketAction('create'),
   validate(IdParamSchema, 'params'), validate(SpawnChildSchema), asyncHandler(ctrl.spawnChild));
 
+// Direct children (one level)
+router.get('/:id/children', requireTicketAction('read'),
+  validate(IdParamSchema, 'params'), asyncHandler(ctrl.listChildren));
+
+// Configured child-workflow triggers for the current stage(s) → raise options
+router.get('/:id/child-triggers', requireTicketAction('read'),
+  validate(IdParamSchema, 'params'), asyncHandler(ctrl.listStageChildTriggers));
+
 export default router;

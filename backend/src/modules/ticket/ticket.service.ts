@@ -148,9 +148,25 @@ export const list = async (
     prisma.ticket.count({ where }),
   ]);
 
+  // Direct-child counts for this page's tickets (one groupBy) so the list can
+  // show an expander on parents. Children may be a different workflow type
+  // (e.g. a CAPA raised from a Change Control ticket) and thus not in this list.
+  const pageIds = items.map((t) => t.id);
+  const childGroups = pageIds.length
+    ? await prisma.ticket.groupBy({
+        by: ['parentTicketId'],
+        where: { parentTicketId: { in: pageIds }, isDeleted: false },
+        _count: { _all: true },
+      })
+    : [];
+  const childCountByParent = new Map(
+    childGroups.map((g) => [g.parentTicketId as string, g._count._all]),
+  );
+
   return {
     items: items.map((t) => ({
       ...t,
+      childCount: childCountByParent.get(t.id) ?? 0,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
     })),
@@ -545,6 +561,30 @@ export const deleteDoc = async (
 
 // ─── Spawn child ────────────────────────────────────────────────────────────
 
+// Resolve a workflow id to its lineage root + latest active version. Workflows
+// re-version on every builder save (new id each time), so a stored reference
+// must be resolved to the current version before raising. Returns null if the
+// workflow is gone.
+const workflowLineage = async (
+  workflowId: string,
+): Promise<{ rootId: string; latestId: string } | null> => {
+  const wf = await prisma.workflow.findUnique({
+    where: { id: workflowId },
+    select: { id: true, parentWorkflowId: true },
+  });
+  if (!wf) return null;
+  const rootId = wf.parentWorkflowId ?? wf.id;
+  const latest = await prisma.workflow.findFirst({
+    where: {
+      isLatestVersion: true,
+      isDeleted: false,
+      OR: [{ id: rootId }, { parentWorkflowId: rootId }],
+    },
+    select: { id: true },
+  });
+  return latest ? { rootId, latestId: latest.id } : null;
+};
+
 export const spawnChild = async (
   parentTicketId: string,
   input: SpawnChildInput,
@@ -556,6 +596,37 @@ export const spawnChild = async (
   });
   if (!parent) throw NotFound('Parent ticket not found');
   if (parent.isDeleted) throw BadRequest('Parent ticket is deleted');
+
+  // Enforce a stage's `allowMultiple=false` trigger: if a matching child (same
+  // stage, same workflow lineage) already exists, block the second raise. Only
+  // applies when raising from a configured stage trigger — findings-driven
+  // spawns (no matching trigger) are unaffected.
+  if (input.parentStageId) {
+    const lineage = await workflowLineage(input.childWorkflowId);
+    const rootId = lineage?.rootId ?? input.childWorkflowId;
+    const lineageWhere = { OR: [{ id: rootId }, { parentWorkflowId: rootId }] };
+    const trigger = await prisma.childWorkflowTrigger.findFirst({
+      where: { parentStageId: input.parentStageId, childWorkflow: lineageWhere },
+      select: { allowMultiple: true },
+    });
+    if (trigger && !trigger.allowMultiple) {
+      const existing = await prisma.ticket.findFirst({
+        where: {
+          parentTicketId,
+          isDeleted: false,
+          parentTicketStageId: input.parentStageId,
+          flows: { some: { workflow: lineageWhere } },
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        throw BadRequest(
+          'A child ticket for this workflow has already been raised from this stage',
+        );
+      }
+    }
+  }
+
   const result = await engineRaiseTicket(
     {
       workflowId: input.childWorkflowId,
@@ -576,5 +647,145 @@ export const spawnChild = async (
     );
   });
   return result;
+};
+
+// ─── Children ───────────────────────────────────────────────────────────────
+// Direct child tickets of a ticket (one level), for the "Child records" view.
+// A child that backs a first-class CAPA is flagged so the UI can deep-link to
+// the CAPA workspace instead of the generic ticket page.
+export const listChildren = async (parentTicketId: string) => {
+  const children = await prisma.ticket.findMany({
+    where: { parentTicketId, isDeleted: false },
+    select: {
+      id: true,
+      uniqueId: true,
+      title: true,
+      sourceFindingId: true,
+      flows: {
+        take: 1,
+        orderBy: { createdAt: 'asc' },
+        select: {
+          isCompleted: true,
+          workflow: { select: { name: true, type: { select: { name: true } } } },
+          currentStages: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // Which of these tickets are CAPA workflow tickets → map to their Capa id.
+  const ids = children.map((c) => c.id);
+  const capas = ids.length
+    ? await prisma.capa.findMany({
+        where: { workflowTicketId: { in: ids } },
+        select: { id: true, capaNumber: true, workflowTicketId: true },
+      })
+    : [];
+  const capaByTicketId = new Map(capas.map((c) => [c.workflowTicketId as string, c]));
+
+  return {
+    data: children.map((c) => {
+      const capa = capaByTicketId.get(c.id) ?? null;
+      const flow = c.flows[0];
+      return {
+        id: c.id,
+        unique_id: c.uniqueId,
+        title: c.title,
+        module: flow?.workflow.type?.name ?? flow?.workflow.name ?? null,
+        stage: flow?.isCompleted
+          ? 'Completed'
+          : flow?.currentStages.map((s) => s.name).join(', ') || null,
+        source_finding_id: c.sourceFindingId,
+        capa_id: capa?.id ?? null,
+        capa_number: capa?.capaNumber ?? null,
+      };
+    }),
+  };
+};
+
+// ─── Stage child-workflow triggers (runtime "Raise child" options) ────────────
+// For the ticket's CURRENT stage(s), return the MANUAL child-workflow triggers
+// configured on those stages — each resolved to the child workflow's latest
+// version (workflows re-version on save). `already_raised` reflects the
+// allowMultiple=false gate so the UI can disable an already-used trigger.
+export const listStageChildTriggers = async (ticketId: string) => {
+  const flow = await prisma.ticketFlow.findFirst({
+    where: { ticketId },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      isCompleted: true,
+      currentStages: { select: { id: true, name: true } },
+    },
+  });
+  if (!flow || flow.isCompleted) return { data: [] };
+  const stageIds = flow.currentStages.map((s) => s.id);
+  if (stageIds.length === 0) return { data: [] };
+  const stageNameById = new Map(flow.currentStages.map((s) => [s.id, s.name]));
+
+  const triggers = await prisma.childWorkflowTrigger.findMany({
+    where: { parentStageId: { in: stageIds }, triggerMode: 'MANUAL' },
+    orderBy: { order: 'asc' },
+    select: {
+      id: true,
+      parentStageId: true,
+      childWorkflowId: true,
+      isBlocking: true,
+      allowMultiple: true,
+      order: true,
+      childWorkflow: { select: { parentWorkflowId: true } },
+    },
+  });
+  if (triggers.length === 0) return { data: [] };
+
+  // Existing children of this ticket → the (parentStageId, lineage-root) pairs
+  // already raised, for the allowMultiple gate.
+  const existingChildren = await prisma.ticket.findMany({
+    where: { parentTicketId: ticketId, isDeleted: false, parentTicketStageId: { in: stageIds } },
+    select: {
+      parentTicketStageId: true,
+      flows: {
+        take: 1,
+        orderBy: { createdAt: 'asc' },
+        select: { workflow: { select: { id: true, parentWorkflowId: true } } },
+      },
+    },
+  });
+  const raisedKeys = new Set(
+    existingChildren
+      .map((c) => {
+        const wf = c.flows[0]?.workflow;
+        if (!wf || !c.parentTicketStageId) return null;
+        return `${c.parentTicketStageId}::${wf.parentWorkflowId ?? wf.id}`;
+      })
+      .filter((k): k is string => k !== null),
+  );
+
+  const data = [];
+  for (const t of triggers) {
+    const rootId = t.childWorkflow.parentWorkflowId ?? t.childWorkflowId;
+    const latest = await prisma.workflow.findFirst({
+      where: {
+        isLatestVersion: true,
+        isDeleted: false,
+        OR: [{ id: rootId }, { parentWorkflowId: rootId }],
+      },
+      select: { id: true, name: true, type: { select: { name: true } } },
+    });
+    if (!latest) continue; // child workflow deleted → not raiseable
+    data.push({
+      id: t.id,
+      parent_stage_id: t.parentStageId,
+      stage_name: stageNameById.get(t.parentStageId) ?? null,
+      child_workflow_id: latest.id,
+      child_workflow_name: latest.name,
+      child_module: latest.type?.name ?? null,
+      is_blocking: t.isBlocking,
+      allow_multiple: t.allowMultiple,
+      order: t.order,
+      already_raised: !t.allowMultiple && raisedKeys.has(`${t.parentStageId}::${rootId}`),
+    });
+  }
+  return { data };
 };
 

@@ -136,6 +136,15 @@ export const buildWorkflowGraph = async (
     data: import('./workflow.schema').EmbeddedApprovalPolicy;
   };
   const pendingApprovalPolicies: PendingApproval[] = [];
+  // Child-workflow triggers — one ChildWorkflowTrigger row per entry. Materialised
+  // after the bulk stage insert; the referenced childWorkflowId is validated then
+  // (FK is onDelete: Restrict, so a stale id would abort the whole tx).
+  type PendingChildTrigger = {
+    stageId: string;
+    stageLabel: string;
+    data: import('./workflow.schema').EmbeddedChildTrigger;
+  };
+  const pendingChildTriggers: PendingChildTrigger[] = [];
 
   let initialStageSeen = false;
 
@@ -251,13 +260,22 @@ export const buildWorkflowGraph = async (
       });
     }
 
+    // Child-workflow triggers — "from this stage, raise a child ticket of
+    // workflow X". Materialised after the bulk stage insert (childWorkflowId
+    // validated there).
+    const embeddedChildTriggers = (node.data.childTriggers ??
+      []) as import('./workflow.schema').EmbeddedChildTrigger[];
+    embeddedChildTriggers.forEach((ct, idx) => {
+      pendingChildTriggers.push({
+        stageId,
+        stageLabel: node.data.label,
+        data: { ...ct, order: ct.order ?? idx },
+      });
+    });
+
     // Legacy / future fields the builder doesn't process yet.
     if ((node.data.dependency ?? []).length > 0)
       warnings.push(`Stage '${node.data.label}': dependencies deferred to Engine phase`);
-    if ((node.data.child_workflow_triggers ?? []).length > 0)
-      warnings.push(
-        `Stage '${node.data.label}': child workflow triggers deferred to Engine phase`,
-      );
     if ((node.data.form_visibility_rules ?? []).length > 0)
       warnings.push(
         `Stage '${node.data.label}': cross-stage form rules deferred to Forms phase`,
@@ -504,6 +522,38 @@ export const buildWorkflowGraph = async (
             : undefined,
       },
     });
+  }
+
+  // Child-workflow triggers — one row per entry. Validate every childWorkflowId
+  // up front (FK is onDelete: Restrict → a stale id aborts the tx), drop the
+  // missing ones with a warning, then bulk insert.
+  if (pendingChildTriggers.length > 0) {
+    const ids = [...new Set(pendingChildTriggers.map((p) => p.data.childWorkflowId))];
+    const existing = await tx.workflow.findMany({
+      where: { id: { in: ids }, isDeleted: false },
+      select: { id: true },
+    });
+    const validIds = new Set(existing.map((w) => w.id));
+    const triggerRows: Prisma.ChildWorkflowTriggerCreateManyInput[] = [];
+    for (const { stageId, stageLabel, data } of pendingChildTriggers) {
+      if (!validIds.has(data.childWorkflowId)) {
+        warnings.push(
+          `Stage '${stageLabel}': child trigger references missing/deleted workflow '${data.childWorkflowId}' — skipped`,
+        );
+        continue;
+      }
+      triggerRows.push({
+        parentStageId: stageId,
+        childWorkflowId: data.childWorkflowId,
+        triggerMode: data.triggerMode,
+        isBlocking: data.isBlocking,
+        allowMultiple: data.allowMultiple,
+        order: data.order,
+      });
+    }
+    if (triggerRows.length > 0) {
+      await tx.childWorkflowTrigger.createMany({ data: triggerRows });
+    }
   }
 
   return { warnings };

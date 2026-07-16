@@ -13,6 +13,7 @@ import {
   ClipboardList,
   FileText,
   Flag,
+  GitBranch,
   Pencil,
   Plus,
   ShieldCheck,
@@ -28,6 +29,7 @@ import type {
 } from '../builder.types';
 import type { WorkflowStageStatus } from '@/lib/api/workflowLookups';
 import ApprovalPolicyEditor from './ApprovalPolicyEditor';
+import ChildTriggerEditor from './ChildTriggerEditor';
 import SlaPolicyEditor from './SlaPolicyEditor';
 import StageFormBindingEditor from './StageFormBindingEditor';
 
@@ -185,6 +187,8 @@ export default function StageInspector({
   const [formBindingOpen, setFormBindingOpen] = useState(false);
   // null → attaching a new form; number → editing the binding at that index.
   const [formEditIndex, setFormEditIndex] = useState<number | null>(null);
+  const [childTriggerOpen, setChildTriggerOpen] = useState(false);
+  const [childTriggerEditIndex, setChildTriggerEditIndex] = useState<number | null>(null);
   const [approvalEditFor, setApprovalEditFor] = useState<
     {
       actionType: 'primary' | 'secondary';
@@ -196,6 +200,7 @@ export default function StageInspector({
   const formBindings = data.formBindings ?? [];
   const sla = data.sla ?? null;
   const approvalPolicies = data.approvalPolicies ?? [];
+  const childTriggers = data.childTriggers ?? [];
 
   const update = <K extends keyof StageNodeData>(key: K, value: StageNodeData[K]) =>
     onChange({ ...data, [key]: value });
@@ -577,6 +582,83 @@ export default function StageInspector({
         )}
       </Section>
 
+      {/* ── Child tickets ──────────────────────────────────────────────── */}
+      <Section
+        icon={GitBranch}
+        title="Child tickets"
+        color="#0EA5E9"
+        tint="#F0F9FF"
+        action={
+          <button
+            type="button"
+            onClick={() => {
+              setChildTriggerEditIndex(null);
+              setChildTriggerOpen(true);
+            }}
+            className="flex items-center gap-1 text-[11px] font-semibold text-gold-700 hover:text-gold-800 hover:bg-gold-50 rounded-md px-1.5 py-1 transition-colors"
+          >
+            <Plus size={12} />
+            Allow
+          </button>
+        }
+      >
+        {childTriggers.length === 0 ? (
+          <p className="text-[11px] text-gray-400 italic">
+            No child tickets. Allow a workflow here to show a “Raise” button on the ticket at this
+            stage.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {childTriggers.map((t, idx) => (
+              <div
+                key={`${t.childWorkflowId}-${idx}`}
+                className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50/60 p-2"
+              >
+                <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 bg-sky-50 text-sky-600">
+                  <GitBranch size={14} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-medium text-gray-900 truncate">
+                    {t.childWorkflowName ?? `Workflow ${t.childWorkflowId.substring(0, 8)}…`}
+                  </div>
+                  <div className="text-[10.5px] text-gray-500 mt-0.5">
+                    {t.allowMultiple ? 'Multiple allowed' : 'One only'}
+                    {t.isBlocking ? ' · Blocking' : ''}
+                  </div>
+                </div>
+                <div className="flex items-center shrink-0">
+                  <button
+                    type="button"
+                    aria-label="edit child trigger"
+                    onClick={() => {
+                      setChildTriggerEditIndex(idx);
+                      setChildTriggerOpen(true);
+                    }}
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="remove child trigger"
+                    onClick={() => {
+                      if (!confirm('Remove this child ticket option from the stage?')) return;
+                      update(
+                        'childTriggers',
+                        childTriggers.filter((_, i) => i !== idx),
+                      );
+                    }}
+                    className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
       <SlaPolicyEditor
         isOpen={slaOpen}
         onClose={() => setSlaOpen(false)}
@@ -598,6 +680,23 @@ export default function StageInspector({
             editIndex == null
               ? [...formBindings, b]
               : formBindings.map((existing, i) => (i === editIndex ? b : existing)),
+          )
+        }
+      />
+
+      <ChildTriggerEditor
+        isOpen={childTriggerOpen}
+        onClose={() => setChildTriggerOpen(false)}
+        stageName={data.label}
+        currentWorkflowId={workflowId}
+        existing={childTriggers}
+        editIndex={childTriggerEditIndex}
+        onSave={(t, editIndex) =>
+          update(
+            'childTriggers',
+            editIndex == null
+              ? [...childTriggers, t]
+              : childTriggers.map((existing, i) => (i === editIndex ? t : existing)),
           )
         }
       />
