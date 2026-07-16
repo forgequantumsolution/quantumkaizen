@@ -10,7 +10,7 @@ import { Activity, AlertTriangle, Timer, PauseCircle, ShieldAlert } from 'lucide
 import type { ModuleAnalyticsProps } from './types';
 import type { TicketSummary } from '@/lib/api/ticket';
 import {
-  isCompleted, isOverdue, countBy, monthlyCount,
+  isCompleted, isOverdue, countBy, openClosedTrend,
   onTimeClosureRate, avgCycleDays, avgOpenAge,
   ChartCard, StatTile,
   TrendLineChart, DonutChart, HBarSplit, ComplianceGauge, CategoryParetoChart,
@@ -27,10 +27,7 @@ export default function DeviationAnalytics({ tickets, onDrill }: ModuleAnalytics
     const capaLinked = filtered.filter((t) => /capa/i.test(t.title)).length;
     const linkageRate = filtered.length ? Math.round((capaLinked / filtered.length) * 100) : 0;
 
-    const trend = monthlyCount(filtered, () => true, (t) => t.createdAt).map((p) => ({
-      month: p.month,
-      count: p.value,
-    }));
+    const trend = openClosedTrend(filtered);
     const classification: Slice[] = countBy(filtered, (t) => t.severity?.name);
     const area: Slice[] = countBy(filtered, (t) => t.department?.name).slice(0, 8);
     const repeat: Slice[] = countBy(filtered, (t) => t.department?.name || t.classification);
@@ -66,8 +63,14 @@ export default function DeviationAnalytics({ tickets, onDrill }: ModuleAnalytics
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Deviation volume" subtitle="Records raised per month (last 6 months)">
-          <TrendLineChart data={k.trend} series={[{ key: 'count', name: 'Deviations', area: true }]} />
+        <ChartCard title="Deviation volume" subtitle="Raised vs closed — last 6 months">
+          <TrendLineChart
+            data={k.trend as unknown as Array<Record<string, string | number>>}
+            series={[
+              { key: 'created', name: 'Raised' },
+              { key: 'completed', name: 'Closed' },
+            ]}
+          />
         </ChartCard>
 
         <ChartCard title="Classification split" subtitle="By severity — Critical / Major / Minor">

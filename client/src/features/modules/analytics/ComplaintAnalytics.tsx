@@ -10,7 +10,7 @@ import { Activity, AlertTriangle, Timer, CheckCircle2, Megaphone } from 'lucide-
 import type { ModuleAnalyticsProps } from './types';
 import type { TicketSummary } from '@/lib/api/ticket';
 import {
-  isCompleted, isOverdue, countBy, monthlyCount,
+  isCompleted, isOverdue, countBy, monthlyCount, openClosedTrend,
   onTimeClosureRate, closureRate, avgCycleDays,
   ChartCard, StatTile,
   TrendLineChart, DonutChart, ComplianceGauge, CategoryParetoChart, CalendarList,
@@ -31,6 +31,7 @@ export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalytics
 
     const monthly = monthlyCount(filtered, () => true, (t) => t.createdAt);
     const trend = monthly.map((p) => ({ month: p.month, count: p.value }));
+    const flow = openClosedTrend(filtered);
     const avgMonthly = monthly.length
       ? Math.round(monthly.reduce((s, p) => s + p.value, 0) / monthly.length)
       : 0;
@@ -56,6 +57,7 @@ export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalytics
       onTime: onTimeClosureRate(filtered),
       conversionRate,
       trend,
+      flow,
       avgMonthly,
       category,
       productSite,
@@ -78,8 +80,14 @@ export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalytics
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <ChartCard title="Complaint volume" subtitle="Complaints received per month (last 6 months)">
-          <TrendLineChart data={k.trend} series={[{ key: 'count', name: 'Complaints', area: true }]} />
+        <ChartCard title="Complaint volume" subtitle="Received vs closed — last 6 months">
+          <TrendLineChart
+            data={k.flow as unknown as Array<Record<string, string | number>>}
+            series={[
+              { key: 'created', name: 'Received' },
+              { key: 'completed', name: 'Closed' },
+            ]}
+          />
         </ChartCard>
 
         <ChartCard title="Complaint rate" subtitle="Monthly volume vs. average benchmark">

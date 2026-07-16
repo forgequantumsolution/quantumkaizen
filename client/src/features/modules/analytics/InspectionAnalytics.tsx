@@ -21,14 +21,16 @@ import {
   StatTile,
   ComplianceGauge,
   TrendLineChart,
-  BarSplit,
+  DonutChart,
+  AgingBucketChart,
   CategoryParetoChart,
   CalendarList,
   // metrics
   isCompleted,
   isOverdue,
   countBy,
-  monthlyCount,
+  openClosedTrend,
+  dueDatePosture,
   closureRate,
   PALETTE,
 } from '@/components/analytics';
@@ -40,24 +42,27 @@ export default function InspectionAnalytics({ tickets, onDrill }: ModuleAnalytic
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
+    const open = filtered.filter((t) => !isCompleted(t));
     const completed = filtered.filter(isCompleted).length;
     const overdue = filtered.filter(isOverdue);
-    const findings = filtered.filter((t) => !isCompleted(t)).length;
 
     return {
       scheduled: filtered.length,
       completed,
       overdue: overdue.length,
-      findings,
+      findings: open.length,
       compliance: closureRate(filtered),
-      findingsTrend: monthlyCount(filtered, () => true, (t) => t.createdAt),
+      // Scheduled (created) vs Completed over the last 6 months.
+      trend: openClosedTrend(filtered),
       // Pass/Fail proxy: completed inspections are treated as "Pass"; open
       // inspections that are past due are treated as "Fail" (unresolved finding).
       passFail: [
         { name: 'Pass', value: completed, color: PALETTE.good },
         { name: 'Fail', value: overdue.length, color: PALETTE.bad },
       ],
-      repeatFindings: countBy(filtered, (t) => t.department?.name),
+      // Age posture of still-open inspections (Overdue / Due soon / On track / No due date).
+      openAging: dueDatePosture(open),
+      byDepartment: countBy(filtered, (t) => t.department?.name),
       overdueEntries: [...overdue]
         .sort(
           (a, b) =>
@@ -97,29 +102,33 @@ export default function InspectionAnalytics({ tickets, onDrill }: ModuleAnalytic
           />
         </ChartCard>
 
-        <ChartCard title="Findings / NC Trend" subtitle="Inspection records raised — last 6 months">
+        <ChartCard title="Scheduled vs Completed Trend" subtitle="Inspections raised vs closed — last 6 months">
           <TrendLineChart
-            data={m.findingsTrend}
-            series={[{ key: 'value', name: 'Findings' }]}
-            emptyLabel="No findings yet"
+            data={m.trend as unknown as Array<Record<string, string | number>>}
+            series={[
+              { key: 'created', name: 'Scheduled' },
+              { key: 'completed', name: 'Completed' },
+            ]}
+            emptyLabel="No inspections yet"
           />
-        </ChartCard>
-
-        <ChartCard title="Overdue Inspections" subtitle="Open inspections past their due date">
-          <div className="mb-3">
-            <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue" value={m.overdue} hint="Open & past due" onClick={onDrill && (() => onDrill('overdue'))} />
-          </div>
-          <CalendarList entries={m.overdueEntries} emptyLabel="No overdue inspections" />
         </ChartCard>
 
         <ChartCard title="Pass / Fail Rate" subtitle="Completed (pass) vs overdue-open (fail) — proxy">
           {/* Proxy: no explicit pass/fail verdict field exists, so completed
               inspections stand in for "Pass" and overdue-open ones for "Fail". */}
-          <BarSplit data={m.passFail} emptyLabel="No inspection outcomes yet" />
+          <DonutChart data={m.passFail} centerLabel="inspections" emptyLabel="No inspection outcomes yet" />
         </ChartCard>
 
-        <ChartCard title="Repeat Finding Pareto" subtitle="Findings ranked by department with cumulative %">
-          <CategoryParetoChart data={m.repeatFindings} cumulativeLine emptyLabel="No repeat-finding data yet" />
+        <ChartCard title="Open Inspection Aging" subtitle="Still-open inspections by due-date posture">
+          <AgingBucketChart data={m.openAging} emptyLabel="No open inspections" />
+        </ChartCard>
+
+        <ChartCard title="Findings by Department" subtitle="Departments ranked by inspection volume with cumulative %">
+          <CategoryParetoChart data={m.byDepartment} cumulativeLine emptyLabel="No department data yet" />
+        </ChartCard>
+
+        <ChartCard title="Overdue Inspections" subtitle="Open inspections past their due date, soonest first">
+          <CalendarList entries={m.overdueEntries} emptyLabel="No overdue inspections" />
         </ChartCard>
       </div>
     </div>

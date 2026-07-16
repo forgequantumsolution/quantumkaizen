@@ -23,6 +23,7 @@ import {
   AgingBucketChart,
   ComplianceGauge,
   DonutChart,
+  HBarSplit,
   CategoryParetoChart,
   // metrics
   isCompleted,
@@ -32,7 +33,6 @@ import {
   dueDatePosture,
   onTimeClosureRate,
   avgCycleDays,
-  monthlyCount,
 } from '@/components/analytics';
 import type { TicketSummary } from '@/lib/api/ticket';
 import type { ModuleAnalyticsProps } from './types';
@@ -64,7 +64,7 @@ export default function CapaAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
       posture: dueDatePosture(filtered),
       source: countBy(filtered, (t) => t.classification),
       rootCause: countBy(filtered, (t) => t.classification || t.severity?.name),
-      recurringTrend: monthlyCount(filtered, isRecurring, (t) => t.createdAt),
+      byPriority: countBy(filtered, (t) => t.priority?.name),
     };
   }, [filtered]);
 
@@ -116,12 +116,8 @@ export default function CapaAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
           <CategoryParetoChart data={m.rootCause} cumulativeLine emptyLabel="No root-cause data yet" />
         </ChartCard>
 
-        <ChartCard title="Recurring Issue Rate" subtitle="CAPAs flagged as recurring / repeat — last 6 months">
-          <TrendLineChart
-            data={m.recurringTrend}
-            series={[{ key: 'value', name: 'Recurring' }]}
-            emptyLabel="No recurring issues detected"
-          />
+        <ChartCard title="CAPAs by Priority" subtitle="Distribution of CAPAs across priority levels">
+          <HBarSplit data={m.byPriority} valueLabel="CAPAs" emptyLabel="No priority recorded" />
         </ChartCard>
       </div>
     </div>

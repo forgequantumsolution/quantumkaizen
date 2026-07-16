@@ -23,11 +23,13 @@ import {
   TrendLineChart,
   DonutChart,
   BarSplit,
+  AgingBucketChart,
   CalendarList,
   // metrics
   isCompleted,
   isOverdue,
-  monthlyCount,
+  openClosedTrend,
+  agingByCreation,
   onTimeClosureRate,
   avgCycleDays,
   daysUntil,
@@ -75,7 +77,8 @@ export default function MaintenanceAnalytics({ tickets, onDrill }: ModuleAnalyti
       pmCompliance: onTimeClosureRate(filtered),
       avgCycle: avgCycleDays(filtered),
       due7,
-      breakdownTrend: monthlyCount(filtered, () => true, (t) => t.createdAt),
+      trend: openClosedTrend(filtered),
+      openAging: agingByCreation(open),
       // PM-to-Breakdown proxy: completed = planned (preventive) work closed;
       // open = unplanned (breakdown) work still in progress.
       pmRatio: [
@@ -123,10 +126,13 @@ export default function MaintenanceAnalytics({ tickets, onDrill }: ModuleAnalyti
           />
         </ChartCard>
 
-        <ChartCard title="Breakdown Count Trend" subtitle="Maintenance tasks raised — last 6 months">
+        <ChartCard title="Breakdown Count Trend" subtitle="Maintenance tasks raised vs closed — last 6 months">
           <TrendLineChart
-            data={m.breakdownTrend}
-            series={[{ key: 'value', name: 'Breakdowns' }]}
+            data={m.trend as unknown as Array<Record<string, string | number>>}
+            series={[
+              { key: 'created', name: 'Raised' },
+              { key: 'completed', name: 'Closed' },
+            ]}
             emptyLabel="No maintenance activity yet"
           />
         </ChartCard>
@@ -141,6 +147,10 @@ export default function MaintenanceAnalytics({ tickets, onDrill }: ModuleAnalyti
 
         <ChartCard title="Upcoming PM Schedule" subtitle="Open maintenance tasks by due date">
           <CalendarList entries={m.upcoming} emptyLabel="Nothing scheduled" />
+        </ChartCard>
+
+        <ChartCard title="Open Task Aging" subtitle="Open maintenance tasks by age since raised">
+          <AgingBucketChart data={m.openAging} emptyLabel="No open tasks" />
         </ChartCard>
       </div>
     </div>

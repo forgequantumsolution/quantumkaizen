@@ -73,8 +73,16 @@ export interface ComplianceItem {
 
 /**
  * Extract every answered `compliance` checklist item from ONE submission.
- * The dedupeKey is prefixed so the same submission read via different callers
- * (ticket vs program) stays idempotent and collision-free.
+ *
+ * The dedupeKey MUST be derived purely from the submission (id + section +
+ * field [+ row idx]) and be identical no matter which caller reads it. A form
+ * submission id is globally unique, so `sub.id` alone is a sufficient and stable
+ * prefix. Do NOT fold the ticket/program id into the prefix: the same
+ * disposition is synced from multiple entry points (checklist submission →
+ * `syncSubmissionComplianceFindings`, ticket close → `syncTicketComplianceFindings`,
+ * program completion → `syncProgramComplianceFindings`). If those paths produced
+ * different keys for the same item, the per-program dedupe would miss and each
+ * path would create its own duplicate Finding + NC.
  */
 const extractComplianceItems = async (
   sub: { id: string; formId: string; responses: unknown },
@@ -158,7 +166,11 @@ export const collectTicketComplianceItems = async (
 
   const items: ComplianceItem[] = [];
   for (const sub of submissions) {
-    items.push(...(await extractComplianceItems(sub, `${ticketId}:${sub.id}`)));
+    // Prefix with the submission id ONLY — must match the key produced by
+    // collectSubmissionComplianceItems so the ticket-close sync recognises
+    // findings already created at checklist-submission time and never
+    // duplicates them. (ticketId is intentionally NOT part of the key.)
+    items.push(...(await extractComplianceItems(sub, sub.id)));
   }
   return items;
 };

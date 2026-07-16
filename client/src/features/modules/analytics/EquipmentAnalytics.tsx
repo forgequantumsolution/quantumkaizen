@@ -22,6 +22,7 @@ import {
   DonutChart,
   BarSplit,
   TrendLineChart,
+  AgingBucketChart,
   ComplianceGauge,
   CategoryParetoChart,
   // metrics
@@ -29,9 +30,9 @@ import {
   isOverdue,
   countBy,
   statusSlices,
-  monthlyCount,
+  openClosedTrend,
+  agingByCreation,
   onTimeClosureRate,
-  avgCycleDays,
   avgOpenAge,
 } from '@/components/analytics';
 import type { ModuleAnalyticsProps } from './types';
@@ -54,10 +55,9 @@ export default function EquipmentAnalytics({ tickets, onDrill }: ModuleAnalytics
       avgAge: avgOpenAge(filtered),
       status: statusSlices(filtered),
       classification: countBy(filtered, (t) => t.classification),
-      activityTrend: monthlyCount(filtered, () => true, (t) => t.createdAt),
+      trend: openClosedTrend(filtered),
+      openAging: agingByCreation(open),
       pmCompliance: onTimeClosureRate(filtered),
-      mttr: avgCycleDays(filtered),
-      reliability: open.length,
       breakdownByDept: countBy(filtered, (t) => t.department?.name),
     };
   }, [filtered]);
@@ -86,10 +86,13 @@ export default function EquipmentAnalytics({ tickets, onDrill }: ModuleAnalytics
           <BarSplit data={m.classification} emptyLabel="No classification recorded" />
         </ChartCard>
 
-        <ChartCard title="Activity Trend" subtitle="Equipment records created — last 6 months">
+        <ChartCard title="Activity Trend" subtitle="Equipment records raised vs closed — last 6 months">
           <TrendLineChart
-            data={m.activityTrend}
-            series={[{ key: 'value', name: 'Created' }]}
+            data={m.trend as unknown as Array<Record<string, string | number>>}
+            series={[
+              { key: 'created', name: 'Raised' },
+              { key: 'completed', name: 'Closed' },
+            ]}
             emptyLabel="No activity yet"
           />
         </ChartCard>
@@ -103,14 +106,8 @@ export default function EquipmentAnalytics({ tickets, onDrill }: ModuleAnalytics
           />
         </ChartCard>
 
-        <ChartCard title="Reliability (MTBF / MTTR proxy)" subtitle="Proxy indicators derived from cycle time and open load">
-          {/* Proxy: avg cycle days approximates MTTR (mean time to repair);
-              open count approximates reliability load in the absence of
-              dedicated failure/uptime telemetry. */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            <StatTile tone="amber" icon={<Timer size={16} />} label="MTTR (proxy)" value={`${m.mttr}d`} hint="Avg cycle days" onClick={onDrill && (() => onDrill('all'))} />
-            <StatTile tone="blue" icon={<ActivityIcon size={16} />} label="Reliability (proxy)" value={m.reliability} hint="Open load" onClick={onDrill && (() => onDrill('open'))} />
-          </div>
+        <ChartCard title="Open Equipment Aging" subtitle="Open / active equipment records by age since raised">
+          <AgingBucketChart data={m.openAging} emptyLabel="No open equipment" />
         </ChartCard>
 
         <ChartCard title="Breakdown Pareto" subtitle="Breakdowns ranked by department with cumulative %">

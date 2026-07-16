@@ -24,12 +24,14 @@ import {
   TrendLineChart,
   CalendarList,
   DonutChart,
+  HBarSplit,
   // metrics
   isCompleted,
   isOverdue,
   daysUntil,
   statusSlices,
   dueWindows,
+  countBy,
   onTimeClosureRate,
   monthlyCount,
   type CalendarEntry,
@@ -81,6 +83,7 @@ export default function CalibrationAnalytics({ tickets, onDrill }: ModuleAnalyti
       dueWindows: dueWindows(open, (t) => t.dueDate, [7, 30, 60]),
       ootTrend: monthlyCount(filtered, isOOT, (t) => t.createdAt),
       ootDevStatus: statusSlices(filtered.filter((t) => OOT_DEV_RE.test(t.title))),
+      byDept: countBy(filtered, (t) => t.department?.name),
       overdueEntries,
     };
   }, [filtered]);
@@ -127,16 +130,16 @@ export default function CalibrationAnalytics({ tickets, onDrill }: ModuleAnalyti
           />
         </ChartCard>
 
-        <ChartCard title="Overdue Count (Critical Flagged)" subtitle="Open calibrations past due date">
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue" value={m.overdue} hint="Open & past due" />
-            <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Critical / High" value={m.overdueCritical} hint="High-priority overdue" />
-          </div>
+        <ChartCard title="Overdue Calibrations" subtitle="Open calibrations past due date, soonest first">
           <CalendarList entries={m.overdueEntries} emptyLabel="No overdue calibrations" />
         </ChartCard>
 
         <ChartCard title="OOT-Linked Deviation Status" subtitle="Status of OOT / deviation records">
           <DonutChart data={m.ootDevStatus} emptyLabel="No OOT-linked deviations" />
+        </ChartCard>
+
+        <ChartCard title="Records by Department" subtitle="Calibration records grouped by department">
+          <HBarSplit data={m.byDept} valueLabel="Records" emptyLabel="No department data" />
         </ChartCard>
       </div>
     </div>

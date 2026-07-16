@@ -24,6 +24,7 @@ import {
   ChartCard,
   StatTile,
   DonutChart,
+  TrendLineChart,
   ScorecardTable,
   scorePill,
   CategoryParetoChart,
@@ -34,6 +35,7 @@ import {
   countBy,
   statusSlices,
   closureRate,
+  openClosedTrend,
   type ScorecardColumn,
 } from '@/components/analytics';
 import type { TicketSummary } from '@/lib/api/ticket';
@@ -92,6 +94,7 @@ export default function SupplierQualityAnalytics({ tickets, onDrill }: ModuleAna
       avgScore,
       rows,
       status: statusSlices(filtered),
+      trend: openClosedTrend(filtered),
       rejectionBySupplier: countBy(filtered, (t) => t.department?.name),
       linkedNc: countBy(filtered, (t) => t.classification || t.severity?.name),
       auditCompliance: closureRate(filtered),
@@ -123,6 +126,17 @@ export default function SupplierQualityAnalytics({ tickets, onDrill }: ModuleAna
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="AVL Status Split" subtitle="Active / under evaluation / disqualified (status proxy)">
           <DonutChart data={m.status} emptyLabel="No supplier records" />
+        </ChartCard>
+
+        <ChartCard title="Evaluations Raised vs Closed" subtitle="Supplier-quality records raised vs closed — last 6 months">
+          <TrendLineChart
+            data={m.trend as unknown as Array<Record<string, string | number>>}
+            series={[
+              { key: 'created', name: 'Raised' },
+              { key: 'completed', name: 'Closed' },
+            ]}
+            emptyLabel="No supplier activity yet"
+          />
         </ChartCard>
 
         <ChartCard title="Supplier Scorecard" subtitle="Ranked by score — on-time share per supplier">

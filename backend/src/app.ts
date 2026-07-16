@@ -65,7 +65,18 @@ export const buildApp = () => {
   const app = express();
 
   app.use(helmet());
-  app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+  // Support a comma-separated list of allowed origins. A bare '*' reflects any
+  // origin (note: browsers reject a literal '*' when credentials are sent, so
+  // `true` — which echoes the request origin — is used instead).
+  const corsOrigins = env.CORS_ORIGIN.split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+  app.use(
+    cors({
+      origin: corsOrigins.includes('*') ? true : corsOrigins,
+      credentials: true,
+    })
+  );
   app.use(express.json({ limit: '15mb' })); // raised for DMS inline document uploads
   app.use(express.urlencoded({ extended: true }));
   if (env.NODE_ENV !== 'test') app.use(morgan('dev'));

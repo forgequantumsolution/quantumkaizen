@@ -20,7 +20,8 @@ import {
   ChartCard,
   StatTile,
   FunnelChart,
-  BarSplit,
+  TrendLineChart,
+  DonutChart,
   AgingBucketChart,
   HBarSplit,
   ComplianceGauge,
@@ -30,11 +31,10 @@ import {
   countBy,
   stageCounts,
   dueDatePosture,
+  openClosedTrend,
   onTimeClosureRate,
   avgCycleDays,
-  type Slice,
 } from '@/components/analytics';
-import type { TicketSummary } from '@/lib/api/ticket';
 import type { ModuleAnalyticsProps } from './types';
 import { useTicketFilters } from './useTicketFilters';
 
@@ -50,20 +50,6 @@ export default function DocumentApprovalAnalytics({ tickets, onDrill }: ModuleAn
     const posture = dueDatePosture(open);
     const dueSoon = posture.find((s) => s.name === 'Due-soon')?.value ?? 0;
 
-    // Approval cycle time by document type (classification proxy): avg days
-    // open → effective for each completed document type.
-    const byType = new Map<string, TicketSummary[]>();
-    for (const t of completed) {
-      const k = t.classification ?? 'Unclassified';
-      const arr = byType.get(k) ?? [];
-      arr.push(t);
-      byType.set(k, arr);
-    }
-    const cycleByType: Slice[] = Array.from(byType.entries())
-      .map(([name, ts]) => ({ name, value: avgCycleDays(ts) }))
-      .filter((s) => s.value > 0)
-      .sort((a, b) => b.value - a.value);
-
     return {
       pending: open.length,
       overdue,
@@ -72,7 +58,8 @@ export default function DocumentApprovalAnalytics({ tickets, onDrill }: ModuleAn
       dueSoon,
       completedCount: completed.length,
       funnel: stageCounts(filtered),
-      cycleByType,
+      trend: openClosedTrend(filtered),
+      byType: countBy(filtered, (t) => t.classification),
       posture,
       pendingByStage: countBy(open, (t) => t.flows[0]?.currentStages[0]?.name),
     };
@@ -98,8 +85,8 @@ export default function DocumentApprovalAnalytics({ tickets, onDrill }: ModuleAn
           <FunnelChart stages={m.funnel} emptyLabel="No documents in workflow" />
         </ChartCard>
 
-        <ChartCard title="Approval Cycle Time" subtitle="Avg days to effective by document type">
-          <BarSplit data={m.cycleByType} valueLabel="Avg days" emptyLabel="No completed approvals yet" />
+        <ChartCard title="Documents by Type" subtitle="Distribution across document classifications">
+          <DonutChart data={m.byType} centerLabel="documents" emptyLabel="No classification recorded" />
         </ChartCard>
 
         <ChartCard title="Aging Buckets" subtitle="Open documents by due-date posture">
@@ -116,6 +103,17 @@ export default function DocumentApprovalAnalytics({ tickets, onDrill }: ModuleAn
             target={90}
             label="On-time approval"
             caption={`${m.completedCount} approved`}
+          />
+        </ChartCard>
+
+        <ChartCard title="Submitted vs Approved Trend" subtitle="Documents submitted vs approved — last 6 months">
+          <TrendLineChart
+            data={m.trend as unknown as Array<Record<string, string | number>>}
+            series={[
+              { key: 'created', name: 'Submitted' },
+              { key: 'completed', name: 'Approved' },
+            ]}
+            emptyLabel="No document activity yet"
           />
         </ChartCard>
       </div>

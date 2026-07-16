@@ -375,11 +375,7 @@ export default function ModulePage({
   const codePrefix = workflowType?.codePrefix;
   const hasFilter = !!priorityId || !!workflowFilterId;
 
-  // The "Document Review" module lives under DMS: documents are authored in the
-  // DMS library, so this workspace is create-free and drops the KPI band. Detect
-  // it the same way the sidebar does so only this module is affected.
-  const isDocReview = /^document\s*review$/i.test(moduleName.trim());
-  const showCreate = canCreate && !isDocReview;
+  const showCreate = canCreate;
 
   // Scope cards hidden while collapsed: the ones beyond the first 4. Module
   // performance KPIs (Active, Overdue, Closure rate, …) now live inside the
@@ -549,7 +545,7 @@ export default function ModulePage({
       {/* ── My Tasks tab: scope quick-filter cards above the ticket list ── */}
       {/* First 4 scopes on one row; Pending / Saved revealed by "Show more".
           Clicking a card filters the table below. */}
-      {tab === 'workspace' && !embedded && !isDocReview && (
+      {tab === 'workspace' && !embedded && (
         <div className="mt-4">
           <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
             {(showAllKpis ? KPI_DEFS : KPI_DEFS.slice(0, 4)).map((k) => (

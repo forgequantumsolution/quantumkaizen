@@ -21,8 +21,8 @@ import {
   StatTile,
   TrendLineChart,
   DonutChart,
-  BarSplit,
   HBarSplit,
+  AgingBucketChart,
   FunnelChart,
   ComplianceGauge,
   // metrics
@@ -33,30 +33,10 @@ import {
   stageCounts,
   closureRate,
   avgCycleDays,
-  type Slice,
+  agingByCreation,
 } from '@/components/analytics';
-import type { TicketSummary } from '@/lib/api/ticket';
 import type { ModuleAnalyticsProps } from './types';
 import { useTicketFilters } from './useTicketFilters';
-
-/** Cycle time in days for a completed ticket (updatedAt - createdAt). */
-const cycleDays = (t: TicketSummary) =>
-  (new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime()) / 86_400_000;
-
-/** Average cycle days grouped by classification, over completed tickets. */
-function avgCycleByCategory(tickets: TicketSummary[]): Slice[] {
-  const groups = new Map<string, { sum: number; count: number }>();
-  for (const t of tickets) {
-    if (!isCompleted(t) || !t.classification) continue;
-    const g = groups.get(t.classification) ?? { sum: 0, count: 0 };
-    g.sum += cycleDays(t);
-    g.count += 1;
-    groups.set(t.classification, g);
-  }
-  return Array.from(groups.entries())
-    .map(([name, g]) => ({ name, value: Math.round(g.sum / g.count) }))
-    .sort((a, b) => b.value - a.value);
-}
 
 export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
   const { filtered, toolbar } = useTicketFilters(tickets);
@@ -73,7 +53,7 @@ export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnaly
       onHold,
       avgCycle: avgCycleDays(filtered),
       trend: openClosedTrend(filtered),
-      cycleByCategory: avgCycleByCategory(filtered),
+      openAging: agingByCreation(open),
       typeSplit: countBy(filtered, (t) => t.priority?.name),
       categorySplit: countBy(filtered, (t) => t.classification),
       approvalStages: stageCounts(open),
@@ -106,8 +86,8 @@ export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnaly
           />
         </ChartCard>
 
-        <ChartCard title="Cycle Time by Category" subtitle="Avg days from open to close, per classification">
-          <BarSplit data={m.cycleByCategory} valueLabel="Avg days" emptyLabel="No completed changes yet" />
+        <ChartCard title="Open Change Aging" subtitle="How long open changes have been in the system, by age bucket">
+          <AgingBucketChart data={m.openAging} emptyLabel="No open changes" />
         </ChartCard>
 
         <ChartCard title="Type Split" subtitle="Change type proxied by priority (Major / Minor / Like-for-like)">
