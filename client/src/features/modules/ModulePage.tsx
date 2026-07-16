@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { App } from 'antd';
@@ -26,6 +26,8 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
+  GitBranch,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -48,6 +50,7 @@ import {
   useTickets,
   type TicketSummary,
 } from '@/lib/api/ticket';
+import { useTicketChildren } from '@/lib/api/finding';
 import { useWorkflowDirectory } from '@/lib/api/workflow';
 import {
   usePriorities,
@@ -876,6 +879,14 @@ function TicketTable({
   onDelete,
   footer,
 }: TicketTableProps) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpand = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const colSpan = visibleCols.size;
   return (
     <Card noPadding className="overflow-hidden">
       <div className="overflow-x-auto">
@@ -898,9 +909,11 @@ function TicketTable({
               const completed = !!flow?.isCompleted;
               const stageName = flow?.currentStages[0]?.name;
               const bookmarked = isBookmarked(t.id);
+              const hasChildren = (t.childCount ?? 0) > 0;
+              const isExpanded = expanded.has(t.id);
               return (
+                <Fragment key={t.id}>
                 <tr
-                  key={t.id}
                   onClick={() => onView(t)}
                   className={cn(
                     'border-b border-gray-100 cursor-pointer transition-colors',
@@ -930,9 +943,24 @@ function TicketTable({
                   )}
                   {visibleCols.has('uniqueId') && (
                     <Td>
-                      <span className="text-[12px] font-mono text-gray-700">
-                        {t.uniqueId}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        {hasChildren ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpand(t.id);
+                            }}
+                            className="p-0.5 -ml-1 rounded hover:bg-gray-200 text-gray-500"
+                            title={isExpanded ? 'Hide child tickets' : `Show ${t.childCount} child ticket(s)`}
+                          >
+                            {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                          </button>
+                        ) : (
+                          <span className="w-[18px]" />
+                        )}
+                        <span className="text-[12px] font-mono text-gray-700">{t.uniqueId}</span>
+                      </div>
                     </Td>
                   )}
                   {visibleCols.has('createdAt') && (
@@ -1014,6 +1042,10 @@ function TicketTable({
                     </Td>
                   )}
                 </tr>
+                {hasChildren && isExpanded && (
+                  <ChildTicketRows parentId={t.id} colSpan={colSpan} />
+                )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -1021,6 +1053,53 @@ function TicketTable({
       </div>
       {footer}
     </Card>
+  );
+}
+
+// Lazily-loaded child ticket rows shown indented under an expanded parent.
+// Children may be a different workflow type (e.g. a CAPA under a Change Control
+// ticket), so they aren't in the module's own list query.
+function ChildTicketRows({ parentId, colSpan }: { parentId: string; colSpan: number }) {
+  const navigate = useNavigate();
+  const { data, isLoading } = useTicketChildren(parentId);
+  const children = data?.data ?? [];
+
+  if (isLoading) {
+    return (
+      <tr className="bg-gray-50/60">
+        <td colSpan={colSpan} className="px-4 py-2 pl-12 text-[12px] text-gray-400">
+          Loading child tickets…
+        </td>
+      </tr>
+    );
+  }
+  if (children.length === 0) return null;
+  return (
+    <>
+      {children.map((c) => (
+        <tr
+          key={c.id}
+          onClick={() => navigate(c.capa_id ? `/audit/capa/${c.capa_id}` : `/tickets/${c.id}`)}
+          className="border-b border-gray-100 bg-gray-50/60 cursor-pointer hover:bg-gray-100/70"
+        >
+          <td colSpan={colSpan} className="px-4 py-2">
+            <div className="flex items-center gap-2 pl-8">
+              <GitBranch size={13} className="text-emerald-500 shrink-0" />
+              <span className="text-[12px] font-mono text-emerald-700">
+                {c.capa_number ?? c.unique_id}
+              </span>
+              <span className="text-sm text-gray-800 truncate">{c.title}</span>
+              {c.module && (
+                <span className="text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                  {c.module}
+                </span>
+              )}
+              {c.stage && <span className="text-[11px] text-gray-500">· {c.stage}</span>}
+            </div>
+          </td>
+        </tr>
+      ))}
+    </>
   );
 }
 

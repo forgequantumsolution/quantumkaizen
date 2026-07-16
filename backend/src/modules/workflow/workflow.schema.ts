@@ -78,6 +78,17 @@ const EmbeddedApprovalPolicySchema = z.object({
     .optional(),
 });
 
+// Child-workflow triggers attach to a stage: "from this stage, a child ticket of
+// workflow X can be raised". Keyed by childWorkflowId. `triggerMode` is MANUAL for
+// the user-driven "Raise child" control (AUTO reserved for a future engine hook).
+const EmbeddedChildTriggerSchema = z.object({
+  childWorkflowId: z.string().uuid(),
+  triggerMode: z.enum(['MANUAL', 'AUTO']).default('MANUAL'),
+  isBlocking: z.boolean().default(false),
+  allowMultiple: z.boolean().default(false),
+  order: z.number().int().min(0).max(1000).default(0),
+});
+
 const NodeSchema = z.object({
   id: z.string().min(1),
   type: z.string().optional(),
@@ -99,9 +110,11 @@ const NodeSchema = z.object({
       formBindings: z.array(EmbeddedFormBindingSchema).max(50).optional(),
       sla: EmbeddedSlaSchema.nullish(),
       approvalPolicies: z.array(EmbeddedApprovalPolicySchema).max(50).optional(),
+      childTriggers: z.array(EmbeddedChildTriggerSchema).max(50).optional(),
       // Legacy fields — retained for backward-compat with older saved JSON.
       forms: z.array(z.unknown()).optional(),
       dependency: z.array(z.unknown()).optional(),
+      // Superseded by the typed `childTriggers` above; kept so old JSON validates.
       child_workflow_triggers: z.array(z.unknown()).optional(),
       form_visibility_rules: z.array(z.unknown()).optional(),
       parallelConfig: z
@@ -192,3 +205,4 @@ export type WorkflowSettings = z.infer<typeof WorkflowSettingsSchema>;
 export type EmbeddedFormBinding = z.infer<typeof EmbeddedFormBindingSchema>;
 export type EmbeddedSla = z.infer<typeof EmbeddedSlaSchema>;
 export type EmbeddedApprovalPolicy = z.infer<typeof EmbeddedApprovalPolicySchema>;
+export type EmbeddedChildTrigger = z.infer<typeof EmbeddedChildTriggerSchema>;

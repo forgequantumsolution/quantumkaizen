@@ -91,4 +91,8 @@ router.post('/:id/spawn-child', requireTicketAction('create'),
 router.get('/:id/children', requireTicketAction('read'),
   validate(IdParamSchema, 'params'), asyncHandler(ctrl.listChildren));
 
+// Configured child-workflow triggers for the current stage(s) → raise options
+router.get('/:id/child-triggers', requireTicketAction('read'),
+  validate(IdParamSchema, 'params'), asyncHandler(ctrl.listStageChildTriggers));
+
 export default router;

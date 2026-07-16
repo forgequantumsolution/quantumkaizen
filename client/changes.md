@@ -1,5 +1,60 @@
 # Changes Log
 
+## Phase 6 follow-ups — stage-scoped Raise button + child nesting in the list — 2026-07-16
+
+Two fixes from testing the raise-child feature. Not committed.
+
+- **Raise button now follows the viewed stage.** `src/features/tickets/detail/ActionBar.tsx`
+  gained a `selectedStageCanonicalId` prop (passed from `TicketDetailPage`); the
+  "Raise <workflow>" buttons render only when the stage selected in the flow band
+  matches the trigger's stage (or nothing is explicitly selected = current stage).
+  Before, the button stayed visible while clicking through other stages in the
+  band. Verified: on a Change Control ticket at Impact Assessment the button shows;
+  selecting **Change Initiation** hides it; selecting **Impact Assessment** brings
+  it back.
+- **Child tickets now nest in the module list.** `src/features/modules/ModulePage.tsx`
+  `TicketTable` rows with `childCount > 0` show an expander chevron in the ID cell;
+  expanding renders the direct children (lazily via `useTicketChildren`) as indented
+  rows directly under the parent — even when the child is a different workflow type
+  (e.g. a CAPA under a Change Control ticket, which isn't in the module's own list).
+  `TicketSummary` gained `childCount` (backend companion). Verified: expanding
+  CC-FQS-047 reveals CAPA-FQS-084 nested below it. `tsc --noEmit` clean.
+
+## Findings Phase 6 — per-stage "raise child ticket" — frontend — 2026-07-16
+
+Configure allowed child workflows on a stage in the builder; the ticket's stage
+view then shows a "Raise <workflow>" button that spawns a nested child (backend
+companion in `backend/changes.md`). Verified end-to-end via Playwright + API on
+local `kaizen_qms2`. Not committed.
+
+- **`src/features/workflows/builder/builder.types.ts`** — new `EmbeddedChildTrigger`
+  interface + `childTriggers?` on `StageNodeData`.
+- **`src/features/workflows/builder/builder.serializer.ts`** — pass `childTriggers`
+  through both ways (deserialize onto the node; serialize into the save payload,
+  stripping the display-only `childWorkflowName`).
+- **`src/features/workflows/builder/inspector/ChildTriggerEditor.tsx` (new)** —
+  modal to allow a child workflow on a stage (workflow picker via
+  `useWorkflowDirectory`, + Allow-multiple / Blocking toggles). No POST — writes to
+  `node.data.childTriggers`, materialised on Publish.
+- **`src/features/workflows/builder/inspector/StageInspector.tsx`** — new
+  **"Child tickets"** section (list + add/edit/remove) mounting the editor,
+  mirroring the Forms section.
+- **`src/lib/api/workflow.ts`** — `BuilderNode.data.childTriggers` typed for the
+  round-trip.
+- **`src/lib/api/ticket.ts`** — `StageChildTrigger`/`SpawnChildInput` types,
+  `ticketKeys.childTriggers`, `useStageChildTriggers(id)` query, `useSpawnChild(id)`
+  mutation (invalidates detail + child-triggers + sidebar `['ticket-children']`).
+- **`src/features/tickets/detail/ActionBar.tsx`** — per current-stage row now
+  renders a **"Raise <workflow>"** button for each configured trigger (disabled +
+  "Already raised" when the allowMultiple gate is hit); clicking opens a title/
+  description modal → spawn-child → navigates to the new child (which nests in the
+  sidebar CHILD RECORDS).
+
+**Verified (Playwright):** on a fresh Inspection ticket at "Inspection Request",
+the **Raise CAPA Management** button appears in Stage Actions; raising it creates
+the CAPA and it shows under CHILD RECORDS; the builder stage inspector shows the
+"Child tickets" section. `tsc --noEmit` clean.
+
 ## Generic findings → child tickets (CAPA / Deviation) — frontend — 2026-07-16
 
 Surfaces the generic findings feature (backend companion in `backend/changes.md`)

@@ -60,6 +60,8 @@ export const deserializeFlow = (
       formBindings: n.data.formBindings ?? [],
       sla: n.data.sla ?? null,
       approvalPolicies: n.data.approvalPolicies ?? [],
+      // Phase 6 — child-workflow triggers.
+      childTriggers: n.data.childTriggers ?? [],
     };
     return { id: n.id, type: 'stage', position: DEFAULT_POS, data };
   });
@@ -163,6 +165,15 @@ export const serializeFlow = (
         formBindings: d.formBindings ?? [],
         sla: d.sla ?? null,
         approvalPolicies: d.approvalPolicies ?? [],
+        // Phase 6 — child-workflow triggers. Strip display-only fields; the
+        // backend re-hydrates childWorkflowName on the next load.
+        childTriggers: (d.childTriggers ?? []).map((t, idx) => ({
+          childWorkflowId: t.childWorkflowId,
+          triggerMode: t.triggerMode ?? 'MANUAL',
+          isBlocking: t.isBlocking ?? false,
+          allowMultiple: t.allowMultiple ?? false,
+          order: t.order ?? idx,
+        })),
       },
     };
   });

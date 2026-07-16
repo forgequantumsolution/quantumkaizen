@@ -170,3 +170,9 @@ export const spawnChild = async (req: Request, res: Response) => {
 export const listChildren = async (req: Request, res: Response) => {
   res.json(await service.listChildren(req.params.id as string));
 };
+
+// Configured child-workflow triggers for this ticket's current stage(s) — the
+// runtime "Raise child ticket" options.
+export const listStageChildTriggers = async (req: Request, res: Response) => {
+  res.json(await service.listStageChildTriggers(req.params.id as string));
+};

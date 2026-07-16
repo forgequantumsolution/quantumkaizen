@@ -40,6 +40,9 @@ export interface TicketSummary {
   site: { id: string; name: string; code: string } | null;
   createdBy: UserRef | null;
   flows: TicketFlowSummary[];
+  /** Direct child tickets (e.g. CAPAs raised from this ticket). Drives the
+   *  list's expand affordance. Children may be a different workflow type. */
+  childCount?: number;
 }
 
 export interface TicketDetail extends TicketSummary {
@@ -206,7 +209,30 @@ export const ticketKeys = {
   timeline: (id: string) => ['tickets', 'timeline', id] as const,
   comments: (id: string) => ['tickets', 'comments', id] as const,
   docs: (id: string) => ['tickets', 'docs', id] as const,
+  childTriggers: (id: string) => ['tickets', 'child-triggers', id] as const,
 };
+
+// ─── Child-workflow triggers (runtime "Raise child ticket" options) ────────────
+
+export interface StageChildTrigger {
+  id: string;
+  parent_stage_id: string;
+  stage_name: string | null;
+  child_workflow_id: string;
+  child_workflow_name: string;
+  child_module: string | null;
+  is_blocking: boolean;
+  allow_multiple: boolean;
+  order: number;
+  already_raised: boolean;
+}
+
+export interface SpawnChildInput {
+  childWorkflowId: string;
+  parentStageId?: string;
+  title: string;
+  description?: string;
+}
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
 
@@ -283,6 +309,29 @@ export const useTransition = (id: string) => {
       qc.invalidateQueries({ queryKey: approvalKeys.ticketInstances(id) });
       qc.invalidateQueries({ queryKey: slaKeys.ticketSla(id) });
       qc.invalidateQueries({ queryKey: stageFormKeys.ticket(id) });
+    },
+  });
+};
+
+// Configured child-workflow triggers for this ticket's current stage(s).
+export const useStageChildTriggers = (id: string | undefined, enabled = true) =>
+  useQuery<{ data: StageChildTrigger[] }>({
+    queryKey: ticketKeys.childTriggers(id ?? ''),
+    queryFn: () => api.get(`/tickets/${id}/child-triggers`).then((r) => r.data),
+    enabled: !!id && enabled,
+  });
+
+// Raise a child ticket (spawn-child). Nests under the parent; refreshes the
+// sidebar CHILD RECORDS + the raise options (allowMultiple gating).
+export const useSpawnChild = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation<{ ticketId: string; uniqueId?: string }, unknown, SpawnChildInput>({
+    mutationFn: (body) => api.post(`/tickets/${id}/spawn-child`, body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ticketKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: ticketKeys.childTriggers(id) });
+      qc.invalidateQueries({ queryKey: ['ticket-children', id] });
+      qc.invalidateQueries({ queryKey: ticketKeys.all });
     },
   });
 };

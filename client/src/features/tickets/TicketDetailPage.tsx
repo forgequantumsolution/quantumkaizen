@@ -167,6 +167,7 @@ export default function TicketDetailPage() {
             isOnHold={ticket.isOnHold}
             isCompleted={isCompleted}
             canTransition={canTransition}
+            selectedStageCanonicalId={selectedStage?.canonicalId ?? null}
           />
         )}
 

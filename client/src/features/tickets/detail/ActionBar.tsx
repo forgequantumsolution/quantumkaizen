@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { ArrowRight, XCircle, Pause, Play, Undo2, UserCog } from 'lucide-react';
-import { Button, Card, Modal, Select, Textarea } from '@/components/ui';
+import { ArrowRight, XCircle, Pause, Play, Undo2, UserCog, GitBranch } from 'lucide-react';
+import { Button, Card, Input, Modal, Select, Textarea } from '@/components/ui';
 import {
   useAllowedActions,
   useResumeTicket,
   useTicketTrack,
   useTransition,
+  useStageChildTriggers,
+  useSpawnChild,
   type AllowedAction,
   type StageActionsView,
+  type StageChildTrigger,
 } from '@/lib/api/ticket';
 import type { StageActionBehavior } from '@/lib/api/workflow';
 import { useTicketStageForms } from '@/lib/api/stageForm';
@@ -18,6 +22,10 @@ interface Props {
   isOnHold: boolean;
   isCompleted: boolean;
   canTransition: boolean;
+  /** Canonical id of the stage the user is viewing in the flow band. The "Raise
+   *  child" buttons show only when this matches the stage they're configured on
+   *  (or nothing is explicitly selected = the current stage). */
+  selectedStageCanonicalId?: string | null;
 }
 
 const BEHAVIOR_ICON: Record<StageActionBehavior, React.ElementType> = {
@@ -38,12 +46,63 @@ const BEHAVIOR_VARIANT: Record<StageActionBehavior, 'primary' | 'reject' | 'seco
   REASSIGN: 'outline',
 };
 
-export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransition }: Props) {
+export default function ActionBar({
+  ticketId,
+  isOnHold,
+  isCompleted,
+  canTransition,
+  selectedStageCanonicalId = null,
+}: Props) {
+  const navigate = useNavigate();
   const { data: stageActions = [], isLoading } = useAllowedActions(ticketId);
   const { data: stageFormsData } = useTicketStageForms(ticketId);
   const { data: trackingRows = [] } = useTicketTrack(ticketId);
+  const { data: childTriggersData } = useStageChildTriggers(ticketId, !isCompleted);
   const transition = useTransition(ticketId);
   const resume = useResumeTicket(ticketId);
+  const spawnChild = useSpawnChild(ticketId);
+
+  // Child-workflow triggers grouped by the stage they hang off.
+  const triggersByStage = useMemo(() => {
+    const map = new Map<string, StageChildTrigger[]>();
+    for (const t of childTriggersData?.data ?? []) {
+      const list = map.get(t.parent_stage_id) ?? [];
+      list.push(t);
+      map.set(t.parent_stage_id, list);
+    }
+    return map;
+  }, [childTriggersData]);
+
+  const [spawnFor, setSpawnFor] = useState<StageChildTrigger | null>(null);
+  const [spawnTitle, setSpawnTitle] = useState('');
+  const [spawnDesc, setSpawnDesc] = useState('');
+  useEffect(() => {
+    if (spawnFor) {
+      setSpawnTitle(spawnFor.child_workflow_name);
+      setSpawnDesc('');
+    }
+  }, [spawnFor]);
+
+  const handleSpawn = async () => {
+    if (!spawnFor) return;
+    if (!spawnTitle.trim()) {
+      toast.error('Enter a title');
+      return;
+    }
+    try {
+      const res = await spawnChild.mutateAsync({
+        childWorkflowId: spawnFor.child_workflow_id,
+        parentStageId: spawnFor.parent_stage_id,
+        title: spawnTitle.trim(),
+        description: spawnDesc.trim() || undefined,
+      });
+      toast.success(`${spawnFor.child_workflow_name} raised`);
+      setSpawnFor(null);
+      if (res?.ticketId) navigate(`/tickets/${res.ticketId}`);
+    } catch (err) {
+      toast.error(errorMsg(err));
+    }
+  };
 
   // Phase 3.5 — block transitions when any required form on the current
   // stage is unsubmitted. The backend re-checks at /transition time (engine
@@ -199,6 +258,27 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
                       <span className="ml-1">Resume</span>
                     </Button>
                   )}
+                  {/* Raise buttons only when this stage is the one being viewed
+                      in the band (or no explicit selection = current stage). */}
+                  {(!selectedStageCanonicalId ||
+                    selectedStageCanonicalId === stage.stageCanonicalId) &&
+                    (triggersByStage.get(stage.stageId) ?? []).map((t) => (
+                      <Button
+                        key={t.id}
+                        variant="outline"
+                        size="sm"
+                        disabled={t.already_raised}
+                        title={
+                          t.already_raised
+                            ? 'Already raised from this stage'
+                            : `Raise a ${t.child_workflow_name} child ticket`
+                        }
+                        onClick={() => setSpawnFor(t)}
+                      >
+                        <GitBranch size={12} />
+                        <span className="ml-1">Raise {t.child_workflow_name}</span>
+                      </Button>
+                    ))}
                 </div>
               </div>
             ))}
@@ -273,6 +353,60 @@ export default function ActionBar({ ticketId, isOnHold, isCompleted, canTransiti
           rows={3}
           maxLength={2000}
         />
+      </Modal>
+
+      {/* Raise a child ticket from a configured stage trigger. */}
+      <Modal
+        isOpen={!!spawnFor}
+        onClose={() => setSpawnFor(null)}
+        title={spawnFor ? `Raise ${spawnFor.child_workflow_name}` : 'Raise child ticket'}
+        size="md"
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setSpawnFor(null)} disabled={spawnChild.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleSpawn}
+              isLoading={spawnChild.isPending}
+              disabled={spawnChild.isPending}
+            >
+              <GitBranch size={12} />
+              <span className="ml-1">Raise</span>
+            </Button>
+          </div>
+        }
+      >
+        {spawnFor && (
+          <>
+            <p className="text-sm text-gray-600 mb-3">
+              Raises a{' '}
+              <span className="font-medium text-gray-800">{spawnFor.child_workflow_name}</span>
+              {spawnFor.child_module ? ` (${spawnFor.child_module})` : ''} ticket nested under this
+              one, from stage <span className="font-medium">{spawnFor.stage_name}</span>.
+            </p>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">
+              Title <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={spawnTitle}
+              onChange={(e) => setSpawnTitle(e.target.value)}
+              maxLength={250}
+              className="mb-3"
+            />
+            <label className="text-xs font-medium text-gray-700 mb-1 block">
+              Description <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <Textarea
+              value={spawnDesc}
+              onChange={(e) => setSpawnDesc(e.target.value)}
+              placeholder="Context for the child ticket…"
+              rows={3}
+              maxLength={5000}
+            />
+          </>
+        )}
       </Modal>
     </>
   );

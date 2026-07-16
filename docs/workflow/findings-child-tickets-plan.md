@@ -1,6 +1,7 @@
 # Generic Findings → Child Tickets (CAPA / Deviation)
 
-**Status:** IMPLEMENTED (Phases 1–5) & verified on `kaizen_qms2`, 2026-07-16
+**Status:** IMPLEMENTED (Phases 1–6) & verified on `kaizen_qms2`, 2026-07-16
+(Phase 6 = per-stage "raise child ticket"; the checklist-at-stage variant remains deferred)
 **Author:** _drafted with Claude Code_
 **Target DB:** `kaizen_qms2` (all-modules dump; never `quantumkaizen` legacy)
 
@@ -286,9 +287,38 @@ each child type can still be created **directly** from its own module. Repeat ac
 modules (Inspection, Supplier Quality, Change Control, Deviation) — Supplier Quality is the useful
 regression check since its checklist already exists.
 
-### Phase 6 — LATER (future): generic per-stage checklist → child-ticket creation
+### Phase 6 — DONE (2026-07-16): generic per-stage "raise child ticket"
 
-Not in the current scope — captured so we build Phases 1–5 in a way that extends to it.
+**Status: IMPLEMENTED & verified** on `kaizen_qms2` — the *raise-child control* part
+(the per-stage checklist tie-in was explicitly deferred; see note at the end). See
+`backend/changes.md` + `client/changes.md` (both dated 2026-07-16) for the full
+file-by-file log. Summary of what shipped:
+
+- **Config = per stage, via the builder.** A stage gains a **"Child tickets"**
+  section (`StageInspector` + `ChildTriggerEditor`) to allow one or more child
+  workflows (+ Allow-multiple / Blocking toggles). Config rides `flow_json` like
+  every other embedded policy — `buildWorkflowGraph` materialises
+  `ChildWorkflowTrigger` rows on publish, and `toFlowJson` round-trips them. The
+  old explicit trigger-clone in `workflow.versioning.ts` was removed (now redundant).
+- **Runtime.** `GET /tickets/:id/child-triggers` returns the current stage's MANUAL
+  triggers (each resolved to the child workflow's latest version). `ActionBar`
+  shows a **"Raise <workflow>"** button per trigger → title/description modal →
+  `POST /tickets/:id/spawn-child` → child nests under the parent (sidebar CHILD
+  RECORDS). `allowMultiple=false` is enforced server-side (second raise 400s) and
+  reflected as a disabled "Already raised" button.
+- **RBAC.** Reuses the per-type ticket keys — the raise button/endpoint is gated by
+  `requireTicketAction('read'|'create')`, so no new permission surface.
+
+**Still deferred (not built):** the *checklist-at-stage → raise from failed items*
+variant. The current mechanism is a direct "Raise" control; wiring a stage checklist
+whose non-conformances drive the raise overlaps with the findings machinery
+(Phases 1–5) and can be layered on later.
+
+---
+
+#### Original design notes (for reference)
+
+Not in the original scope — captured so we build Phases 1–5 in a way that extends to it.
 
 Today (Phases 1–5) findings come from a **checklist form** and the four scoped modules get one. The
 future generalization: let **any workflow attach a checklist to a specific stage**, and have that
