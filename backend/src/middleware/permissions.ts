@@ -3,6 +3,7 @@ import { Forbidden, Unauthorized } from '../lib/httpError';
 import { computeEffectivePermissions } from '../lib/effective-permissions';
 import { prisma } from '../lib/prisma';
 import { wfTypeKey, typeIdFromKey } from '../lib/rbac-workflow-types';
+import { findingTypeKey } from '../lib/rbac-findings';
 
 const cache = new Map<string, { keys: Set<string>; expires: number }>();
 const TTL_MS = 30_000;
@@ -181,6 +182,68 @@ export const requireTicketListAccess = async (
     next(err);
   }
 };
+
+// ─── Per-workflow-type FINDINGS enforcement ──────────────────────────────────
+
+type FindingAction = 'read' | 'create' | 'update' | 'delete';
+
+/**
+ * Where to resolve the workflow-type id a finding request belongs to:
+ *  - 'ticketParam' → `req.params.ticketId` (per-ticket findings list)
+ *  - 'body'        → `req.body.source_ticket_id` (manual create)
+ *  - 'finding'     → `req.params.id` (existing finding → its source ticket)
+ *  - 'query'       → `req.query.workflow_type_id` (module register; the id itself)
+ */
+type FindingFrom = 'ticketParam' | 'body' | 'finding' | 'query';
+
+const typeIdForFinding = async (findingId: string | undefined): Promise<string | null> => {
+  if (!findingId) return null;
+  const finding = await prisma.finding.findUnique({
+    where: { id: findingId },
+    select: { sourceTicketId: true },
+  });
+  return finding ? typeIdForTicket(finding.sourceTicketId) : null;
+};
+
+const resolveFindingTypeId = async (req: Request, from: FindingFrom): Promise<string | null> => {
+  switch (from) {
+    case 'ticketParam':
+      return typeIdForTicket(req.params.ticketId as string);
+    case 'body':
+      return typeIdForTicket((req.body as { source_ticket_id?: string })?.source_ticket_id ?? '');
+    case 'finding':
+      return typeIdForFinding(req.params.id as string);
+    case 'query': {
+      const q = (req.query as { workflow_type_id?: string })?.workflow_type_id;
+      return q && q.length > 0 ? q : null;
+    }
+  }
+};
+
+/**
+ * Guard for a findings route. Passes only when the caller holds the per-type key
+ * `finding.<typeId>.<action>` for the workflow type the request resolves to.
+ * A ticket/type that doesn't support findings (or has no type) yields no key,
+ * so only SUPER_ADMIN (effective-permission bypass) can reach it.
+ */
+export const requireFindingAction = (action: FindingAction, from: FindingFrom) =>
+  async (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) return next(Unauthorized());
+    try {
+      const keys = await loadPermissions(req.user.userId);
+      const typeId = await resolveFindingTypeId(req, from);
+      if (typeId && keys.has(findingTypeKey(typeId, action))) return next();
+      return next(
+        Forbidden(
+          typeId
+            ? `Missing required permission: ${findingTypeKey(typeId, action)}`
+            : `Findings not available for this record — no per-module key can grant ${action}`,
+        ),
+      );
+    } catch (err) {
+      next(err);
+    }
+  };
 
 // ─── Per-site scoping ─────────────────────────────────────────────────────────
 

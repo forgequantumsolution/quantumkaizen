@@ -76,6 +76,7 @@ model User {
   capasCreated            Capa[]           @relation("CapaCreatedBy")
   actionItemsOwned        ActionItem[]     @relation("ActionItemOwner")
   actionItemsCreated      ActionItem[]     @relation("ActionItemCreatedBy")
+  findingsCreated         Finding[]        @relation("FindingCreatedBy")
 
   // Phase 3 — Approvals + SLA
   approverOnPolicies      ApprovalPolicy[] @relation("ApprovalPolicyApproverUsers")
@@ -285,6 +286,10 @@ model WorkflowType {
   name       String  @unique
   codePrefix String?
   isDeleted  Boolean @default(false)
+
+  // When true, tickets of this type get a Findings tab and the module gets a
+  // Findings register (generic findings capability). Off by default.
+  supportsFindings Boolean @default(false)
 
   workflows  Workflow[]
   iconConfig WorkflowIconConfig?
@@ -593,6 +598,13 @@ model Ticket {
 
   parentTicketStageId String?
   parentTicketStage   WorkflowStage? @relation("TicketParentStage", fields: [parentTicketStageId], references: [id], onDelete: SetNull)
+
+  // Generic findings capability. When this ticket was raised as a child from a
+  // Finding (CAPA/Deviation flow), `sourceFindingId` points back to that finding.
+  // `findings` are the findings recorded/generated ON this ticket (source side).
+  sourceFindingId String?
+  sourceFinding   Finding?  @relation("FindingChildTickets", fields: [sourceFindingId], references: [id], onDelete: SetNull)
+  findings        Finding[] @relation("TicketFindings")
 
   priorityId String?
   priority   Priority? @relation(fields: [priorityId], references: [id], onDelete: SetNull)
@@ -1880,6 +1892,11 @@ model Capa {
   nonConformanceId String?         @unique
   nonConformance   NonConformance? @relation("CapaNonConformance", fields: [nonConformanceId], references: [id], onDelete: SetNull)
 
+  // Origin finding (optional) — set when this CAPA was raised from a generic
+  // Finding (non-audit modules). The generic analog of nonConformanceId.
+  findingId String?
+  finding   Finding? @relation("CapaFinding", fields: [findingId], references: [id], onDelete: SetNull)
+
   // Root cause analysis. rootCauseData holds structured 5-why / fishbone.
   rootCause        String?
   rootCauseData    Json?
@@ -1969,6 +1986,50 @@ enum ActionItemPriority {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+// ============================================================
+// Generic Finding — the non-audit analog of AuditFinding. Belongs to a source
+// workflow Ticket (inspection / change-control / etc.). Findings are primarily
+// AUTO-GENERATED from a ticket's checklist form dispositions (see the finding
+// module's sync service, mirroring audit-compliance-sync); manual entry is a
+// fallback. From a finding, CAPA / Deviation child tickets are raised directly
+// (no NonConformance step). See docs/findings-child-tickets-plan.md.
+// ============================================================
+model Finding {
+  id            String @id @default(uuid())
+  findingNumber String @unique // "F-YYYY-NNNN"
+
+  // The module ticket this finding was recorded on.
+  sourceTicketId String
+  sourceTicket   Ticket @relation("TicketFindings", fields: [sourceTicketId], references: [id], onDelete: Cascade)
+  // Optional: the workflow stage (canonical id) the finding was raised on.
+  sourceStageId String?
+
+  severity FindingSeverity
+  status   FindingStatus   @default(OPEN)
+
+  title          String
+  description    String
+  // For auto-generated findings, holds { dedupeKey, source, submissionId,
+  // section, field, result } so re-running the sync never duplicates.
+  evidence       Json?
+  recommendation String?
+  reference      String? // clause / spec / section ref
+
+  // Child tickets raised from this finding (CAPA workflow tickets + Deviations).
+  childTickets Ticket[] @relation("FindingChildTickets")
+  // First-class CAPAs raised from this finding (the rich CAPA path).
+  capas        Capa[]   @relation("CapaFinding")
+
+  createdById String?
+  createdBy   User?   @relation("FindingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([sourceTicketId])
+  @@index([status])
 }
 
 // ============================================================

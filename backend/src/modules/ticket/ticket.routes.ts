@@ -87,4 +87,8 @@ router.delete('/:id/docs/:docId', requireTicketAction('update'),
 router.post('/:id/spawn-child', requireTicketAction('create'),
   validate(IdParamSchema, 'params'), validate(SpawnChildSchema), asyncHandler(ctrl.spawnChild));
 
+// Direct children (one level)
+router.get('/:id/children', requireTicketAction('read'),
+  validate(IdParamSchema, 'params'), asyncHandler(ctrl.listChildren));
+
 export default router;

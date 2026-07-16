@@ -162,6 +162,15 @@ export const wfTypeUpdateKey = (typeId: string): string => `wf_type.${typeId}.up
 export const wfTypeDeleteKey = (typeId: string): string => `wf_type.${typeId}.delete`;
 export const wfTypeTransitionKey = (typeId: string): string => `wf_type.${typeId}.transition`;
 
+/** Per-type FINDINGS keys — only exist for types with supportsFindings=true.
+ *  Entity prefix + read/create keys drive the matrix row and client gating (see
+ *  backend lib/rbac-findings.ts). */
+export const findingTypeEntity = (typeId: string): string => `finding.${typeId}`;
+export const findingTypeReadKey = (typeId: string): string => `finding.${typeId}.read`;
+export const findingTypeCreateKey = (typeId: string): string => `finding.${typeId}.create`;
+export const findingTypeUpdateKey = (typeId: string): string => `finding.${typeId}.update`;
+export const findingTypeDeleteKey = (typeId: string): string => `finding.${typeId}.delete`;
+
 /**
  * Build the Access-Control matrix module for one workflow type. The module
  * itself is named after the type (e.g. "CAPA"); its single row is labeled
@@ -169,7 +178,11 @@ export const wfTypeTransitionKey = (typeId: string): string => `wf_type.${typeId
  * duplicate of the module header, and matches the row Audit gets for the same
  * `wf_type.*` keys (see AccessControlTab's `useAuditTicketTabs`).
  */
-export const workflowTypeModule = (type: { id: string; name: string }): NavModuleAccess => ({
+export const workflowTypeModule = (type: {
+  id: string;
+  name: string;
+  supportsFindings?: boolean;
+}): NavModuleAccess => ({
   key: wfTypeEntity(type.id),
   label: type.name,
   description: `${type.name} — workflow tickets`,
@@ -180,6 +193,19 @@ export const workflowTypeModule = (type: { id: string; name: string }): NavModul
       permission: wfTypeReadKey(type.id),
       entity: wfTypeEntity(type.id),
     },
+    // Findings-enabled types get a second row gating the generic Findings
+    // capability (Findings tab on tickets + module register) independently of
+    // ticket access. Backed by the per-type `finding.<id>.*` keys.
+    ...(type.supportsFindings
+      ? [
+          {
+            key: `${wfTypeEntity(type.id)}.findings`,
+            label: 'Findings',
+            permission: findingTypeReadKey(type.id),
+            entity: findingTypeEntity(type.id),
+          },
+        ]
+      : []),
   ],
 });
 

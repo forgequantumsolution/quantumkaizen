@@ -9,6 +9,7 @@ export interface WorkflowType {
   name: string;
   codePrefix: string | null;
   isDeleted: boolean;
+  supportsFindings: boolean;
   iconConfig: { id: string; iconName: string } | null;
   createdAt: string;
   updatedAt: string;

@@ -578,3 +578,58 @@ export const spawnChild = async (
   return result;
 };
 
+// ─── Children ───────────────────────────────────────────────────────────────
+// Direct child tickets of a ticket (one level), for the "Child records" view.
+// A child that backs a first-class CAPA is flagged so the UI can deep-link to
+// the CAPA workspace instead of the generic ticket page.
+export const listChildren = async (parentTicketId: string) => {
+  const children = await prisma.ticket.findMany({
+    where: { parentTicketId, isDeleted: false },
+    select: {
+      id: true,
+      uniqueId: true,
+      title: true,
+      sourceFindingId: true,
+      flows: {
+        take: 1,
+        orderBy: { createdAt: 'asc' },
+        select: {
+          isCompleted: true,
+          workflow: { select: { name: true, type: { select: { name: true } } } },
+          currentStages: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  // Which of these tickets are CAPA workflow tickets → map to their Capa id.
+  const ids = children.map((c) => c.id);
+  const capas = ids.length
+    ? await prisma.capa.findMany({
+        where: { workflowTicketId: { in: ids } },
+        select: { id: true, capaNumber: true, workflowTicketId: true },
+      })
+    : [];
+  const capaByTicketId = new Map(capas.map((c) => [c.workflowTicketId as string, c]));
+
+  return {
+    data: children.map((c) => {
+      const capa = capaByTicketId.get(c.id) ?? null;
+      const flow = c.flows[0];
+      return {
+        id: c.id,
+        unique_id: c.uniqueId,
+        title: c.title,
+        module: flow?.workflow.type?.name ?? flow?.workflow.name ?? null,
+        stage: flow?.isCompleted
+          ? 'Completed'
+          : flow?.currentStages.map((s) => s.name).join(', ') || null,
+        source_finding_id: c.sourceFindingId,
+        capa_id: capa?.id ?? null,
+        capa_number: capa?.capaNumber ?? null,
+      };
+    }),
+  };
+};
+

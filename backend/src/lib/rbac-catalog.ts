@@ -247,6 +247,10 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'capa.create', module: 'CAPA', action: 'CREATE', description: 'Raise a CAPA from a non-conformance' },
   { key: 'capa.update', module: 'CAPA', action: 'UPDATE', description: 'Edit / progress / verify CAPAs' },
   { key: 'capa.delete', module: 'CAPA', action: 'DELETE', description: 'Delete CAPAs' },
+  // ── Generic Findings (non-audit modules) ─────────────
+  // Access is per-workflow-type, not a single global key: `finding.<typeId>.*`
+  // (module FINDING_TYPE), synced dynamically for every type with
+  // supportsFindings=true. See lib/rbac-findings.ts. No static keys here.
   // ── Action Items ─────────────────────────────────────
   { key: 'action_item.read',   module: 'ACTION_ITEM', action: 'READ',   description: 'View action items' },
   { key: 'action_item.create', module: 'ACTION_ITEM', action: 'CREATE', description: 'Create action items' },

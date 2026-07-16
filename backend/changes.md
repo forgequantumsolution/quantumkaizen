@@ -4,6 +4,103 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Generic findings → child tickets (CAPA / Deviation) — backend — 2026-07-16
+
+Bring the audit module's "findings → child ticket" capability to every other QMS
+module as ONE reusable mechanism, instead of cloning audit's bespoke tables per
+module. A **Finding** is auto-generated from a ticket's checklist dispositions
+(non-conformance → severity finding; observation too), then a **CAPA** or
+**Deviation** child ticket is raised from it and nests under the parent. Applies
+to types flagged `supportsFindings` (Inspection, Change Control, Deviation,
+Supplier Quality). Full plan: `docs/workflow/findings-child-tickets-plan.md`. Verified on
+local `kaizen_qms2` (all-modules dump). Working tree only — **not committed**.
+
+- **`prisma/schema.prisma` + migration `20260716080013_add_generic_findings`** —
+  new **`Finding`** model (`findingNumber` `F-YYYY-NNNN`, `sourceTicketId`,
+  `sourceStageId?`, `severity`, `status`, `title/description/evidence?/
+  recommendation?/reference?`, `childTickets`, `capas`, `createdById?`). Added
+  `Ticket.sourceFindingId`/`sourceFinding`/`findings`, `Capa.findingId`/`finding`,
+  `User.findingsCreated`, and **`WorkflowType.supportsFindings Boolean @default(false)`**
+  (the per-type opt-in flag). Additive migration — 3 columns, 1 table, indexes, 4
+  FKs, no drops.
+- **`src/modules/finding/` (new)** — the whole module:
+  - `finding.schema.ts` — Zod: `FindingUpsertSchema`, `FindingUpdateSchema`,
+    `ListFindingQuerySchema` (`workflow_type_id`, `source_ticket_id`, `status`,
+    `severity`, `department_id`, paging), `RaiseChildSchema`
+    (`child_type: CAPA|DEVIATION` + capa_type/owner/dept/due), id/param schemas.
+  - `finding-sync.service.ts` — auto-generation. Reuses audit's
+    `collectSubmissionComplianceItems`/`collectTicketComplianceItems`;
+    `syncSubmissionFindings(ticketId, submissionId)` +
+    `syncTicketFindingsOnComplete(ticketId)` persist generic `Finding` rows with
+    `F-YYYY-NNNN` numbering, deduped by `evidence.dedupeKey`.
+  - `finding.service.ts` — `listFindingsForTicket`, `listFindings` (module
+    register), `createFinding`/`updateFinding`/`deleteFinding`, `raiseChild`
+    (CAPA → `createCapa` with `finding_id` + `parent_ticket_id`; DEVIATION →
+    resolve the Deviation workflow + `spawnChild`, set `sourceFindingId`),
+    `listFindingChildren`.
+  - `finding.controller.ts` / `finding.routes.ts` — `GET /findings`,
+    `GET /tickets/:ticketId/findings`, `POST/PUT/DELETE /findings`,
+    `POST /findings/:id/raise-child`, `GET /findings/:id/children`.
+- **`src/modules/audit/capa.service.ts`** — `raiseCapaWorkflowTicket` accepts
+  `findingId` + `parentTicketId` (threaded to `engineRaiseTicket`; sets
+  `ticket.sourceFindingId`); `createCapa` persists `findingId` and passes
+  `parent_ticket_id` so a CAPA raised from a finding nests under the source ticket.
+- **`src/modules/audit/audit.schema.ts`** — `CapaCreateSchema` gains optional
+  `finding_id` + `parent_ticket_id`.
+- **`src/modules/ticket/ticket.service.ts` + `.controller.ts` + `.routes.ts`** —
+  new `listChildren(parentTicketId)` (resolves `capa_id`, dedups) + `GET
+  /tickets/:id/children` powering the sidebar CHILD RECORDS card.
+- **`src/modules/stage-form/stage-form.service.ts`** — best-effort
+  `syncSubmissionFindings` hook after a generic submission is created.
+- **`src/modules/workflow/engine/orchestrator.ts`** — `syncTicketFindingsOnComplete`
+  hook on ticket completion.
+- **`src/app.ts`** — mount `findingRoutes` under `/api`.
+
+**Verified:** manual finding `F-2026-0001`; raise `CAPA-2026-0008` + `DEV-FQS-047`;
+children dedupe. Auto-gen on `INS-FQS-051` (submitted checklist → `F-2026-0002`
+MAJOR from non-conformance, `F-2026-0003` OBSERVATION; compliant items ignored).
+`tsc --noEmit` clean.
+
+---
+
+# Findings access control — per-workflow-type (not one global key) — 2026-07-16
+
+Follow-on to the feature above. Findings started with a single global `finding.*`
+permission set; converted to **per-workflow-type** keys so Access Control can
+grant/deny findings on each module independently — mirroring the per-module
+**ticket** keys (`wf_type.<id>.*`). Key scheme `finding.<typeId>.{read,create,
+update,delete}` (module `FINDING_TYPE`), only for `supportsFindings` types.
+Working tree only — **not committed**.
+
+- **`src/lib/rbac-findings.ts` (new)** — mirrors `rbac-workflow-types.ts` for
+  findings: `findingTypeKey`, `typeIdFromFindingKey`, `ensure/grant/delete`
+  helpers, and `syncFindingTypePermissions()` — upserts 4 keys for every
+  `supportsFindings` type, prunes orphans (type gone OR findings turned off).
+  Deliberately namespaced under `finding.` (not `wf_type.`) so no ticket-key
+  logic (migration / system-role / `ticketReadScope`) ever picks it up.
+- **`src/lib/rbac-sync.ts`** — call `syncFindingTypePermissions()` before the
+  SUPER_ADMIN "hold everything" step (so the invariant covers it); new
+  `pruneRetiredGlobalFindingKeys()` deletes the old module-`FINDING` master keys.
+- **`src/lib/rbac-catalog.ts`** — removed the 4 static global `finding.*` rows
+  (replaced by the dynamic per-type keys).
+- **`src/middleware/permissions.ts`** — new `requireFindingAction(action, from)`
+  guard: resolves the workflow type from the request (`ticketParam` /`body`
+  `source_ticket_id` / `finding` id / `query` `workflow_type_id`) and checks
+  `finding.<typeId>.<action>`. No type / non-findings type → no key can grant it.
+- **`src/modules/finding/finding.routes.ts`** — swapped every
+  `requirePermission('finding.*')` for `requireFindingAction(...)` (validate runs
+  first so the resolver sees parsed params/body/query).
+- **`src/modules/workflow/lookups/lookups.service.ts`** — hard-deleting a type now
+  also `deleteFindingTypePermissions(id)`.
+
+**Verified:** boot sync created **16 keys** (4 types × 4 verbs) for Inspection /
+Change Control / Deviation / Supplier Quality; old global keys pruned. Enforcement
+as admin: inspection & deviation findings → **200**, Batch Disposition
+(non-findings type) → **403**. Migrated the demo `QMS_ADMIN` role's retired global
+grant onto the 16 per-type keys so it keeps working. `tsc --noEmit` clean.
+
+---
+
 # Workflow site-ownership — backend (Phases A–D) — 2026-07-12
 
 Workflows gain a **site owner** so different sites can have their own workflows,

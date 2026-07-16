@@ -55,9 +55,10 @@ import {
 } from '@/lib/api/workflowLookups';
 import RaiseTicketDrawer from '@/features/tickets/shared/RaiseTicketDrawer';
 import ModuleAnalytics from './analytics';
+import ModuleFindingsRegister from './ModuleFindingsRegister';
 
 type KpiId = 'mine' | 'department' | 'createdByMe' | 'all' | 'pending' | 'saved';
-type Tab = 'dashboard' | 'workspace';
+type Tab = 'dashboard' | 'workspace' | 'findings';
 type StatusView = 'all' | 'open' | 'overdue' | 'onhold' | 'completed';
 
 const STATUS_VIEW_LABEL: Record<StatusView, string> = {
@@ -142,6 +143,9 @@ export default function ModulePage({
   const canForType = (action: string) => hasPermission(`wf_type.${typeId}.${action}`);
   const canCreate = canForType('create');
   const canDelete = canForType('delete');
+  // Findings register is gated by the per-type `finding.<id>.read` key, separate
+  // from ticket access (see lib/rbac-findings.ts).
+  const canReadFindings = hasPermission(`finding.${typeId}.read`);
   const deleteTicket = useDeleteTicket();
   const { modal } = App.useApp();
   const bookmarks = useBookmarkStore();
@@ -491,6 +495,14 @@ export default function ModulePage({
                       icon={<Briefcase size={14} />}
                       label="My Tasks"
                     />
+                    {workflowType?.supportsFindings && canReadFindings && (
+                      <TabButton
+                        active={tab === 'findings'}
+                        onClick={() => setTab('findings')}
+                        icon={<AlertTriangle size={14} />}
+                        label="Findings"
+                      />
+                    )}
                   </nav>
                 </div>
               </div>
@@ -540,6 +552,11 @@ export default function ModulePage({
         <div className="mt-4">
           <ModuleAnalytics tickets={allTickets} moduleName={moduleName} onDrill={handleDrill} />
         </div>
+      )}
+
+      {/* ── Findings register (findings-enabled modules) ────────────────── */}
+      {tab === 'findings' && typeId && canReadFindings && (
+        <ModuleFindingsRegister workflowTypeId={typeId} />
       )}
 
       {/* ── My Tasks tab: scope quick-filter cards above the ticket list ── */}

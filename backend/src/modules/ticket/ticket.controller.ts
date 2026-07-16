@@ -165,3 +165,8 @@ export const spawnChild = async (req: Request, res: Response) => {
   );
   res.status(201).json(result);
 };
+
+// Direct children (one level) — for the "Child records" view.
+export const listChildren = async (req: Request, res: Response) => {
+  res.json(await service.listChildren(req.params.id as string));
+};

@@ -1,5 +1,71 @@
 # Changes Log
 
+## Generic findings → child tickets (CAPA / Deviation) — frontend — 2026-07-16
+
+Surfaces the generic findings feature (backend companion in `backend/changes.md`)
+in the UI: a **Findings** tab on tickets of `supportsFindings` types, a
+**Findings register** per module, and **child records** nested under the parent
+ticket. Findings auto-generate from checklist dispositions; from one you raise a
+CAPA/Deviation child. Verified end-to-end via Playwright on local `kaizen_qms2`
+(login `admin@forgequantum.com`). Not committed.
+
+- **`src/lib/api/finding.ts` (new)** — React Query hooks: `useTicketFindings`,
+  `useFindingsRegister`, `useFindingChildren`, `useCreateFinding`,
+  `useUpdateFinding`, `useDeleteFinding`, `useRaiseChild`, `useTicketChildren` +
+  `Finding`/`FindingSeverity`/`FindingStatus` types.
+- **`src/features/tickets/detail/FindingsTab.tsx` (new)** — `DataTable` of a
+  ticket's findings (severity/status/source badges; "Checklist" vs "Manual"
+  origin) + `FindingDrawer` (manual add/edit fallback) + `RaiseChildDrawer`
+  (raise CAPA/Deviation → routes to the created record). Delete via shared
+  `useConfirmDelete`.
+- **`src/features/modules/ModuleFindingsRegister.tsx` (new)** — module-wide
+  findings register (severity/status filters, source-ticket + department columns,
+  server pagination).
+- **`src/features/tickets/detail/TicketSidebar.tsx`** — new **CHILD RECORDS** list
+  in the Linked Records card (via `useTicketChildren`) — CAPAs/Deviations raised
+  from this ticket's findings, one level deep.
+- **`src/features/tickets/TicketDetailPage.tsx`** — Findings tab wired in
+  (see per-type gating below).
+- **`src/features/modules/ModulePage.tsx`** — Findings tab + register wired in
+  (per-type gated).
+- **`src/lib/api/workflowLookups.ts`** — `WorkflowType` gains `supportsFindings`.
+- **`src/hooks/useCountdown.ts` (bug fix, found during this work)** — a
+  *"Maximum update depth exceeded"* infinite render loop on ticket-detail pages
+  with an active SLA: the effect dep array held a fresh `Date` each render.
+  Changed deps to `[deadlineMs]` and rebuild the `Date` inside the effect.
+
+**Verified (Playwright):** Findings tab shows the 2 auto-generated findings on
+`INS-FQS-051`; "Raise" → CAPA drawer → `CAPA-2026-0009` created; back on the
+ticket the sidebar shows **CHILD RECORDS (1)**; module **Findings** register lists
+all findings. Note: the workflow-types lookup is cached in `localStorage`, so an
+open tab needs a hard refresh to pick up the new `supportsFindings` flag.
+`tsc --noEmit` clean.
+
+## Findings access control — per-workflow-type rows in the matrix — 2026-07-16
+
+Findings permission went from one global switch to **per-workflow-type** (backend
+companion in `backend/changes.md`). The Access Control matrix now shows a
+**Findings** row nested under each supporting module (Inspection, Change Control,
+Deviation, Supplier Quality), granted independently of ticket access. Not committed.
+
+- **`src/lib/navAccess.ts`** — added `findingTypeEntity` + `findingType{Read,
+  Create,Update,Delete}Key` helpers. `workflowTypeModule(type)` now takes
+  `supportsFindings` and, when true, appends a second **"Findings"** tab (entity
+  `finding.<id>`, gate `finding.<id>.read`) beside "Workflow Tickets". (Reverted
+  the interim single global "Findings" nav group.)
+- **`src/features/admin/access-control/AccessControlTab.tsx`** — no change needed:
+  `useWorkflowTypeModules` already passes the full type object, so `supportsFindings`
+  flows through and the extra row renders per module.
+- **`src/features/tickets/TicketDetailPage.tsx`** — Findings tab now shows only
+  when `supportsFindings && hasPermission(finding.<typeId>.read)`; Add/Raise gated
+  on `finding.<typeId>.create` (was the global `finding.create`).
+- **`src/features/modules/ModulePage.tsx`** — module Findings tab + register gated
+  on `finding.<typeId>.read`.
+
+**Verified (Playwright):** Access Control → Master Data → search "finding" shows a
+**Findings** row under all four modules (each with Read/Create/Update/Delete);
+ticket Findings tab still renders for the admin. `tsc --noEmit` clean.
+
 ## LIMS Configuration table consistency — 2026-07-14
 
 Layout/visual cleanup across the LIMS Configuration list tables so they read as

@@ -16,6 +16,7 @@ import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, Forbidden, NotFound } from '../../lib/httpError';
 import { isAuditFormsStage } from '../../lib/auditFormsStage';
 import { syncSubmissionComplianceFindings } from '../audit/audit-compliance-sync.service';
+import { syncSubmissionFindings } from '../finding/finding-sync.service';
 import type {
   CreateStageFormBindingInput,
   CreateWorkflowSubmissionInput,
@@ -726,6 +727,21 @@ export const createWorkflowSubmission = async (
   });
 
   // TODO(Phase 4): emit `FORM_SUBMITTED` audit event when input.status === 'SUBMITTED'.
+
+  // Generic findings: on a completed checklist submission against a
+  // findings-enabled ticket, turn NON_CONFORMANCE / OBSERVATION dispositions
+  // into Findings. Best-effort + idempotent — a sync failure must never fail the
+  // submission the user just saved, and re-submitting never duplicates.
+  if (input.status === 'SUBMITTED') {
+    try {
+      await syncSubmissionFindings(ticketId, submission.id);
+    } catch (err) {
+      console.error(
+        `[stage-form] finding sync failed for submission ${submission.id}:`,
+        err,
+      );
+    }
+  }
 
   return submission;
 };

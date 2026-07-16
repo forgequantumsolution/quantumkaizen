@@ -6,6 +6,7 @@ import {
   grantWorkflowTypePermissionsToSuperAdmin,
   deleteWorkflowTypePermissions,
 } from '../../../lib/rbac-workflow-types';
+import { deleteFindingTypePermissions } from '../../../lib/rbac-findings';
 import { invalidatePermissionCache } from '../../../middleware/permissions';
 import type {
   CreateNamedInput,
@@ -94,6 +95,7 @@ export const deleteWorkflowType = async (id: string, hard: boolean) => {
     // grants cascade away via the M2M). Soft-delete keeps them so a restore is
     // seamless.
     await deleteWorkflowTypePermissions(id);
+    await deleteFindingTypePermissions(id);
     invalidatePermissionCache();
   } else {
     if (type.isDeleted) throw BadRequest('Workflow type already deleted');

@@ -57,19 +57,24 @@ export const useCountdown = (deadline: Date | string | null | undefined): Countd
     deadlineDate ? compute(deadlineDate) : null,
   );
 
+  // Depend ONLY on the primitive `deadlineMs` — `deadlineDate` is a fresh Date
+  // object every render, so including it here re-ran the effect on every render
+  // and `setState(compute())` (a new object each call) re-rendered, looping
+  // forever ("Maximum update depth exceeded"). Rebuild the Date inside instead.
   useEffect(() => {
-    if (!deadlineDate) {
+    if (!deadlineMs) {
       setState(null);
       return;
     }
-    setState(compute(deadlineDate));
+    const dd = new Date(deadlineMs);
+    setState(compute(dd));
 
     let intervalId: number | undefined;
 
     const start = () => {
       if (intervalId !== undefined) return;
       intervalId = window.setInterval(() => {
-        setState(compute(deadlineDate));
+        setState(compute(dd));
       }, 1000);
     };
 
@@ -86,7 +91,7 @@ export const useCountdown = (deadline: Date | string | null | undefined): Countd
       } else {
         // Resync immediately on tab return so the display jumps to the correct
         // value rather than ticking forward from the stale state.
-        setState(compute(deadlineDate));
+        setState(compute(dd));
         start();
       }
     };
@@ -98,7 +103,7 @@ export const useCountdown = (deadline: Date | string | null | undefined): Countd
       stop();
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [deadlineMs, deadlineDate]);
+  }, [deadlineMs]);
 
   return state;
 };

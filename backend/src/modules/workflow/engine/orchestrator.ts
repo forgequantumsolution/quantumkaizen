@@ -18,6 +18,7 @@ import { onTicketHeld, onTicketResumed } from './sla.handler';
 import { resolveLatestVersion } from '../workflow.versioning';
 import { ensureDefaultSite } from '../../../lib/site-defaults';
 import { syncTicketComplianceFindings } from '../../audit/audit-compliance-sync.service';
+import { syncTicketFindingsOnComplete } from '../../finding/finding-sync.service';
 import { syncCapaFromTicketId } from '../../audit/capa.service';
 import type {
   ActorContext,
@@ -524,6 +525,13 @@ export const performAction = async (
       await syncTicketComplianceFindings(ticketId);
     } catch (err) {
       console.error('[audit] compliance sync failed for ticket', ticketId, err);
+    }
+    // Generic (non-audit) findings-enabled modules: same roll-up into the
+    // generic Finding table. Best-effort + idempotent.
+    try {
+      await syncTicketFindingsOnComplete(ticketId);
+    } catch (err) {
+      console.error('[finding] finding sync failed for ticket', ticketId, err);
     }
   }
 
