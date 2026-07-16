@@ -142,6 +142,19 @@ export default function StageFormSection({ ticketId }: Props) {
           submissionId={active.latestSubmission?.id ?? null}
           readOnly={readOnly}
           variant="inline"
+          onSubmitted={(status) => {
+            // On submit, auto-advance to the next unfinished checklist so the
+            // user isn't left on the just-completed (now read-only) form waiting
+            // for a manual reload. Computed from the current order (treating the
+            // just-submitted form as done); if none remain we stay put.
+            if (status !== 'SUBMITTED') return;
+            const next = bindings.find(
+              (b) =>
+                b.id !== active.id &&
+                b.latestSubmission?.status !== 'SUBMITTED',
+            );
+            if (next) setActiveBindingId(next.id);
+          }}
         />
       </div>
 

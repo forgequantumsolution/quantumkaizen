@@ -480,3 +480,37 @@ tabs (Notifications / Security / Org Profile) are now hidden too, since they wer
 only reachable via this group. If theming should stay universal, relocate
 "Appearance" out of Configuration — e.g. wire the currently-dead **"Profile &
 Preferences"** header button to `/appearance`. (Not done — flagged for a decision.)
+
+## Audit "perform audit" — next checklist now auto-advances on submit
+
+**Bug (reported):** in the audit *perform* flow, submitting one stage-form
+checklist did not surface the next checklist — it stayed on the just-completed
+(now read-only) form until a manual page refresh.
+
+**Root cause:** the checklist data *did* refresh (the submit mutation invalidates
+the ticket stage-forms query, so chips + progress bar update instantly). The
+problem was **which** checklist stayed active. The auto-select effect in
+`client/src/features/tickets/detail/StageFormSection.tsx` only picks the first
+pending checklist when `activeBindingId` is empty or points at a binding that no
+longer exists. After submit, `activeBindingId` still pointed at the just-submitted
+binding — which is still in the list, just now `SUBMITTED` — so the effect
+early-returned and never advanced. A refresh remounts the component with a null
+`activeBindingId`, so it then correctly jumped to the first pending checklist.
+
+**Fix:** `StageFormSection` now passes an `onSubmitted` handler to `FormFillEmbed`.
+On a successful `SUBMITTED`, it advances `activeBindingId` to the next
+non-submitted checklist (computed from current order, excluding the one just
+submitted; stays put if none remain). Draft saves (`IN_PROGRESS`) are ignored.
+
+- An effect-based alternative (advance whenever the active binding is `SUBMITTED`)
+  was rejected: it can't distinguish *just submitted* from *clicked a green chip to
+  review*, so it would block reviewing completed checklists. `onSubmitted` only
+  fires on an actual submit, preserving manual review.
+- Advances before the refetch lands (by design); no race — when the refetch lands,
+  `activeBindingId` already points at the next binding, so the effect early-returns.
+
+| File | Change |
+|------|--------|
+| `client/src/features/tickets/detail/StageFormSection.tsx` | Added `onSubmitted` to the embedded `FormFillEmbed`; on `SUBMITTED` it selects the next non-submitted binding. |
+
+Frontend typecheck clean. Not yet verified live in-app (submit checklist #1 → #2 should appear without refresh).
