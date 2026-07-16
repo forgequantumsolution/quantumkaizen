@@ -110,6 +110,17 @@ const ROLES = [
       'user.read', 'department.read', 'org.read', 'site.read',
       'doc.read', 'capa.read', 'nc.read',
       'audit.read', 'audit.write', 'audit.approve',
+      // Audit module (new `audit_*` catalog). AUDITORs run audits AND are the
+      // intended approvers, so they hold `audit_register.approve`; combined with
+      // the named-approver enforcement in audit-register.service.ts this lets an
+      // auditor named on a register approve it (and only that register).
+      'audit_register.read', 'audit_register.create', 'audit_register.update', 'audit_register.approve',
+      'audit_master.read', 'audit_master.create', 'audit_master.update',
+      'audit_program.read', 'audit_program.execute',
+      'audit_finding.read', 'audit_finding.create', 'audit_finding.update',
+      'audit_schedule.read', 'audit_schedule.create', 'audit_schedule.update',
+      'audit_type.read', 'audit_type.create', 'audit_type.update',
+      'non_conformance.read', 'non_conformance.create',
       'fmea.read', 'risk.read', 'supplier.read',
       'training.read', 'inspection.read', 'calibration.read',
       'workflow.read', 'workflow.lookups.read',

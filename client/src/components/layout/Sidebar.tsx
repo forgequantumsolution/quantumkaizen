@@ -379,8 +379,12 @@ export default function Sidebar() {
         // personal tabs (profile / notifications / security) don't warrant the
         // entry on their own.
         {
+          // Explicit section param so this doesn't loose-match every /settings*
+          // URL — otherwise Master Data stays highlighted on the Workflows/Forms
+          // sub-sections too (they share the /settings pathname). SettingsPage
+          // treats any non-workflows/forms section as master-data.
           label: "Master Data",
-          path: "/settings",
+          path: "/settings?section=master-data",
           icon: Database,
           anyPermission: [
             "user.read",
