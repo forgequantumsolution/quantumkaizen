@@ -1,7 +1,6 @@
 import './chartTheme';
 import TopBar from './components/TopBar';
-import OperationalSnapshot from './components/OperationalSnapshot';
-import ScorecardSection from './components/ScorecardSection';
+import KpiStrip from './components/KpiStrip';
 import NonConformanceSection from './components/NonConformanceSection';
 import CapaComplaintsSection from './components/CapaComplaintsSection';
 import DocumentsTrainingSection from './components/DocumentsTrainingSection';
@@ -26,8 +25,7 @@ function DashboardBody() {
 
   return (
     <div className="wrap">
-      {has('snapshot') && <OperationalSnapshot />}
-      {has('scorecard') && <ScorecardSection />}
+      {(has('snapshot') || has('scorecard')) && <KpiStrip />}
       {has('nonconformance') && <NonConformanceSection />}
       {(has('capa') || has('complaints')) && <CapaComplaintsSection />}
       {(has('documents') || has('training')) && <DocumentsTrainingSection />}

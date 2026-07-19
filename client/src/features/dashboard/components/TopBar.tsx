@@ -1,17 +1,22 @@
-import { useNavigate } from 'react-router-dom';
 import { useDashboard, SEG_TO_RANGE, RANGE_TO_SEG } from '../context';
+import { useAuthStore } from '@/stores/authStore';
+import { useSiteStore } from '@/stores/siteStore';
 
 const RANGES = ['7D', '1M', '3M', '12M', '3Y'] as const;
 
 export default function TopBar() {
-  const navigate = useNavigate();
   const { range, setRange, data, isSample } = useDashboard();
   const activeSeg = RANGE_TO_SEG[range];
+
+  const allowedSites = useAuthStore((s) => s.user?.allowedSites ?? []);
+  const selectedSiteId = useSiteStore((s) => s.selectedSiteId);
+  const setSelectedSiteId = useSiteStore((s) => s.setSelectedSiteId);
 
   const scope = data?.scope;
   const orgName = scope?.organization?.name ?? 'Quantum Kairoz';
   const siteLabel = scope?.site ? scope.site.name : (scope?.canViewAll ? 'All Sites' : scope?.department ?? 'My Scope');
   const roleLabel = scope?.role && scope.role !== 'NONE' ? scope.role : null;
+  const canViewAll = scope?.canViewAll ?? false;
 
   const updated = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -56,28 +61,28 @@ export default function TopBar() {
           ))}
         </div>
 
-        <div className="qa-bar">
-          <button className="btn-primary" type="button" title="Report Non-Conformance" onClick={() => navigate('/audit/non-conformance')}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" /></svg>
-            Report NC
-          </button>
-          <button className="qa-btn" type="button" title="Create Document" onClick={() => navigate('/forms/new')}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M7 3h7l5 5v13H7z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /><path d="M14 3v5h5" stroke="currentColor" strokeWidth="1.6" /></svg>
-            <span>Document</span>
-          </button>
-          <button className="qa-btn" type="button" title="Schedule Audit" onClick={() => navigate('/audit/register')}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="16" rx="2.5" stroke="currentColor" strokeWidth="1.6" /><path d="M4 9h16M9 3v4M15 3v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>
-            <span>Audit</span>
-          </button>
-          <button className="qa-btn" type="button" title="New CAPA" onClick={() => navigate('/workflows')}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M9 4h6l1 3h3v13H5V7h3l1-3Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
-            <span>CAPA</span>
-          </button>
-          <button className="qa-btn" type="button" title="Log Complaint" onClick={() => navigate('/tickets')}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 5h16v11H8l-4 4V5Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" /></svg>
-            <span>Complaint</span>
-          </button>
-        </div>
+        {/* Site filter — scopes the whole dashboard. Only offered to users who
+            may view more than one site; single-site users have nothing to pick. */}
+        {(canViewAll || allowedSites.length > 1) && (
+          <div className="site-filter">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="M4 21h16M6 21V8l6-4 6 4v13M10 12h4M10 16h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <select
+              value={selectedSiteId ?? ''}
+              onChange={(e) => setSelectedSiteId(e.target.value || null)}
+              aria-label="Filter by site"
+            >
+              {canViewAll && <option value="">All Sites</option>}
+              {allowedSites.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+            <svg className="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+        )}
       </div>
     </header>
   );
