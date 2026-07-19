@@ -8,7 +8,7 @@ import {
 } from '@react-pdf/renderer';
 import { formatDate, formatDateTime } from '@/lib/utils';
 import { REPORT } from './reportTheme';
-import type { TicketReportData } from './useTicketReportData';
+import type { TicketReportData, ReportForm } from './reportTypes';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -24,9 +24,7 @@ const ticketStatus = (t: TicketReportData['ticket']): { label: string; color: st
   return { label: 'Open', color: REPORT.info };
 };
 
-const titleCase = (v: string) =>
-  v.charAt(0) + v.slice(1).toLowerCase();
-
+const titleCase = (v: string) => v.charAt(0) + v.slice(1).toLowerCase();
 const dash = (v: string | null | undefined) => (v && v.trim() ? v : '—');
 
 // ─── Styles ─────────────────────────────────────────────────────────────────
@@ -34,7 +32,7 @@ const dash = (v: string | null | undefined) => (v && v.trim() ? v : '—');
 const styles = StyleSheet.create({
   page: {
     paddingTop: 92,
-    paddingBottom: 56,
+    paddingBottom: 54,
     paddingHorizontal: 40,
     fontSize: 9.5,
     fontFamily: 'Helvetica',
@@ -42,40 +40,40 @@ const styles = StyleSheet.create({
     lineHeight: 1.4,
   },
 
-  // Header (fixed on every page)
+  // Header (fixed)
   header: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: 24,
+    paddingTop: 22,
     paddingHorizontal: 40,
-    paddingBottom: 10,
+    paddingBottom: 9,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     borderBottomWidth: 2,
     borderBottomColor: REPORT.gold,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', maxWidth: 320 },
-  logo: { width: 40, height: 40, objectFit: 'contain', marginRight: 10 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', maxWidth: 340 },
+  logo: { width: 38, height: 38, objectFit: 'contain', marginRight: 10 },
   logoFallback: {
-    width: 40,
-    height: 40,
+    width: 38,
+    height: 38,
     marginRight: 10,
     borderRadius: 6,
     backgroundColor: REPORT.navy,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoFallbackText: { color: REPORT.gold, fontFamily: 'Helvetica-Bold', fontSize: 13 },
+  logoFallbackText: { color: REPORT.gold, fontFamily: 'Helvetica-Bold', fontSize: 12 },
   orgName: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: REPORT.navy },
   orgMeta: { fontSize: 7.5, color: REPORT.sub, marginTop: 1 },
   headerRight: { alignItems: 'flex-end' },
   reportKicker: { fontSize: 7.5, letterSpacing: 1, color: REPORT.gold, fontFamily: 'Helvetica-Bold' },
   reportId: { fontFamily: 'Helvetica-Bold', fontSize: 12, color: REPORT.navy, marginTop: 2 },
 
-  // Footer (fixed on every page)
+  // Footer (fixed)
   footer: {
     position: 'absolute',
     bottom: 22,
@@ -91,13 +89,24 @@ const styles = StyleSheet.create({
     color: REPORT.faint,
   },
 
-  // Title block
-  docTitle: { fontFamily: 'Helvetica-Bold', fontSize: 16, color: REPORT.navy },
+  // Cover band
+  cover: {
+    backgroundColor: REPORT.navy,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 4,
+  },
+  coverKicker: { fontSize: 7.5, letterSpacing: 1.2, color: REPORT.gold, fontFamily: 'Helvetica-Bold' },
+  coverTitle: { fontFamily: 'Helvetica-Bold', fontSize: 17, color: REPORT.white, marginTop: 5, lineHeight: 1.25 },
+  coverStrip: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, gap: 0 },
+  coverStat: { width: '25%', paddingRight: 8, marginBottom: 4 },
+  coverStatLabel: { fontSize: 6.5, letterSpacing: 0.5, color: '#8A8FA3', textTransform: 'uppercase' },
+  coverStatValue: { fontSize: 9, color: REPORT.white, fontFamily: 'Helvetica-Bold', marginTop: 2 },
   statusPill: {
-    marginTop: 6,
     alignSelf: 'flex-start',
-    paddingVertical: 2,
-    paddingHorizontal: 8,
+    marginTop: 8,
+    paddingVertical: 2.5,
+    paddingHorizontal: 9,
     borderRadius: 3,
     fontSize: 8,
     fontFamily: 'Helvetica-Bold',
@@ -105,7 +114,7 @@ const styles = StyleSheet.create({
   },
 
   // Sections
-  section: { marginTop: 16 },
+  section: { marginTop: 15 },
   sectionTitle: {
     fontFamily: 'Helvetica-Bold',
     fontSize: 10,
@@ -118,34 +127,87 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  // Field grid (2 columns)
-  fieldGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  field: { width: '50%', paddingRight: 12, marginBottom: 7 },
-  fieldLabel: { fontSize: 7.5, color: REPORT.sub, textTransform: 'uppercase', letterSpacing: 0.5 },
-  fieldValue: { fontSize: 9.5, color: REPORT.ink, marginTop: 1 },
+  // Field grid
+  fieldGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    borderWidth: 1,
+    borderColor: REPORT.border,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  field: {
+    width: '50%',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: REPORT.border,
+  },
+  fieldLabel: { fontSize: 7, color: REPORT.sub, textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldValue: { fontSize: 9.5, color: REPORT.ink, marginTop: 2 },
 
   // Prose
+  proseBox: {
+    borderWidth: 1,
+    borderColor: REPORT.border,
+    borderRadius: 4,
+    padding: 10,
+  },
+  proseLabel: { fontSize: 7, color: REPORT.sub, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 },
   prose: { fontSize: 9.5, color: REPORT.ink },
-  proseLabel: { fontSize: 7.5, color: REPORT.sub, textTransform: 'uppercase', marginBottom: 2, marginTop: 6 },
+  proseDivider: { height: 1, backgroundColor: REPORT.border, marginVertical: 8 },
 
   // Table
-  table: { borderWidth: 1, borderColor: REPORT.border, borderRadius: 3 },
+  table: { borderWidth: 1, borderColor: REPORT.border, borderRadius: 4, overflow: 'hidden' },
   tr: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: REPORT.border },
   trLast: { flexDirection: 'row' },
-  th: {
-    backgroundColor: REPORT.navySoft,
-    fontFamily: 'Helvetica-Bold',
-    fontSize: 8,
-    color: REPORT.navy,
-    padding: 5,
-  },
+  th: { backgroundColor: REPORT.navySoft, fontFamily: 'Helvetica-Bold', fontSize: 8, color: REPORT.navy, padding: 5 },
   td: { fontSize: 8.5, color: REPORT.ink, padding: 5 },
   rowAlt: { backgroundColor: REPORT.rowAlt },
+
+  // Forms
+  formCard: {
+    borderWidth: 1,
+    borderColor: REPORT.border,
+    borderRadius: 5,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  formHead: {
+    backgroundColor: REPORT.navySoft,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: REPORT.border,
+  },
+  formTitle: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: REPORT.navy },
+  formMeta: { fontSize: 7.5, color: REPORT.sub, marginTop: 2 },
+  formBody: { padding: 10 },
+  formSectionName: {
+    fontFamily: 'Helvetica-Bold',
+    fontSize: 8.5,
+    color: REPORT.gold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 5,
+    marginTop: 6,
+  },
+  kv: { flexDirection: 'row', marginBottom: 4, alignItems: 'flex-start' },
+  kvLabel: { width: '38%', paddingRight: 8, fontSize: 8.5, color: REPORT.sub },
+  kvValue: { width: '62%', fontSize: 8.5, color: REPORT.ink, fontFamily: 'Helvetica-Bold' },
+  tableCaption: { fontSize: 8.5, color: REPORT.sub, marginBottom: 3 },
 
   empty: { fontSize: 8.5, color: REPORT.faint, fontStyle: 'italic' },
 });
 
 // ─── Small components ─────────────────────────────────────────────────────────
+
+const CoverStat = ({ label, value }: { label: string; value: string }) => (
+  <View style={styles.coverStat}>
+    <Text style={styles.coverStatLabel}>{label}</Text>
+    <Text style={styles.coverStatValue}>{value}</Text>
+  </View>
+);
 
 const Field = ({ label, value }: { label: string; value: string }) => (
   <View style={styles.field}>
@@ -154,8 +216,6 @@ const Field = ({ label, value }: { label: string; value: string }) => (
   </View>
 );
 
-// The section itself is wrappable so long tables flow onto following pages;
-// `minPresenceAhead` on the title keeps it from being orphaned at a page foot.
 const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
   <View style={styles.section}>
     <Text style={styles.sectionTitle} minPresenceAhead={60}>
@@ -181,7 +241,7 @@ const Table = ({ cols, rows }: { cols: Col[]; rows: string[][] }) => (
     {rows.map((row, r) => (
       <View key={r} style={r === rows.length - 1 ? styles.trLast : styles.tr} wrap={false}>
         {row.map((cell, i) => (
-          <Text key={i} style={[styles.td, { width: cols[i].width }, r % 2 === 1 ? styles.rowAlt : {}]}>
+          <Text key={i} style={[styles.td, { width: cols[i]?.width }, r % 2 === 1 ? styles.rowAlt : {}]}>
             {cell}
           </Text>
         ))}
@@ -190,12 +250,71 @@ const Table = ({ cols, rows }: { cols: Col[]; rows: string[][] }) => (
   </View>
 );
 
+// One submitted form/checklist as a card with its resolved field values.
+const FormCard = ({ form }: { form: ReportForm }) => (
+  <View style={styles.formCard} wrap>
+    <View style={styles.formHead}>
+      <Text style={styles.formTitle}>{form.title}</Text>
+      <Text style={styles.formMeta}>
+        {[
+          form.stageName ? `Stage: ${form.stageName}` : null,
+          titleCase(form.status),
+          form.submittedBy ? `By ${form.submittedBy}` : null,
+          form.submittedAt ? formatDateTime(form.submittedAt) : null,
+        ]
+          .filter(Boolean)
+          .join('  ·  ')}
+      </Text>
+    </View>
+    <View style={styles.formBody}>
+      {form.sections.length === 0 ? (
+        <Text style={styles.empty}>Submitted — no field detail available.</Text>
+      ) : (
+        form.sections.map((sec, si) => (
+          <View key={si}>
+            <Text style={styles.formSectionName}>{sec.name}</Text>
+            {sec.fields.map((f, fi) =>
+              f.table ? (
+                <View key={fi} style={{ marginBottom: 6 }}>
+                  <Text style={styles.tableCaption}>{f.label}</Text>
+                  <View style={{ marginTop: 3 }}>
+                    <Table
+                      cols={f.table.columns.map((h) => ({
+                        header: h,
+                        width: `${100 / Math.max(f.table!.columns.length, 1)}%`,
+                      }))}
+                      rows={f.table.rows}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <View key={fi} style={styles.kv} wrap={false}>
+                  <Text style={styles.kvLabel}>{f.label}</Text>
+                  <Text style={styles.kvValue}>{f.text}</Text>
+                </View>
+              ),
+            )}
+          </View>
+        ))
+      )}
+    </View>
+  </View>
+);
+
 // ─── Document ─────────────────────────────────────────────────────────────────
 
-export default function TicketReportDocument({ org, ticket, timeline, comments, docs, forms }: TicketReportData) {
+export default function TicketReportDocument({
+  org,
+  ticket,
+  timeline,
+  comments,
+  docs,
+  forms,
+  children,
+}: TicketReportData) {
   const status = ticketStatus(ticket);
   const flow = ticket.flows[0];
-  const currentStages = flow?.currentStages?.map((s) => s.name).join(', ') || '—';
+  const currentStages = flow?.currentStages?.map((s) => s.name).join(', ') || (flow?.isCompleted ? 'Completed' : '—');
   const generatedAt = formatDateTime(new Date());
 
   const timelineRows: string[][] = timeline.map((e) => {
@@ -210,14 +329,6 @@ export default function TicketReportDocument({ org, ticket, timeline, comments, 
     return [formatDateTime(e.at), 'Comment', `${e.author ? `${e.author.name}: ` : ''}${e.body}`];
   });
 
-  const formRows: string[][] = forms.map((f) => [
-    dash(f.formTitle),
-    dash(f.stageName),
-    titleCase(f.status),
-    f.submittedBy?.name ?? '—',
-    formatDateTime(f.submittedAt),
-  ]);
-
   const commentRows: string[][] = comments.map((c) => [
     c.author?.name ?? '—',
     formatDateTime(c.createdAt),
@@ -229,6 +340,13 @@ export default function TicketReportDocument({ org, ticket, timeline, comments, 
     titleCase(d.docType),
     d.uploadedBy?.name ?? '—',
     formatDate(d.createdAt),
+  ]);
+
+  const childRows: string[][] = children.map((c) => [
+    c.unique_id,
+    c.title,
+    dash(c.module),
+    dash(c.stage),
   ]);
 
   const customEntries = ticket.customFields
@@ -245,9 +363,7 @@ export default function TicketReportDocument({ org, ticket, timeline, comments, 
               <Image style={styles.logo} src={org.logoUrl} />
             ) : (
               <View style={styles.logoFallback}>
-                <Text style={styles.logoFallbackText}>
-                  {(org.name || 'Q').slice(0, 2).toUpperCase()}
-                </Text>
+                <Text style={styles.logoFallbackText}>{(org.name || 'Q').slice(0, 2).toUpperCase()}</Text>
               </View>
             )}
             <View>
@@ -268,17 +384,30 @@ export default function TicketReportDocument({ org, ticket, timeline, comments, 
           <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
         </View>
 
-        {/* Title */}
-        <View>
-          <Text style={styles.docTitle}>{ticket.title}</Text>
+        {/* Cover band */}
+        <View style={styles.cover}>
+          <Text style={styles.coverKicker}>{dash(flow?.workflowName).toUpperCase()}</Text>
+          <Text style={styles.coverTitle}>{ticket.title}</Text>
+          <View style={styles.coverStrip}>
+            <CoverStat label="Ticket ID" value={ticket.uniqueId} />
+            <CoverStat label="Priority" value={dash(ticket.priority?.name)} />
+            <CoverStat label="Severity" value={dash(ticket.severity?.name)} />
+            <CoverStat label="Department" value={dash(ticket.department?.name)} />
+            <CoverStat label="Site" value={dash(ticket.site?.name)} />
+            <CoverStat label="Current Stage" value={currentStages} />
+            <CoverStat label="Raised By" value={dash(ticket.createdBy?.name)} />
+            <CoverStat label="Raised On" value={formatDate(ticket.createdAt)} />
+          </View>
           <Text style={[styles.statusPill, { backgroundColor: status.color }]}>{status.label}</Text>
         </View>
 
         {/* Summary */}
-        <Section title="Summary">
+        <Section title="Ticket Details">
           <View style={styles.fieldGrid}>
             <Field label="Ticket ID" value={ticket.uniqueId} />
             <Field label="Status" value={status.label} />
+            <Field label="Process / Workflow" value={`${dash(flow?.workflowName)}${flow ? `  (v${flow.workflowVersion})` : ''}`} />
+            <Field label="Current Stage" value={currentStages} />
             <Field label="Priority" value={dash(ticket.priority?.name)} />
             <Field label="Severity" value={dash(ticket.severity?.name)} />
             <Field label="Classification" value={ticket.classification ? titleCase(ticket.classification) : '—'} />
@@ -296,20 +425,37 @@ export default function TicketReportDocument({ org, ticket, timeline, comments, 
 
         {/* Description & Reason */}
         <Section title="Description & Reason">
-          <Text style={styles.proseLabel}>Description</Text>
-          <Text style={styles.prose}>{dash(ticket.description)}</Text>
-          <Text style={styles.proseLabel}>Reason</Text>
-          <Text style={styles.prose}>{dash(ticket.ticketReason)}</Text>
+          <View style={styles.proseBox}>
+            <Text style={styles.proseLabel}>Description</Text>
+            <Text style={styles.prose}>{dash(ticket.description)}</Text>
+            <View style={styles.proseDivider} />
+            <Text style={styles.proseLabel}>Reason</Text>
+            <Text style={styles.prose}>{dash(ticket.ticketReason)}</Text>
+          </View>
         </Section>
 
-        {/* Workflow */}
-        <Section title="Workflow">
-          <View style={styles.fieldGrid}>
-            <Field label="Workflow" value={dash(flow?.workflowName)} />
-            <Field label="Version" value={flow ? `v${flow.workflowVersion}` : '—'} />
-            <Field label="Current Stage(s)" value={currentStages} />
-            <Field label="Completed" value={flow?.isCompleted ? 'Yes' : 'No'} />
-          </View>
+        {/* Child tickets */}
+        {childRows.length > 0 && (
+          <Section title={`Child Tickets (${childRows.length})`}>
+            <Table
+              cols={[
+                { header: 'Ticket ID', width: '22%' },
+                { header: 'Title', width: '44%' },
+                { header: 'Type', width: '18%' },
+                { header: 'Stage / Status', width: '16%' },
+              ]}
+              rows={childRows}
+            />
+          </Section>
+        )}
+
+        {/* Forms & checklists with field data */}
+        <Section title={`Forms & Checklists${forms.length ? ` (${forms.length})` : ''}`}>
+          {forms.length ? (
+            forms.map((f) => <FormCard key={f.id} form={f} />)
+          ) : (
+            <Text style={styles.empty}>No forms submitted.</Text>
+          )}
         </Section>
 
         {/* Timeline */}
@@ -325,24 +471,6 @@ export default function TicketReportDocument({ org, ticket, timeline, comments, 
             />
           ) : (
             <Text style={styles.empty}>No activity recorded.</Text>
-          )}
-        </Section>
-
-        {/* Stage forms */}
-        <Section title="Submitted Forms">
-          {formRows.length ? (
-            <Table
-              cols={[
-                { header: 'Form', width: '30%' },
-                { header: 'Stage', width: '22%' },
-                { header: 'Status', width: '14%' },
-                { header: 'Submitted By', width: '18%' },
-                { header: 'Submitted', width: '16%' },
-              ]}
-              rows={formRows}
-            />
-          ) : (
-            <Text style={styles.empty}>No forms submitted.</Text>
           )}
         </Section>
 
