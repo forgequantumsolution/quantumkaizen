@@ -1,159 +1,87 @@
 import { useEffect, useRef } from 'react';
-import { Chart, type Plugin, type ScriptableContext } from 'chart.js';
+import { Chart } from 'chart.js';
 import SectionHead from './SectionHead';
-import { C, gridX, gridY, gradient, tooltipStyle } from '../chartTheme';
+import { C, tooltipStyle } from '../chartTheme';
+import { useDashboard } from '../context';
 
 export default function InspectionCalibrationSection() {
-  const passRef = useRef<HTMLCanvasElement>(null);
+  const { data, has } = useDashboard();
+  const inspection = data?.panels.inspection;
+  const calibration = data?.panels.calibration;
+  const showInsp = has('inspection');
+  const showCal = has('calibration');
+
+  const gaugeRef = useRef<HTMLCanvasElement>(null);
   const resRef = useRef<HTMLCanvasElement>(null);
   const calRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!passRef.current || !resRef.current || !calRef.current) return;
-    [passRef, resRef, calRef].forEach((r) => {
-      if (r.current) Chart.getChart(r.current)?.destroy();
-    });
     const charts: Chart[] = [];
+    [gaugeRef, resRef, calRef].forEach((r) => { if (r.current) Chart.getChart(r.current)?.destroy(); });
 
-    const pTarget: Plugin<'line'> = {
-      id: 'pt',
-      afterDraw(c) {
-        const y = c.scales.y.getPixelForValue(95);
-        const a = c.chartArea;
-        const ctx = c.ctx;
-        ctx.save();
-        ctx.strokeStyle = C.brand;
-        ctx.setLineDash([5, 4]);
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(a.left, y);
-        ctx.lineTo(a.right, y);
-        ctx.stroke();
-        ctx.restore();
-      },
-    };
-
-    charts.push(
-      new Chart(passRef.current, {
-        type: 'line',
-        data: {
-          labels: ['Oct-24', 'Nov-24', 'Dec-24'],
-          datasets: [
-            {
-              data: [97, 94, 96],
-              borderColor: C.good, borderWidth: 2.5, tension: 0.4,
-              pointRadius: 4, pointBackgroundColor: '#fff', pointBorderColor: C.good, pointBorderWidth: 2,
-              fill: true,
-              backgroundColor: (ctx: ScriptableContext<'line'>) =>
-                gradient(ctx.chart.ctx, 240, 'rgba(21,163,74,.16)', 'rgba(21,163,74,0)'),
-            },
-          ],
-        },
-        options: {
-          plugins: { tooltip: tooltipStyle },
-          scales: {
-            x: gridX,
-            y: { ...gridY, min: 88, max: 100, ticks: { callback: (v) => v + '%' } },
-          },
-        },
-        plugins: [pTarget],
-      }),
-    );
-
-    charts.push(
-      new Chart<'doughnut'>(resRef.current, {
+    if (showInsp && inspection && gaugeRef.current) {
+      const rate = inspection.passRate;
+      charts.push(new Chart<'doughnut'>(gaugeRef.current, {
         type: 'doughnut',
         data: {
-          labels: ['Pass', 'Fail', 'Conditional', 'Pending'],
-          datasets: [
-            {
-              data: [82, 6, 9, 3],
-              backgroundColor: [C.good, C.bad, C.warn, C.neutral],
-              borderWidth: 3, borderColor: '#fff', hoverOffset: 6,
-            },
-          ],
+          labels: ['Pass', 'Remaining'],
+          datasets: [{ data: [rate, Math.max(0, 100 - rate)], backgroundColor: [rate >= 95 ? C.good : rate >= 90 ? C.warn : C.bad, '#eef1f5'], borderWidth: 0, circumference: 180, rotation: 270 }],
         },
-        options: {
-          cutout: '64%',
-          plugins: {
-            tooltip: tooltipStyle,
-            legend: {
-              display: true, position: 'bottom',
-              labels: {
-                boxWidth: 8, boxHeight: 8, usePointStyle: true,
-                pointStyle: 'circle', padding: 12, color: C.ink2, font: { size: 11 },
-              },
-            },
-          },
-        },
-      }),
-    );
+        options: { cutout: '72%', plugins: { tooltip: { enabled: false } } },
+      }));
+    }
 
-    charts.push(
-      new Chart<'doughnut'>(calRef.current, {
+    if (showInsp && inspection && resRef.current) {
+      const palette: Record<string, string> = { Pass: C.good, Fail: C.bad, Conditional: C.warn, Pending: C.neutral };
+      charts.push(new Chart<'doughnut'>(resRef.current, {
         type: 'doughnut',
         data: {
-          labels: ['Current', 'Due Soon', 'Overdue', 'Out of Service'],
-          datasets: [
-            {
-              data: [68, 15, 11, 6],
-              backgroundColor: [C.good, C.warn, C.bad, C.neutral],
-              borderWidth: 3, borderColor: '#fff', hoverOffset: 6,
-            },
-          ],
+          labels: inspection.byResult.map((r) => r.result),
+          datasets: [{ data: inspection.byResult.map((r) => r.count), backgroundColor: inspection.byResult.map((r) => palette[r.result] ?? C.neutral), borderWidth: 3, borderColor: '#fff', hoverOffset: 6 }],
         },
-        options: {
-          cutout: '64%',
-          plugins: {
-            tooltip: tooltipStyle,
-            legend: {
-              display: true, position: 'bottom',
-              labels: {
-                boxWidth: 8, boxHeight: 8, usePointStyle: true,
-                pointStyle: 'circle', padding: 12, color: C.ink2, font: { size: 11 },
-              },
-            },
-          },
+        options: { cutout: '64%', plugins: { tooltip: tooltipStyle, legend: { display: true, position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, pointStyle: 'circle', padding: 12, color: C.ink2, font: { size: 11 } } } } },
+      }));
+    }
+
+    if (showCal && calibration && calRef.current) {
+      charts.push(new Chart<'doughnut'>(calRef.current, {
+        type: 'doughnut',
+        data: {
+          labels: calibration.status.map((s) => s.status),
+          datasets: [{ data: calibration.status.map((s) => s.count), backgroundColor: calibration.status.map((s) => s.fill), borderWidth: 3, borderColor: '#fff', hoverOffset: 6 }],
         },
-      }),
-    );
+        options: { cutout: '64%', plugins: { tooltip: tooltipStyle, legend: { display: true, position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, pointStyle: 'circle', padding: 12, color: C.ink2, font: { size: 11 } } } } },
+      }));
+    }
 
     return () => charts.forEach((c) => { try { c.destroy(); } catch { /* */ } });
-  }, []);
+  }, [inspection, calibration, showInsp, showCal]);
 
   return (
     <>
-      <SectionHead title="Inspection & Calibration" tag="Target 95% pass" />
+      <SectionHead title="Inspection & Calibration" tag={showInsp ? `${inspection?.passRate ?? 0}% first-pass` : 'Instrument fleet'} />
       <div className="grid g3">
-        <div className="card d1">
-          <div className="card-h">
-            <div>
-              <h3>Inspection Pass Rate</h3>
-              <div className="sub">vs 95% target</div>
+        {showInsp && (
+          <div className="card d1">
+            <div className="card-h"><div><h3>First-Pass Rate</h3><div className="sub">Passing inspections</div></div></div>
+            <div className="chart-box h-md" style={{ position: 'relative' }}>
+              <canvas ref={gaugeRef} />
+              <div className="gauge-val">{inspection?.passRate ?? 0}%</div>
             </div>
           </div>
-          <div className="chart-box h-md"><canvas ref={passRef} /></div>
-        </div>
-
-        <div className="card d2">
-          <div className="card-h">
-            <div>
-              <h3>Inspection Results</h3>
-              <div className="sub">This period</div>
-            </div>
+        )}
+        {showInsp && (
+          <div className="card d2">
+            <div className="card-h"><div><h3>Inspection Results</h3><div className="sub">This period</div></div></div>
+            <div className="chart-box h-md"><canvas ref={resRef} /></div>
           </div>
-          <div className="chart-box h-md"><canvas ref={resRef} /></div>
-        </div>
-
-        <div className="card d3">
-          <div className="card-h">
-            <div>
-              <h3>Calibration Status</h3>
-              <div className="sub">Instrument fleet</div>
-            </div>
+        )}
+        {showCal && (
+          <div className="card d3">
+            <div className="card-h"><div><h3>Calibration Status</h3><div className="sub">Instrument fleet</div></div></div>
+            <div className="chart-box h-md"><canvas ref={calRef} /></div>
           </div>
-          <div className="chart-box h-md"><canvas ref={calRef} /></div>
-        </div>
+        )}
       </div>
     </>
   );
