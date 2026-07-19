@@ -12,6 +12,7 @@ export interface Organization {
   timezone: string;
   dateFormat: string;
   logoUrl: string | null;
+  reportFooterText: string | null;
   createdAt: string;
   updatedAt: string;
 }
