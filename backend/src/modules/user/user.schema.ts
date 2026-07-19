@@ -2,6 +2,16 @@ import { z } from 'zod';
 
 const employeeIdRegex = /^[A-Z0-9_-]{2,32}$/;
 
+// Profile photo: an http(s) URL or an inline base64 data-URL (png/jpeg/svg),
+// capped at ~1MB of encoded string to keep the user row lean.
+const AvatarValue = z
+  .string()
+  .refine(
+    (v) => v === '' || /^https?:\/\//.test(v) || /^data:image\/(png|jpe?g|svg\+xml);base64,/.test(v),
+    { message: 'Photo must be an http(s) URL or a base64 image data-URL' },
+  )
+  .refine((v) => v.length <= 1_400_000, { message: 'Photo image is too large (max ~1MB)' });
+
 export const CreateUserSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
@@ -15,6 +25,7 @@ export const CreateUserSchema = z.object({
   name: z.string().min(1).max(120).optional(),
   phone: z.string().max(40).optional().nullable(),
   designation: z.string().max(120).optional().nullable(),
+  avatarUrl: AvatarValue.optional().nullable(),
   departmentId: z.string().uuid().optional().nullable(),
   roleId: z.string().uuid().optional().nullable(),
   siteId: z.string().uuid().optional().nullable(),

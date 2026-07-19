@@ -860,17 +860,26 @@ export default function Sidebar() {
           style={{ borderTop: "1px solid " + DIVIDER }}
           className="px-3 py-2.5 flex items-center gap-2.5 shrink-0"
         >
-          <div
-            style={{
-              backgroundColor: "rgba(201,168,76,0.15)",
-              border: "1px solid rgba(201,168,76,0.25)",
-            }}
-            className="w-8 h-8 rounded flex items-center justify-center shrink-0"
-          >
-            <span style={{ color: ACCENT }} className="text-[11px] font-bold">
-              {initials}
-            </span>
-          </div>
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={user?.name ?? "User"}
+              style={{ border: "1px solid rgba(201,168,76,0.35)" }}
+              className="w-8 h-8 rounded object-cover shrink-0"
+            />
+          ) : (
+            <div
+              style={{
+                backgroundColor: "rgba(201,168,76,0.15)",
+                border: "1px solid rgba(201,168,76,0.25)",
+              }}
+              className="w-8 h-8 rounded flex items-center justify-center shrink-0"
+            >
+              <span style={{ color: ACCENT }} className="text-[11px] font-bold">
+                {initials}
+              </span>
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <p
               style={{ color: ACTIVE_CLR }}
@@ -878,9 +887,17 @@ export default function Sidebar() {
             >
               {user?.name ?? "—"}
             </p>
+            {user?.email && (
+              <p
+                style={{ color: ACTIVE_CLR, opacity: 0.6 }}
+                className="text-[12px] truncate leading-tight mt-0.5"
+              >
+                {user.email}
+              </p>
+            )}
             <p
               style={{ color: SECTION_CLR }}
-              className="text-[12px] truncate leading-tight mt-1 tracking-wide"
+              className="text-[11px] truncate leading-tight mt-0.5 tracking-wide uppercase"
             >
               {user?.role?.replace(/_/g, " ") ?? "Unknown Role"}
             </p>

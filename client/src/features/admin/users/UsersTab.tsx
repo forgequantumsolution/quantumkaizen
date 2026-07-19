@@ -10,10 +10,11 @@ import {
   DatePicker as AntDatePicker,
   Empty,
   Avatar as AntAvatar,
+  Upload as AntUpload,
   type TableColumnsType,
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import { Plus, Pencil, KeyRound, Power, RotateCcw } from 'lucide-react';
+import { Plus, Pencil, KeyRound, Power, RotateCcw, Upload as UploadIcon, Trash2 } from 'lucide-react';
 import { AppForm } from '@/components/ui';
 import {
   useAdminUsers,
@@ -28,7 +29,7 @@ import {
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useRoles } from '@/features/admin/roles/hooks';
 import { useSites, useCreateSite } from '@/lib/api/sites';
-import { useHasPermission } from '@/stores/authStore';
+import { useHasPermission, useAuthStore } from '@/stores/authStore';
 
 interface FormValues {
   email: string;
@@ -38,6 +39,7 @@ interface FormValues {
   lastName: string;
   phone: string;
   designation: string;
+  avatarUrl: string;
   departmentId: string;
   roleId: string;
   siteId: string;
@@ -54,6 +56,7 @@ const emptyValues: FormValues = {
   lastName: '',
   phone: '',
   designation: '',
+  avatarUrl: '',
   departmentId: '',
   roleId: '',
   siteId: '',
@@ -61,6 +64,17 @@ const emptyValues: FormValues = {
   joinDate: null,
   isActive: true,
 };
+
+const AVATAR_MAX_BYTES = 1_000_000; // ~1MB
+const AVATAR_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml'];
+
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
 
 const extractApiError = (err: unknown, fallback = 'Save failed'): string =>
   (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error
@@ -115,6 +129,8 @@ export default function UsersTab() {
   const canCreate = useHasPermission('user.create');
   const canUpdate = useHasPermission('user.update');
   const canDelete = useHasPermission('user.delete');
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  const refreshUser = useAuthStore((s) => s.refreshUser);
 
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -136,6 +152,7 @@ export default function UsersTab() {
       lastName: editing.lastName ?? '',
       phone: editing.phone ?? '',
       designation: editing.designation ?? '',
+      avatarUrl: editing.avatarUrl ?? '',
       departmentId: editing.departmentId ?? '',
       roleId: editing.roleId ?? '',
       siteId: editing.siteId ?? '',
@@ -175,6 +192,30 @@ export default function UsersTab() {
     form.resetFields();
   };
 
+  const avatarUrl = (AppForm.useWatch('avatarUrl', form) ?? '') as string;
+
+  // Read the picked photo into a base64 data-URL. Returning false stops antd
+  // Upload from performing an HTTP request.
+  const handleAvatarPick = async (file: File) => {
+    setFormError(null);
+    if (!AVATAR_TYPES.includes(file.type)) {
+      setFormError('Photo must be a PNG, JPG, or SVG image.');
+      return false;
+    }
+    if (file.size > AVATAR_MAX_BYTES) {
+      setFormError('Photo image is too large (max 1MB).');
+      return false;
+    }
+    try {
+      form.setFieldValue('avatarUrl', await readFileAsDataUrl(file));
+    } catch {
+      setFormError('Could not read the selected image.');
+    }
+    return false;
+  };
+
+  const clearAvatar = () => form.setFieldValue('avatarUrl', '');
+
   const handleFinish = async (values: FormValues) => {
     setFormError(null);
     const basePayload = {
@@ -184,6 +225,7 @@ export default function UsersTab() {
       lastName: values.lastName.trim() || null,
       phone: values.phone.trim() || null,
       designation: values.designation.trim() || null,
+      avatarUrl: values.avatarUrl || null,
       departmentId: values.departmentId || null,
       roleId: values.roleId || null,
       siteId: values.siteId || null,
@@ -192,8 +234,14 @@ export default function UsersTab() {
       isActive: values.isActive,
     };
     try {
-      if (editing) await update.mutateAsync({ id: editing.id, ...basePayload });
-      else await create.mutateAsync({ ...basePayload, password: values.password } as CreateUserInput);
+      if (editing) {
+        await update.mutateAsync({ id: editing.id, ...basePayload });
+        // Editing your own profile → refresh auth so the sidebar avatar/details
+        // update immediately, no re-login needed.
+        if (editing.id === currentUserId) await refreshUser();
+      } else {
+        await create.mutateAsync({ ...basePayload, password: values.password } as CreateUserInput);
+      }
       closeForm();
     } catch (err) {
       setFormError(extractApiError(err));
@@ -253,7 +301,9 @@ export default function UsersTab() {
         ).toUpperCase()}`;
         return (
           <div className="flex items-center gap-2.5">
-            <AntAvatar style={{ background: '#0f172a' }}>{initials}</AntAvatar>
+            <AntAvatar src={user.avatarUrl || undefined} style={{ background: '#0f172a' }}>
+              {initials}
+            </AntAvatar>
             <div className="min-w-0">
               <p className="font-medium text-gray-900 mb-0">{user.name}</p>
               <p className="text-xs text-gray-500 mb-0">{user.email}</p>
@@ -449,6 +499,52 @@ export default function UsersTab() {
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
             Identity
           </h3>
+
+          {/* Profile photo — optional; falls back to initials when empty. */}
+          <AppForm.Item name="avatarUrl" hidden noStyle>
+            <AntInput type="hidden" />
+          </AppForm.Item>
+          <div className="flex items-center gap-4 mb-4">
+            {avatarUrl ? (
+              <AntAvatar src={avatarUrl} size={56} shape="circle" />
+            ) : (
+              <AntAvatar size={56} shape="circle" style={{ background: '#0f172a' }}>
+                {`${(form.getFieldValue('firstName')?.[0] ?? form.getFieldValue('email')?.[0] ?? '?')
+                  .toString()
+                  .toUpperCase()}`}
+              </AntAvatar>
+            )}
+            <div>
+              <p className="text-sm font-medium text-gray-900 mb-0">Profile Photo</p>
+              <p className="text-xs text-gray-500 mt-0.5 mb-1">
+                PNG, JPG, or SVG, max 1MB · optional
+              </p>
+              <div className="flex items-center gap-3">
+                <AntUpload
+                  accept=".png,.jpg,.jpeg,.svg"
+                  showUploadList={false}
+                  beforeUpload={handleAvatarPick}
+                >
+                  <AntButton size="small" type="link" icon={<UploadIcon size={12} />} className="!p-0">
+                    {avatarUrl ? 'Replace photo' : 'Upload photo'}
+                  </AntButton>
+                </AntUpload>
+                {avatarUrl && (
+                  <AntButton
+                    size="small"
+                    type="link"
+                    danger
+                    icon={<Trash2 size={12} />}
+                    className="!p-0"
+                    onClick={clearAvatar}
+                  >
+                    Remove
+                  </AntButton>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-x-4">
             <AppForm.Item
               label="Employee ID"

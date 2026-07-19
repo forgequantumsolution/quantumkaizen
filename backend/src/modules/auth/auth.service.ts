@@ -14,6 +14,7 @@ const publicUserSelect = {
   firstName: true,
   lastName: true,
   designation: true,
+  avatarUrl: true,
   isActive: true,
   departmentId: true,
   roleId: true,
