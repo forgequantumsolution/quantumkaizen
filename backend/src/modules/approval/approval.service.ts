@@ -13,6 +13,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
 import * as approvalLayer from '../workflow/engine/approval.layer';
+import { terminateTicketAsRejected } from '../workflow/engine/orchestrator';
 import type { ActorContext } from '../workflow/engine/types';
 import type {
   CreateApprovalPolicyInput,
@@ -347,14 +348,14 @@ export const getInstance = async (instanceId: string) => {
 
 /**
  * `POST /api/approvals/:instanceId/decide` — record a decision against an
- * existing PENDING instance via the engine's approval layer. Stays in stage on
- * REJECTED per Q5; flips the instance to SATISFIED and reloads the expanded
- * view on APPROVED-and-satisfied.
+ * existing PENDING instance via the engine's approval layer. On REJECTED the
+ * ticket is terminated (stages cleared, flow marked rejected) — reject means
+ * stop. On APPROVED-and-satisfied it flips the instance to SATISFIED.
  *
- * The engine's `decide()` does NOT advance the ticket — to actually move the
- * ticket forward after the policy is satisfied, the user re-invokes the
- * action via `POST /api/tickets/:id/actions/:actionId/perform`, which now
- * sees a SATISFIED instance and falls through to the transition path.
+ * The engine's `decide()` does NOT advance the ticket on approval — to move the
+ * ticket forward after the policy is satisfied, the user re-invokes the action
+ * via `POST /api/tickets/:id/actions/:actionId/perform`, which now sees a
+ * SATISFIED instance and falls through to the transition path.
  */
 export const decideInstance = async (
   instanceId: string,
@@ -362,12 +363,27 @@ export const decideInstance = async (
   actor: ActorContext,
 ) => {
   await prisma.$transaction(async (tx) => {
-    await approvalLayer.decide(tx, {
+    const result = await approvalLayer.decide(tx, {
       instanceId,
       decision: input.decision,
       comment: input.comment ?? null,
       actor,
     });
+    // A rejection is terminal — stop the ticket the instance belongs to.
+    if (result.status === 'rejected') {
+      const inst = await tx.approvalInstance.findUnique({
+        where: { id: instanceId },
+        select: { ticketId: true },
+      });
+      if (inst) {
+        await terminateTicketAsRejected(tx, {
+          ticketId: inst.ticketId,
+          actor,
+          remarks: input.comment ?? null,
+          reason: 'APPROVAL_REJECTED',
+        });
+      }
+    }
   });
   // Reload via the public read path so the caller sees the post-decision shape
   // (status + records list). Same select shape as getInstance.

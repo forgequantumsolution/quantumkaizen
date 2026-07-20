@@ -9,7 +9,7 @@ import {
   setHoldOnActiveTracking,
 } from './tracking.layer';
 import { advanceFlow } from './transition.layer';
-import { resolveNextStages, getPreviousActiveStageId } from './graph.layer';
+import { resolveNextStages } from './graph.layer';
 import { startBranches, markBranchCompleted } from './parallel.handler';
 import { emitAuditEvent } from './audit.emitter';
 import * as approvalLayer from './approval.layer';
@@ -382,13 +382,22 @@ export const performAction = async (
         actor,
       });
       if (decideResult.status === 'rejected') {
+        // Approval rejected → terminate the ticket (clear stages + mark the
+        // flow rejected). Reject means stop — no walk-back to a prior stage.
+        const { exitedStages } = await terminateTicketAsRejected(tx, {
+          ticketId: ticket.id,
+          actor,
+          actionId: action.id,
+          remarks: payload.approvalComment ?? payload.remarks ?? null,
+          reason: 'APPROVAL_REJECTED',
+        });
         return {
-          status: 'approval_rejected',
+          status: 'rejected',
           ticketId: ticket.id,
           flowId: flow.id,
           enteredStages: [],
-          exitedStages: [],
-          isCompleted: false,
+          exitedStages,
+          isCompleted: true,
           approval: { instanceId: decideResult.instanceId },
         };
       }
@@ -448,7 +457,7 @@ export const performAction = async (
         actionId: action.id,
         currentStage,
         remarks: payload.remarks ?? null,
-      });
+      }, actor);
     } else if (behavior === 'HOLD') {
       result = await holdViaAction(tx, {
         flowId: flow.id,
@@ -519,8 +528,9 @@ export const performAction = async (
 
   // Post-commit, best-effort: when an audit ticket completes, roll its checklist
   // compliance dispositions up into Findings / Non-Conformances. Never let this
-  // failing break the (already-committed) transition.
-  if (result.isCompleted) {
+  // failing break the (already-committed) transition. A rejected ticket is
+  // terminal-but-not-completed — skip the completion roll-ups for it.
+  if (result.isCompleted && result.status === 'completed') {
     try {
       await syncTicketComplianceFindings(ticketId);
     } catch (err) {
@@ -662,41 +672,84 @@ const forwardAction = async (
   };
 };
 
+/**
+ * Terminal rejection. Clears every current stage of the ticket's active flow,
+ * closes their tracking rows, and marks the flow rejected (and completed — no
+ * current stages left). Once terminal, the ticket is no longer fillable or
+ * actionable: the stage-form layer returns no bindings and the action bar shows
+ * no stages. Shared by the REJECT-behavior action and approval rejection.
+ */
+export const terminateTicketAsRejected = async (
+  tx: Tx,
+  params: {
+    ticketId: string;
+    actor: ActorContext;
+    actionId?: string | null;
+    remarks?: string | null;
+    reason?: string | null;
+  }
+): Promise<{ flowId: string; exitedStages: { id: string; name: string }[] }> => {
+  const flow = await tx.ticketFlow.findFirst({
+    where: { ticketId: params.ticketId, isCompleted: false },
+    select: { id: true, currentStages: { select: { id: true, name: true } } },
+  });
+  if (!flow) throw BadRequest('Ticket has no active flow to reject');
+
+  for (const stage of flow.currentStages) {
+    await closeStageTracking(tx, {
+      ticketId: params.ticketId,
+      stageId: stage.id,
+      performedById: params.actor.id,
+      postActionId: params.actionId ?? null,
+      remarks: params.remarks ?? null,
+    });
+  }
+
+  // Disconnect all current stages → advanceFlow sees an empty set and flips the
+  // flow to completed. We then stamp the rejection so status reads "Rejected".
+  await advanceFlow(tx, flow.id, {
+    disconnectStageIds: flow.currentStages.map((s) => s.id),
+    connectStageIds: [],
+  });
+  await tx.ticketFlow.update({
+    where: { id: flow.id },
+    data: { isRejected: true, rejectedAt: new Date() },
+  });
+
+  await emitAuditEvent(
+    tx,
+    { ticketId: params.ticketId, flowId: flow.id },
+    'TICKET_REJECTED',
+    {
+      exitedStageIds: flow.currentStages.map((s) => s.id),
+      reason: params.reason ?? null,
+      remarks: params.remarks ?? null,
+    },
+    params.actor
+  );
+
+  return { flowId: flow.id, exitedStages: flow.currentStages };
+};
+
 const rejectAction = async (
   tx: Tx,
-  ctx: BehaviorContext
+  ctx: BehaviorContext,
+  actor: ActorContext
 ): Promise<PerformActionResult> => {
-  const previousStageId = await getPreviousActiveStageId(tx, ctx.ticketId);
-  if (!previousStageId) {
-    throw BadRequest('No previous stage to reject to');
-  }
-  const previousStage = await tx.workflowStage.findUnique({
-    where: { id: previousStageId },
-    select: { id: true, name: true, workflowId: true },
-  });
-  if (!previousStage) throw BadRequest('Previous stage not found');
-
-  await closeStageTracking(tx, {
+  const { exitedStages } = await terminateTicketAsRejected(tx, {
     ticketId: ctx.ticketId,
-    stageId: ctx.currentStage.id,
-    performedById: ctx.actorId,
-    postActionId: ctx.actionId,
+    actor,
+    actionId: ctx.actionId,
     remarks: ctx.remarks ?? null,
-  });
-  await openStageTracking(tx, ctx.ticketId, previousStage);
-
-  await advanceFlow(tx, ctx.flowId, {
-    disconnectStageIds: [ctx.currentStage.id],
-    connectStageIds: [previousStage.id],
   });
 
   return {
-    status: 'transitioned',
+    status: 'rejected',
     ticketId: ctx.ticketId,
     flowId: ctx.flowId,
-    exitedStages: [{ id: ctx.currentStage.id, name: ctx.currentStage.name }],
-    enteredStages: [{ id: previousStage.id, name: previousStage.name }],
-    isCompleted: false,
+    exitedStages,
+    enteredStages: [],
+    isCompleted: true,
   };
 };
 

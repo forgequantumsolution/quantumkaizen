@@ -42,6 +42,7 @@ const ticketSummarySelect = {
     select: {
       id: true,
       isCompleted: true,
+      isRejected: true,
       workflowId: true,
       workflowName: true,
       workflowVersion: true,
@@ -78,6 +79,8 @@ const ticketDetailSelect = {
     select: {
       id: true,
       isCompleted: true,
+      isRejected: true,
+      rejectedAt: true,
       completedAt: true,
       statusUpdatedAt: true,
       workflow: { select: { id: true, name: true, version: true, typeId: true } },
@@ -191,6 +194,7 @@ export const getById = async (id: string) => {
     flows: t.flows.map((f) => ({
       ...f,
       completedAt: f.completedAt ? f.completedAt.toISOString() : null,
+      rejectedAt: f.rejectedAt ? f.rejectedAt.toISOString() : null,
       statusUpdatedAt: f.statusUpdatedAt.toISOString(),
     })),
   };

@@ -4,6 +4,43 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Reject is now terminal — a rejection stops the ticket ("Rejected", not fillable) — 2026-07-16
+
+Previously a REJECT-behavior action sent the ticket **back to the previous
+stage**, and an approval rejection **left the ticket in stage** (old "Q5"
+behaviour). Both now **terminate the ticket**: current stages are cleared, the
+flow is marked rejected, and the ticket is no longer fillable/actionable. Status
+reads **Rejected** (distinct from Completed). Working tree only (not committed).
+Verified end-to-end against `kaizen_qms2` by running the terminal-reject helper
+on a real open flow inside a rolled-back transaction — result: `isCompleted=true,
+isRejected=true, rejectedAt` set, `currentStages=0`, SLA timer settled,
+`TICKET_REJECTED` emitted; rollback left the flow untouched. Backend + client
+`tsc --noEmit` clean.
+
+- **`prisma/schema.prisma`** — `TicketFlow` gains `isRejected Boolean @default(false)`
+  + `rejectedAt DateTime?`. Migration `20260716173841_ticket_flow_rejected`
+  (additive columns only) applied to `kaizen_qms2` via `migrate deploy`.
+- **`src/modules/workflow/engine/orchestrator.ts`** — new exported
+  `terminateTicketAsRejected(tx, {ticketId, actor, actionId?, remarks?, reason?})`:
+  closes tracking for every current stage, `advanceFlow`-disconnects them all
+  (→ flow completes), stamps `isRejected/rejectedAt`, emits `TICKET_REJECTED`.
+  `rejectAction` rewritten to call it (was: walk back to previous stage). The
+  approval-intercept path now terminates on a rejected decision (was:
+  `approval_rejected`, ticket stayed). Completion roll-ups (findings/compliance)
+  now guarded on `status === 'completed'` so a rejection doesn't trigger them.
+  Dropped the now-unused `getPreviousActiveStageId` import.
+- **`src/modules/workflow/engine/approval.layer.ts`** — `decide()`'s REJECTED
+  path is now **terminal for every mode** (removed the `isPolicyUnsatisfiable`
+  gate): one rejection ends the approval and returns `status:'rejected'`.
+- **`src/modules/approval/approval.service.ts`** — `decideInstance` calls
+  `terminateTicketAsRejected` when the standalone `/decide` endpoint rejects.
+- **`src/modules/workflow/engine/types.ts`** — `AuditEventType` += `TICKET_REJECTED`;
+  `PerformActionStatus` replaces `approval_rejected` with `rejected`.
+- **`src/modules/ticket/ticket.service.ts`** — `isRejected` added to the summary +
+  detail selects; `rejectedAt` mapped to ISO in the detail response.
+- **`src/modules/ticket/ticket.openapi.ts`** — transition status enum: `rejected`
+  replaces `approval_rejected`.
+
 # Audit approval + checklist access — enforce the named approver & tie checklists to assignments — 2026-07-16
 
 Fixes two audit-module holes surfaced by a multi-user Playwright diagnostic

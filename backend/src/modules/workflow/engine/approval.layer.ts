@@ -16,9 +16,10 @@
  *      records the decision, marks satisfied/rejected, returns a result the
  *      caller can fall-through-or-return on.
  *
- * Behaviour per Q5 (signed off 2026-05-12): on REJECTED the instance is
- * marked REJECTED, an `APPROVAL_REJECTED` audit + hook fires, **and the
- * ticket stays in stage**. Django parity.
+ * Behaviour: on REJECTED the instance is marked REJECTED, an
+ * `APPROVAL_REJECTED` audit fires, and the decision is terminal — the caller
+ * then stops the ticket (clears its stages + marks the flow rejected). Any
+ * single rejection ends the approval regardless of mode.
  */
 import { Prisma } from '@prisma/client';
 import { BadRequest, Forbidden, NotFound } from '../../../lib/httpError';
@@ -315,38 +316,28 @@ export const decide = async (
   });
   if (!instance) throw NotFound(`Approval instance ${params.instanceId} not found`);
 
-  // Rejection path — flip instance, fire audit, return "rejected" so the
-  // controller can surface it. The ticket is NOT moved (Q5 signed-off).
+  // Rejection path — any REJECTED decision is terminal: flip the instance,
+  // fire audit, return "rejected". The caller (orchestrator / approval service)
+  // then stops the ticket (clears its stages + marks the flow rejected). A
+  // single rejection ends the approval regardless of mode — reject means stop.
   if (params.decision === 'REJECTED') {
-    if (isPolicyUnsatisfiable(instance.records, instance.policy)) {
-      await tx.approvalInstance.update({
-        where: { id: instance.id },
-        data: { status: 'REJECTED', completedAt: new Date() },
-      });
-      await emitAuditEvent(
-        tx,
-        { ticketId: instance.ticketId },
-        'APPROVAL_REJECTED',
-        {
-          instanceId: instance.id,
-          policyId: instance.policy.id,
-          policyMode: instance.policy.mode,
-          comment: params.comment ?? null,
-        },
-        params.actor,
-      );
-      return { status: 'rejected', instanceId: instance.id };
-    }
-    // Recorded as REJECTED but policy can still be satisfied (e.g. QUORUM with
-    // enough remaining approvers). Treat as still-pending.
-    return {
-      status: 'pending',
-      instanceId: instance.id,
-      remaining: {
-        rolesRequired: instance.policy.requiredCount,
-        recordedApprovers: instance.records.filter((r) => r.decision === 'APPROVED').length,
+    await tx.approvalInstance.update({
+      where: { id: instance.id },
+      data: { status: 'REJECTED', completedAt: new Date() },
+    });
+    await emitAuditEvent(
+      tx,
+      { ticketId: instance.ticketId },
+      'APPROVAL_REJECTED',
+      {
+        instanceId: instance.id,
+        policyId: instance.policy.id,
+        policyMode: instance.policy.mode,
+        comment: params.comment ?? null,
       },
-    };
+      params.actor,
+    );
+    return { status: 'rejected', instanceId: instance.id };
   }
 
   // APPROVED path — check satisfaction.

@@ -225,6 +225,9 @@ export const useDecideApproval = (instanceId: string, ticketId?: string) => {
       qc.invalidateQueries({ queryKey: approvalKeys.instance(instanceId) });
       if (ticketId) {
         qc.invalidateQueries({ queryKey: approvalKeys.ticketInstances(ticketId) });
+        // A rejection terminates the ticket — refresh ticket detail/list/actions
+        // so the status flips to "Rejected" and the action bar/forms lock.
+        qc.invalidateQueries({ queryKey: ['tickets'] });
       }
     },
   });

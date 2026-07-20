@@ -2,9 +2,9 @@
  * Approver-facing modal: approve or reject a PENDING approval instance.
  *
  * Calls `POST /api/approvals/:instanceId/decide` via `useDecideApproval`.
- * On REJECTED + unsatisfiable policy: instance flips REJECTED, ticket stays
- * in stage (Q5). On APPROVED + satisfied: caller still needs to invoke the
- * underlying action via `/transition` to actually advance the ticket.
+ * On REJECTED: the instance flips REJECTED and the ticket is terminated
+ * (stages cleared, status → Rejected). On APPROVED + satisfied: caller still
+ * needs to invoke the underlying action via `/transition` to advance the ticket.
  */
 import { useState } from 'react';
 import toast from 'react-hot-toast';
@@ -39,7 +39,7 @@ export default function ApprovalDecideModal({ isOpen, onClose, instance }: Props
       if (result.status === 'SATISFIED') {
         toast.success('Approved — re-invoke the action to advance the ticket');
       } else if (result.status === 'REJECTED') {
-        toast.success('Rejected — ticket stays in this stage');
+        toast.success('Rejected — ticket closed');
       } else {
         toast.success('Decision recorded — waiting for more approvers');
       }

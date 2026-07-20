@@ -1,5 +1,52 @@
 # Changes Log
 
+## Terminal reject — ticket shows "Rejected" and locks — 2026-07-16
+
+Frontend companion to the backend "reject is now terminal" change
+(`backend/changes.md`). A rejected flow comes back `isCompleted: true` +
+`isRejected: true` with no current stages, so the action bar and stage forms
+already lock automatically; these changes surface the distinct **Rejected**
+status. Not committed. `tsc --noEmit` clean.
+
+- **`src/lib/api/ticket.ts`** — `TicketFlowSummary` gains `isRejected`; detail flow
+  gains `rejectedAt`; `TransitionResult.status` adds `'rejected'`.
+- **`src/features/tickets/shared/TicketStatusBadge.tsx`** — new **Rejected** badge
+  (`danger` variant, `XCircle`), checked before `isCompleted` so a rejected flow
+  reads "Rejected" not "Completed".
+- **`src/features/tickets/detail/TicketHeaderCard.tsx`** — stage label shows
+  "Rejected" and the header icon turns red when `flow.isRejected`.
+- **`src/features/tickets/detail/ActionBar.tsx`** — transition toast handles
+  `status === 'rejected'` → "Ticket rejected".
+- **`src/features/tickets/detail/ApprovalDecideModal.tsx`** — reject toast now
+  "Rejected — ticket closed" (was "ticket stays in this stage").
+- **`src/lib/api/approval.ts`** — `useDecideApproval` also invalidates `['tickets']`
+  so a rejection via the approval modal refreshes ticket status/actions/forms.
+
+## Workflow builder — required type + mandatory per-action approval policies — 2026-07-16
+
+Three related tweaks to workflow creation and the stage builder. Not committed.
+`tsc --noEmit` clean.
+
+- **Workflow type is now required.** `src/features/workflows/shared/CreateWorkflowModal.tsx`
+  — the **Type** field lost its "(optional)" label (now a red `*`), the Create button
+  is disabled until a type is picked, `handleSubmit` guards with a `Type is required`
+  toast and sends `typeId` directly (was `typeId || null`), and the placeholder reads
+  "— Select a type —".
+- **Approver roles/users are shared across all actions on a stage.**
+  `src/features/workflows/builder/inspector/StageInspector.tsx` — `upsertApprovalPolicy`
+  now propagates a saved policy's `approverRoleIds`/`approverUserIds` to **every** action
+  on the stage: actions without a policy get one cloned from the saved one; actions that
+  already have a policy keep their own mode/flags but inherit the shared approver set.
+  Removing a policy stays local to its action. Added an italic hint under the Approvals
+  list explaining the shared behavior.
+- **Publish is blocked when any action lacks a policy.**
+  `src/features/workflows/builder/WorkflowBuilderPage.tsx` — new
+  `collectMissingPolicyErrors(nodes)` walks every stage node and flags each primary/
+  secondary action with no matching entry in `data.approvalPolicies`. `handlePublish`
+  runs it **before** the confirm modal; on failure it populates the existing
+  `ValidationErrorPanel` and toasts `N action(s) missing an approval policy` instead of
+  publishing. Client-side guard only — no backend enforcement added.
+
 ## Sidebar fix — Master Data no longer stays highlighted across Configuration — 2026-07-16
 
 Not committed.

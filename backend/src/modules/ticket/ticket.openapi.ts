@@ -61,11 +61,12 @@ const TransitionResponse = z
       'held',
       'returned',
       'reassigned',
-      // Phase 3 — Approvals. Returned when the action's policy isn't yet
-      // satisfied (`pending_approval`) or was rejected (`approval_rejected`).
-      // In both cases enteredStages/exitedStages are empty and isCompleted=false.
+      // Phase 3 — Approvals. `pending_approval`: the action's policy isn't yet
+      // satisfied (enteredStages/exitedStages empty, isCompleted=false).
       'pending_approval',
-      'approval_rejected',
+      // Terminal rejection — a REJECT-behavior action or an approval rejection
+      // stopped the ticket. exitedStages holds the cleared stages, isCompleted=true.
+      'rejected',
     ]),
     ticketId: z.string().uuid(),
     flowId: z.string().uuid(),
@@ -83,7 +84,7 @@ const TransitionResponse = z
           .optional(),
       })
       .optional()
-      .describe('Present when status is pending_approval or approval_rejected'),
+      .describe('Present when status is pending_approval or rejected (via approval)'),
   })
   .openapi('TransitionResponse');
 

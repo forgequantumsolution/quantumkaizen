@@ -7,6 +7,7 @@
 export type AuditEventType =
   | 'TICKET_RAISED'
   | 'TICKET_COMPLETED'
+  | 'TICKET_REJECTED'
   | 'TICKET_DELETED'
   | 'TICKET_HELD'
   | 'TICKET_RESUMED'
@@ -47,10 +48,10 @@ export type PerformActionStatus =
   // Phase 3 — Approvals: returned when an approval policy intercepted the
   // action and the policy isn't satisfied yet (more approvers needed).
   | 'pending_approval'
-  // Phase 3 — Approvals: returned when the approval was rejected. Ticket stays
-  // in stage (Q5 signed-off); caller can invoke a separate REJECT-behavior
-  // action to walk back.
-  | 'approval_rejected';
+  // Terminal rejection — a REJECT-behavior action or an approval rejection
+  // stopped the ticket. The flow is closed (isCompleted) and marked isRejected,
+  // its current stages cleared, so it's no longer fillable/actionable.
+  | 'rejected';
 
 export interface PerformActionResult {
   status: PerformActionStatus;

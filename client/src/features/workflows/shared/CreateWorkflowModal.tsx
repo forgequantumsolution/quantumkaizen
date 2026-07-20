@@ -42,10 +42,11 @@ export default function CreateWorkflowModal({ isOpen, onClose }: Props) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return toast.error('Name is required');
+    if (!typeId) return toast.error('Type is required');
     try {
       const result = await create.mutateAsync({
         name: name.trim(),
-        typeId: typeId || null,
+        typeId,
         // Only send siteId when the user may choose it; '' = Global (null).
         // Scoped creators omit it → server forces their own site.
         ...(canPickSite ? { siteId: siteId || null } : {}),
@@ -78,7 +79,7 @@ export default function CreateWorkflowModal({ isOpen, onClose }: Props) {
               variant="primary"
               onClick={handleSubmit}
               isLoading={create.isPending}
-              disabled={create.isPending || !name.trim()}
+              disabled={create.isPending || !name.trim() || !typeId}
             >
               Create &amp; open builder
             </Button>
@@ -99,7 +100,7 @@ export default function CreateWorkflowModal({ isOpen, onClose }: Props) {
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-sm font-medium text-gray-700">
-                Type <span className="text-gray-400 font-normal">(optional)</span>
+                Type <span className="text-red-500">*</span>
               </label>
               <button
                 type="button"
@@ -114,7 +115,7 @@ export default function CreateWorkflowModal({ isOpen, onClose }: Props) {
               value={typeId}
               onChange={(e) => setTypeId(e.target.value)}
               disabled={typesLoading}
-              placeholder="— No type —"
+              placeholder="— Select a type —"
               options={types.map((t) => ({ value: t.id, label: t.name }))}
             />
             <p className="text-xs text-gray-500 mt-1">

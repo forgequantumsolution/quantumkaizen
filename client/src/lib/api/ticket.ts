@@ -18,6 +18,10 @@ export interface TicketCurrentStage {
 export interface TicketFlowSummary {
   id: string;
   isCompleted: boolean;
+  /** Terminal rejection — the flow was stopped by a REJECT action or an
+   *  approval rejection. Also isCompleted (no current stages). Drives the
+   *  "Rejected" status label. */
+  isRejected: boolean;
   workflowId: string;
   workflowName: string;
   workflowVersion: number;
@@ -56,6 +60,7 @@ export interface TicketDetail extends TicketSummary {
   parentTicketStage: { id: string; name: string; canonicalId: string } | null;
   flows: (TicketFlowSummary & {
     completedAt: string | null;
+    rejectedAt: string | null;
     statusUpdatedAt: string;
     workflow: { id: string; name: string; version: number; typeId: string | null };
   })[];
@@ -128,7 +133,7 @@ export interface TransitionInput {
 }
 
 export interface TransitionResult {
-  status: 'transitioned' | 'completed' | 'held' | 'returned' | 'reassigned';
+  status: 'transitioned' | 'completed' | 'held' | 'returned' | 'reassigned' | 'rejected';
   ticketId: string;
   flowId: string;
   enteredStages: { id: string; name: string }[];

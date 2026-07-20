@@ -684,6 +684,12 @@ model TicketFlow {
 
   isCompleted     Boolean   @default(false)
   completedAt     DateTime?
+  // Terminal rejection — distinct from a successful completion. Set when a
+  // REJECT-behavior action or an approval rejection stops the ticket. The flow
+  // is also marked isCompleted (no current stages) so it locks; isRejected lets
+  // the status read "Rejected" instead of "Completed".
+  isRejected      Boolean   @default(false)
+  rejectedAt      DateTime?
   statusUpdatedAt DateTime  @default(now())
 
   currentStages WorkflowStage[] @relation("TicketFlowCurrentStages")

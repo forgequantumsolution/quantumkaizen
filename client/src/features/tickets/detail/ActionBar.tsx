@@ -161,9 +161,11 @@ export default function ActionBar({
       const msg =
         res.status === 'completed'
           ? 'Ticket completed'
-          : res.status === 'held'
-            ? 'Ticket held'
-            : `Moved to ${res.enteredStages.map((s) => s.name).join(', ') || 'next stage'}`;
+          : res.status === 'rejected'
+            ? 'Ticket rejected'
+            : res.status === 'held'
+              ? 'Ticket held'
+              : `Moved to ${res.enteredStages.map((s) => s.name).join(', ') || 'next stage'}`;
       toast.success(msg);
       setPending(null);
       setRemarks('');
