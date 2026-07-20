@@ -422,7 +422,10 @@ export default function Sidebar() {
         .filter((it) => {
           if (it.children && it.children.length === 0 && !it.path) return false;
           if (it.permission && !hasPermission(it.permission)) return false;
-          if (it.anyPermission && !it.anyPermission.some((k) => hasPermission(k)))
+          if (
+            it.anyPermission &&
+            !it.anyPermission.some((k) => hasPermission(k))
+          )
             return false;
           return true;
         });
@@ -699,6 +702,41 @@ export default function Sidebar() {
         )}
       </div>
 
+      {/* Logged-in user — centered photo (fully rounded) with login id below */}
+      {!sidebarCollapsed && (
+        <div
+          style={{ borderBottom: "1px solid " + DIVIDER }}
+          className="flex flex-col items-center text-center shrink-0 py-4 px-4"
+        >
+          {user?.avatarUrl ? (
+            <img
+              src={user.avatarUrl}
+              alt={user?.name ?? "User"}
+              style={{ border: "2px solid rgba(201,168,76,0.4)" }}
+              className="w-24 h-24 rounded-full object-cover"
+            />
+          ) : (
+            <div
+              style={{
+                backgroundColor: "rgba(201,168,76,0.15)",
+                border: "1px solid rgba(201,168,76,0.3)",
+              }}
+              className="w-20 h-20 rounded-full flex items-center justify-center"
+            >
+              <span style={{ color: ACCENT }} className="text-2xl font-bold">
+                {initials}
+              </span>
+            </div>
+          )}
+          <p
+            style={{ color: ACTIVE_CLR }}
+            className="text-sm font-medium truncate leading-tight mt-2 max-w-full"
+          >
+            {user?.name ?? "—"}
+          </p>
+        </div>
+      )}
+
       {/* Navigation */}
       <nav
         className="flex-1 overflow-y-auto py-3 scrollbar-none"
@@ -853,40 +891,6 @@ export default function Sidebar() {
           </div>
         )}
       </nav>
-
-      {/* User identity */}
-      {!sidebarCollapsed && (
-        <div
-          style={{ borderTop: "1px solid " + DIVIDER }}
-          className="px-3 py-2.5 flex items-center gap-2.5 shrink-0"
-        >
-          <div
-            style={{
-              backgroundColor: "rgba(201,168,76,0.15)",
-              border: "1px solid rgba(201,168,76,0.25)",
-            }}
-            className="w-8 h-8 rounded flex items-center justify-center shrink-0"
-          >
-            <span style={{ color: ACCENT }} className="text-[11px] font-bold">
-              {initials}
-            </span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <p
-              style={{ color: ACTIVE_CLR }}
-              className="text-[15px] truncate leading-tight"
-            >
-              {user?.name ?? "—"}
-            </p>
-            <p
-              style={{ color: SECTION_CLR }}
-              className="text-[12px] truncate leading-tight mt-1 tracking-wide"
-            >
-              {user?.role?.replace(/_/g, " ") ?? "Unknown Role"}
-            </p>
-          </div>
-        </div>
-      )}
 
       {/* Compliance-mode indicator (FQS-QK-UIUX-003 §4/§8) — reassures QA/
           inspectors that GMP data-integrity controls are active. */}

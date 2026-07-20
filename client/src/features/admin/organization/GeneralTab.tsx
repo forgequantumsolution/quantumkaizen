@@ -5,8 +5,9 @@ import {
   Select as AntSelect,
   Spin,
   Tag as AntTag,
+  Upload as AntUpload,
 } from 'antd';
-import { Save, Check, Upload, Plus } from 'lucide-react';
+import { Save, Check, Upload, Plus, Trash2 } from 'lucide-react';
 import { AppForm } from '@/components/ui';
 import {
   useOrganization,
@@ -26,7 +27,20 @@ interface FormValues {
   standards: string[];
   timezone: string;
   dateFormat: string;
+  logoUrl: string;
+  reportFooterText: string;
 }
+
+const LOGO_MAX_BYTES = 1_000_000; // ~1MB — keeps the base64 payload sane
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml'];
+
+const readFileAsDataUrl = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
 
 const TIMEZONES = [
   'Asia/Kolkata',
@@ -59,6 +73,7 @@ export default function GeneralTab() {
   // Watched fields drive the suggested-standards block.
   const industry = AppForm.useWatch('industry', form) ?? '';
   const standards = (AppForm.useWatch('standards', form) ?? []) as string[];
+  const logoUrl = (AppForm.useWatch('logoUrl', form) ?? '') as string;
 
   const initialValues = useMemo<FormValues | null>(() => {
     if (!org) return null;
@@ -71,6 +86,8 @@ export default function GeneralTab() {
       standards: [...org.standards],
       timezone: org.timezone,
       dateFormat: org.dateFormat,
+      logoUrl: org.logoUrl ?? '',
+      reportFooterText: org.reportFooterText ?? '',
     };
   }, [org]);
 
@@ -103,6 +120,8 @@ export default function GeneralTab() {
       standards: values.standards,
       timezone: values.timezone,
       dateFormat: values.dateFormat,
+      logoUrl: values.logoUrl || null,
+      reportFooterText: values.reportFooterText.trim() || null,
     };
     try {
       await update.mutateAsync(payload);
@@ -123,6 +142,35 @@ export default function GeneralTab() {
     if (!v || standards.includes(v)) return;
     form.setFieldValue('standards', [...standards, v]);
     setDirty(true);
+  };
+
+  // Read the picked logo into a base64 data-URL and stash it on the form.
+  // Returning false prevents antd Upload from performing an HTTP request.
+  const handleLogoPick = async (file: File) => {
+    setError(null);
+    if (!LOGO_TYPES.includes(file.type)) {
+      setError('Logo must be a PNG, JPG, or SVG image.');
+      return false;
+    }
+    if (file.size > LOGO_MAX_BYTES) {
+      setError('Logo image is too large (max 1MB).');
+      return false;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      form.setFieldValue('logoUrl', dataUrl);
+      setDirty(true);
+      setSaved(false);
+    } catch {
+      setError('Could not read the selected image.');
+    }
+    return false;
+  };
+
+  const clearLogo = () => {
+    form.setFieldValue('logoUrl', '');
+    setDirty(true);
+    setSaved(false);
   };
 
   return (
@@ -167,24 +215,52 @@ export default function GeneralTab() {
       {/* Identity */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
         <h2 className="text-h3 text-gray-900">Organization Identity</h2>
+        {/* logoUrl is managed imperatively via the Upload control below. */}
+        <AppForm.Item name="logoUrl" hidden noStyle>
+          <AntInput type="hidden" />
+        </AppForm.Item>
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 rounded-xl bg-slate-900 flex items-center justify-center shrink-0">
-            <span className="text-blue-600 font-bold text-xl">QK</span>
+          <div className="w-16 h-16 rounded-xl bg-slate-900 flex items-center justify-center shrink-0 overflow-hidden">
+            {logoUrl ? (
+              <img
+                src={logoUrl}
+                alt="Organization logo"
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <span className="text-pharma-500 font-bold text-xl">QK</span>
+            )}
           </div>
           <div>
             <p className="text-sm font-medium text-gray-900 mb-0">Organization Logo</p>
             <p className="text-xs text-gray-500 mt-0.5 mb-0">
-              PNG or SVG, max 2MB, recommended 200×200px
+              PNG, JPG, or SVG, max 1MB · used on ticket report headers
             </p>
-            <AntButton
-              size="small"
-              type="link"
-              icon={<Upload size={12} />}
-              disabled
-              className="!p-0 !mt-1"
-            >
-              Upload logo
-            </AntButton>
+            {canEdit && (
+              <div className="flex items-center gap-3 mt-1">
+                <AntUpload
+                  accept=".png,.jpg,.jpeg,.svg"
+                  showUploadList={false}
+                  beforeUpload={handleLogoPick}
+                >
+                  <AntButton size="small" type="link" icon={<Upload size={12} />} className="!p-0">
+                    {logoUrl ? 'Replace logo' : 'Upload logo'}
+                  </AntButton>
+                </AntUpload>
+                {logoUrl && (
+                  <AntButton
+                    size="small"
+                    type="link"
+                    danger
+                    icon={<Trash2 size={12} />}
+                    className="!p-0"
+                    onClick={clearLogo}
+                  >
+                    Remove
+                  </AntButton>
+                )}
+              </div>
+            )}
           </div>
         </div>
         <div className="grid grid-cols-2 gap-x-4">
@@ -284,6 +360,22 @@ export default function GeneralTab() {
             <AntSelect options={DATE_FORMATS.map((f) => ({ value: f, label: f }))} />
           </AppForm.Item>
         </div>
+      </div>
+
+      {/* Report Branding */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+        <h2 className="text-h3 text-gray-900">Report Branding</h2>
+        <p className="text-sm text-gray-500 mb-0">
+          The logo above and this footer appear on every page of downloaded ticket reports.
+        </p>
+        <AppForm.Item
+          label="Report Footer Text"
+          name="reportFooterText"
+          help="Shown at the bottom of each report page — e.g. a confidentiality notice."
+          rules={[{ max: 200, message: 'Must be at most 200 characters' }]}
+        >
+          <AntInput placeholder="Confidential — for internal use only" maxLength={200} />
+        </AppForm.Item>
       </div>
     </AppForm>
   );

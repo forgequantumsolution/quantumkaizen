@@ -43,6 +43,7 @@ export interface CreateUserInput {
   lastName?: string | null;
   phone?: string | null;
   designation?: string | null;
+  avatarUrl?: string | null;
   departmentId?: string | null;
   roleId?: string | null;
   siteId?: string | null;

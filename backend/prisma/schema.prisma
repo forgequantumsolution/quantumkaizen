@@ -230,7 +230,11 @@ model Organization {
   standards  String[]
   timezone   String   @default("Asia/Kolkata")
   dateFormat String   @default("DD/MM/YYYY")
+  // logoUrl holds either an http(s) URL or an inline data:image/...;base64,...
+  // string (used as the report header logo).
   logoUrl    String?
+  // Footer line printed on every page of generated ticket reports.
+  reportFooterText String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

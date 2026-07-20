@@ -15,6 +15,8 @@ interface AuthUser {
   name: string;
   role: string;
   roleName: string | null;
+  /** Profile photo (http(s) URL or base64 data-URL); null → show initials. */
+  avatarUrl: string | null;
   department?: string;
   /** The user's assigned site (used to default the navbar selector). */
   site?: SiteRef | null;
@@ -46,6 +48,7 @@ interface BackendUser {
   email: string;
   name: string;
   employeeId: string | null;
+  avatarUrl?: string | null;
   isActive: boolean;
   departmentId: string | null;
   roleId: string | null;
@@ -64,6 +67,7 @@ function mapBackendUser(u: BackendUser): AuthUser {
     name: u.name,
     role: u.role?.name ?? 'NONE',
     roleName: u.role?.name ?? null,
+    avatarUrl: u.avatarUrl ?? null,
     department: u.department?.name ?? undefined,
     site: u.site ?? null,
     allowedSites: Array.isArray(u.allowedSites) ? u.allowedSites : [],

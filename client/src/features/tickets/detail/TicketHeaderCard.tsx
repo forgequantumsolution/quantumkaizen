@@ -14,6 +14,7 @@ import { useCountdown } from '@/hooks/useCountdown';
 import { useTicketStageForms } from '@/lib/api/stageForm';
 import { formatDateTime } from '@/lib/utils';
 import TicketStatusBadge from '../shared/TicketStatusBadge';
+import DownloadReportButton from '../report/DownloadReportButton';
 import type { TicketDetail } from '@/lib/api/ticket';
 
 interface Props {
@@ -141,6 +142,7 @@ export default function TicketHeaderCard({
             tone="muted"
           />
           <TicketStatusBadge ticket={ticket} />
+          <DownloadReportButton ticketId={ticket.id} ticketUniqueId={ticket.uniqueId} />
           <Button variant="outline" size="sm" onClick={onBack}>
             Back
           </Button>

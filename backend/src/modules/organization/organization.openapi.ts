@@ -22,6 +22,7 @@ const OrganizationSchema = z
     timezone: z.string(),
     dateFormat: z.string(),
     logoUrl: z.string().nullable(),
+    reportFooterText: z.string().nullable(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })

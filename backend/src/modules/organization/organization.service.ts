@@ -33,6 +33,7 @@ export const update = async (input: UpdateOrganizationInput) => {
       timezone: input.timezone,
       dateFormat: input.dateFormat,
       logoUrl: input.logoUrl === '' ? null : input.logoUrl,
+      reportFooterText: input.reportFooterText === '' ? null : input.reportFooterText,
     },
   });
 };

@@ -7,6 +7,7 @@ import {
   Search,
   Filter as FilterIcon,
   Download,
+  Loader2,
   Settings2,
   LayoutDashboard,
   Briefcase,
@@ -61,6 +62,7 @@ import {
   useWorkflowTypes,
 } from '@/lib/api/workflowLookups';
 import RaiseTicketDrawer from '@/features/tickets/shared/RaiseTicketDrawer';
+import { downloadTicketReport } from '@/features/tickets/report/downloadTicketReport';
 import ModuleAnalytics from './analytics';
 import ModuleFindingsRegister from './ModuleFindingsRegister';
 
@@ -895,6 +897,25 @@ function TicketTable({
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+
+  // Ticket id currently being rendered to a PDF report (drives the row spinner
+  // and prevents double-clicks).
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const handleDownloadReport = async (t: TicketSummary) => {
+    if (downloadingId) return;
+    setDownloadingId(t.id);
+    const toastId = toast.loading(`Preparing ${t.uniqueId} report…`);
+    try {
+      await downloadTicketReport(t.id, t.uniqueId);
+      toast.success('Report downloaded', { id: toastId });
+    } catch (err) {
+      console.error('Report generation failed', err);
+      toast.error('Could not generate the report.', { id: toastId });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const colSpan = visibleCols.size;
   return (
     <Card noPadding className="overflow-hidden">
@@ -1030,23 +1051,22 @@ function TicketTable({
                           title="View"
                           onClick={() => onView(t)}
                         />
-                        <IconAction
-                          icon={<Download size={14} />}
-                          title="Download"
-                          onClick={() => {
-                            const blob = new Blob(
-                              [JSON.stringify(t, null, 2)],
-                              { type: 'application/json' },
-                            );
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `${t.uniqueId}.json`;
-                            a.click();
-                            URL.revokeObjectURL(url);
-                          }}
-                          subtle
-                        />
+                        {/* Report download is offered only once the ticket is
+                            completed — an in-progress ticket has no final report. */}
+                        {completed && (
+                          <IconAction
+                            icon={
+                              downloadingId === t.id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Download size={14} />
+                              )
+                            }
+                            title="Download PDF report"
+                            onClick={() => handleDownloadReport(t)}
+                            subtle
+                          />
+                        )}
                         {onDelete && (
                           <IconAction
                             icon={<Trash2 size={14} />}
