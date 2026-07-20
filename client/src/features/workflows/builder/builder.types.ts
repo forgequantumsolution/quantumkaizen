@@ -122,8 +122,10 @@ export interface StageNodeData {
   childTriggers?: EmbeddedChildTrigger[];
   /** Set by TicketFlowCanvas when this stage is one of the ticket's current stages. */
   isCurrent?: boolean;
-  /** Set by TicketFlowCanvas when the parent ticket flow has finished (all stages completed). */
+  /** Set by TicketFlowCanvas when this stage was completed by the ticket. */
   isCompleted?: boolean;
+  /** Set by TicketFlowCanvas when the ticket was rejected while parked on this stage. */
+  isRejected?: boolean;
   /** Direction of the surrounding flow — controls handle placement. Defaults to 'TB'. */
   flowDirection?: 'TB' | 'LR';
 }

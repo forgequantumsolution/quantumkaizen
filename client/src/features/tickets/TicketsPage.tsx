@@ -11,6 +11,7 @@ import {
   TimerReset,
   Circle,
   CheckCircle2,
+  XCircle,
   Filter as FilterIcon,
   X,
   Network,
@@ -31,6 +32,8 @@ import { useHasAnyPermissionMatching } from '@/stores/authStore';
 import {
   useDeleteTicket,
   useTickets,
+  ticketOutcome,
+  isCompletedSuccessfully,
   type ListTicketsQuery,
   type TicketSummary,
 } from '@/lib/api/ticket';
@@ -148,11 +151,17 @@ export default function TicketsPage() {
   );
 
   const openCount = useMemo(
-    () => (data?.items ?? []).filter((t) => !t.flows[0]?.isCompleted && !t.isOnHold).length,
+    () => (data?.items ?? []).filter((t) => ticketOutcome(t) === 'open').length,
     [data?.items],
   );
+  // Successful finishes only — a rejected flow is also `isCompleted`, and
+  // counting rejections as completions overstates this tile.
   const completedCount = useMemo(
-    () => (data?.items ?? []).filter((t) => t.flows[0]?.isCompleted).length,
+    () => (data?.items ?? []).filter(isCompletedSuccessfully).length,
+    [data?.items],
+  );
+  const rejectedCount = useMemo(
+    () => (data?.items ?? []).filter((t) => ticketOutcome(t) === 'rejected').length,
     [data?.items],
   );
 
@@ -191,7 +200,7 @@ export default function TicketsPage() {
       </div>
 
       {/* ── KPI strip ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard
           label="Total tickets"
           value={totalAll}
@@ -209,6 +218,12 @@ export default function TicketsPage() {
           value={completedCount}
           icon={CheckCircle2}
           accent="emerald"
+        />
+        <KpiCard
+          label="Rejected"
+          value={rejectedCount}
+          icon={XCircle}
+          accent="rose"
         />
         <KpiCard
           label={breachedCount > 0 ? 'Breached SLA' : 'At risk'}

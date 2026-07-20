@@ -26,7 +26,8 @@ import {
   AgingBucketChart,
   CalendarList,
   // metrics
-  isCompleted,
+  isClosed,
+  isCompletedSuccessfully,
   isOverdue,
   openClosedTrend,
   agingByCreation,
@@ -44,7 +45,7 @@ import { useTicketFilters } from './useTicketFilters';
 function mttrByDepartment(tickets: TicketSummary[]): Slice[] {
   const sums = new Map<string, { total: number; count: number }>();
   for (const t of tickets) {
-    if (!isCompleted(t)) continue;
+    if (!isCompletedSuccessfully(t)) continue;
     const dept = t.department?.name;
     if (!dept) continue;
     const days =
@@ -64,8 +65,8 @@ export default function MaintenanceAnalytics({ tickets, onDrill }: ModuleAnalyti
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
-    const completed = filtered.filter(isCompleted).length;
+    const open = filtered.filter((t) => !isClosed(t));
+    const completed = filtered.filter(isCompletedSuccessfully).length;
     const due7 = open.filter((t) => {
       const d = daysUntil(t.dueDate);
       return !isNaN(d) && d >= 0 && d <= 7;

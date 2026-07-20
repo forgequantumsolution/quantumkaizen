@@ -1,5 +1,116 @@
 # Changes Log
 
+## Playwright coverage for terminal rejection — and two bugs it caught — 2026-07-20
+
+Browser-driven regression suite for the change below, run against the real dev
+stack. `tests/ui/rejected-status.spec.ts` + `rejected-status.config.ts` (both
+gitignored with the rest of `tests/`). 4 tests, all passing:
+
+    npx playwright test --config tests/ui/rejected-status.config.ts
+
+Needs backend :4000 and client :5173 already running — unlike the other
+`tests/ui` configs it does not spawn a `webServer`, because it needs auth, the DB
+and live transitions. It raises a Document Management ticket over the API, walks
+it FORWARD one stage, then REJECTs it mid-flow, so the graph has one stage behind
+it, one it stopped on, and four it never reached — the shape that makes
+"everything is green" visibly wrong. Every seeded workflow gates transitions on
+required stage forms (including REJECT), so the helper submits them first.
+
+**Two real bugs surfaced that type-checking and reading had missed:**
+
+1. **The sidebar's Key Dates still said "Completed", in green, on a rejected
+   ticket.** `TicketSidebar` renders a `completedAt` row, and rejection sets
+   `completedAt` too. Now shows **Rejected** with `rejectedAt` in red.
+2. **The rejection-point heuristic marked too many stages red.** The first
+   version matched tracking rows sharing the latest `exitedAt`; the second
+   widened that to a 5s burst (because `closeStageTracking` stamps its own `now`
+   per stage, so parallel branches land milliseconds apart). Both were wrong —
+   in the test the FORWARD exit was only 72ms before the rejection, so *both*
+   stages rendered as the stop point. Replaced with a structural rule: **a stage
+   left by moving on has a successor entered at or after its exit; the stage(s)
+   the ticket stopped on have nothing entered after them.** That is timestamp-
+   window-free, handles parallel branches, and also covers approval-driven
+   rejection, where no REJECT-behaviour action is recorded on the tracking row.
+
+Verified visually as well as by assertion: the stage band renders Draft Creation
+green (worked through), Technical Review red (rejected here) and the remaining
+four grey (never reached); the list KPI strip reads Completed 0 / Rejected 20
+where it previously counted all 20 rejections as completions.
+
+Two smaller notes from writing the suite:
+
+- The list-view test filters by typing into the search box rather than by
+  navigating to `/tickets?search=<id>` — `TicketsPage` doesn't read a `search`
+  URL param, so the param form silently returned the unfiltered list and the
+  assertion only passed because the new ticket happened to sort onto page one.
+  Worth knowing if deep-linking a filtered ticket list is ever wanted.
+- Also verified in passing that the backend contract the UI relies on holds:
+  `POST /tickets/:id/transition` on a REJECT action returns
+  `status: 'rejected'`, `isCompleted: true`, and the detail response carries
+  `isRejected: true` with `rejectedAt` and zero `currentStages`.
+
+**Note:** the probe/e2e runs left ~20 throwaway `DOC-FQS-*` tickets in the
+`kaizen_qms2` dev database ("E2E reject-status …" / "Reject UI probe …"). Harmless
+but worth deleting if the ticket list matters for a demo.
+
+## Rejected tickets no longer read "Completed" — 2026-07-20
+
+Follow-up to the terminal-reject change below. That change taught only
+`TicketStatusBadge` and `TicketHeaderCard` about `isRejected`; ~20 other call
+sites still asked `isCompleted` alone. Because terminal rejection works by
+clearing the flow's current stages — the same signal a successful finish uses —
+**every rejected flow is also `isCompleted`**, so all of those sites labelled
+rejected tickets "Completed". Backend was correct throughout; this is entirely
+client-side. Not committed. `tsc --noEmit` clean on client and backend; the
+backend unit suite still passes 25/25.
+
+**One shared derivation instead of twenty `if`s** — `src/lib/api/ticket.ts` gains
+`ticketOutcome(ticket)` → `'no-flow' | 'rejected' | 'completed' | 'on-hold' |
+'open'`, plus `isClosed` / `isCompletedSuccessfully` / `isRejected` and
+`OUTCOME_LABEL`. Terminal states outrank `on-hold`: a hold placed before the flow
+ended is stale once it has.
+
+- **Status labels** — `TicketStatusBadge` now switches on `ticketOutcome`.
+  `ModulePage` (row tint, stage chip, CSV export, status drill-through),
+  `TicketsPage` (KPI strip, plus a new **Rejected** tile — grid widened to 5),
+  `ModuleDashboard`, `CapaWorkflowBand`, `AuditRegisterDetailPage`, and the
+  (currently unrendered) `StageStripBar` all distinguish rejected from completed.
+- **Stage painting** — `StageTabs` and `TicketFlowCanvas` no longer blanket-mark
+  every stage `done` when the flow is finished. On a rejected flow they take
+  `visitedPersistedStageIds` + `rejectedAtPersistedStageIds` and render only
+  visited stages green, the stop point red (new `rejected` StageStatus and a red
+  `StageNode` theme), and never-reached stages as upcoming. `TicketDetailPage`
+  derives both lists from `useTicketTrack`: visited = distinct tracking
+  `stageId`s; the rejection point = the rows sharing the latest `exitedAt`, since
+  terminal rejection closes every open stage in one instant.
+- **Analytics semantics** — `components/analytics/metrics.ts` no longer exports
+  the ambiguous `isCompleted`; removing it made the compiler enumerate all 11
+  analytics modules so each had to pick. The rule applied:
+  - *still on someone's plate?* → `isClosed`: `isOverdue`, `agingByCreation`,
+    `dueDatePosture`, `avgOpenAge`, `onTimeClosureRate`, `avgCycleDays`, and
+    every `open` / backlog filter in the module analytics.
+  - *did we succeed?* → `isCompletedSuccessfully`: `closureRate`, the Completed
+    slice of `statusSlices`, `stageCounts`, and the completed counts in CAPA /
+    Document Approval / Inspection / Maintenance (incl. Maintenance MTTR — a
+    rejected work order was never repaired).
+  - `openClosedTrend` gains a `rejected` series kept out of `completed` but
+    subtracted from the running open balance, so the "open" line still drains.
+  - `ticketStatus` / `statusSlices` / `ModuleDashboard` gain a Rejected bucket.
+  - `SupplierQualityAnalytics.isDisqualified` deliberately uses `isClosed`,
+    preserving its existing behaviour exactly rather than reinterpreting that
+    module's unusual "completed ⇒ disqualified" rule.
+- `CapaWorkflowBand`'s refetch signature now includes `isRejected`, so rejecting
+  a CAPA's ticket refreshes the CAPA.
+- The new array props default to a module-level `EMPTY_IDS` constant rather than
+  a `[]` literal. A fresh literal per render would change identity every render,
+  invalidating the `useMemo` that runs `layoutGraph` — i.e. re-laying out the
+  whole graph on every render of the canvas and the stage band.
+
+**Not covered:** no client test runner exists, so all of this is verified by
+type-check and reading only. A successfully completed flow still paints every
+stage green (unchanged behaviour) — with `visitedPersistedStageIds` now plumbed
+through, narrowing that to visited stages is a small follow-up.
+
 ## Terminal reject — ticket shows "Rejected" and locks — 2026-07-16
 
 Frontend companion to the backend "reject is now terminal" change

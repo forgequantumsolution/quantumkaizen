@@ -333,7 +333,7 @@ function WorkflowProgressCard({
             {flow ? (
               <span className="text-xs text-gray-500 ml-2">
                 {flow.workflowName} · v{flow.workflowVersion}
-                {flow.isCompleted ? ' · completed' : ''}
+                {flow.isRejected ? ' · rejected' : flow.isCompleted ? ' · completed' : ''}
               </span>
             ) : null}
           </div>
@@ -343,7 +343,7 @@ function WorkflowProgressCard({
             </div>
             {currentStages.length === 0 ? (
               <span className="text-xs text-gray-400">
-                {flow?.isCompleted ? 'Workflow complete' : '—'}
+                {flow?.isRejected ? 'Workflow rejected' : flow?.isCompleted ? 'Workflow complete' : '—'}
               </span>
             ) : (
               <div className="flex flex-wrap gap-1.5">

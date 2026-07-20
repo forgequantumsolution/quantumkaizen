@@ -4,6 +4,87 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Observation: the required-forms gate also blocks REJECT — 2026-07-20
+
+Surfaced while building the Playwright rejection suite (see `client/changes.md`),
+not fixed — recording it so the behaviour is a decision rather than an accident.
+
+`performAction` runs the Phase 3.5 required-forms intercept *after* the approval
+gate but *before* behaviour dispatch
+(`src/modules/workflow/engine/orchestrator.ts`), so it applies to **every**
+behaviour, REJECT included. A stage with an unsubmitted required form returns:
+
+    400  Required forms not submitted  { formsRequired: [...] }
+
+even when the action being attempted is "Reject". In practice a reviewer cannot
+reject a ticket without first filling in the very form they are rejecting it
+over; the e2e helper has to submit the stage's required forms before it can
+reject. Every seeded workflow has required forms on every stage, so this is the
+normal path, not an edge case.
+
+Defensible either way — an ALCOA+ argument says the rejection rationale must be
+captured on the form first. But if the intent was only to gate *forward*
+progress, the check should skip REJECT (and probably HOLD), which is a one-line
+guard on `behavior` at that intercept. No code changed.
+
+---
+
+# Unit tests for the terminal-reject change — 2026-07-20
+
+`npm run test:unit` previously pointed at a `tests/unit` directory that did not
+exist; it now runs 25 passing tests covering the "reject is now terminal" change
+below. No database, no Redis — collaborator modules are `vi.mock`ed per file.
+
+Note: `tests/` is gitignored (see `.gitignore` — "Local-only tests (P3.7 Vitest +
+Playwright specs)"), so these live alongside the existing local-only Playwright
+suites in `tests/e2e` and `tests/ui` and are never committed. They are run
+manually, not in CI.
+
+- **`backend/vitest.config.ts`** (new) — node environment, `setupFiles` pointing
+  at the shared setup, `include: ['**/*.test.ts']`. The existing `test:unit`
+  script (`vitest run --dir ../tests/unit`) needed no change. Note this file sits
+  under `backend/` and is therefore **not** covered by the `tests/` ignore rule —
+  it would be committed while the specs it points at would not, leaving a config
+  referencing a directory that isn't in the repo. Either commit both or neither;
+  left as-is pending that call.
+- **`tests/unit/setup.ts`** (new) — sets placeholder `DATABASE_URL`/`JWT_SECRET`
+  so `src/config/env.ts` doesn't `process.exit(1)` when pulled in transitively
+  via `src/lib/prisma.ts`. Nothing in the suite opens a connection.
+- **`tests/unit/helpers/fakeTx.ts`** (new) — `makeFakeTx()` builds a
+  `Prisma.TransactionClient` double where every delegate method is a `vi.fn()`.
+  Tests stub only the reads they need and assert on the writes.
+- **`tests/unit/terminate-ticket-as-rejected.test.ts`** (new, 8 tests) — all
+  current stages exited on a 3-stage parallel flow (not just the first);
+  `isRejected` + `rejectedAt` stamped; the stamp lands *after* `advanceFlow`;
+  `TICKET_REJECTED` emitted with the right context/payload/actor; actor and
+  action id threaded into stage tracking; the flow lookup is scoped to
+  `isCompleted: false`; no-active-flow throws instead of no-oping; a flow with
+  an already-empty stage set is still stamped rejected.
+- **`tests/unit/approval-decide.test.ts`** (new, 17 tests) — the mode matrix:
+  a REJECTED decision is terminal in all five modes (`SINGLE`, `ANY`, `QUORUM`,
+  `ALL_REQUIRED`, `SEQUENTIAL`), including with prior APPROVED records on the
+  instance, and never falls through to `satisfied`. Plus the unchanged approval
+  path (`SINGLE` satisfies, `QUORUM` stays pending with progress) and pure-
+  function coverage of `isPolicySatisfied` (distinct-approver counting,
+  REJECTED never counts, SEQUENTIAL order coverage, empty-sequence fallback).
+
+**Mutation-checked, not just green.** Restoring the old `isPolicyUnsatisfiable`
+gate in `approval.layer.decide` fails exactly 8 tests — the `SINGLE`/`ANY`/
+`QUORUM` cases — while `ALL_REQUIRED`/`SEQUENTIAL` keep passing, which is the
+correct signature of that change. Slicing `terminateTicketAsRejected`'s stage
+loop to the first stage fails exactly the parallel-flow test. Both mutations
+were reverted; `tsc --noEmit` clean.
+
+**Known gap:** `isPolicyUnsatisfiable` in `approval.layer.ts` is now unreferenced
+— the terminal-reject change removed its only call site. Left in place (still
+exported) rather than deleted as part of a test-only change.
+
+**Not covered:** the client changes (type-check only, no frontend test runner),
+`approval.service.decideInstance`'s wiring, and the `performAction`
+approval-intercept branch in `orchestrator.ts`.
+
+---
+
 # Reject is now terminal — a rejection stops the ticket ("Rejected", not fillable) — 2026-07-16
 
 Previously a REJECT-behavior action sent the ticket **back to the previous

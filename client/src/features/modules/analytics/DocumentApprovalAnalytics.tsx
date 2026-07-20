@@ -26,7 +26,8 @@ import {
   HBarSplit,
   ComplianceGauge,
   // metrics
-  isCompleted,
+  isClosed,
+  isCompletedSuccessfully,
   isOverdue,
   countBy,
   stageCounts,
@@ -43,8 +44,8 @@ export default function DocumentApprovalAnalytics({ tickets, onDrill }: ModuleAn
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
-    const completed = filtered.filter(isCompleted);
+    const open = filtered.filter((t) => !isClosed(t));
+    const completed = filtered.filter(isCompletedSuccessfully);
     const overdue = filtered.filter(isOverdue).length;
 
     const posture = dueDatePosture(open);

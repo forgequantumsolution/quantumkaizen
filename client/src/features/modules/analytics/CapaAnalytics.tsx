@@ -26,7 +26,8 @@ import {
   HBarSplit,
   CategoryParetoChart,
   // metrics
-  isCompleted,
+  isClosed,
+  isCompletedSuccessfully,
   isOverdue,
   countBy,
   openClosedTrend,
@@ -47,8 +48,8 @@ export default function CapaAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
-    const completed = filtered.filter(isCompleted);
+    const open = filtered.filter((t) => !isClosed(t));
+    const completed = filtered.filter(isCompletedSuccessfully);
     const overdue = filtered.filter(isOverdue).length;
     const recurringCount = filtered.filter(isRecurring).length;
 

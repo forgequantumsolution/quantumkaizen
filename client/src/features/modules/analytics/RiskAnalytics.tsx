@@ -26,7 +26,7 @@ import {
   AgingBucketChart,
   CalendarList,
   // metrics
-  isCompleted,
+  isClosed,
   isOverdue,
   isOnHold,
   daysSince,
@@ -85,7 +85,7 @@ export default function RiskAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
+    const open = filtered.filter((t) => !isClosed(t));
     const overdue = filtered.filter(isOverdue).length;
     const highRpn = filtered.filter((t) => HIGH_RPN_RE.test(t.severity?.name ?? '')).length;
     const onHold = filtered.filter(isOnHold).length;

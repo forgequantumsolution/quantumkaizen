@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
-import { CircleDot, Workflow as WorkflowIcon, CheckCircle2 } from 'lucide-react';
+import { CircleDot, Workflow as WorkflowIcon, CheckCircle2, XCircle } from 'lucide-react';
 import { Card, Button, Badge, Modal, Spinner } from '@/components/ui';
 import { useHasPermission } from '@/stores/authStore';
 import { useTicket } from '@/lib/api/ticket';
@@ -38,7 +38,7 @@ export default function CapaWorkflowBand({ capa }: { capa: Capa }) {
   // lag behind the stage the forms are now on.
   const flow0 = ticket?.flows?.[0];
   const flowSig = flow0
-    ? `${flow0.isCompleted}|${flow0.currentStages.map((s) => s.id).sort().join(',')}`
+    ? `${flow0.isCompleted}|${flow0.isRejected}|${flow0.currentStages.map((s) => s.id).sort().join(',')}`
     : '';
   useEffect(() => {
     if (flowSig) qc.invalidateQueries({ queryKey: auditKeys.capa(capa.id) });
@@ -110,13 +110,20 @@ export default function CapaWorkflowBand({ capa }: { capa: Capa }) {
 
   const flow = ticket.flows[0];
   const isCompleted = !!flow?.isCompleted;
+  // A rejected flow is also `isCompleted` — check it first or a rejected CAPA
+  // reads "Completed".
+  const isRejected = !!flow?.isRejected;
   const currentStages = flow?.currentStages ?? [];
 
   return (
     <>
       <Card>
         <div className="flex flex-wrap items-center gap-3">
-          {isCompleted ? (
+          {isRejected ? (
+            <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-700">
+              <XCircle size={15} /> Rejected
+            </span>
+          ) : isCompleted ? (
             <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">
               <CheckCircle2 size={15} /> Completed
             </span>
@@ -164,6 +171,7 @@ export default function CapaWorkflowBand({ capa }: { capa: Capa }) {
             currentStageIds={currentStages.map((s) => s.canonicalId)}
             currentPersistedStageIds={currentStages.map((s) => s.id)}
             isCompleted={isCompleted}
+            isRejected={isRejected}
             direction="LR"
             height={420}
           />

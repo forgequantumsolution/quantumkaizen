@@ -26,7 +26,7 @@ import {
   ComplianceGauge,
   CategoryParetoChart,
   // metrics
-  isCompleted,
+  isClosed,
   isOverdue,
   countBy,
   statusSlices,
@@ -43,7 +43,7 @@ export default function EquipmentAnalytics({ tickets, onDrill }: ModuleAnalytics
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
+    const open = filtered.filter((t) => !isClosed(t));
     const underMaintenance = filtered.filter((t) => !!t.isOnHold).length;
     const overdueQual = filtered.filter(isOverdue).length;
 

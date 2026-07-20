@@ -6,7 +6,12 @@
  * it. All are pure functions over the module's own TicketSummary[] — strictly
  * read-only (spec §9).
  */
-import type { TicketSummary } from '@/lib/api/ticket';
+import {
+  isClosed as outcomeIsClosed,
+  isCompletedSuccessfully as outcomeIsCompleted,
+  isRejected as outcomeIsRejected,
+  type TicketSummary,
+} from '@/lib/api/ticket';
 
 export const MONTH_LABELS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -19,9 +24,22 @@ export interface Slice {
   color?: string;
 }
 
-export function isCompleted(t: TicketSummary): boolean {
-  return !!t.flows[0]?.isCompleted;
-}
+/**
+ * There is deliberately no `isCompleted` export.
+ *
+ * A rejected flow carries `isCompleted: true` (terminal rejection works by
+ * clearing the flow's current stages, the same signal a successful finish
+ * uses), so a single "completed" predicate silently counts rejections as wins.
+ * Every call site has to say which of these it means:
+ *
+ *   - `isClosed`    — finished either way. Use for backlog, aging, overdue,
+ *                     open/closed splits: is this still on someone's plate?
+ *   - `isCompletedSuccessfully` — reached the end of the workflow. Use for
+ *                     completion/closure rates and success counts.
+ */
+export const isClosed = outcomeIsClosed;
+export const isCompletedSuccessfully = outcomeIsCompleted;
+export const isRejected = outcomeIsRejected;
 
 export function isOnHold(t: TicketSummary): boolean {
   return !!t.isOnHold;
@@ -39,18 +57,20 @@ export function daysUntil(iso: string | null | undefined): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 }
 
-export type SimpleStatus = 'Open' | 'In Progress' | 'On Hold' | 'Completed';
+export type SimpleStatus = 'Open' | 'In Progress' | 'On Hold' | 'Completed' | 'Rejected';
 
 export function ticketStatus(t: TicketSummary): SimpleStatus {
-  if (isCompleted(t)) return 'Completed';
+  if (isRejected(t)) return 'Rejected';
+  if (isCompletedSuccessfully(t)) return 'Completed';
   if (t.isOnHold) return 'On Hold';
   if (t.flows[0]?.currentStages.length) return 'In Progress';
   return 'Open';
 }
 
-/** True when an open ticket is past its due date. */
+/** True when a still-open ticket is past its due date. Closed — completed or
+ *  rejected — is not overdue: nobody can act on it. */
 export function isOverdue(t: TicketSummary): boolean {
-  return !isCompleted(t) && !!t.dueDate && daysSince(t.dueDate) > 0;
+  return !isClosed(t) && !!t.dueDate && daysSince(t.dueDate) > 0;
 }
 
 /** Count records by an arbitrary key, sorted descending (drops null keys). */
@@ -69,11 +89,12 @@ export function countBy(
     .sort((a, b) => b.value - a.value);
 }
 
-/** Standard status donut (Open / In Progress / On Hold / Completed). */
+/** Standard status donut (Open / In Progress / On Hold / Completed / Rejected). */
 export function statusSlices(tickets: TicketSummary[]): Slice[] {
-  let open = 0, inProg = 0, onHold = 0, done = 0;
+  let open = 0, inProg = 0, onHold = 0, done = 0, rejected = 0;
   for (const t of tickets) {
-    if (isCompleted(t)) done++;
+    if (isRejected(t)) rejected++;
+    else if (isCompletedSuccessfully(t)) done++;
     else if (t.isOnHold) onHold++;
     else if (t.flows[0]?.currentStages.length) inProg++;
     else open++;
@@ -83,6 +104,7 @@ export function statusSlices(tickets: TicketSummary[]): Slice[] {
     { name: 'In Progress', value: inProg, color: '#F59E0B' },
     { name: 'On Hold', value: onHold, color: '#F97316' },
     { name: 'Completed', value: done, color: '#22C55E' },
+    { name: 'Rejected', value: rejected, color: '#EF4444' },
   ].filter((d) => d.value > 0);
 }
 
@@ -97,6 +119,9 @@ export interface TrendPoint {
   month: string;
   created: number;
   completed: number;
+  /** Terminal rejections. Kept separate from `completed` so the chart doesn't
+   *  present them as successes, but still drained from the open balance. */
+  rejected: number;
   open: number;
 }
 
@@ -109,20 +134,30 @@ export function openClosedTrend(tickets: TicketSummary[], months = 6): TrendPoin
   const out: TrendPoint[] = [];
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    out.push({ month: MONTH_LABELS[d.getMonth()]!, created: 0, completed: 0, open: 0 });
+    out.push({
+      month: MONTH_LABELS[d.getMonth()]!,
+      created: 0,
+      completed: 0,
+      rejected: 0,
+      open: 0,
+    });
   }
   for (const t of tickets) {
     const ci = months - 1 - monthsBack(t.createdAt);
     if (ci >= 0 && ci < months) out[ci]!.created++;
-    if (isCompleted(t)) {
+    if (isClosed(t)) {
       const ui = months - 1 - monthsBack(t.updatedAt);
-      if (ui >= 0 && ui < months) out[ui]!.completed++;
+      if (ui >= 0 && ui < months) {
+        if (isRejected(t)) out[ui]!.rejected++;
+        else out[ui]!.completed++;
+      }
     }
   }
-  // Running open balance = cumulative(created) - cumulative(completed).
+  // Running open balance = cumulative(created) - cumulative(closed). Rejections
+  // have to drain the balance too, or the "open" line never comes back down.
   let bal = 0;
   for (const p of out) {
-    bal += p.created - p.completed;
+    bal += p.created - p.completed - p.rejected;
     p.open = Math.max(0, bal);
   }
   return out;
@@ -158,7 +193,7 @@ export function agingByCreation(tickets: TicketSummary[]): Slice[] {
     { name: '90+ days', value: 0, color: '#EF4444' },
   ];
   for (const t of tickets) {
-    if (isCompleted(t)) continue;
+    if (isClosed(t)) continue;
     const d = daysSince(t.createdAt);
     if (d <= 7) b[0]!.value++;
     else if (d <= 30) b[1]!.value++;
@@ -172,7 +207,7 @@ export function agingByCreation(tickets: TicketSummary[]): Slice[] {
 export function dueDatePosture(tickets: TicketSummary[]): Slice[] {
   let overdue = 0, dueSoon = 0, onTrack = 0, noDue = 0;
   for (const t of tickets) {
-    if (isCompleted(t)) continue;
+    if (isClosed(t)) continue;
     if (!t.dueDate) { noDue++; continue; }
     const d = daysSince(t.dueDate);
     if (d > 0) overdue++;
@@ -211,9 +246,13 @@ export function dueWindows(
   return buckets;
 }
 
-/** On-time closure rate % (completed on or before due date) over completed records. */
+/**
+ * On-time closure rate % (closed on or before due date) over closed records.
+ * Measures timeliness of reaching an end state, so rejections count — they are
+ * a resolution, just not a successful one.
+ */
 export function onTimeClosureRate(tickets: TicketSummary[]): number {
-  const closed = tickets.filter(isCompleted);
+  const closed = tickets.filter(isClosed);
   if (closed.length === 0) return 0;
   const onTime = closed.filter((t) => {
     if (!t.dueDate) return true; // no SLA target → not counted as breach
@@ -222,15 +261,17 @@ export function onTimeClosureRate(tickets: TicketSummary[]): number {
   return Math.round((onTime / closed.length) * 100);
 }
 
-/** Overall closure rate % (completed / total). */
+/** Overall closure rate % (successfully completed / total). Rejections are not
+ *  successes, so they lower this rather than inflating it. */
 export function closureRate(tickets: TicketSummary[]): number {
   if (tickets.length === 0) return 0;
-  return Math.round((tickets.filter(isCompleted).length / tickets.length) * 100);
+  return Math.round((tickets.filter(isCompletedSuccessfully).length / tickets.length) * 100);
 }
 
-/** Average cycle time in days for completed records (updatedAt - createdAt). */
+/** Average cycle time in days for closed records (updatedAt - createdAt).
+ *  Includes rejections — time-to-resolution, however it resolved. */
 export function avgCycleDays(tickets: TicketSummary[]): number {
-  const closed = tickets.filter(isCompleted);
+  const closed = tickets.filter(isClosed);
   if (closed.length === 0) return 0;
   const sum = closed.reduce(
     (s, t) => s + (new Date(t.updatedAt).getTime() - new Date(t.createdAt).getTime()) / 86_400_000,
@@ -241,7 +282,7 @@ export function avgCycleDays(tickets: TicketSummary[]): number {
 
 /** Average age in days of open records. */
 export function avgOpenAge(tickets: TicketSummary[]): number {
-  const open = tickets.filter((t) => !isCompleted(t));
+  const open = tickets.filter((t) => !isClosed(t));
   if (open.length === 0) return 0;
   return Math.round(open.reduce((s, t) => s + daysSince(t.createdAt), 0) / open.length);
 }
@@ -266,6 +307,10 @@ export function pareto(slices: Slice[], limit = 8): ParetoItem[] {
 /** Stage-workflow counts (records currently at each stage), for funnels. */
 export function stageCounts(tickets: TicketSummary[]): Slice[] {
   return countBy(tickets, (t) =>
-    isCompleted(t) ? 'Completed' : t.flows[0]?.currentStages[0]?.name ?? 'Unassigned',
+    isRejected(t)
+      ? 'Rejected'
+      : isCompletedSuccessfully(t)
+        ? 'Completed'
+        : t.flows[0]?.currentStages[0]?.name ?? 'Unassigned',
   );
 }

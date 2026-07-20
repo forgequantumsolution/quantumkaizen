@@ -22,6 +22,7 @@ import {
   Workflow as WorkflowIcon,
   AlertTriangle,
   CheckCircle2,
+  XCircle,
   History,
   X,
   ChevronDown,
@@ -48,6 +49,9 @@ import { useBookmarkStore } from '@/stores/bookmarkStore';
 import {
   useDeleteTicket,
   useTickets,
+  ticketOutcome,
+  isClosed,
+  isCompletedSuccessfully,
   type TicketSummary,
 } from '@/lib/api/ticket';
 import { useTicketChildren } from '@/lib/api/finding';
@@ -219,7 +223,7 @@ export default function ModulePage({
       department:  myDept ? allTickets.filter((t) => t.department?.name === myDept).length : 0,
       createdByMe: allTickets.filter((t) => t.createdBy?.id === myId).length,
       all:         allTickets.length,
-      pending:     allTickets.filter((t) => !t.flows[0]?.isCompleted).length,
+      pending:     allTickets.filter((t) => !isClosed(t)).length,
       saved:       allTickets.filter((t) => bookmarks.isBookmarked(t.id)).length,
     };
   }, [allTickets, user, bookmarks]);
@@ -257,7 +261,7 @@ export default function ModulePage({
         case 'all':
           break;
         case 'pending':
-          list = list.filter((t) => !t.flows[0]?.isCompleted);
+          list = list.filter((t) => !isClosed(t));
           break;
         case 'saved':
           list = list.filter((t) => bookmarks.isBookmarked(t.id));
@@ -285,10 +289,13 @@ export default function ModulePage({
     // Drill-through from an Overview KPI card (Active / Overdue / …).
     if (statusView && statusView !== 'all') {
       list = list.filter((t) => {
-        const completed = !!t.flows[0]?.isCompleted;
+        // `isCompleted` is true for rejected flows too, so "completed" has to
+        // ask for a successful finish or the tile counts rejections as wins.
+        const outcome = ticketOutcome(t);
+        const completed = outcome === 'completed' || outcome === 'rejected';
         switch (statusView) {
           case 'open':      return !completed;
-          case 'completed': return completed;
+          case 'completed': return outcome === 'completed';
           case 'onhold':    return !completed && t.isOnHold;
           case 'overdue':
             return !completed && !!t.dueDate && new Date(t.dueDate).getTime() < Date.now();
@@ -345,7 +352,9 @@ export default function ModulePage({
             case 'createdAt':  return formatDate(t.createdAt);
             case 'process':    return moduleName;
             case 'title':      return JSON.stringify(t.title);
-            case 'stage':      return t.flows[0]?.currentStages[0]?.name ?? (t.flows[0]?.isCompleted ? 'Completed' : '—');
+            case 'stage':      return t.flows[0]?.currentStages[0]?.name
+                                 ?? (ticketOutcome(t) === 'rejected' ? 'Rejected'
+                                   : ticketOutcome(t) === 'completed' ? 'Completed' : '—');
             case 'department': return t.department?.name ?? '';
             default:           return '';
           }
@@ -906,7 +915,8 @@ function TicketTable({
           <tbody>
             {tickets.map((t) => {
               const flow = t.flows[0];
-              const completed = !!flow?.isCompleted;
+              const completed = isCompletedSuccessfully(t);
+              const rejected = ticketOutcome(t) === 'rejected';
               const stageName = flow?.currentStages[0]?.name;
               const bookmarked = isBookmarked(t.id);
               const hasChildren = (t.childCount ?? 0) > 0;
@@ -917,9 +927,11 @@ function TicketTable({
                   onClick={() => onView(t)}
                   className={cn(
                     'border-b border-gray-100 cursor-pointer transition-colors',
-                    completed
-                      ? 'bg-emerald-50/40 hover:bg-emerald-50/70'
-                      : 'hover:bg-gray-50',
+                    rejected
+                      ? 'bg-red-50/40 hover:bg-red-50/70'
+                      : completed
+                        ? 'bg-emerald-50/40 hover:bg-emerald-50/70'
+                        : 'hover:bg-gray-50',
                   )}
                 >
                   {visibleCols.has('bookmark') && (
@@ -984,7 +996,12 @@ function TicketTable({
                   )}
                   {visibleCols.has('stage') && (
                     <Td>
-                      {completed ? (
+                      {rejected ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-red-700 bg-red-50 border border-red-200 px-2 py-0.5 rounded-md">
+                          <XCircle size={11} />
+                          Rejected
+                        </span>
+                      ) : completed ? (
                         <span className="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
                           <CheckCircle2 size={11} />
                           Completed

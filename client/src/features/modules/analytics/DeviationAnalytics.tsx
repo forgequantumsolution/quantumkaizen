@@ -10,7 +10,7 @@ import { Activity, AlertTriangle, Timer, PauseCircle, ShieldAlert } from 'lucide
 import type { ModuleAnalyticsProps } from './types';
 import type { TicketSummary } from '@/lib/api/ticket';
 import {
-  isCompleted, isOverdue, countBy, openClosedTrend,
+  isClosed, isOverdue, countBy, openClosedTrend,
   onTimeClosureRate, avgCycleDays, avgOpenAge,
   ChartCard, StatTile,
   TrendLineChart, DonutChart, HBarSplit, ComplianceGauge, CategoryParetoChart,
@@ -22,7 +22,7 @@ export default function DeviationAnalytics({ tickets, onDrill }: ModuleAnalytics
   const { filtered, toolbar } = useTicketFilters(tickets);
 
   const k = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
+    const open = filtered.filter((t) => !isClosed(t));
     const criticalOpen = open.filter((t) => /crit/i.test(t.severity?.name ?? '')).length;
     const capaLinked = filtered.filter((t) => /capa/i.test(t.title)).length;
     const linkageRate = filtered.length ? Math.round((capaLinked / filtered.length) * 100) : 0;
