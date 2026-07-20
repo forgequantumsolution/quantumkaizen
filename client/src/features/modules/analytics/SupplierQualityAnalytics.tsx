@@ -30,7 +30,7 @@ import {
   CategoryParetoChart,
   ComplianceGauge,
   // metrics
-  isCompleted,
+  isClosed,
   isOverdue,
   countBy,
   statusSlices,
@@ -45,7 +45,7 @@ import { useTicketFilters } from './useTicketFilters';
 /** A supplier/record counts as disqualified when completed or flagged so. */
 const DISQ_RE = /disq/i;
 const isDisqualified = (t: TicketSummary) =>
-  isCompleted(t) || DISQ_RE.test(t.severity?.name ?? '');
+  isClosed(t) || DISQ_RE.test(t.severity?.name ?? '');
 
 interface SupplierRow {
   name: string;
@@ -59,7 +59,7 @@ export default function SupplierQualityAnalytics({ tickets, onDrill }: ModuleAna
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
+    const open = filtered.filter((t) => !isClosed(t));
     const disqualified = filtered.filter(isDisqualified).length;
     const overdue = filtered.filter(isOverdue).length;
 

@@ -41,6 +41,36 @@ import type {
   WorkflowFlowEdge,
   WorkflowFlowNode,
 } from './builder.types';
+import { isStageData } from './builder.types';
+
+/**
+ * Publish-time guard: every action on every stage must carry an approval
+ * policy. Returns a human-readable error per action that's missing one.
+ */
+const collectMissingPolicyErrors = (nodes: WorkflowFlowNode[]): string[] => {
+  const errors: string[] = [];
+  for (const node of nodes) {
+    if (!isStageData(node.data, node.type)) continue;
+    const data = node.data;
+    const policies = data.approvalPolicies ?? [];
+    const stageName = data.label?.trim() || 'Untitled stage';
+    const hasPolicy = (type: 'primary' | 'secondary', index: number) =>
+      policies.some((p) => p.actionType === type && p.actionIndex === index);
+    const check = (type: 'primary' | 'secondary') =>
+      (type === 'primary' ? data.primary_actions : data.secondary_actions ?? [])?.forEach(
+        (a, i) => {
+          if (!hasPolicy(type, i)) {
+            errors.push(
+              `Stage "${stageName}": ${type} action "${a.stage_status_name ?? 'Action'}" has no approval policy.`,
+            );
+          }
+        },
+      );
+    check('primary');
+    check('secondary');
+  }
+  return errors;
+};
 
 let nodeCounter = 0;
 const newNodeId = () => `node-${Date.now().toString(36)}-${++nodeCounter}`;
@@ -269,6 +299,12 @@ export default function WorkflowBuilderPage() {
   };
 
   const handlePublish = () => {
+    const missingPolicies = collectMissingPolicyErrors(nodes);
+    if (missingPolicies.length > 0) {
+      setValidationErrors(missingPolicies);
+      toast.error(`${missingPolicies.length} action(s) missing an approval policy`);
+      return;
+    }
     modal.confirm({
       title: 'Publish workflow',
       content:

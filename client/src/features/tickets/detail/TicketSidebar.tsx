@@ -173,11 +173,21 @@ export default function TicketSidebar({ ticket }: { ticket: TicketDetail }) {
             <dt className="text-gray-500">Last Updated</dt>
             <dd className="text-gray-900">{fmtDate(ticket.updatedAt)}</dd>
           </div>
-          {flow?.completedAt && (
+          {/* A rejected flow is also completed (its stages were cleared), and
+              carries a completedAt — so this must report the rejection instead,
+              or a stopped ticket reads as a green successful finish. */}
+          {flow?.isRejected ? (
             <div className="flex justify-between">
-              <dt className="text-gray-500">Completed</dt>
-              <dd className="text-emerald-700">{fmtDate(flow.completedAt)}</dd>
+              <dt className="text-gray-500">Rejected</dt>
+              <dd className="text-red-700">{fmtDate(flow.rejectedAt ?? flow.completedAt)}</dd>
             </div>
+          ) : (
+            flow?.completedAt && (
+              <div className="flex justify-between">
+                <dt className="text-gray-500">Completed</dt>
+                <dd className="text-emerald-700">{fmtDate(flow.completedAt)}</dd>
+              </div>
+            )
           )}
         </dl>
       </Card>

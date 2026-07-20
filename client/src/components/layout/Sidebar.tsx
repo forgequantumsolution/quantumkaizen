@@ -678,8 +678,8 @@ export default function Sidebar() {
       <div
         style={{ borderBottom: "1px solid " + DIVIDER }}
         className={cn(
-          "flex items-center h-14 shrink-0",
-          sidebarCollapsed ? "justify-center px-3" : "gap-3 px-4"
+          "flex items-center justify-center h-14 shrink-0",
+          sidebarCollapsed ? "px-3" : "gap-3 px-4"
         )}
       >
         <div

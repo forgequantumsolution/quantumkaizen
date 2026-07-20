@@ -18,6 +18,10 @@ export interface TicketCurrentStage {
 export interface TicketFlowSummary {
   id: string;
   isCompleted: boolean;
+  /** Terminal rejection — the flow was stopped by a REJECT action or an
+   *  approval rejection. Also isCompleted (no current stages). Drives the
+   *  "Rejected" status label. */
+  isRejected: boolean;
   workflowId: string;
   workflowName: string;
   workflowVersion: number;
@@ -56,10 +60,66 @@ export interface TicketDetail extends TicketSummary {
   parentTicketStage: { id: string; name: string; canonicalId: string } | null;
   flows: (TicketFlowSummary & {
     completedAt: string | null;
+    rejectedAt: string | null;
     statusUpdatedAt: string;
     workflow: { id: string; name: string; version: number; typeId: string | null };
   })[];
 }
+
+// ─── Ticket outcome ───────────────────────────────────────────────────────────
+
+/**
+ * A rejected flow is ALSO `isCompleted` — terminal rejection works by clearing
+ * the flow's current stages, which is the same signal the engine uses for a
+ * successful finish (see `terminateTicketAsRejected` in the backend engine).
+ * So `isCompleted` alone means "finished", not "finished successfully", and any
+ * UI that reads it without also checking `isRejected` will label a rejected
+ * ticket "Completed".
+ *
+ * Derive the display state from `ticketOutcome` instead of testing the flags
+ * directly, so there is one place that knows the precedence.
+ */
+export type TicketOutcome = 'no-flow' | 'rejected' | 'completed' | 'on-hold' | 'open';
+
+interface OutcomeInput {
+  isOnHold?: boolean;
+  flows: { isCompleted: boolean; isRejected: boolean }[];
+}
+
+/**
+ * Precedence: terminal states (rejected, completed) outrank `on-hold`. A hold
+ * placed before the flow ended is stale once it has — reporting "On Hold" for a
+ * ticket nobody can act on again would be misleading.
+ */
+export const ticketOutcome = (ticket: OutcomeInput): TicketOutcome => {
+  const flow = ticket.flows[0];
+  if (!flow) return 'no-flow';
+  if (flow.isRejected) return 'rejected';
+  if (flow.isCompleted) return 'completed';
+  if (ticket.isOnHold) return 'on-hold';
+  return 'open';
+};
+
+export const OUTCOME_LABEL: Record<TicketOutcome, string> = {
+  'no-flow': 'No flow',
+  rejected: 'Rejected',
+  completed: 'Completed',
+  'on-hold': 'On Hold',
+  open: 'Open',
+};
+
+/** Finished, either way — use for open/closed splits and backlog counts. */
+export const isClosed = (ticket: OutcomeInput): boolean => {
+  const o = ticketOutcome(ticket);
+  return o === 'completed' || o === 'rejected';
+};
+
+/** Finished successfully — use for completion rates, cycle time, throughput. */
+export const isCompletedSuccessfully = (ticket: OutcomeInput): boolean =>
+  ticketOutcome(ticket) === 'completed';
+
+export const isRejected = (ticket: OutcomeInput): boolean =>
+  ticketOutcome(ticket) === 'rejected';
 
 export interface AllowedAction {
   id: string;
@@ -128,7 +188,7 @@ export interface TransitionInput {
 }
 
 export interface TransitionResult {
-  status: 'transitioned' | 'completed' | 'held' | 'returned' | 'reassigned';
+  status: 'transitioned' | 'completed' | 'held' | 'returned' | 'reassigned' | 'rejected';
   ticketId: string;
   flowId: string;
   enteredStages: { id: string; name: string }[];

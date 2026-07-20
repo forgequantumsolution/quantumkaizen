@@ -26,7 +26,7 @@ import {
   FunnelChart,
   ComplianceGauge,
   // metrics
-  isCompleted,
+  isClosed,
   isOverdue,
   countBy,
   openClosedTrend,
@@ -43,7 +43,7 @@ export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnaly
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
+    const open = filtered.filter((t) => !isClosed(t));
     const onHold = open.filter((t) => t.isOnHold).length;
 
     return {

@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button, Card, Spinner, Tabs } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { useAuthStore } from '@/stores/authStore';
-import { useDeleteTicket, useTicket } from '@/lib/api/ticket';
+import { useDeleteTicket, useTicket, useTicketTrack } from '@/lib/api/ticket';
 import { useWorkflowTypes } from '@/lib/api/workflowLookups';
 import { findingTypeReadKey, findingTypeCreateKey } from '@/lib/navAccess';
 import FindingsTab from './detail/FindingsTab';
@@ -53,6 +53,43 @@ export default function TicketDetailPage() {
   }, [id]);
 
   const { data: ticket, isLoading, error } = useTicket(id);
+  const { data: trackRows } = useTicketTrack(id);
+
+  // Which stages the ticket actually entered, and — when it was rejected —
+  // which it was parked on at the time. A rejected flow is also `isCompleted`,
+  // so without this the stage band paints every stage in the workflow green,
+  // including branches the ticket never reached.
+  const { visitedStageIds, rejectedAtStageIds } = useMemo(() => {
+    const rows = trackRows ?? [];
+    const visited = [...new Set(rows.map((r) => r.stageId).filter((s): s is string => !!s))];
+    if (!ticket?.flows[0]?.isRejected) {
+      return { visitedStageIds: visited, rejectedAtStageIds: [] as string[] };
+    }
+    // A stage left by moving on has a successor entered at (or after) its exit;
+    // the stage(s) the ticket stopped on have nothing entered after them. That
+    // holds for parallel branches and for approval-driven rejection, where no
+    // REJECT-behaviour action is recorded — unlike a timestamp window, which
+    // can't tell a forward 70ms before the rejection from the rejection itself.
+    // `openStageTracking` runs after `closeStageTracking` inside the same
+    // transaction, so a successor's enteredAt is always >= the exit it followed.
+    const ms = (iso: string | null) => (iso ? new Date(iso).getTime() : NaN);
+    const hasSuccessor = (row: (typeof rows)[number]) => {
+      const exited = ms(row.exitedAt);
+      if (Number.isNaN(exited)) return true; // still active — not a stop point
+      return rows.some(
+        (o) => o.id !== row.id && !Number.isNaN(ms(o.enteredAt)) && ms(o.enteredAt) >= exited,
+      );
+    };
+    const stoppedAt = [
+      ...new Set(
+        rows
+          .filter((r) => r.exitedAt && !hasSuccessor(r))
+          .map((r) => r.stageId)
+          .filter((s): s is string => !!s),
+      ),
+    ];
+    return { visitedStageIds: visited, rejectedAtStageIds: stoppedAt };
+  }, [trackRows, ticket]);
 
   // Per-type gating with the global `ticket.*` master as the OR-bridge fallback.
   // The type comes from the ticket's (root) flow; null → only the global key grants.
@@ -127,6 +164,7 @@ export default function TicketDetailPage() {
 
   const flow = ticket.flows[0];
   const isCompleted = !!flow?.isCompleted;
+  const isRejected = !!flow?.isRejected;
 
   // Stage clicked in the workflow band. When it's a stage the ticket has already
   // moved past, the Stage Forms tab shows that stage's submitted (read-only)
@@ -157,6 +195,9 @@ export default function TicketDetailPage() {
             currentStageIds={flow.currentStages.map((s) => s.canonicalId)}
             currentPersistedStageIds={flow.currentStages.map((s) => s.id)}
             isCompleted={isCompleted}
+            isRejected={isRejected}
+            visitedPersistedStageIds={visitedStageIds}
+            rejectedAtPersistedStageIds={rejectedAtStageIds}
             selectedCanonicalId={selectedStage?.canonicalId ?? null}
             onStageSelect={setSelectedStage}
           />

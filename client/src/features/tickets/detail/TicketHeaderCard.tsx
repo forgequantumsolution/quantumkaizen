@@ -64,9 +64,10 @@ export default function TicketHeaderCard({
     return { done, total: denom, pct: Math.round((done / denom) * 100) };
   }, [stageFormsData]);
 
+  const isRejected = !!flow?.isRejected;
   const currentStageName =
     flow?.currentStages.map((s) => s.name).join(', ') ||
-    (isCompleted ? 'Completed' : '—');
+    (isRejected ? 'Rejected' : isCompleted ? 'Completed' : '—');
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -75,7 +76,13 @@ export default function TicketHeaderCard({
         <div className="min-w-0 flex-1 flex items-center gap-2">
           <CheckCircle2
             size={20}
-            className={isCompleted ? 'text-emerald-500' : 'text-gray-400'}
+            className={
+              isRejected
+                ? 'text-red-500'
+                : isCompleted
+                  ? 'text-emerald-500'
+                  : 'text-gray-400'
+            }
           />
           <h1 className="text-base sm:text-lg font-semibold text-gray-900 truncate min-w-0">
             {ticket.title}

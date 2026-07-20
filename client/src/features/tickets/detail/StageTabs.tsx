@@ -7,7 +7,9 @@ import { layoutGraph } from '@/features/workflows/builder/layout';
 import type { StageNodeData } from '@/features/workflows/builder/builder.types';
 import type { SelectedStageInfo } from './TicketFlowCanvas';
 
-type StageStatus = 'done' | 'current' | 'upcoming';
+const EMPTY_IDS: string[] = [];
+
+type StageStatus = 'done' | 'current' | 'upcoming' | 'rejected';
 
 interface StageTab extends SelectedStageInfo {
   order: number;
@@ -22,6 +24,16 @@ interface Props {
   currentPersistedStageIds?: string[];
   /** When true, every stage renders in its "completed" colour. */
   isCompleted?: boolean;
+  /**
+   * Terminal rejection. A rejected flow is also `isCompleted`, so this must be
+   * checked first — otherwise every stage in the graph, including ones the
+   * ticket never reached, renders green.
+   */
+  isRejected?: boolean;
+  /** Persisted stage IDs the ticket actually entered, from its tracking rows. */
+  visitedPersistedStageIds?: string[];
+  /** Persisted stage IDs the ticket was parked on when it was rejected. */
+  rejectedAtPersistedStageIds?: string[];
   /** Canonical id of the tab currently selected by the parent. */
   selectedCanonicalId?: string | null;
   /** Fired when the user clicks a stage tab. */
@@ -33,6 +45,9 @@ export default function StageTabs({
   currentStageIds = [],
   currentPersistedStageIds = [],
   isCompleted = false,
+  isRejected = false,
+  visitedPersistedStageIds = EMPTY_IDS,
+  rejectedAtPersistedStageIds = EMPTY_IDS,
   selectedCanonicalId = null,
   onStageSelect,
 }: Props) {
@@ -47,6 +62,14 @@ export default function StageTabs({
   const currentPersistedSet = useMemo(
     () => new Set(currentPersistedStageIds),
     [currentPersistedStageIds],
+  );
+  const visitedSet = useMemo(
+    () => new Set(visitedPersistedStageIds),
+    [visitedPersistedStageIds],
+  );
+  const rejectedAtSet = useMemo(
+    () => new Set(rejectedAtPersistedStageIds),
+    [rejectedAtPersistedStageIds],
   );
 
   const stages = useMemo<StageTab[]>(() => {
@@ -75,29 +98,49 @@ export default function StageTabs({
     return stageNodes.map((n, idx) => {
       const d = n.data as StageNodeData;
       const current = isCurrentOf(n);
+      const pid = d.persistedStageId;
       let status: StageStatus;
-      if (isCompleted) status = 'done';
+      if (isRejected) {
+        // A rejection stops the ticket where it stood: the stages it was parked
+        // on are the rejection point, everything it actually worked through
+        // stays done, and anything it never reached stays upcoming. Blanket
+        // "done" here is what made a rejected ticket look fully completed.
+        if (pid && rejectedAtSet.has(pid)) status = 'rejected';
+        else if (pid && visitedSet.has(pid)) status = 'done';
+        else status = 'upcoming';
+      } else if (isCompleted) status = 'done';
       else if (current) status = 'current';
       else if (firstCurrentIdx !== -1 && idx < firstCurrentIdx) status = 'done';
       else status = 'upcoming';
 
       return {
         canonicalId: n.id,
-        persistedId: d.persistedStageId,
+        persistedId: pid,
         name: d.label || 'Untitled stage',
-        isCurrent: !isCompleted && current,
+        isCurrent: !isCompleted && !isRejected && current,
         isInitial: d.is_initial_stage === true,
         order: idx,
         status,
       };
     });
-  }, [flowJson, currentIdSet, currentPersistedSet, isCompleted]);
+  }, [
+    flowJson,
+    currentIdSet,
+    currentPersistedSet,
+    isCompleted,
+    isRejected,
+    visitedSet,
+    rejectedAtSet,
+  ]);
 
   // Default selection follows the current (or last) stage until the user picks.
   const [internalSelected, setInternalSelected] = useState<string | null>(null);
   useEffect(() => {
+    // On a rejected flow there is no current stage — land on the one it stopped
+    // at rather than the last stage in the graph, which was never reached.
     const fallback =
       stages.find((s) => s.status === 'current')?.canonicalId ??
+      stages.find((s) => s.status === 'rejected')?.canonicalId ??
       stages[stages.length - 1]?.canonicalId ??
       null;
     setInternalSelected(fallback);
@@ -173,18 +216,31 @@ function StageStep({ stage, isActive, onSelect }: StepProps) {
   const { status } = stage;
 
   const bar =
-    status === 'done'
-      ? 'bg-emerald-500'
-      : status === 'current'
-        ? 'bg-blue-500'
-        : 'bg-gray-200';
+    status === 'rejected'
+      ? 'bg-red-500'
+      : status === 'done'
+        ? 'bg-emerald-500'
+        : status === 'current'
+          ? 'bg-blue-500'
+          : 'bg-gray-200';
 
   const label =
-    status === 'done'
-      ? 'text-emerald-600'
+    status === 'rejected'
+      ? 'text-red-600 font-semibold'
+      : status === 'done'
+        ? 'text-emerald-600'
+        : status === 'current'
+          ? 'text-blue-600 font-semibold'
+          : 'text-gray-400';
+
+  const statusLabel =
+    status === 'rejected'
+      ? 'Rejected here'
       : status === 'current'
-        ? 'text-blue-600 font-semibold'
-        : 'text-gray-400';
+        ? 'Current'
+        : status === 'done'
+          ? 'Completed'
+          : 'Upcoming';
 
   return (
     <button
@@ -192,9 +248,7 @@ function StageStep({ stage, isActive, onSelect }: StepProps) {
       role="tab"
       aria-selected={isActive}
       onClick={onSelect}
-      title={`${stage.name} — ${
-        status === 'current' ? 'Current' : status === 'done' ? 'Completed' : 'Upcoming'
-      }`}
+      title={`${stage.name} — ${statusLabel}`}
       className="group flex min-w-0 flex-1 flex-col items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-slate-50/70"
     >
       <span className={`h-1.5 w-full rounded-full transition-colors ${bar}`} />

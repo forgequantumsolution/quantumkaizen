@@ -41,7 +41,12 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { Card } from '@/components/ui';
 import type { KpiAccent } from '@/components/ui';
-import type { TicketSummary } from '@/lib/api/ticket';
+import {
+  isClosed,
+  isCompletedSuccessfully,
+  isRejected,
+  type TicketSummary,
+} from '@/lib/api/ticket';
 
 interface Props {
   tickets: TicketSummary[];
@@ -220,8 +225,8 @@ export function computeModuleKpiChips(
   moduleName: string,
 ): ModuleKpiChip[] {
   const profile = profileFor(moduleName);
-  const open = tickets.filter((t) => !isCompleted(t));
-  const completedList = tickets.filter(isCompleted);
+  const open = tickets.filter((t) => !isClosed(t));
+  const completedList = tickets.filter(isCompletedSuccessfully);
   const onHold = open.filter((t) => t.isOnHold).length;
   let overdue = 0;
   let ageSum = 0;
@@ -256,14 +261,14 @@ export function computeModuleKpiChips(
 // ─── Metrics ────────────────────────────────────────────────────────────────
 interface Slice { name: string; value: number; color?: string }
 
-function isCompleted(t: TicketSummary): boolean {
-  return !!t.flows[0]?.isCompleted;
-}
 function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
-function ticketStatus(t: TicketSummary): 'Open' | 'In Progress' | 'On Hold' | 'Completed' {
-  if (isCompleted(t)) return 'Completed';
+function ticketStatus(
+  t: TicketSummary,
+): 'Open' | 'In Progress' | 'On Hold' | 'Completed' | 'Rejected' {
+  if (isRejected(t)) return 'Rejected';
+  if (isCompletedSuccessfully(t)) return 'Completed';
   if (t.isOnHold) return 'On Hold';
   if (t.flows[0]?.currentStages.length) return 'In Progress';
   return 'Open';
@@ -309,8 +314,8 @@ export default function ModuleDashboard({ tickets, moduleName, showIndicators = 
   );
 
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
-    const completedList = filtered.filter(isCompleted);
+    const open = filtered.filter((t) => !isClosed(t));
+    const completedList = filtered.filter(isCompletedSuccessfully);
 
     // Status donut
     let statusOpen = 0, inProg = 0, onHold = 0;
@@ -324,6 +329,7 @@ export default function ModuleDashboard({ tickets, moduleName, showIndicators = 
       { name: 'In Progress', value: inProg, color: PALETTE.inProgress },
       { name: 'On Hold', value: onHold, color: PALETTE.onHold },
       { name: 'Completed', value: completedList.length, color: PALETTE.completed },
+      { name: 'Rejected', value: filtered.filter(isRejected).length, color: PALETTE.breached },
     ].filter((d) => d.value > 0);
 
     // Trend — last 6 months, created vs completed
@@ -339,7 +345,7 @@ export default function ModuleDashboard({ tickets, moduleName, showIndicators = 
     for (const t of filtered) {
       const ci = 5 - monthsBack(t.createdAt);
       if (ci >= 0 && ci < 6) trend[ci]!.created++;
-      if (isCompleted(t)) {
+      if (isCompletedSuccessfully(t)) {
         const ui = 5 - monthsBack(t.updatedAt);
         if (ui >= 0 && ui < 6) trend[ui]!.completed++;
       }

@@ -10,7 +10,7 @@ import { Activity, AlertTriangle, Timer, CheckCircle2, Megaphone } from 'lucide-
 import type { ModuleAnalyticsProps } from './types';
 import type { TicketSummary } from '@/lib/api/ticket';
 import {
-  isCompleted, isOverdue, countBy, monthlyCount, openClosedTrend,
+  isClosed, isOverdue, countBy, monthlyCount, openClosedTrend,
   onTimeClosureRate, closureRate, avgCycleDays,
   ChartCard, StatTile,
   TrendLineChart, DonutChart, ComplianceGauge, CategoryParetoChart, CalendarList,
@@ -24,7 +24,7 @@ export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalytics
   const { filtered, toolbar } = useTicketFilters(tickets);
 
   const k = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
+    const open = filtered.filter((t) => !isClosed(t));
     const reportable = filtered.filter((t) => REPORTABLE.test(t.title));
     const capaConverted = filtered.filter((t) => /capa/i.test(t.title)).length;
     const conversionRate = filtered.length ? Math.round((capaConverted / filtered.length) * 100) : 0;
@@ -40,7 +40,7 @@ export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalytics
     const productSite: Slice[] = countBy(filtered, (t) => t.site?.name || t.department?.name);
 
     const reportableEntries: CalendarEntry[] = reportable
-      .filter((t) => !isCompleted(t))
+      .filter((t) => !isClosed(t))
       .map((t) => ({
         id: t.id,
         title: t.title,

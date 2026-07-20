@@ -26,7 +26,7 @@ import {
   DonutChart,
   HBarSplit,
   // metrics
-  isCompleted,
+  isClosed,
   isOverdue,
   daysUntil,
   statusSlices,
@@ -54,7 +54,7 @@ export default function CalibrationAnalytics({ tickets, onDrill }: ModuleAnalyti
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
-    const open = filtered.filter((t) => !isCompleted(t));
+    const open = filtered.filter((t) => !isClosed(t));
     const overdueOpen = open.filter(isOverdue);
     const due30 = open.filter((t) => {
       const d = daysUntil(t.dueDate);

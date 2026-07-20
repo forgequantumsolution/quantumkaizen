@@ -6,6 +6,7 @@ interface Props {
   ticketId: string;
   currentStages: Array<{ id: string; name: string }>;
   isCompleted: boolean;
+  isRejected: boolean;
   isOnHold: boolean;
   onOpenWorkflow: () => void;
   onOpenSla: () => void;
@@ -15,6 +16,7 @@ export default function StageStripBar({
   ticketId,
   currentStages,
   isCompleted,
+  isRejected,
   isOnHold,
   onOpenWorkflow,
   onOpenSla,
@@ -26,6 +28,7 @@ export default function StageStripBar({
     <div className="mt-3 flex items-center gap-2 flex-wrap rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm">
       <StageChip
         isCompleted={isCompleted}
+        isRejected={isRejected}
         isOnHold={isOnHold}
         currentStages={currentStages}
       />
@@ -51,11 +54,21 @@ export default function StageStripBar({
 
 interface StageChipProps {
   isCompleted: boolean;
+  isRejected: boolean;
   isOnHold: boolean;
   currentStages: Array<{ id: string; name: string }>;
 }
 
-function StageChip({ isCompleted, isOnHold, currentStages }: StageChipProps) {
+function StageChip({ isCompleted, isRejected, isOnHold, currentStages }: StageChipProps) {
+  // A rejected flow is also `isCompleted` — check it first.
+  if (isRejected) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-700">
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+        Rejected
+      </span>
+    );
+  }
   if (isCompleted) {
     return (
       <span className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700">

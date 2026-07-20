@@ -330,10 +330,42 @@ export default function StageInspector({
     ref: ActionRef,
     next: EmbeddedApprovalPolicy | null,
   ) => {
-    const filtered = approvalPolicies.filter(
-      (p) => !(p.actionType === ref.type && p.actionIndex === ref.index),
-    );
-    update('approvalPolicies', next ? [...filtered, next] : filtered);
+    // Removing a policy is local to its action — leave siblings untouched.
+    if (next === null) {
+      update(
+        'approvalPolicies',
+        approvalPolicies.filter(
+          (p) => !(p.actionType === ref.type && p.actionIndex === ref.index),
+        ),
+      );
+      return;
+    }
+
+    // Attaching/editing a policy syncs its approver roles/users onto EVERY
+    // action on the stage: actions without a policy get one cloned from `next`,
+    // and actions that already have a policy keep their own mode/flags but
+    // inherit the shared approver set. Net effect — every action carries a
+    // policy and they all share the same approver roles/users.
+    const synced: EmbeddedApprovalPolicy[] = allActionRefs.map((r) => {
+      if (r.type === ref.type && r.index === ref.index) return next;
+      const existing = approvalPolicies.find(
+        (p) => p.actionType === r.type && p.actionIndex === r.index,
+      );
+      if (existing) {
+        return {
+          ...existing,
+          approverRoleIds: next.approverRoleIds,
+          approverUserIds: next.approverUserIds,
+        };
+      }
+      return {
+        ...next,
+        actionType: r.type,
+        actionIndex: r.index,
+        approvalSequence: undefined,
+      };
+    });
+    update('approvalPolicies', synced);
   };
 
   const renderApprovalRow = (ref: ActionRef) => {
@@ -453,7 +485,13 @@ export default function StageInspector({
             Add at least one action above to attach an approval policy.
           </p>
         ) : (
-          <div>{allActionRefs.map(renderApprovalRow)}</div>
+          <div>
+            {allActionRefs.map(renderApprovalRow)}
+            <p className="text-[11px] text-gray-400 italic pt-1.5">
+              Approver roles/users are shared across all actions on this stage —
+              setting them on one applies to the rest.
+            </p>
+          </div>
         )}
       </Section>
 

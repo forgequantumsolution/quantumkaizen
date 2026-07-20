@@ -1,17 +1,29 @@
-import { CheckCircle2, CircleDot, Mail, PlayCircle } from 'lucide-react';
+import { CheckCircle2, CircleDot, Mail, PlayCircle, XCircle } from 'lucide-react';
 import type { StageNodeData } from '../builder.types';
 import type { NodeComponentProps } from './types';
 
 // Visual theme per stage state. Precedence (highest first):
-// completed (green filled) > current (gold pulse) > selected (gold ring) >
-// initial (green accent) > default (slate).
+// rejected (red filled) > completed (green filled) > current (gold pulse) >
+// selected (gold ring) > initial (green accent) > default (slate).
 export default function StageNode({ data, selected }: NodeComponentProps<StageNodeData>) {
   const primary = data.primary_actions ?? [];
   const secondary = data.secondary_actions ?? [];
   const isCurrent = data.isCurrent === true;
   const isCompleted = data.isCompleted === true;
+  const isRejected = data.isRejected === true;
 
-  const theme = isCompleted
+  const theme = isRejected
+    ? {
+        accent: '#DC2626',
+        headerText: '#B91C1C',
+        headerBg: 'linear-gradient(135deg,#FEE2E2 0%,#FEF2F2 100%)',
+        cardBg: '#FEF2F2',
+        border: '#FCA5A5',
+        ring: '0 0 0 4px rgba(220,38,38,0.14), 0 6px 16px rgba(220,38,38,0.16)',
+        label: 'Rejected',
+        Icon: XCircle,
+      }
+    : isCompleted
     ? {
         accent: '#16A34A',
         headerText: '#15803D',
@@ -55,11 +67,14 @@ export default function StageNode({ data, selected }: NodeComponentProps<StageNo
             Icon: null,
           };
 
-  const borderColor = selected && !isCompleted && !isCurrent ? '#C9A84C' : theme.border;
+  const borderColor =
+    selected && !isCompleted && !isRejected && !isCurrent ? '#C9A84C' : theme.border;
 
   return (
     <div
-      className={`wf-node-card ${isCurrent && !isCompleted ? 'ticket-current-stage' : ''}`}
+      className={`wf-node-card ${
+        isCurrent && !isCompleted && !isRejected ? 'ticket-current-stage' : ''
+      }`}
       style={{
         minWidth: 210,
         maxWidth: 264,

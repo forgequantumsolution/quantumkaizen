@@ -7,6 +7,8 @@ import { layoutGraph } from '@/features/workflows/builder/layout';
 import JsPlumbCanvas from '@/features/workflows/builder/JsPlumbCanvas';
 import type { StageNodeData } from '@/features/workflows/builder/builder.types';
 
+const EMPTY_IDS: string[] = [];
+
 export interface SelectedStageInfo {
   canonicalId: string;
   persistedId?: string;
@@ -23,6 +25,15 @@ interface Props {
   currentPersistedStageIds?: string[];
   /** When true, every stage in the graph renders in its "completed" colour. */
   isCompleted?: boolean;
+  /**
+   * Terminal rejection. A rejected flow is also `isCompleted`, so this must win
+   * — otherwise stages the ticket never reached render as completed.
+   */
+  isRejected?: boolean;
+  /** Persisted stage IDs the ticket actually entered, from its tracking rows. */
+  visitedPersistedStageIds?: string[];
+  /** Persisted stage IDs the ticket was parked on when it was rejected. */
+  rejectedAtPersistedStageIds?: string[];
   height?: number;
   interactive?: boolean;
   /** Layout direction: 'LR' horizontal (default), 'TB' top-to-bottom. */
@@ -38,6 +49,9 @@ export default function TicketFlowCanvas({
   currentStageIds = [],
   currentPersistedStageIds = [],
   isCompleted = false,
+  isRejected = false,
+  visitedPersistedStageIds = EMPTY_IDS,
+  rejectedAtPersistedStageIds = EMPTY_IDS,
   height = 420,
   interactive = true,
   direction = 'LR',
@@ -56,6 +70,14 @@ export default function TicketFlowCanvas({
     () => new Set(currentPersistedStageIds),
     [currentPersistedStageIds],
   );
+  const visitedSet = useMemo(
+    () => new Set(visitedPersistedStageIds),
+    [visitedPersistedStageIds],
+  );
+  const rejectedAtSet = useMemo(
+    () => new Set(rejectedAtPersistedStageIds),
+    [rejectedAtPersistedStageIds],
+  );
 
   // Deserialise + decorate + lay out. Highlight current stage(s): match by
   // canonical id first, then fall back to `persistedStageId` so this works for
@@ -68,15 +90,26 @@ export default function TicketFlowCanvas({
     const decorated = rawNodes.map((n) => {
       if (n.type !== 'stage') return n;
       const d = n.data as StageNodeData;
+      const pid = d.persistedStageId;
       const isCurrent =
-        currentIdSet.has(n.id) ||
-        (d.persistedStageId ? currentPersistedSet.has(d.persistedStageId) : false);
+        currentIdSet.has(n.id) || (pid ? currentPersistedSet.has(pid) : false);
+
+      // On a rejected flow, only stages the ticket actually entered render as
+      // done, and the stage(s) it stopped on render as rejected. Painting the
+      // whole graph green (the `isCompleted` path) is what made a rejected
+      // ticket look like it had run to completion.
+      const stageIsRejected = isRejected && !!pid && rejectedAtSet.has(pid);
+      const stageIsDone = isRejected
+        ? !!pid && !stageIsRejected && visitedSet.has(pid)
+        : isCompleted;
+
       return {
         ...n,
         data: {
           ...d,
-          isCurrent: isCompleted ? false : isCurrent,
-          isCompleted,
+          isCurrent: isCompleted || isRejected ? false : isCurrent,
+          isCompleted: stageIsDone,
+          isRejected: stageIsRejected,
           flowDirection: direction,
         },
       };
@@ -85,7 +118,16 @@ export default function TicketFlowCanvas({
       nodes: layoutGraph(decorated, rawEdges, { direction }),
       edges: rawEdges,
     };
-  }, [flowJson, currentIdSet, currentPersistedSet, isCompleted, direction]);
+  }, [
+    flowJson,
+    currentIdSet,
+    currentPersistedSet,
+    isCompleted,
+    isRejected,
+    visitedSet,
+    rejectedAtSet,
+    direction,
+  ]);
 
   const handleSelect = useCallback(
     (id: string) => {
