@@ -53,6 +53,18 @@ done
 echo "==> Running Prisma migrations (one-shot container)"
 $COMPOSE run --rm api npx prisma migrate deploy --schema prisma/schema.prisma
 
+# Idempotent reference-data seeds. The sidebar auto-generates the "Risk" module
+# from the `Risk` WorkflowType row, which migrations never create — only these
+# seeds do. `tsx` is a devDependency (absent from the prod image), so fetch it
+# on the fly with `npx -y`. Each seed is a no-op on re-run and MUST NOT abort the
+# deploy, so failures are guarded — the app still rolls, just without the data.
+# Demo data (seed-risk-data.ts) is intentionally excluded from production.
+echo "==> Seeding Risk Management reference data (idempotent; non-fatal)"
+$COMPOSE run --rm api npx -y tsx prisma/seed-risk-workflow.ts \
+  || echo "    WARNING: risk workflow seed failed — Risk sidebar module may not appear"
+$COMPOSE run --rm api npx -y tsx prisma/seed-risk-master.ts \
+  || echo "    WARNING: risk master-data seed failed — default frameworks may be missing"
+
 echo "==> Rolling api + worker + frontend to new images"
 $COMPOSE up -d --remove-orphans api worker frontend
 
