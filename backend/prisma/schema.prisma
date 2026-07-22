@@ -3514,3 +3514,558 @@ model LmsSessionAttendance {
   @@unique([sessionId, userId])
   @@index([userId])
 }
+
+// ─── Risk management ─────────────────────────────────────────────────────────
+// Models added to match migrations 20260720093000_risk_management_phase1 and
+// 20260720110000_risk_management_phase2_4. Only riskId/frameworkId/categoryId/
+// libraryItemId/assessmentId carry FKs; all other *Id columns are plain scalars.
+
+enum RiskMethodology {
+  MATRIX
+  FMEA
+  FMECA
+  HACCP
+  HAZOP
+  PHA
+  FTA
+  BOWTIE
+  CUSTOM
+}
+
+enum RiskFactorKind {
+  SEVERITY
+  OCCURRENCE
+  PROBABILITY
+  DETECTABILITY
+  EXPOSURE
+  CUSTOM
+}
+
+enum RiskScoreFormula {
+  PRODUCT
+  SUM
+  WEIGHTED_PRODUCT
+  MATRIX_LOOKUP
+  ACTION_PRIORITY
+}
+
+enum RiskAcceptanceLevel {
+  ACCEPTABLE
+  ALARP
+  UNACCEPTABLE
+}
+
+enum RiskRegisterScope {
+  SITE
+  PRODUCT
+  PROCESS
+  PROJECT
+  SUPPLIER
+  EQUIPMENT
+  SYSTEM
+  ENTERPRISE
+}
+
+enum RiskStatus {
+  IDENTIFIED
+  UNDER_ASSESSMENT
+  TREATMENT_PLANNED
+  TREATMENT_IN_PROGRESS
+  RESIDUAL_ASSESSED
+  ACCEPTED
+  MONITORED
+  CLOSED
+  REOPENED
+  ESCALATED
+}
+
+enum RiskTreatment {
+  AVOID
+  REDUCE
+  TRANSFER
+  ACCEPT
+}
+
+enum RiskScoreStage {
+  INITIAL
+  RESIDUAL
+  TARGET
+  REVIEW
+}
+
+enum RiskAssessmentStatus {
+  DRAFT
+  IN_ASSESSMENT
+  PENDING_REVIEW
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PERIODIC_REVIEW
+  SUPERSEDED
+  CLOSED
+  CANCELLED
+}
+
+enum RiskControlType {
+  PREVENTIVE
+  DETECTIVE
+  MITIGATING
+  CORRECTIVE
+}
+
+enum RiskControlHierarchy {
+  ELIMINATION
+  SUBSTITUTION
+  ENGINEERING
+  ADMINISTRATIVE
+  PPE
+  INHERENT_SAFETY
+  PROTECTIVE_MEASURE
+  INFORMATION_FOR_SAFETY
+}
+
+enum RiskControlStatus {
+  PLANNED
+  IN_PROGRESS
+  IMPLEMENTED
+  VERIFIED
+  INEFFECTIVE
+  CANCELLED
+}
+
+enum RiskReviewOutcome {
+  NO_CHANGE
+  RESCORED
+  CONTROLS_ADDED
+  ESCALATED
+  CLOSED
+}
+
+model RiskFramework {
+  id          String           @id @default(uuid())
+  code        String?          @unique
+  name        String
+  description String?
+  standard    String?
+  methodology RiskMethodology  @default(MATRIX)
+  formula     RiskScoreFormula @default(PRODUCT)
+  version     Int              @default(1)
+  isActive    Boolean          @default(true)
+  isDefault   Boolean          @default(false)
+  terminology Json?
+  fieldConfig Json?
+  siteId      String?
+  createdById String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  factors     RiskFactor[]
+  levels      RiskLevelDef[]
+  matrixCells RiskMatrixCell[]
+  risks       Risk[]
+  registers   RiskRegister[]
+  assessments RiskAssessment[]
+
+  @@index([isActive, methodology])
+}
+
+model RiskFactor {
+  id          String         @id @default(uuid())
+  frameworkId String
+  kind        RiskFactorKind @default(CUSTOM)
+  key         String
+  label       String
+  description String?
+  weight      Float          @default(1)
+  order       Int            @default(0)
+
+  framework RiskFramework     @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  levels    RiskFactorLevel[]
+
+  @@unique([frameworkId, key])
+  @@index([frameworkId, order])
+}
+
+model RiskFactorLevel {
+  id         String  @id @default(uuid())
+  factorId   String
+  rank       Int
+  label      String
+  definition String?
+  guidance   String?
+  color      String?
+
+  factor RiskFactor @relation(fields: [factorId], references: [id], onDelete: Cascade)
+
+  @@unique([factorId, rank])
+  @@index([factorId])
+}
+
+model RiskLevelDef {
+  id               String              @id @default(uuid())
+  frameworkId      String
+  code             String
+  label            String
+  color            String              @default("#64748B")
+  order            Int                 @default(0)
+  minScore         Int?
+  maxScore         Int?
+  acceptance       RiskAcceptanceLevel @default(ALARP)
+  requiresCapa     Boolean             @default(false)
+  requiresApproval Boolean             @default(false)
+  requiresControl  Boolean             @default(false)
+  reviewMonths     Int?
+  escalateToRoleId String?
+
+  framework   RiskFramework    @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  matrixCells RiskMatrixCell[]
+
+  @@unique([frameworkId, code])
+  @@index([frameworkId, order])
+}
+
+model RiskMatrixCell {
+  id           String @id @default(uuid())
+  frameworkId  String
+  rowFactorKey String
+  rowRank      Int
+  colFactorKey String
+  colRank      Int
+  score        Int?
+  levelId      String
+
+  framework RiskFramework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  level     RiskLevelDef  @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  @@unique([frameworkId, rowFactorKey, rowRank, colFactorKey, colRank])
+  @@index([frameworkId])
+  @@index([levelId])
+}
+
+model RiskCategory {
+  id          String   @id @default(uuid())
+  code        String?  @unique
+  name        String
+  description String?
+  color       String?
+  isActive    Boolean  @default(true)
+  parentId    String?
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  parent   RiskCategory?       @relation("RiskCategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children RiskCategory[]      @relation("RiskCategoryTree")
+  risks    Risk[]
+  hazards  HazardLibraryItem[]
+
+  @@index([parentId, isActive])
+}
+
+model RiskRegister {
+  id             String            @id @default(uuid())
+  registerNumber String            @unique
+  name           String
+  description    String?
+  scope          RiskRegisterScope @default(SITE)
+  scopeRef       Json?
+  frameworkId    String?
+  siteId         String?
+  departmentId   String?
+  ownerId        String?
+  isActive       Boolean           @default(true)
+  createdById    String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  framework   RiskFramework?   @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
+  risks       Risk[]
+  assessments RiskAssessment[]
+
+  @@index([siteId, isActive])
+  @@index([scope])
+  @@index([ownerId])
+}
+
+model Risk {
+  id                     String         @id @default(uuid())
+  riskNumber             String         @unique
+  title                  String
+  description            String?
+  registerId             String
+  frameworkId            String?
+  categoryId             String?
+  hazard                 String?
+  hazardousSituation     String?
+  harm                   String?
+  cause                  String?
+  consequence            String?
+  status                 RiskStatus     @default(IDENTIFIED)
+  treatment              RiskTreatment?
+  initialFactors         Json?
+  initialScore           Int?
+  initialLevelId         String?
+  residualFactors        Json?
+  residualScore          Int?
+  residualLevelId        String?
+  targetFactors          Json?
+  targetScore            Int?
+  targetLevelId          String?
+  ownerId                String?
+  departmentId           String?
+  siteId                 String?
+  identifiedAt           DateTime       @default(now())
+  acceptedAt             DateTime?
+  closedAt               DateTime?
+  nextReviewAt           DateTime?
+  workflowId             String?
+  workflowTicketId       String?
+  workflowTicketUniqueId String?
+  createdById            String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  register          RiskRegister           @relation(fields: [registerId], references: [id], onDelete: Cascade)
+  framework         RiskFramework?         @relation(fields: [frameworkId], references: [id], onDelete: SetNull)
+  category          RiskCategory?          @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  snapshots         RiskScoreSnapshot[]
+  links             RiskLink[]
+  controls          RiskControl[]
+  reviews           RiskReview[]
+  acceptanceRecords RiskAcceptanceRecord[]
+  assessmentLines   RiskAssessmentLine[]
+
+  @@index([registerId, status])
+  @@index([ownerId])
+  @@index([nextReviewAt])
+  @@index([residualScore])
+  @@index([categoryId])
+}
+
+model RiskScoreSnapshot {
+  id          String           @id @default(uuid())
+  riskId      String
+  stage       RiskScoreStage
+  factors     Json
+  score       Int
+  levelCode   String
+  levelLabel  String
+  formula     RiskScoreFormula
+  frameworkId String?
+  reason      String?
+  userId      String?
+  userName    String           @default("system")
+  createdAt   DateTime         @default(now())
+
+  risk Risk @relation(fields: [riskId], references: [id], onDelete: Cascade)
+
+  @@index([riskId, createdAt])
+}
+
+model RiskLink {
+  id           String   @id @default(uuid())
+  riskId       String?
+  entityType   String
+  entityId     String
+  label        String?
+  relation     String?
+  createdById  String?
+  createdAt    DateTime @default(now())
+  assessmentId String?
+
+  risk       Risk?           @relation(fields: [riskId], references: [id], onDelete: Cascade)
+  assessment RiskAssessment? @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@unique([riskId, entityType, entityId, relation])
+  @@index([entityType, entityId])
+  @@index([assessmentId])
+}
+
+model HazardLibraryItem {
+  id                  String   @id @default(uuid())
+  code                String?  @unique
+  name                String
+  type                String   @default("HAZARD")
+  description         String?
+  categoryId          String?
+  defaultSeverityRank Int?
+  tags                Json?
+  isActive            Boolean  @default(true)
+  createdById         String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  category RiskCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([type, isActive])
+  @@index([categoryId])
+}
+
+model ControlLibraryItem {
+  id                String                @id @default(uuid())
+  code              String?               @unique
+  name              String
+  type              RiskControlType       @default(PREVENTIVE)
+  hierarchy         RiskControlHierarchy?
+  description       String?
+  effectivenessRank Int?
+  isActive          Boolean               @default(true)
+  createdById       String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  controls RiskControl[]
+
+  @@index([type, isActive])
+}
+
+model RiskAssessment {
+  id                     String               @id @default(uuid())
+  assessmentNumber       String               @unique
+  title                  String
+  objective              String?
+  scopeText              String?
+  methodology            RiskMethodology      @default(MATRIX)
+  status                 RiskAssessmentStatus @default(DRAFT)
+  registerId             String?
+  frameworkId            String
+  frameworkSnapshot      Json?
+  version                Int                  @default(1)
+  parentId               String?
+  teamMembers            Json?
+  leadId                 String?
+  siteId                 String?
+  departmentId           String?
+  startedAt              DateTime?
+  completedAt            DateTime?
+  approvedAt             DateTime?
+  approvedById           String?
+  rejectionReason        String?
+  conclusion             String?
+  nextReviewAt           DateTime?
+  triggerType            String?
+  triggerId              String?
+  workflowId             String?
+  workflowTicketId       String?
+  workflowTicketUniqueId String?
+  createdById            String?
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  register  RiskRegister?        @relation(fields: [registerId], references: [id], onDelete: SetNull)
+  framework RiskFramework        @relation(fields: [frameworkId], references: [id], onDelete: Restrict)
+  parent    RiskAssessment?      @relation("AssessmentVersions", fields: [parentId], references: [id], onDelete: SetNull)
+  versions  RiskAssessment[]     @relation("AssessmentVersions")
+  lines     RiskAssessmentLine[]
+  links     RiskLink[]
+
+  @@index([status, methodology])
+  @@index([registerId])
+  @@index([nextReviewAt])
+  @@index([parentId])
+}
+
+model RiskAssessmentLine {
+  id                String    @id @default(uuid())
+  assessmentId      String
+  lineNumber        Int
+  itemFunction      String?
+  failureMode       String?
+  effect            String?
+  cause             String?
+  currentControls   String?
+  hazard            String?
+  consequence       String?
+  initialFactors    Json?
+  initialScore      Int?
+  initialLevelId    String?
+  actionPriority    String?
+  recommendedAction String?
+  ownerId           String?
+  dueDate           DateTime?
+  residualFactors   Json?
+  residualScore     Int?
+  residualLevelId   String?
+  riskId            String?
+  isCritical        Boolean   @default(false)
+  notes             String?
+  createdById       String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  assessment RiskAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  risk       Risk?          @relation(fields: [riskId], references: [id], onDelete: SetNull)
+
+  @@unique([assessmentId, lineNumber])
+  @@index([assessmentId])
+  @@index([riskId])
+}
+
+model RiskControl {
+  id            String                @id @default(uuid())
+  controlNumber String                @unique
+  riskId        String
+  title         String
+  description   String?
+  type          RiskControlType       @default(PREVENTIVE)
+  hierarchy     RiskControlHierarchy?
+  status        RiskControlStatus     @default(PLANNED)
+  ownerId       String?
+  dueDate       DateTime?
+  implementedAt DateTime?
+  verifiedById  String?
+  verifiedAt    DateTime?
+  effectiveness String?
+  isEffective   Boolean?
+  capaId        String?
+  actionItemId  String?
+  documentId    String?
+  lmsCourseId   String?
+  libraryItemId String?
+  createdById   String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  risk        Risk                @relation(fields: [riskId], references: [id], onDelete: Cascade)
+  libraryItem ControlLibraryItem? @relation(fields: [libraryItemId], references: [id], onDelete: SetNull)
+
+  @@index([riskId, status])
+  @@index([ownerId, dueDate])
+  @@index([status, dueDate])
+}
+
+model RiskReview {
+  id           String             @id @default(uuid())
+  riskId       String
+  dueAt        DateTime
+  reviewedAt   DateTime?
+  reviewedById String?
+  outcome      RiskReviewOutcome?
+  findings     String?
+  nextReviewAt DateTime?
+  overdueAt    DateTime?
+  createdById  String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  risk Risk @relation(fields: [riskId], references: [id], onDelete: Cascade)
+
+  @@index([riskId, dueAt])
+  @@index([dueAt, reviewedAt])
+}
+
+model RiskAcceptanceRecord {
+  id                   String   @id @default(uuid())
+  riskId               String
+  justification        String
+  residualScore        Int?
+  residualLevelCode    String?
+  benefitRiskRationale String?
+  acceptedById         String?
+  acceptedAt           DateTime @default(now())
+  eSignatureId         String?
+
+  risk Risk @relation(fields: [riskId], references: [id], onDelete: Cascade)
+
+  @@index([riskId])
+}

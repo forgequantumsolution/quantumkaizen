@@ -5,7 +5,7 @@ import { verifyPassword } from '../../lib/password';
 export interface TrailInput {
   entityType: string;
   entityId: string;
-  action: 'CREATE' | 'UPDATE' | 'TRANSITION' | 'SIGN' | 'DELETE';
+  action: 'CREATE' | 'UPDATE' | 'TRANSITION' | 'SIGN' | 'DELETE' | 'SCORE';
   field?: string | null;
   oldValue?: string | null;
   newValue?: string | null;
