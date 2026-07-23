@@ -1,5 +1,32 @@
 # Changes Log
 
+## Ticket fix — stray/duplicate "Resume" button in the stage action bar — 2026-07-16
+
+A **Resume** button showed on tickets that were **not** on hold, and when a ticket
+*was* held it appeared twice (the stage action + the real Resume). Not committed.
+
+Root cause: `Resume` is a seeded **UNHOLD-behaviour stage status** wired to **283
+stage actions** — essentially every stage of every workflow (CAPA, Document
+Management, Audit Management, …) — so `/allowed-actions` returns it alongside
+`Hold` on virtually every stage (e.g. "Verify Audit Details" returns
+`Approve/Forward:FORWARD, Return:RETURN, Reject:REJECT, Hold:HOLD, Resume:UNHOLD`).
+The action bar rendered it unconditionally, next to the separate `isOnHold`-gated
+Resume button. That UNHOLD action is also **dead code**: the engine rejects every
+action while a ticket is held (`orchestrator.ts` `performAction` →
+"Ticket is on hold; resume before transitioning"), so it could only ever render
+when unholding is meaningless. `POST /tickets/:id/resume` is the only working path.
+
+- **`src/features/tickets/detail/ActionBar.tsx`** — filter `behavior !== 'UNHOLD'`
+  out of each stage's actions before rendering, leaving the dedicated
+  `isOnHold`-gated Resume as the single source of truth. The stage `map` callback
+  now has a body (returns the row) so the filtered list can be computed per stage,
+  and the "No actions configured" placeholder is suppressed while on hold (the
+  Resume button is the action in that state).
+- Verified in the running app with Playwright: on three not-on-hold tickets across
+  the Audit / Document / Inspection workflows → **0** Resume buttons (was ≥1); on a
+  held ticket with an active stage → **exactly 1**. The ticket was returned to
+  not-on-hold afterwards. `tsc --noEmit` clean.
+
 ## Playwright coverage for terminal rejection — and two bugs it caught — 2026-07-20
 
 Browser-driven regression suite for the change below, run against the real dev

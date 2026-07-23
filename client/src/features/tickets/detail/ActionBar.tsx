@@ -210,7 +210,16 @@ export default function ActionBar({
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">
-            {stageActions.map((stage) => (
+            {stageActions.map((stage) => {
+              // UNHOLD actions are never usable from here: the engine rejects every
+              // action while a ticket is on hold (`performAction` →
+              // "Ticket is on hold; resume before transitioning"), so a configured
+              // UNHOLD button can only render when the ticket ISN'T held — where
+              // unholding is meaningless — and when it IS held it just duplicates
+              // the universal Resume button below. Resume (POST /tickets/:id/resume)
+              // is the only working path, so drop UNHOLD from the stage actions.
+              const actions = stage.actions.filter((a) => a.behavior !== 'UNHOLD');
+              return (
               <div key={stage.stageId} className="flex items-center gap-3 flex-wrap">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
@@ -220,10 +229,10 @@ export default function ActionBar({
                   <span className="text-xs font-medium text-gray-900 truncate">{stage.stageName}</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 ml-auto">
-                  {stage.actions.length === 0 && (
+                  {actions.length === 0 && !isOnHold && (
                     <span className="text-xs text-gray-400 italic">No actions configured</span>
                   )}
-                  {stage.actions.map((a) => {
+                  {actions.map((a) => {
                     const Icon = BEHAVIOR_ICON[a.behavior];
                     const disabled =
                       !a.canPerform || !canTransition || isOnHold || formsBlocked;
@@ -283,7 +292,8 @@ export default function ActionBar({
                     ))}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
