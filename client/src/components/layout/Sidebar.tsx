@@ -98,6 +98,7 @@ const ICON_BY_KEY: Record<string, React.ElementType> = {
   complaints: MessageSquareWarning,
   productcomplaints: MessageSquareWarning,
   risk: ShieldAlert,
+  riskmanagement: ShieldAlert,
   audit: ClipboardCheck,
   document: FileText,
   // Additional QMS modules — each gets a distinct, recognisable icon so the
@@ -156,6 +157,7 @@ const MODULE_GROUP: Record<string, ModuleGroup> = {
   change: "Quality System",
   changecontrol: "Quality System",
   risk: "Quality System",
+  riskmanagement: "Quality System",
   audit: "Compliance",
   calibration: "Compliance",
 };

@@ -1,7 +1,7 @@
 /**
  * Standalone, production-safe seed for the Risk Management dynamic workflow.
  *
- * Seeds ONLY the `Risk` WorkflowType, the `Risk Management v1` workflow (6
+ * Seeds ONLY the `Risk Management` WorkflowType, the `Risk Management v1` workflow (6
  * stages following the ICH Q9 quality-risk-management cycle) and its 6
  * per-stage forms. It does NOT touch users, roles, permissions or demo data, so
  * it is safe to run against production. Dependencies created by the base seed
@@ -15,10 +15,10 @@
  *   1. The engine gets a workflow that Risk records can be driven by — the
  *      `Risk.workflowId / workflowTicketId / workflowTicketUniqueId` link triple
  *      (the same pattern Capa and AuditRegister use).
- *   2. The sidebar auto-generates a "Risk" entry from the WorkflowType, and the
- *      analytics registry resolves it to RiskAnalytics — both key off the
- *      normalised type name "risk", which is why the type is named `Risk` and
- *      not "Risk Management".
+ *   2. The sidebar auto-generates a "Risk Management" entry from the WorkflowType,
+ *      and the analytics registry resolves it to RiskAnalytics — both normalise
+ *      the type name to "riskmanagement" (analytics also still matches "risk"),
+ *      which Sidebar.tsx's ICON_BY_KEY / MODULE_GROUP now recognise.
  *
  *   Run:  npm run db:seed:risk-workflow      (backend workspace)
  *   or:   npx tsx prisma/seed-risk-workflow.ts
@@ -96,15 +96,25 @@ async function main() {
     return factor.levels.map((l) => ({ label: `${l.rank} — ${l.label}`, value: String(l.rank) }));
   };
 
-  // ── Risk WorkflowType ────────────────────────────────────────────────────
-  // Named "Risk" (not "Risk Management") on purpose: the sidebar's pickIcon and
-  // groupForModule normalise the type name to "risk", which already maps to
-  // ShieldAlert / "Quality System" in Sidebar.tsx.
+  // ── Risk Management WorkflowType ─────────────────────────────────────────
+  // Named "Risk Management". The sidebar's pickIcon/groupForModule and the
+  // analytics registry all normalise to "riskmanagement" (analytics also still
+  // matches "risk"); Sidebar.tsx carries the matching ICON_BY_KEY / MODULE_GROUP
+  // entries and the seeded iconConfig ('shield-alert') is used first regardless.
+  // Migrate any pre-existing "Risk" type from earlier seed runs to the new name
+  // so re-running never leaves a duplicate.
+  const legacy = await prisma.workflowType.findUnique({ where: { name: 'Risk' } });
+  if (legacy) {
+    await prisma.workflowType.update({
+      where: { id: legacy.id },
+      data: { name: 'Risk Management' },
+    });
+  }
   const riskType = await prisma.workflowType.upsert({
-    where: { name: 'Risk' },
+    where: { name: 'Risk Management' },
     update: {},
     create: {
-      name: 'Risk',
+      name: 'Risk Management',
       codePrefix: 'RSK',
       supportsFindings: true,
       iconConfig: { create: { iconName: 'shield-alert' } },
@@ -148,7 +158,7 @@ async function main() {
         versionId: `${templateKey}-v1`,
         status: 'PUBLISHED',
         kind: 'FORM',
-        workflowType: 'Risk',
+        workflowType: 'Risk Management',
       },
       select: { id: true },
     });
@@ -362,11 +372,11 @@ async function main() {
   }
 
   console.log(
-    '✅  Risk workflow ready: WorkflowType "Risk" (RSK) + 6 stages ' +
+    '✅  Risk workflow ready: WorkflowType "Risk Management" (RSK) + 6 stages ' +
       '(Identification → Acceptance & Closure) + 6 required stage forms.',
   );
   console.log(
-    '    The sidebar will now show a "Risk" entry for anyone holding wf_type.<id>.read.',
+    '    The sidebar will now show a "Risk Management" entry for anyone holding wf_type.<id>.read.',
   );
 }
 
