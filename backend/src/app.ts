@@ -38,6 +38,10 @@ import navCountsRoutes from './modules/nav-counts/nav-counts.routes';
 import dashboardRoutes from './modules/dashboard/dashboard.routes';
 import searchRoutes from './modules/search/search.routes';
 import accessRoutes from './modules/access/access.routes';
+import riskRoutes from './modules/risk/risk.routes';
+import riskAnalyticsRoutes from './modules/risk/risk-analytics.routes';
+import riskAssessmentRoutes from './modules/risk/risk-assessment.routes';
+import riskControlRoutes from './modules/risk/risk-control.routes';
 import {
   workflowScopedPolicyRouter as approvalWorkflowScopedRouter,
   policyRouter as approvalPolicyRouter,
@@ -122,6 +126,13 @@ export const buildApp = () => {
   app.use('/api/stability', stabilityRoutes); // LIMS 2.0 — stability (ICH Q1A)
   app.use('/api/coa', coaRoutes); // LIMS 2.0 — certificate of analysis
   app.use('/api/lims-analytics', limsAnalyticsRoutes); // LIMS 2.0 — dashboard, TAT, workload, data-review
+  // Risk Management (QRM). All four routers share the /api/risk base; the more
+  // specific literal prefixes (analytics, assessments, controls/libraries) are
+  // mounted before the generic frameworks/registers/risks router.
+  app.use('/api/risk', riskAnalyticsRoutes);  // /analytics/*
+  app.use('/api/risk', riskAssessmentRoutes); // /assessments
+  app.use('/api/risk', riskControlRoutes);    // /controls, /hazard-library, /control-library
+  app.use('/api/risk', riskRoutes);           // /frameworks, /categories, /registers, /risks, /heatmap, /summary
   app.use('/api/nav-counts', navCountsRoutes); // sidebar notification badges (FQS-QK-UIUX-003 §4)
   app.use('/api/dashboard', dashboardRoutes); // Quality Command Center — role-aware, org-scoped overview
   app.use('/api/search', searchRoutes); // global cross-module search (FQS-QK-UIUX-003 §4)
