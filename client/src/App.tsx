@@ -94,6 +94,20 @@ import AuditMasterFormPage from '@/features/audit/AuditMasterFormPage';
 import FocusAreaPage from '@/features/audit/FocusAreaPage';
 import AuditTypePage from '@/features/audit/AuditTypePage';
 import IsoStandardsPage from '@/features/audit/IsoStandardsPage';
+// Risk Management
+import RiskModuleLayout from '@/features/risk/RiskModuleLayout';
+import RiskConfigLayout from '@/features/risk/RiskConfigLayout';
+import RiskDashboardPage from '@/features/risk/RiskDashboardPage';
+import RiskAssessmentListPage from '@/features/risk/RiskAssessmentListPage';
+import RiskAssessmentDetailPage from '@/features/risk/RiskAssessmentDetailPage';
+import RiskRegisterListPage from '@/features/risk/RiskRegisterListPage';
+import RiskListPage from '@/features/risk/RiskListPage';
+import RiskDetailPage from '@/features/risk/RiskDetailPage';
+import RiskControlListPage from '@/features/risk/RiskControlListPage';
+import RiskReviewListPage from '@/features/risk/RiskReviewListPage';
+import RiskFrameworkPage from '@/features/risk/RiskFrameworkPage';
+import RiskCategoryPage from '@/features/risk/RiskCategoryPage';
+import RiskLibraryPage from '@/features/risk/RiskLibraryPage';
 // System
 import SettingsPage from '@/pages/SettingsPage';
 import AppearancePage from '@/pages/AppearancePage';
@@ -248,6 +262,28 @@ export default function App() {
             <Route path="/audit/focus-areas" element={<FocusAreaPage />} />
             <Route path="/audit/audit-types" element={<AuditTypePage />} />
             <Route path="/audit/iso-standards" element={<IsoStandardsPage />} />
+          </Route>
+
+          {/* Risk Management — Overview → Assessments → Registers → Risks → Controls → Reviews.
+              Shares the RiskModuleLayout tab bar; detail pages stay full-page. */}
+          <Route path="/risk" element={<Navigate to="/risk/dashboard" replace />} />
+          <Route element={<RiskModuleLayout />}>
+            <Route path="/risk/dashboard" element={<RiskDashboardPage />} />
+            <Route path="/risk/assessments" element={<RiskAssessmentListPage />} />
+            <Route path="/risk/registers" element={<RiskRegisterListPage />} />
+            <Route path="/risk/risks" element={<RiskListPage />} />
+            <Route path="/risk/controls" element={<RiskControlListPage />} />
+            <Route path="/risk/reviews" element={<RiskReviewListPage />} />
+          </Route>
+          {/* Risk detail pages (full-page, no tab bar) */}
+          <Route path="/risk/risks/:id" element={<RiskDetailPage />} />
+          <Route path="/risk/assessments/:id" element={<RiskAssessmentDetailPage />} />
+          {/* Risk Configuration — frameworks / categories / libraries */}
+          <Route path="/risk/config" element={<Navigate to="/risk/config/frameworks" replace />} />
+          <Route element={<RiskConfigLayout />}>
+            <Route path="/risk/config/frameworks" element={<RiskFrameworkPage />} />
+            <Route path="/risk/config/categories" element={<RiskCategoryPage />} />
+            <Route path="/risk/config/library" element={<RiskLibraryPage />} />
           </Route>
 
           {/* System */}

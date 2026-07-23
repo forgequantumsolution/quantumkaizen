@@ -98,6 +98,7 @@ const ICON_BY_KEY: Record<string, React.ElementType> = {
   complaints: MessageSquareWarning,
   productcomplaints: MessageSquareWarning,
   risk: ShieldAlert,
+  riskmanagement: ShieldAlert,
   audit: ClipboardCheck,
   document: FileText,
   // Additional QMS modules — each gets a distinct, recognisable icon so the
@@ -156,6 +157,7 @@ const MODULE_GROUP: Record<string, ModuleGroup> = {
   change: "Quality System",
   changecontrol: "Quality System",
   risk: "Quality System",
+  riskmanagement: "Quality System",
   audit: "Compliance",
   calibration: "Compliance",
 };
@@ -224,17 +226,23 @@ export default function Sidebar() {
       .filter((t) => !t.isDeleted && !isDocReview(t.name))
       .map((t) => {
         const isAudit = /^audit$/i.test(t.name);
+        // Risk has a dedicated feature area (registers, risks, controls,
+        // reviews, assessments) under /risk with its own tab bar — route the
+        // sidebar entry there instead of the generic /modules ticket workspace.
+        const isRisk = /^risk(\s*management)?$/i.test(t.name);
         const item: NavItem = {
           label: WF_DISPLAY_NAME[t.name] ?? t.name,
           // For Audit, omit the leaf path so the parent acts purely as an expandable
           // group; first child becomes the navigation target in collapsed mode.
-          path: isAudit ? undefined : `/modules/${t.id}`,
+          path: isAudit ? undefined : isRisk ? "/risk/dashboard" : `/modules/${t.id}`,
           icon: pickIcon(t.name, t.iconConfig?.iconName ?? null),
           // Each workflow-type module has its own switch: gate strictly on its
           // per-type read key. Audit gates via its children
-          // (audit_register.read etc) instead.
-          permission: isAudit ? undefined : wfTypeReadKey(t.id),
+          // (audit_register.read etc) instead; Risk gates on its feature key.
+          permission: isAudit ? undefined : isRisk ? "risk.read" : wfTypeReadKey(t.id),
           children: isAudit ? auditChildren : undefined,
+          // Keep the entry highlighted across every /risk/* sub-page.
+          activeForPrefixes: isRisk ? ["/risk"] : undefined,
           count: navCounts?.workflowTypes?.[t.id],
         };
         return { item, group: groupForModule(t.name) };

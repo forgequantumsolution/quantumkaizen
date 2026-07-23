@@ -103,12 +103,12 @@ const KPI_DEFS: Array<{
   icon: LucideIcon;
   accent: KpiAccent;
 }> = [
-  { id: 'mine',        label: 'My PR',            icon: FileText, accent: 'blue'    },
-  { id: 'department',  label: 'My Department PR', icon: Users,    accent: 'emerald' },
-  { id: 'createdByMe', label: 'Created By Me',    icon: UserIcon, accent: 'slate'   },
-  { id: 'all',         label: 'All PR',           icon: ListIcon, accent: 'amber'   },
-  { id: 'pending',     label: 'Pending',          icon: Clock,    accent: 'orange'  },
-  { id: 'saved',       label: 'Saved PR',         icon: Bookmark, accent: 'rose'    },
+  { id: 'mine',        label: 'My Records',            icon: FileText, accent: 'blue'    },
+  { id: 'department',  label: 'My Department Records', icon: Users,    accent: 'emerald' },
+  { id: 'createdByMe', label: 'Created By Me',         icon: UserIcon, accent: 'slate'   },
+  { id: 'all',         label: 'All Records',           icon: ListIcon, accent: 'amber'   },
+  { id: 'pending',     label: 'Pending',               icon: Clock,    accent: 'orange'  },
+  { id: 'saved',       label: 'Saved Records',         icon: Bookmark, accent: 'rose'    },
 ];
 
 function useDebounced<T>(value: T, ms = 250) {
