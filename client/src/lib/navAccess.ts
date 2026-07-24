@@ -124,6 +124,28 @@ export const NAV_ACCESS: NavModuleAccess[] = [
     ],
   },
   {
+    key: 'risk',
+    label: 'Risk Management',
+    description: 'Quality risk management — registers, risks, controls, reviews, assessments.',
+    tabs: [
+      { key: 'risk.risks',       label: 'Risks',       permission: 'risk.read',            entity: 'risk' },
+      { key: 'risk.registers',   label: 'Registers',   permission: 'risk_register.read',   entity: 'risk_register' },
+      { key: 'risk.assessments', label: 'Assessments', permission: 'risk_assessment.read', entity: 'risk_assessment' },
+      { key: 'risk.controls',    label: 'Controls',    permission: 'risk_control.read',    entity: 'risk_control' },
+      { key: 'risk.reviews',     label: 'Reviews',     permission: 'risk_review.read',     entity: 'risk_review' },
+    ],
+  },
+  {
+    key: 'risk-config',
+    label: 'Risk Configuration',
+    description: 'Risk framework, category and library master data.',
+    tabs: [
+      { key: 'risk.frameworks',  label: 'Frameworks',  permission: 'risk_framework.read',  entity: 'risk_framework' },
+      { key: 'risk.categories',  label: 'Categories',  permission: 'risk_category.read',    entity: 'risk_category' },
+      { key: 'risk.libraries',   label: 'Libraries',   permission: 'risk_library.read',     entity: 'risk_library' },
+    ],
+  },
+  {
     key: 'configuration',
     label: 'Configuration',
     description: 'Workflow, form and master-data administration.',
@@ -149,6 +171,11 @@ export const NAV_ACCESS: NavModuleAccess[] = [
 
 /** Audit is special-cased everywhere — never gets a generated per-type row. */
 export const isAuditWorkflowTypeName = (name: string): boolean => /^audit$/i.test(name.trim());
+
+/** The Risk workflow type — folded into the static "Risk Management" module
+ *  (like Audit) so its ticket/findings keys don't form a duplicate group. */
+export const isRiskWorkflowTypeName = (name: string): boolean =>
+  /^risk(\s*management)?$/i.test(name.trim());
 
 /** Permission-key entity prefix for a workflow type (buckets the matrix columns). */
 export const wfTypeEntity = (typeId: string): string => `wf_type.${typeId}`;

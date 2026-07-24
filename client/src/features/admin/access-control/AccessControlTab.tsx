@@ -24,9 +24,12 @@ import {
   type NavModuleAccess,
   type NavTabAccess,
   isAuditWorkflowTypeName,
+  isRiskWorkflowTypeName,
   workflowTypeModule,
   wfTypeReadKey,
   wfTypeEntity,
+  findingTypeReadKey,
+  findingTypeEntity,
 } from '@/lib/navAccess';
 import { cn } from '@/lib/utils';
 
@@ -40,21 +43,24 @@ function useWorkflowTypeModules(): NavModuleAccess[] {
   return useMemo(
     () =>
       types
-        .filter((t) => !t.isDeleted && !isAuditWorkflowTypeName(t.name))
+        .filter(
+          (t) => !t.isDeleted && !isAuditWorkflowTypeName(t.name) && !isRiskWorkflowTypeName(t.name),
+        )
         .map((t) => workflowTypeModule(t)),
     [types],
   );
 }
 
-/* Shared: the Audit workflow type's ticket keys, folded into the EXISTING static
- * Audit module as one "Workflow Tickets" row (keyed by that module's key,
- * 'audit') — instead of a duplicate standalone "Audit" group. Empty until the
- * audit type exists. See docs/per-module-ticket-master-plan.md. */
+/* Shared: workflow types that have a dedicated static module (Audit, Risk) get
+ * their ticket/findings keys FOLDED into that module (keyed by its NAV_ACCESS
+ * key) — instead of a duplicate standalone group. Empty until the type exists.
+ * See docs/per-module-ticket-master-plan.md. */
 function useAuditTicketTabs(): Record<string, NavTabAccess[]> {
   const { data: types = [] } = useWorkflowTypes();
   return useMemo<Record<string, NavTabAccess[]>>(() => {
-    const audit = types.find((t) => !t.isDeleted && isAuditWorkflowTypeName(t.name));
     const result: Record<string, NavTabAccess[]> = {};
+
+    const audit = types.find((t) => !t.isDeleted && isAuditWorkflowTypeName(t.name));
     if (audit) {
       result.audit = [
         {
@@ -65,6 +71,25 @@ function useAuditTicketTabs(): Record<string, NavTabAccess[]> {
         },
       ];
     }
+
+    const risk = types.find((t) => !t.isDeleted && isRiskWorkflowTypeName(t.name));
+    if (risk) {
+      result.risk = [
+        {
+          key: 'risk.tickets',
+          label: 'Workflow Tickets',
+          permission: wfTypeReadKey(risk.id),
+          entity: wfTypeEntity(risk.id),
+        },
+        {
+          key: 'risk.findings',
+          label: 'Findings',
+          permission: findingTypeReadKey(risk.id),
+          entity: findingTypeEntity(risk.id),
+        },
+      ];
+    }
+
     return result;
   }, [types]);
 }
