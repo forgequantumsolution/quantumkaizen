@@ -12,6 +12,7 @@
  */
 import { Router } from 'express';
 import * as ctrl from './dms.controller';
+import { auditAccess } from '../../middleware/audit-access';
 import {
   ApproveSchema,
   AssignReadersSchema,
@@ -44,6 +45,9 @@ router.get(
   '/documents/:id',
   requirePermission('document.read'),
   validate(IdParamSchema, 'params'),
+  // Controlled-document content is served inline here, so opening the record is
+  // the access event worth recording.
+  auditAccess('Document', 'DMS'),
   asyncHandler(ctrl.get),
 );
 router.post(

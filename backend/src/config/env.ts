@@ -18,6 +18,10 @@ const EnvSchema = z.object({
   APPROVAL_DEADLINE_CRON: z.string().default('*/30 * * * *'),
   // Audit schedule recurrence sweep — spawns due audits from schedule rules.
   AUDIT_SCHEDULE_CRON: z.string().default('0 1 * * *'),
+  // How often the audit hash chain is sealed. This is the size of the window in
+  // which entries are written but not yet chained — a compliance property, so
+  // keep it short. 30s by default.
+  AUDIT_SEAL_INTERVAL_MS: z.coerce.number().default(30_000),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

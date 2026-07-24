@@ -1,5 +1,78 @@
 # Changes Log
 
+## Audit Trail UI — global viewer, detail drawer, per-record history — 2026-07-24
+
+Front end for the system-wide audit trail (backend in `backend/changes.md`). Not
+committed. A trail nobody can read is not evidence, so this was pulled ahead of
+the reason-for-change/e-signature phase.
+
+- **API client** — `src/lib/api/auditTrail.ts`: `useAuditTrailList` (filtered +
+  paginated), `useEntityHistory` (per-record), `useTrailFacets`, `useChainStatus`,
+  and `downloadTrailCsv`.
+- **Global viewer** — `src/features/admin/audit-trail/AuditTrailPage.tsx` at
+  `/admin/audit-trail` (route in `App.tsx`, nav entry in
+  `components/layout/Sidebar.tsx` under Compliance, gated on `audit_trail.read`).
+  Filter bar (search, module, record type, action, criticality, user, date
+  range), keyset pagination, an integrity-status banner, and CSV export (the
+  export is itself audited).
+- **Detail drawer** — `src/components/shared/AuditEntryDrawer.tsx`: click any row
+  to see **everything** the entry holds, grouped What / Why / Who / When & where /
+  Full record snapshot / Integrity — including IP, session, request id, full user
+  agent, and the hash + prev-hash (with copy buttons). Empty fields are hidden
+  rather than shown as dashes, so a `system` seed action shows no IP while a user
+  LOGIN shows the full set.
+- **Reusable history panel** — `src/components/shared/EntityAuditTrail.tsx`
+  (`buildTrailColumns` shared with the viewer so the two never diverge), dropped
+  onto the ticket (`features/tickets/TicketDetailPage.tsx`, History tab) and
+  document (`features/dms/DocumentDetailPage.tsx`) detail pages.
+
+### Table-layout iterations (from screenshot feedback)
+
+- First pass overlapped: `whitespace-nowrap` timestamps ran under the next
+  column and a 1200 px table overflowed a 942 px container. Fixed with sized
+  columns + a two-line When cell.
+- "Change" column duplicated "Record" and was empty on non-diff rows. Replaced
+  with a **Details** column that summarises every action (field diff, "Signed in",
+  "Password changed", the sign meaning, etc.) rather than repeating the record;
+  pulled **Module** into its own column (populated for ~every row) to fill the
+  space; middle-ellipsis on system keys (`wf_type.7ce2…read`) so the action
+  suffix stays readable.
+- Details ended up isolated at the far right because Record had no width and
+  absorbed all slack on wide screens. Gave **every** column an explicit width so
+  the fixed layout spreads extra space proportionally — uniform columns, Record
+  (~390) and Details (~366) balanced side by side.
+
+`tsc --noEmit` clean; verified in-browser with Playwright at 1280/1600/1920
+widths (drawer contents, no horizontal scroll, uniform columns); e2e 37 passed /
+14 pre-existing failures.
+
+## Ticket fix — stray/duplicate "Resume" button in the stage action bar — 2026-07-16
+
+A **Resume** button showed on tickets that were **not** on hold, and when a ticket
+*was* held it appeared twice (the stage action + the real Resume). Not committed.
+
+Root cause: `Resume` is a seeded **UNHOLD-behaviour stage status** wired to **283
+stage actions** — essentially every stage of every workflow (CAPA, Document
+Management, Audit Management, …) — so `/allowed-actions` returns it alongside
+`Hold` on virtually every stage (e.g. "Verify Audit Details" returns
+`Approve/Forward:FORWARD, Return:RETURN, Reject:REJECT, Hold:HOLD, Resume:UNHOLD`).
+The action bar rendered it unconditionally, next to the separate `isOnHold`-gated
+Resume button. That UNHOLD action is also **dead code**: the engine rejects every
+action while a ticket is held (`orchestrator.ts` `performAction` →
+"Ticket is on hold; resume before transitioning"), so it could only ever render
+when unholding is meaningless. `POST /tickets/:id/resume` is the only working path.
+
+- **`src/features/tickets/detail/ActionBar.tsx`** — filter `behavior !== 'UNHOLD'`
+  out of each stage's actions before rendering, leaving the dedicated
+  `isOnHold`-gated Resume as the single source of truth. The stage `map` callback
+  now has a body (returns the row) so the filtered list can be computed per stage,
+  and the "No actions configured" placeholder is suppressed while on hold (the
+  Resume button is the action in that state).
+- Verified in the running app with Playwright: on three not-on-hold tickets across
+  the Audit / Document / Inspection workflows → **0** Resume buttons (was ≥1); on a
+  held ticket with an active stage → **exactly 1**. The ticket was returned to
+  not-on-hold afterwards. `tsc --noEmit` clean.
+
 ## Playwright coverage for terminal rejection — and two bugs it caught — 2026-07-20
 
 Browser-driven regression suite for the change below, run against the real dev

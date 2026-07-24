@@ -258,6 +258,12 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'audit_type.create',     module: 'AUDIT_TYPE',      action: 'CREATE', description: 'Create audit types' },
   { key: 'audit_type.update',     module: 'AUDIT_TYPE',      action: 'UPDATE', description: 'Edit audit types' },
   { key: 'audit_type.delete',     module: 'AUDIT_TYPE',      action: 'DELETE', description: 'Delete audit types' },
+  // ── Audit Trail (system-wide change history) ─────────
+  // Distinct from `audit_register.*`, which is the internal-audit *module*.
+  // Reading the trail is its own privilege: it exposes who did what across
+  // every module, including security events.
+  { key: 'audit_trail.read',   module: 'AUDIT_TRAIL', action: 'READ',   description: 'View the system audit trail' },
+  { key: 'audit_trail.export', module: 'AUDIT_TRAIL', action: 'EXPORT', description: 'Export the audit trail' },
   // ── Audit Register (planning + approval) ─────────────
   { key: 'audit_register.read',    module: 'AUDIT_REGISTER', action: 'READ',    description: 'View audit registers' },
   { key: 'audit_register.create',  module: 'AUDIT_REGISTER', action: 'CREATE',  description: 'Create audit registers' },

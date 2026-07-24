@@ -4,6 +4,14 @@ import { env } from '../config/env';
 export interface JwtPayload {
   userId: string;
   email: string;
+  /**
+   * Audit-trail provenance. Optional so tokens issued before this was added
+   * keep verifying until they expire — the audit writer falls back to a DB
+   * lookup for the name, and a missing sessionId is recorded as such rather
+   * than blocking the request.
+   */
+  name?: string;
+  sessionId?: string;
 }
 
 export const signToken = (payload: JwtPayload): string =>

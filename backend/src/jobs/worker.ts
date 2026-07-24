@@ -24,6 +24,7 @@
 import { Worker, type Job } from 'bullmq';
 import { env } from '../config/env';
 import { prisma } from '../lib/prisma';
+import { runAsSystem } from '../lib/audit-context';
 import { checkSlaTimers } from './sweeps/checkSlaTimers';
 import { checkApprovalDeadlines } from './sweeps/checkApprovalDeadlines';
 import {
@@ -104,8 +105,10 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
     SLA_SWEEP_QUEUE,
     async (job: Job) => {
       log(`processing ${job.name} id=${job.id}`);
-      const result = await checkSlaTimers();
-      return result;
+      // Unattended work still has to be attributable: without a context every
+      // row the sweep touches would be audited as 'system' with no indication
+      // of which job did it.
+      return runAsSystem(`job:${SLA_SWEEP_QUEUE}`, () => checkSlaTimers());
     },
     { connection: conn, concurrency: 1 },
   );
@@ -120,8 +123,7 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
     APPROVAL_DEADLINE_QUEUE,
     async (job: Job) => {
       log(`processing ${job.name} id=${job.id}`);
-      const result = await checkApprovalDeadlines();
-      return result;
+      return runAsSystem(`job:${APPROVAL_DEADLINE_QUEUE}`, () => checkApprovalDeadlines());
     },
     { connection: conn, concurrency: 1 },
   );
@@ -136,12 +138,14 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
     AUDIT_SCHEDULE_QUEUE,
     async (job: Job) => {
       log(`processing ${job.name} id=${job.id}`);
-      const result = await spawnDueAudits();
-      // Piggyback the DMS review + LIMS certification-expiry sweeps on the tick.
-      const review = await flagOverdueReviews();
-      const certs = await flagExpiringCertifications();
-      const stability = await flagDueStabilityPulls();
-      return { ...result, review, certs, stability };
+      return runAsSystem(`job:${AUDIT_SCHEDULE_QUEUE}`, async () => {
+        const result = await spawnDueAudits();
+        // Piggyback the DMS review + LIMS certification-expiry sweeps on the tick.
+        const review = await flagOverdueReviews();
+        const certs = await flagExpiringCertifications();
+        const stability = await flagDueStabilityPulls();
+        return { ...result, review, certs, stability };
+      });
     },
     { connection: conn, concurrency: 1 },
   );

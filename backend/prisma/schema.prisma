@@ -2049,21 +2049,76 @@ model Finding {
 // plain column (no FK) so this stays self-contained.
 // ============================================================
 
+enum AuditCriticality {
+  NORMAL
+  CRITICAL
+}
+
+enum AuditActorType {
+  USER
+  SYSTEM
+  JOB
+  INTEGRATION
+}
+
 model AuditTrailEntry {
-  id         String   @id @default(uuid())
-  entityType String // "Capa" | "AuditRegister" | "NonConformance" | ...
-  entityId   String
-  action     String // CREATE | UPDATE | TRANSITION | SIGN | DELETE
-  field      String?
-  oldValue   String?
-  newValue   String?
-  reason     String?
-  userId     String?
-  userName   String
-  createdAt  DateTime @default(now())
+  id String @id @default(uuid())
+  // Monotonic write order, independent of createdAt (clock changes cannot
+  // reorder the trail). NOT gap-free: a rolled-back transaction consumes its
+  // sequence value, so a missing seq is not by itself evidence of deletion —
+  // the hash chain is what detects removal.
+  seq BigInt @default(autoincrement())
+
+  // ── WHAT ──
+  entityType  String // "Capa" | "AuditRegister" | "NonConformance" | ...
+  entityId    String
+  entityLabel String? // human-readable at time of action ("SOP-014 rev 3")
+  module      String? // QMS | DMS | LIMS | LMS | WORKFLOW | ADMIN | SECURITY
+  action      String // CREATE | UPDATE | TRANSITION | SIGN | DELETE | LOGIN | ...
+  field       String?
+  oldValue    String?
+  newValue    String?
+  valueType   String? // string | number | boolean | date | json | file
+  diff        Json? // full before/after for multi-field operations
+  criticality AuditCriticality @default(NORMAL)
+
+  // ── WHY ──
+  reason      String?
+  reasonCode  String?
+  signatureId String? // set when the change was e-signed
+
+  // ── WHO (snapshotted: survives rename, transfer or deletion of the user) ──
+  actorType      AuditActorType @default(USER)
+  userId         String?
+  userName       String
+  userEmployeeId String?
+  userRole       String?
+  userDepartment String?
+  onBehalfOfId   String?
+
+  // ── WHERE / HOW ──
+  sessionId String?
+  ipAddress String?
+  userAgent String?
+  requestId String?
+  source    String? // WEB | API | JOB | IMPORT
+
+  // ── WHEN — DB clock, stored with timezone ──
+  createdAt         DateTime @default(now()) @db.Timestamptz(6)
+  clientTzOffsetMin Int?
+
+  // ── INTEGRITY (see lib/audit-hash.ts) ──
+  chainKey String? // UTC day partitioning the hash chain
+  prevHash String?
+  hash     String?
 
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([module, action, createdAt])
+  @@index([criticality, createdAt])
+  @@index([chainKey, seq])
+  @@index([requestId])
 }
 
 model ESignature {
@@ -2071,11 +2126,61 @@ model ESignature {
   entityType String
   entityId   String
   meaning    String // "Approved" | "Reviewed" | "Verified & Closed" | ...
+  // Controlled vocabulary behind the display text — free text alone cannot be
+  // reported on or validated (21 CFR Part 11 §11.50(a)(3)).
+  meaningCode String?
   userId     String
   userName   String
-  signedAt   DateTime @default(now())
+  // Snapshot of the signed record, so a later change to that record cannot be
+  // passed off as having been signed (§11.70 signature/record linking).
+  recordHash String?
+  // The SIGN audit entry emitted alongside this signature.
+  auditEntryId String?
+  sessionId    String?
+  ipAddress    String?
+  signedAt     DateTime @default(now()) @db.Timestamptz(6)
+  // Signatures are never deleted; an erroneous one is invalidated in place.
+  invalidatedAt     DateTime?
+  invalidatedById   String?
+  invalidationReason String?
 
   @@index([entityType, entityId])
+  @@index([userId, signedAt])
+}
+
+/// Periodic audit-trail review (EU GMP Annex 11 §9, MHRA DI §6.16). The review
+/// is itself a controlled record — who reviewed what period, and what they found.
+model AuditTrailReview {
+  id           String   @id @default(uuid())
+  scope        String // module or entityType covered
+  periodStart  DateTime @db.Timestamptz(6)
+  periodEnd    DateTime @db.Timestamptz(6)
+  eventCount   Int
+  findings     String?
+  outcome      String // NO_ISSUES | ISSUES_RAISED
+  reviewerId   String
+  reviewerName String
+  signatureId  String?
+  reviewedAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([scope, periodEnd])
+}
+
+/// Result of the nightly hash-chain walk — the standing evidence that the trail
+/// has not been altered. A failed checkpoint is a data-integrity incident.
+model AuditChainCheckpoint {
+  id        String   @id @default(uuid())
+  chainKey  String
+  fromSeq   BigInt
+  toSeq     BigInt
+  headHash  String
+  entryCount Int
+  verified  Boolean
+  failureDetail String?
+  checkedAt DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([chainKey])
+  @@index([checkedAt])
 }
 
 // ─────────────────────────── DMS — Controlled Documents ───────────────────────────

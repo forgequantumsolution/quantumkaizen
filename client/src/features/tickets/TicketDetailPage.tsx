@@ -19,6 +19,7 @@ import AuditCapaChildrenCard from './detail/AuditCapaChildrenCard';
 import TicketFormHistory from './detail/TicketFormHistory';
 import { type SelectedStageInfo } from './detail/TicketFlowCanvas';
 import StageTabs from './detail/StageTabs';
+import EntityAuditTrail from '@/components/shared/EntityAuditTrail';
 import TicketActivityModal from './detail/TicketActivityModal';
 import TicketDetailsModal from './detail/TicketDetailsModal';
 import TicketSidebar from './detail/TicketSidebar';
@@ -259,6 +260,17 @@ export default function TicketDetailPage() {
                   isCompleted={isCompleted}
                 />
                 <ApprovalAwaitingCard ticketId={ticket.id} />
+                {/* Every recorded change to this ticket — field edits, stage
+                    transitions, holds — with the actor behind each one. */}
+                <Card>
+                  <div className="px-4 pt-3 pb-2">
+                    <h3 className="text-sm font-semibold text-gray-900">Audit Trail</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Every recorded change to this ticket and who made it.
+                    </p>
+                  </div>
+                  <EntityAuditTrail entityType="Ticket" entityId={ticket.id} compact />
+                </Card>
               </div>
             )}
           </div>

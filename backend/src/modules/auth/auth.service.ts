@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { hashPassword, verifyPassword } from '../../lib/password';
 import { signToken } from '../../lib/jwt';
 import { Conflict, Unauthorized } from '../../lib/httpError';
 import { computeEffectivePermissions } from '../../lib/effective-permissions';
+import { recordAudit } from '../../lib/audit';
 import type { LoginInput, RegisterInput } from './auth.schema';
 
 const publicUserSelect = {
@@ -81,16 +83,53 @@ export const registerUser = async (input: RegisterInput) => {
     select: publicUserSelect,
   });
 
-  const token = signToken({ userId: user.id, email: user.email });
+  const token = signToken({
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    sessionId: randomUUID(),
+  });
   return { user: await flatten(user), token };
+};
+
+/**
+ * Records a rejected authentication attempt.
+ *
+ * Failed logins are the events a security review looks for first, and they are
+ * the ones the system never wrote down before. The attempted address is
+ * recorded (it is an identifier, not a secret); the submitted password never is.
+ * A miss on an unknown address is still recorded — repeated attempts against
+ * addresses that do not exist is exactly the pattern worth seeing.
+ */
+const recordFailedLogin = async (email: string, userId: string | null, why: string) => {
+  await recordAudit({
+    entityType: 'User',
+    entityId: userId ?? 'unknown',
+    action: 'LOGIN_FAILED',
+    module: 'SECURITY',
+    criticality: 'CRITICAL',
+    entityLabel: email,
+    newValue: email,
+    reason: why,
+  });
 };
 
 export const loginUser = async (input: LoginInput) => {
   const dbUser = await prisma.user.findUnique({ where: { email: input.email } });
-  if (!dbUser || !dbUser.isActive) throw Unauthorized('Invalid credentials');
+  if (!dbUser) {
+    await recordFailedLogin(input.email, null, 'No account for this address');
+    throw Unauthorized('Invalid credentials');
+  }
+  if (!dbUser.isActive) {
+    await recordFailedLogin(input.email, dbUser.id, 'Account is deactivated');
+    throw Unauthorized('Invalid credentials');
+  }
 
   const ok = await verifyPassword(input.password, dbUser.passwordHash);
-  if (!ok) throw Unauthorized('Invalid credentials');
+  if (!ok) {
+    await recordFailedLogin(input.email, dbUser.id, 'Incorrect password');
+    throw Unauthorized('Invalid credentials');
+  }
 
   const user = await prisma.user.findUnique({
     where: { id: dbUser.id },
@@ -103,7 +142,29 @@ export const loginUser = async (input: LoginInput) => {
     data: { lastLoginAt: new Date() },
   });
 
-  const token = signToken({ userId: user.id, email: user.email });
+  // One session id per login, carried in the token and stamped on every audit
+  // entry, so a run of actions can be tied back to a single authentication.
+  const sessionId = randomUUID();
+  const token = signToken({
+    userId: user.id,
+    email: user.email,
+    name: dbUser.name,
+    sessionId,
+  });
+
+  // Stamped onto the context first so the LOGIN entry carries the same session
+  // id as every action that follows it.
+  await recordAudit(
+    {
+      entityType: 'User',
+      entityId: user.id,
+      action: 'LOGIN',
+      module: 'SECURITY',
+      entityLabel: user.email,
+    },
+    { userId: user.id, context: { sessionId, userName: dbUser.name } },
+  );
+
   return { user: await flatten(user), token };
 };
 

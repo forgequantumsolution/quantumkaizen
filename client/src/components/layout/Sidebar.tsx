@@ -284,6 +284,15 @@ export default function Sidebar() {
       path: "/dashboard",
       icon: LayoutDashboard,
     };
+    // System-wide change history. Gated on its own key rather than the
+    // internal-audit module's, since the trail spans every module and includes
+    // security events.
+    const auditTrailItem: NavItem = {
+      label: "Audit Trail",
+      path: "/admin/audit-trail",
+      icon: ScrollText,
+      permission: "audit_trail.read",
+    };
     // Groups the DMS document library with the "Document Review" workflow so the
     // two document-centric areas live under one roof.
     const dmsItem: NavItem = {
@@ -415,7 +424,7 @@ export default function Sidebar() {
       { title: "Lab Operations", items: [limsItem, limsConfigItem] },
       { title: "DMS", items: [dmsItem] },
       { title: "Quality System", items: qualityItems },
-      { title: "Compliance", items: complianceItems },
+      { title: "Compliance", items: [...complianceItems, auditTrailItem] },
       { title: "LMS", items: [trainingItem, configItem] },
     ];
 

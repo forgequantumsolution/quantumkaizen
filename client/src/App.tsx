@@ -11,6 +11,7 @@ import WorkflowDetailPage from '@/features/workflows/WorkflowDetailPage';
 import WorkflowBuilderPage from '@/features/workflows/builder/WorkflowBuilderPage';
 import WorkflowLookupsPage from '@/features/admin/workflow-lookups/WorkflowLookupsPage';
 import BusinessCalendarsPage from '@/features/admin/business-calendars/BusinessCalendarsPage';
+import AuditTrailPage from '@/features/admin/audit-trail/AuditTrailPage';
 // Tickets
 import TicketsPage from '@/features/tickets/TicketsPage';
 import TicketDetailPage from '@/features/tickets/TicketDetailPage';
@@ -147,6 +148,7 @@ export default function App() {
           <Route path="/workflows/:id/builder" element={<WorkflowBuilderPage />} />
           <Route path="/admin/workflow-lookups" element={<WorkflowLookupsPage />} />
           <Route path="/admin/business-calendars" element={<BusinessCalendarsPage />} />
+          <Route path="/admin/audit-trail" element={<AuditTrailPage />} />
           <Route path="/tickets" element={<TicketsPage />} />
           <Route path="/tickets/:id" element={<TicketDetailPage />} />
           <Route path="/modules/:typeId" element={<ModulePage />} />
