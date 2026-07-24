@@ -5,6 +5,7 @@ import { Conflict, NotFound } from '../../lib/httpError';
 import { invalidatePermissionCache } from '../../middleware/permissions';
 import { computeEffectiveWithSources } from '../../lib/effective-permissions';
 import { writeTrail } from '../audit/compliance.service';
+import { recordAudit } from '../../lib/audit';
 import type {
   CreateUserInput,
   ListQuery,
@@ -215,9 +216,20 @@ export const update = async (id: string, input: UpdateUserInput) => {
 };
 
 export const resetPassword = async (id: string, { password }: ResetPasswordInput) => {
-  await getById(id);
+  const user = await getById(id);
   const passwordHash = await hashPassword(password);
   await prisma.user.update({ where: { id }, data: { passwordHash } });
+  // The automatic interceptor redacts credential fields, so a password reset
+  // would otherwise leave no trace at all. The fact of the change is recorded;
+  // neither the old nor the new value ever is.
+  await recordAudit({
+    entityType: 'User',
+    entityId: id,
+    action: 'PASSWORD_CHANGE',
+    module: 'SECURITY',
+    criticality: 'CRITICAL',
+    entityLabel: user?.email ?? null,
+  });
 };
 
 export const deactivate = async (id: string) => {

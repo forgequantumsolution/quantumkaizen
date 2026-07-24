@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import { env } from './config/env';
 import { errorHandler, notFoundHandler } from './middleware/error';
+import { auditContext } from './middleware/audit-context';
 import authRoutes from './modules/auth/auth.routes';
 import userRoutes from './modules/user/user.routes';
 import departmentRoutes from './modules/department/department.routes';
@@ -70,6 +71,11 @@ import { asyncHandler } from './lib/asyncHandler';
 export const buildApp = () => {
   const app = express();
 
+  // Required for a truthful client IP in the audit trail when running behind
+  // the Render/Netlify/nginx proxies — without it every entry records the
+  // proxy's address.
+  app.set('trust proxy', true);
+
   app.use(helmet());
   // Support a comma-separated list of allowed origins. A bare '*' reflects any
   // origin (note: browsers reject a literal '*' when credentials are sent, so
@@ -86,6 +92,11 @@ export const buildApp = () => {
   app.use(express.json({ limit: '15mb' })); // raised for DMS inline document uploads
   app.use(express.urlencoded({ extended: true }));
   if (env.NODE_ENV !== 'test') app.use(morgan('dev'));
+
+  // Opens the audit context for every request — mounted before the routers so
+  // unauthenticated traffic (failed logins above all) still carries an IP,
+  // user agent and correlation id. requireAuth stamps identity on afterwards.
+  app.use(auditContext);
 
   app.get(
     '/health',

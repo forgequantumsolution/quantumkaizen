@@ -18,6 +18,7 @@ import {
   DOC_TYPE_LABELS,
 } from '@/lib/api/dms';
 import RichTextEditor from './RichTextEditor';
+import EntityAuditTrail from '@/components/shared/EntityAuditTrail';
 import DocFileViewer from './DocFileViewer';
 import DocStatusBadge from './DocStatusBadge';
 import AcknowledgementPanel from './AcknowledgementPanel';
@@ -281,6 +282,16 @@ export default function DocumentDetailPage() {
             </li>
           ))}
         </ul>
+      </div>
+
+      {/* Audit trail — every change to this controlled document, including who
+          viewed it. Distinct from Version History, which lists issued revisions. */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h3 className="text-sm font-semibold text-gray-900 mb-1">Audit Trail</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          Every recorded action on this document and who performed it.
+        </p>
+        <EntityAuditTrail entityType="Document" entityId={doc.id} compact />
       </div>
 
       {/* Approve (e-signature) modal */}

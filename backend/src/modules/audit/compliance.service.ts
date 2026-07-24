@@ -1,6 +1,8 @@
 import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound, Unauthorized } from '../../lib/httpError';
 import { verifyPassword } from '../../lib/password';
+import { recordAudit } from '../../lib/audit';
+import { criticalityFor, moduleFor } from '../../lib/audit-scope';
 
 export interface TrailInput {
   entityType: string;
@@ -13,34 +15,35 @@ export interface TrailInput {
 }
 
 /**
- * Append an immutable audit-trail entry. Best-effort: trail logging must never
- * break the underlying business operation, so failures are swallowed (logged).
- * Resolves userName from the actor id when available.
+ * Append an immutable audit-trail entry.
+ *
+ * Thin wrapper kept for the existing call sites; new code should call
+ * `recordAudit` directly and hand it the surrounding transaction. Identity,
+ * provenance and the hash chain now come from `lib/audit`, so the explicit
+ * `userId` argument is only a fallback for callers with no request context.
+ *
+ * This used to swallow write failures to protect the business operation. It no
+ * longer does: a silently dropped entry makes the system claim a completeness
+ * it does not have, which is the more serious of the two failures.
  */
 export const writeTrail = async (input: TrailInput, userId?: string): Promise<void> => {
-  try {
-    let userName = 'system';
-    if (userId) {
-      const u = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
-      userName = u?.name ?? 'unknown';
-    }
-    await prisma.auditTrailEntry.create({
-      data: {
-        entityType: input.entityType,
-        entityId: input.entityId,
-        action: input.action,
-        field: input.field ?? null,
-        oldValue: input.oldValue ?? null,
-        newValue: input.newValue ?? null,
-        reason: input.reason ?? null,
-        userId: userId ?? null,
-        userName,
-      },
-    });
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error('[audit-trail] failed to write entry', e instanceof Error ? e.message : e);
-  }
+  await recordAudit(
+    {
+      entityType: input.entityType,
+      entityId: input.entityId,
+      action: input.action,
+      field: input.field ?? null,
+      oldValue: input.oldValue ?? null,
+      newValue: input.newValue ?? null,
+      reason: input.reason ?? null,
+      // Derived from the same registry the interceptor uses, so hand-written
+      // and automatic entries are filterable and classifiable alike — otherwise
+      // manual entries are invisible to a module or criticality filter.
+      module: moduleFor(input.entityType),
+      criticality: criticalityFor(input.entityType),
+    },
+    { userId },
+  );
 };
 
 export const getTrail = async (entityType: string, entityId: string) => {

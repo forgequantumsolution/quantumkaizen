@@ -5,6 +5,7 @@ import * as capaCtrl from './capa.controller';
 import * as dashboardCtrl from './audit-dashboard.controller';
 import * as scheduleCtrl from './audit-schedule.controller';
 import * as complianceCtrl from './compliance.controller';
+import * as trailCtrl from './audit-trail.controller';
 import {
   AuditScheduleRuleUpsertSchema,
   ListScheduleRuleQuerySchema,
@@ -148,6 +149,23 @@ router.post('/audit/action-items', requirePermission('action_item.create'), vali
 router.put('/audit/action-items/:id', requirePermission('action_item.update'), validate(IdParamSchema, 'params'), validate(ActionItemUpsertSchema), asyncHandler(capaCtrl.updateActionItem));
 router.patch('/audit/action-items/:id/status', requirePermission('action_item.update'), validate(IdParamSchema, 'params'), validate(UpdateActionItemStatusSchema), asyncHandler(capaCtrl.updateActionItemStatus));
 router.delete('/audit/action-items/:id', requirePermission('action_item.delete'), validate(IdParamSchema, 'params'), asyncHandler(capaCtrl.deleteActionItem));
+
+// ── System audit trail (read-only, cross-module) ──
+// Gated by its own permission: the trail spans every module and includes
+// security events, so `audit_register.read` (the internal-audit module) is the
+// wrong boundary for it.
+router.get('/audit-trail', requirePermission('audit_trail.read'), asyncHandler(trailCtrl.list));
+router.get('/audit-trail/facets', requirePermission('audit_trail.read'), asyncHandler(trailCtrl.facets));
+router.get('/audit-trail/chain', requirePermission('audit_trail.read'), asyncHandler(trailCtrl.chain));
+router.get('/audit-trail/export', requirePermission('audit_trail.export'), asyncHandler(trailCtrl.exportCsv));
+// Per-record history — powers the History tab on any detail page. Must be last
+// so the literal paths above are not swallowed by the :entityType param.
+router.get(
+  '/audit-trail/:entityType/:entityId',
+  requirePermission('audit_trail.read'),
+  validate(TrailParamSchema, 'params'),
+  asyncHandler(trailCtrl.history),
+);
 
 // ── Compliance: audit trail + e-signatures ──
 router.get('/audit/trail/:entityType/:entityId', requirePermission('audit_register.read'), validate(TrailParamSchema, 'params'), asyncHandler(complianceCtrl.getTrail));

@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken, type JwtPayload } from '../lib/jwt';
 import { Unauthorized } from '../lib/httpError';
+import { applyIdentityToAuditContext } from './audit-context';
 
 declare global {
   namespace Express {
@@ -17,6 +18,7 @@ export const requireAuth = (req: Request, _res: Response, next: NextFunction) =>
   const token = header.slice('Bearer '.length).trim();
   try {
     req.user = verifyToken(token);
+    applyIdentityToAuditContext(req.user);
     next();
   } catch {
     next(Unauthorized('Invalid or expired token'));
