@@ -5,6 +5,7 @@ import { Download, History, RotateCcw, ShieldCheck, ShieldAlert, Search } from '
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
 import { buildTrailColumns } from '@/components/shared/EntityAuditTrail';
+import AuditEntryDrawer from '@/components/shared/AuditEntryDrawer';
 import {
   downloadTrailCsv,
   useAuditTrailList,
@@ -36,6 +37,7 @@ export default function AuditTrailPage() {
   const [range, setRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [selected, setSelected] = useState<TrailRow | null>(null);
 
   const filters: TrailFilters = {
     entity_type: entityType,
@@ -183,6 +185,10 @@ export default function AuditTrailPage() {
           // Fixed layout + per-column widths keeps every row the same height and
           // stops long ids from pushing neighbouring cells out of their column.
           tableLayout="fixed"
+          onRow={(record) => ({
+            onClick: () => setSelected(record),
+            className: 'cursor-pointer',
+          })}
           pagination={{
             current: page,
             pageSize: PAGE_SIZE,
@@ -192,6 +198,8 @@ export default function AuditTrailPage() {
           }}
         />
       </div>
+
+      <AuditEntryDrawer row={selected} open={!!selected} onClose={() => setSelected(null)} />
     </PageContainer>
   );
 }

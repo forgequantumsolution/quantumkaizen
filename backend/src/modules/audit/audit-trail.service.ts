@@ -61,15 +61,10 @@ const buildWhere = (q: TrailQuery): Prisma.AuditTrailEntryWhereInput => {
 };
 
 /** Shape shared by the list and the per-record history, so one UI renders both. */
-const toDto = (t: {
-  id: string; seq: bigint; entityType: string; entityId: string; entityLabel: string | null;
-  module: string | null; action: string; field: string | null; oldValue: string | null;
-  newValue: string | null; reason: string | null; criticality: string; userName: string;
-  userId: string | null; userRole: string | null; userDepartment: string | null;
-  actorType: string; ipAddress: string | null; sessionId: string | null;
-  requestId: string | null; source: string | null; createdAt: Date; hash: string | null;
-  diff: Prisma.JsonValue | null;
-}) => ({
+// The Prisma row carries every column; the list and history queries don't
+// `select`, so the full record reaches here and the detail drawer can show all
+// of it. Typed loosely because both call sites pass the whole entity.
+const toDto = (t: Prisma.AuditTrailEntryGetPayload<Record<string, never>>) => ({
   id: t.id,
   seq: String(t.seq),
   entity_type: t.entityType,
@@ -78,22 +73,32 @@ const toDto = (t: {
   module: t.module,
   action: t.action,
   field: t.field,
+  value_type: t.valueType,
   old_value: t.oldValue,
   new_value: t.newValue,
   reason: t.reason,
+  reason_code: t.reasonCode,
   criticality: t.criticality,
   user_name: t.userName,
   user_id: t.userId,
   user_role: t.userRole,
   user_department: t.userDepartment,
+  user_employee_id: t.userEmployeeId,
+  on_behalf_of_id: t.onBehalfOfId,
   actor_type: t.actorType,
   ip_address: t.ipAddress,
+  user_agent: t.userAgent,
   session_id: t.sessionId,
   request_id: t.requestId,
   source: t.source,
   created_at: t.createdAt,
-  // Presence of a hash tells the reader whether the entry is chained yet, without
-  // exposing the digest itself.
+  client_tz_offset_min: t.clientTzOffsetMin,
+  signature_id: t.signatureId,
+  // The hash is tamper evidence, not a secret — exposing it lets a reviewer
+  // confirm the chain independently. `sealed` is the cheap boolean for the row.
+  chain_key: t.chainKey,
+  prev_hash: t.prevHash,
+  hash: t.hash,
   sealed: t.hash !== null,
   diff: t.diff,
 });

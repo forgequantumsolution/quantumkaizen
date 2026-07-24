@@ -4,6 +4,123 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# System-wide ALCOA++ audit trail — 2026-07-24
+
+A single tamper-evident audit trail recording **what changed, from what to what,
+by whom, when, from where, and why** across every module. Full design and the
+regulatory mapping are in `docs/AUDIT-TRAIL-ALCOA-compliance-plan.md`. Not
+committed. Built in phases; each verified against the live dev stack + the
+`kaizen_qms2` prod dump.
+
+## Phase 0 — foundations + immutability
+
+- **Schema** (`prisma/schema.prisma`, migration
+  `20260723120000_audit_trail_alcoa_phase0`): `AuditTrailEntry` gained `seq`
+  (bigserial), full provenance (`ipAddress`, `sessionId`, `userAgent`,
+  `requestId`, actor snapshot `userRole`/`userDepartment`/`userEmployeeId`),
+  classification (`module`, `criticality`), the `diff` JSON, and the integrity
+  columns (`chainKey`, `prevHash`, `hash`). `createdAt` → `timestamptz`.
+  `ESignature` bound to content (`recordHash`, `meaningCode`, `auditEntryId`).
+  New models `AuditTrailReview`, `AuditChainCheckpoint`. Enums
+  `AuditCriticality`, `AuditActorType`. All additive — no drops, no backfill; a
+  `CONFIG_CHANGE` "audit trail commenced" row marks the honest start line.
+- **Append-only enforcement**: DB triggers reject `UPDATE`/`DELETE` on
+  `AuditTrailEntry`, `ESignature`, `AuditTrailReview` for every client including
+  `psql` — application discipline is not evidence.
+- **Request context** (`lib/audit-context.ts`, `middleware/audit-context.ts`):
+  `AsyncLocalStorage` carrying identity + IP/session/user-agent/request-id,
+  mounted before the routers so failed logins are still attributable.
+  `app.set('trust proxy', true)` for a truthful client IP behind the proxy.
+- **JWT** (`lib/jwt.ts`) gained optional `name` + `sessionId`; `/login` issues one
+  session id per login (`modules/auth/auth.service.ts`).
+- **Writer** (`lib/audit.ts` `recordAudit`/`recordFieldDiff`): joins the caller's
+  transaction, snapshots the actor, and **no longer swallows failures** — a
+  dropped entry rolls the business write back. `compliance.service.ts`'s
+  `writeTrail` now delegates here (the ~160 existing call sites keep compiling).
+
+## Phase 1 — automatic capture
+
+- `lib/audit-scope.ts` — the coverage registry (AUTO / MANUAL / EXCLUDED per
+  model, each exclusion justified) plus module + criticality classification and
+  credential redaction (`passwordHash`, PINs, tokens).
+- `lib/audit-prisma-extension.ts` — a `$extends` interceptor over
+  create/update/upsert/delete/updateMany/deleteMany for in-scope models,
+  emitting per-field diffs; deletes preserve the whole row in `diff`. Wired in
+  `lib/prisma.ts` (extended client + `prismaBase` escape hatch). Coverage rose
+  from 5 entity types to 32 across 5 modules in one e2e run — tickets, workflows,
+  sites, roles and permissions were previously **unaudited**.
+
+## Phase 2 — semantic + security events
+
+- `modules/workflow/engine/audit.emitter.ts` — **was a no-op** (console.debug in
+  dev, nothing written); all 17 engine call sites had been emitting into the
+  void. Now maps each `AuditEventType` → action + criticality and writes through
+  the caller's `tx`, so transitions/holds/approvals are atomic with the state
+  change. Frozen signature meant no call site changed.
+- Security (`auth.service.ts`): `LOGIN`, and `LOGIN_FAILED` on all three
+  rejection paths with the reason distinguished; the attempted address is
+  recorded, the password never is. `PASSWORD_CHANGE` (`user.service.ts`) — the
+  interceptor redacts the hash, so a reset would otherwise leave no trace.
+- Jobs (`jobs/worker.ts`): all three sweeps run inside `runAsSystem('job:<queue>')`
+  so unattended writes are attributable.
+- Access logging (`middleware/audit-access.ts`): `VIEW` on controlled-document
+  and CoA detail reads only — best-effort by nature (response already sent).
+
+## Chaining rework — synchronous → write-then-seal
+
+The Phase 0 design hashed on the write path behind a per-day
+`pg_advisory_xact_lock`. Because that lock is transaction-scoped, once Phase 2
+joined the caller's transaction it was held for the caller's **entire**
+duration — one slow workflow transition serialised every other write and all
+logins hung (observed: one backend `idle in transaction` holding the lock, four
+queued behind). Replaced with:
+
+- `recordAudit` inserts **unsealed** (`hash`/`prevHash` NULL), never taking a
+  lock on the request path.
+- `lib/audit-seal.ts` (`sealPendingEntries` + `verifyChain`) chains the unsealed
+  tail under its own session-scoped lock, run every `AUDIT_SEAL_INTERVAL_MS`
+  (default 30 s) from the API process (`index.ts`) — not the optional BullMQ
+  worker, since the unsealed-window size is a compliance property.
+- Migration `20260724090000_audit_chain_async_seal` narrows the trigger to permit
+  exactly one transition — NULL hash → non-NULL with every other column
+  byte-identical (`to_jsonb(OLD) - seal cols = to_jsonb(NEW) - seal cols`);
+  business-column UPDATE, re-sealing and DELETE all stay rejected (verified).
+- Verified: 10 concurrent hold/resume transitions complete <0.25 s each; logins
+  ~90 ms. `seq` corrected in the schema comment from "gap-free" to "monotonic,
+  not gap-free" (a rolled-back tx consumes its value — one such gap already
+  exists; the hash chain, not `seq`, detects removal).
+
+## Phase 4 (read API) — pulled ahead of Phase 3
+
+- `modules/audit/audit-trail.service.ts` + `.controller.ts`, mounted in
+  `audit.routes.ts`: filtered + keyset-paginated `/audit-trail` list, per-record
+  `/audit-trail/:entityType/:entityId` history, `/facets`, `/chain`
+  (verification status), and `/export` CSV (itself recorded as an `EXPORT`).
+  DTO returns the full record — provenance, diff, and the hash/prev-hash — so the
+  UI drawer can show everything.
+- New permissions `audit_trail.read` / `audit_trail.export` (`lib/rbac-catalog.ts`),
+  replacing the misuse of `audit_register.read` (the internal-audit module) for
+  the cross-module trail.
+
+## Config + data
+
+- `config/env.ts`: `AUDIT_SEAL_INTERVAL_MS` (default 30 000).
+- Seed account `doc@forgequantum.com` password realigned to `Admin@123` (it was
+  `admin123`, the lone outlier among the seed users, failing the e2e login
+  fixture). Done via the real reset endpoint, which exercised the new
+  `PASSWORD_CHANGE` path live.
+
+## Verification (whole effort)
+
+`tsc --noEmit` clean; 25 unit tests pass; e2e 37 passed / 14 pre-existing
+failures (unchanged from the pre-work baseline — the `doc@` fix moved 3 from
+fail to pass). DB checks confirm append-only enforcement, 0 credential leaks,
+and 0 chain breaks among all entries written under the new sealer (3 legacy
+breaks remain at seq 2045/2089/2133 — an artifact of changing sealing regimes
+mid-dataset on the dev copy, not tampering; a fresh deployment starts clean).
+
+---
+
 # Observation: the required-forms gate also blocks REJECT — 2026-07-20
 
 Surfaced while building the Playwright rejection suite (see `client/changes.md`),
