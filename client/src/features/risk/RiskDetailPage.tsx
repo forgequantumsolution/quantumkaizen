@@ -26,11 +26,12 @@ import {
   Tooltip,
   message,
 } from 'antd';
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 import {
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
+  ChevronsRight,
   CalendarClock,
   FileText,
   Gauge,
@@ -50,6 +51,7 @@ import ESignatureModal from '@/components/shared/ESignatureModal';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
 import { useUserDirectory } from '@/features/admin/users/hooks';
+import { useDocuments } from '@/lib/api/dms';
 import { api } from '@/lib/api';
 import DownloadRiskReportButton from './report/DownloadRiskReportButton';
 import {
@@ -69,15 +71,18 @@ import {
   useRiskReviews,
   useScoreRisk,
   useUpdateControl,
+  useUpdateControlStatus,
   useUpdateRisk,
   useUpdateRiskStatus,
   useVerifyControl,
   CONTROL_HIERARCHY_LABELS,
+  CONTROL_STATUS_LABELS,
   CONTROL_TYPE_LABELS,
   REVIEW_OUTCOME_LABELS,
   RISK_STATUS_LABELS,
   TREATMENT_LABELS,
   type ControlHierarchy,
+  type ControlStatus,
   type ControlType,
   type FactorValues,
   type Risk,
@@ -95,6 +100,19 @@ import { ControlStatusBadge, RiskLevelBadge, RiskStatusBadge } from './riskStatu
 const RISK_STATUSES = Object.keys(RISK_STATUS_LABELS) as RiskStatus[];
 const CONTROL_TYPES = Object.keys(CONTROL_TYPE_LABELS) as ControlType[];
 const CONTROL_HIERARCHIES = Object.keys(CONTROL_HIERARCHY_LABELS) as ControlHierarchy[];
+
+// Non-verify control transitions offered by the "Advance status" action. The
+// server owns the real state machine (risk-control.service ALLOWED_CONTROL_
+// TRANSITIONS); IMPLEMENTED→VERIFIED / IMPLEMENTED→INEFFECTIVE are deliberately
+// omitted here because those go through the Verify flow (they need evidence).
+const NEXT_CONTROL_STATUSES: Record<ControlStatus, ControlStatus[]> = {
+  PLANNED: ['IN_PROGRESS', 'CANCELLED'],
+  IN_PROGRESS: ['IMPLEMENTED', 'CANCELLED'],
+  IMPLEMENTED: [],
+  VERIFIED: [],
+  INEFFECTIVE: ['IN_PROGRESS'],
+  CANCELLED: [],
+};
 const REVIEW_OUTCOMES = Object.keys(REVIEW_OUTCOME_LABELS) as ReviewOutcome[];
 const TREATMENTS = Object.keys(TREATMENT_LABELS) as RiskTreatment[];
 
@@ -860,6 +878,7 @@ interface ControlFormValues {
   hierarchy?: ControlHierarchy | null;
   ownerId?: string | null;
   dueDate?: Dayjs | null;
+  documentId?: string | null;
 }
 
 function ControlsTab({ riskId, controls }: { riskId: string; controls: RiskControl[] }) {
@@ -872,12 +891,15 @@ function ControlsTab({ riskId, controls }: { riskId: string; controls: RiskContr
   const [editing, setEditing] = useState<RiskControl | null>(null);
   const [open, setOpen] = useState(false);
   const [verifyTarget, setVerifyTarget] = useState<RiskControl | null>(null);
+  const [statusTarget, setStatusTarget] = useState<RiskControl | null>(null);
   const [form] = Form.useForm<ControlFormValues>();
 
   const createMut = useCreateControl();
   const updateMut = useUpdateControl(editing?.id ?? '');
   const deleteMut = useDeleteControl();
   const { data: directory } = useUserDirectory();
+  // Controlled documents that can back a control as evidence (RiskControl.documentId).
+  const { data: docs } = useDocuments({ page_size: 200 });
 
   const openCreate = () => {
     setEditing(null);
@@ -888,6 +910,7 @@ function ControlsTab({ riskId, controls }: { riskId: string; controls: RiskContr
       hierarchy: null,
       ownerId: null,
       dueDate: null,
+      documentId: null,
     });
     setOpen(true);
   };
@@ -903,7 +926,8 @@ function ControlsTab({ riskId, controls }: { riskId: string; controls: RiskContr
         type: c.type,
         hierarchy: c.hierarchy ?? null,
         ownerId: c.owner_id ?? null,
-        dueDate: null,
+        dueDate: c.due_date ? dayjs(c.due_date) : null,
+        documentId: c.document_id ?? null,
       }),
     );
   };
@@ -917,6 +941,7 @@ function ControlsTab({ riskId, controls }: { riskId: string; controls: RiskContr
       hierarchy: v.hierarchy || null,
       ownerId: v.ownerId || null,
       dueDate: v.dueDate ? v.dueDate.toISOString() : null,
+      documentId: v.documentId || null,
     };
     try {
       if (editing) {
@@ -983,8 +1008,18 @@ function ControlsTab({ riskId, controls }: { riskId: string; controls: RiskContr
       className: 'text-right',
       render: (c) => (
         <div className="flex items-center justify-end gap-1">
-          {canApprove && c.status !== 'CANCELLED' && (
-            <Tooltip title="Verify effectiveness">
+          {canUpdate && NEXT_CONTROL_STATUSES[c.status].length > 0 && (
+            <Tooltip title="Advance status">
+              <AntButton
+                type="text"
+                size="small"
+                icon={<ChevronsRight size={15} />}
+                onClick={() => setStatusTarget(c)}
+              />
+            </Tooltip>
+          )}
+          {canApprove && (c.status === 'IMPLEMENTED' || c.status === 'VERIFIED') && (
+            <Tooltip title={c.status === 'VERIFIED' ? 'Re-verify effectiveness' : 'Verify effectiveness'}>
               <AntButton
                 type="text"
                 size="small"
@@ -1111,10 +1146,27 @@ function ControlsTab({ riskId, controls }: { riskId: string; controls: RiskContr
           <Form.Item name="dueDate" label="Due date">
             <DatePicker className="w-full" />
           </Form.Item>
+          <Form.Item
+            name="documentId"
+            label="Supporting document"
+            extra="Link a controlled document as evidence (e.g. SOP, qualification or effectiveness report)."
+          >
+            <AntSelect
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="No document linked"
+              options={(docs?.data ?? []).map((d) => ({
+                value: d.id,
+                label: `${d.doc_number} — ${d.title}`,
+              }))}
+            />
+          </Form.Item>
         </Form>
       </Drawer>
 
       <VerifyControlDrawer control={verifyTarget} onClose={() => setVerifyTarget(null)} />
+      <ControlStatusDrawer control={statusTarget} onClose={() => setStatusTarget(null)} />
     </Card>
   );
 }
@@ -1145,12 +1197,24 @@ function VerifyControlDrawer({
 }
 
 function VerifyControlForm({ control, onDone }: { control: RiskControl; onDone: () => void }) {
-  const [form] = Form.useForm<{ isEffective: boolean; effectiveness: string; verifiedAt?: Dayjs }>();
+  const [form] = Form.useForm<{
+    isEffective: boolean;
+    effectiveness: string;
+    verifiedAt?: Dayjs;
+    documentId?: string | null;
+  }>();
   const verifyMut = useVerifyControl(control.id);
+  // The verify endpoint stores only the text verdict; the evidence document is a
+  // field on the control itself, so persist it separately when it changes.
+  const updateMut = useUpdateControl(control.id);
+  const { data: docs } = useDocuments({ page_size: 200 });
 
   const submit = async () => {
     const v = await form.validateFields();
     try {
+      if ((v.documentId ?? null) !== (control.document_id ?? null)) {
+        await updateMut.mutateAsync({ documentId: v.documentId || null });
+      }
       await verifyMut.mutateAsync({
         isEffective: !!v.isEffective,
         effectiveness: v.effectiveness.trim(),
@@ -1173,7 +1237,7 @@ function VerifyControlForm({ control, onDone }: { control: RiskControl; onDone: 
         form={form}
         layout="vertical"
         requiredMark
-        initialValues={{ isEffective: true, effectiveness: '' }}
+        initialValues={{ isEffective: true, effectiveness: '', documentId: control.document_id ?? null }}
       >
         <Form.Item name="isEffective" label="Control is effective" valuePropName="checked">
           <Switch />
@@ -1185,14 +1249,99 @@ function VerifyControlForm({ control, onDone }: { control: RiskControl; onDone: 
         >
           <AntInput.TextArea rows={4} placeholder="What was checked, over what period, and the result" />
         </Form.Item>
+        <Form.Item
+          name="documentId"
+          label="Evidence document"
+          extra="Optional — link the controlled document that holds the proof (report, study, requalification)."
+        >
+          <AntSelect
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="No document linked"
+            options={(docs?.data ?? []).map((d) => ({
+              value: d.id,
+              label: `${d.doc_number} — ${d.title}`,
+            }))}
+          />
+        </Form.Item>
         <Form.Item name="verifiedAt" label="Verified on" extra="Defaults to now.">
           <DatePicker className="w-full" />
         </Form.Item>
       </Form>
       <div className="flex justify-end gap-2">
         <AntButton onClick={onDone}>Cancel</AntButton>
-        <AntButton type="primary" loading={verifyMut.isPending} onClick={submit}>
+        <AntButton type="primary" loading={verifyMut.isPending || updateMut.isPending} onClick={submit}>
           Record verification
+        </AntButton>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Advancing a control through its lifecycle (PLANNED → IN_PROGRESS →
+ * IMPLEMENTED, or rework from INEFFECTIVE). Its own component so the mutation
+ * hook binds to a real control id. The VERIFIED / INEFFECTIVE verdicts go
+ * through VerifyControlDrawer instead, since they require effectiveness evidence.
+ */
+function ControlStatusDrawer({
+  control,
+  onClose,
+}: {
+  control: RiskControl | null;
+  onClose: () => void;
+}) {
+  return (
+    <Drawer
+      title={control ? `Advance ${control.control_number}` : 'Advance control'}
+      width={460}
+      open={!!control}
+      onClose={onClose}
+      destroyOnClose
+      footer={null}
+    >
+      {control && <ControlStatusForm control={control} onDone={onClose} />}
+    </Drawer>
+  );
+}
+
+function ControlStatusForm({ control, onDone }: { control: RiskControl; onDone: () => void }) {
+  const [form] = Form.useForm<{ status: ControlStatus; reason?: string }>();
+  const statusMut = useUpdateControlStatus(control.id);
+  const options = NEXT_CONTROL_STATUSES[control.status];
+
+  const submit = async () => {
+    const v = await form.validateFields();
+    try {
+      await statusMut.mutateAsync({ status: v.status, reason: v.reason?.trim() || null });
+      message.success(`Control moved to ${CONTROL_STATUS_LABELS[v.status]}`);
+      onDone();
+    } catch (err) {
+      message.error(extractErr(err));
+    }
+  };
+
+  return (
+    <>
+      <p className="text-xs text-gray-500 mb-4 leading-relaxed">
+        Current status is{' '}
+        <span className="font-semibold text-gray-800">{CONTROL_STATUS_LABELS[control.status]}</span>. A
+        control must reach <span className="font-semibold text-gray-800">Implemented</span> before its
+        effectiveness can be verified.
+      </p>
+      <Form form={form} layout="vertical" requiredMark initialValues={{ status: options[0] }}>
+        <Form.Item name="status" label="New status" rules={[{ required: true }]}>
+          <AntSelect options={options.map((s) => ({ value: s, label: CONTROL_STATUS_LABELS[s] }))} />
+        </Form.Item>
+        <Form.Item name="reason" label="Reason" extra="Optional — stored on the audit trail.">
+          <AntInput.TextArea rows={3} placeholder="Why this transition" />
+        </Form.Item>
+      </Form>
+      <div className="flex justify-end gap-2">
+        <AntButton onClick={onDone}>Cancel</AntButton>
+        <AntButton type="primary" loading={statusMut.isPending} onClick={submit}>
+          Update status
         </AntButton>
       </div>
     </>
