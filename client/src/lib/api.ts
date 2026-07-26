@@ -21,6 +21,10 @@ api.interceptors.request.use((config) => {
   // Always advertise that we want JSON — some static hosts honour this and
   // return a proper error instead of rewriting to index.html.
   config.headers.Accept = 'application/json';
+  // The audit trail records the actor's local time alongside the DB clock
+  // (ALCOA+ "Contemporaneous"). The backend reads this header; without it the
+  // offset is never captured and the trail can't say what time the user saw.
+  config.headers['X-Client-Tz-Offset'] = String(new Date().getTimezoneOffset());
   return config;
 });
 

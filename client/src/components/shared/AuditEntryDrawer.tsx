@@ -87,9 +87,15 @@ export default function AuditEntryDrawer({ row, open, onClose }: Props) {
   if (!row) return <Drawer open={open} onClose={onClose} width={520} title="Audit entry" />;
 
   const when = new Date(row.created_at);
+  // `client_tz_offset_min` follows getTimezoneOffset() (UTC minus local), so the
+  // sign flips. Rendered as hh:mm because not every zone is a whole hour off.
   const tz =
     row.client_tz_offset_min != null
-      ? `UTC${row.client_tz_offset_min <= 0 ? '+' : '-'}${Math.abs(row.client_tz_offset_min) / 60}`
+      ? (() => {
+          const abs = Math.abs(row.client_tz_offset_min);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          return `UTC${row.client_tz_offset_min <= 0 ? '+' : '-'}${pad(Math.floor(abs / 60))}:${pad(abs % 60)}`;
+        })()
       : null;
   const diffText = prettyDiff(row.diff);
   const isFieldChange = row.field && row.field !== 'workflowEvent';
