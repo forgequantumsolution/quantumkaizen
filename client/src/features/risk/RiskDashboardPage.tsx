@@ -7,11 +7,16 @@
  * cells when the framework uses MATRIX_LOOKUP, otherwise the score band). No
  * number here is derived, estimated or filled in when data is missing — panels
  * with nothing to show say so.
+ *
+ * The scope bar at the top drives every panel: register, site and stage are
+ * passed to the heat map and summary, and register/site/window/closed-inclusion
+ * are passed to the three analytics endpoints. One filter set, one consistent
+ * page — no panel silently reports a different population than its neighbour.
  */
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Select as AntSelect } from 'antd';
+import { Select as AntSelect, Segmented, Switch, Tooltip as AntTooltip } from 'antd';
 import {
   ShieldAlert,
   AlertTriangle,
@@ -19,6 +24,10 @@ import {
   HelpCircle,
   ShieldCheck,
   ArrowRight,
+  Activity,
+  ClipboardCheck,
+  RotateCcw,
+  TrendingDown,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import {
@@ -27,60 +36,99 @@ import {
   useRiskHeatmap,
   useRiskRegisters,
   useRiskSummary,
-  type RiskFramework,
-  type RiskHeatmap,
+  RISK_STATUS_LABELS,
+  type RiskStatus,
 } from '@/lib/api/risk';
+import { useSites } from '@/lib/api/sites';
 import {
   ChartCard,
   EmptyChart,
   CategoryParetoChart,
   TrendLineChart,
+  DonutChart,
+  ScorecardTable,
   PALETTE,
+  type ScorecardColumn,
 } from '@/components/analytics';
 import { Card, KpiCard } from '@/components/ui';
 import { useHasPermission } from '@/stores/authStore';
+import RiskHeatMap, { resolveCellLevel } from './RiskHeatMap';
 
 // ── Analytics payloads served by /api/risk/analytics/* ──────────────────────
 // These endpoints are read-only projections used by this page alone, so their
 // shapes are declared here rather than widening the shared API client.
 
+interface CategoryRow {
+  category_id: string | null;
+  category_code: string | null;
+  category_name: string;
+  color: string | null;
+  risk_count: number;
+  avg_residual_score: number | null;
+  avg_initial_score: number | null;
+  max_residual_score: number | null;
+  share: number;
+  cumulative_share: number;
+}
+
 interface ByCategoryResponse {
   total: number;
-  categories: {
-    category_id: string | null;
-    category_name: string;
-    color: string | null;
-    risk_count: number;
-    avg_residual_score: number | null;
-    cumulative_share: number;
-  }[];
+  include_closed: boolean;
+  categories: CategoryRow[];
 }
 
 interface TrendResponse {
   months: string[];
-  series: { level_code: string; level_label: string; color: string | null; counts: number[] }[];
+  series: {
+    level_code: string;
+    level_label: string;
+    color: string | null;
+    counts: number[];
+    total: number;
+  }[];
   avg_residual: (number | null)[];
   scored_counts: number[];
   total_snapshots: number;
 }
 
+interface OverdueReviewRow {
+  id: string;
+  due_at: string;
+  days_overdue: number;
+  risk_id: string;
+  risk_number: string;
+  title: string;
+  status: string;
+  residual_score: number | null;
+  register: { id: string; register_number: string; name: string } | null;
+}
+
+interface OverdueControlRow {
+  id: string;
+  control_number: string;
+  title: string;
+  type: string;
+  hierarchy: string | null;
+  status: string;
+  owner_id: string | null;
+  due_date: string | null;
+  days_overdue: number;
+  risk_id: string;
+  risk_number: string;
+  risk_title: string;
+  register: { id: string; register_number: string; name: string } | null;
+}
+
 interface OverdueResponse {
-  overdue_reviews: {
-    id: string;
-    due_at: string;
-    days_overdue: number;
-    risk_id: string;
-    risk_number: string;
-    title: string;
-    status: string;
-    residual_score: number | null;
-    register: { id: string; register_number: string; name: string } | null;
-  }[];
+  overdue_reviews: OverdueReviewRow[];
+  overdue_controls: OverdueControlRow[];
   counts: {
     overdue_reviews: number;
     overdue_controls: number;
     risks_past_review_date: number;
+    overdue_controls_by_status: Record<string, number>;
     total: number;
+    truncated: boolean;
   };
 }
 
@@ -96,77 +144,82 @@ const monthLabel = (key: string) => {
 const fmtDate = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
-/**
- * The framework level a (rowRank, colRank) cell resolves to. Mirrors the
- * server's resolution order so the dashboard cannot show a colour the scoring
- * engine would disagree with: an explicit matrix cell wins, otherwise the score
- * the formula produces is matched against the level bands.
- */
-function resolveCellLevel(
-  framework: RiskFramework | undefined,
-  rowKey: string,
-  rowRank: number,
-  colKey: string,
-  colRank: number,
-) {
-  if (!framework) return null;
-  const cell = framework.matrix_cells?.find(
-    (c) =>
-      c.row_factor_key === rowKey &&
-      c.row_rank === rowRank &&
-      c.col_factor_key === colKey &&
-      c.col_rank === colRank,
-  );
-  if (cell) return framework.levels.find((l) => l.id === cell.level_id) ?? null;
-  if (framework.formula === 'MATRIX_LOOKUP') return null;
+/** Donut colours for the lifecycle statuses — mirrors riskStatusBadge's tones. */
+const STATUS_COLOR: Record<string, string> = {
+  IDENTIFIED: PALETTE.slate,
+  UNDER_ASSESSMENT: PALETTE.blue,
+  TREATMENT_PLANNED: PALETTE.indigo,
+  TREATMENT_IN_PROGRESS: PALETTE.amber,
+  RESIDUAL_ASSESSED: PALETTE.purple,
+  ACCEPTED: PALETTE.emerald,
+  MONITORED: PALETTE.cyan,
+  CLOSED: '#94A3B8',
+  REOPENED: '#F97316',
+  ESCALATED: PALETTE.bad,
+};
 
-  const score = framework.formula === 'SUM' ? rowRank + colRank : rowRank * colRank;
-  return (
-    framework.levels.find(
-      (l) =>
-        l.min_score != null &&
-        score >= l.min_score &&
-        (l.max_score == null || score <= l.max_score),
-    ) ?? null
-  );
-}
+const WINDOWS = [
+  { value: 6, label: '6 m' },
+  { value: 12, label: '12 m' },
+  { value: 24, label: '24 m' },
+];
 
 export default function RiskDashboardPage() {
   const nav = useNavigate();
   const canReadRegisters = useHasPermission('risk_register.read');
-  const [registerId, setRegisterId] = useState<string | undefined>(undefined);
-  const [stage, setStage] = useState<'INITIAL' | 'RESIDUAL'>('RESIDUAL');
 
-  const heatmapParams = { registerId, stage };
-  const { data: heatmap, isLoading: heatmapLoading, error: heatmapError } =
-    useRiskHeatmap(heatmapParams);
-  const { data: summary } = useRiskSummary({ registerId });
+  // ── Scope ────────────────────────────────────────────────────────────────
+  const [registerId, setRegisterId] = useState<string | undefined>();
+  const [siteId, setSiteId] = useState<string | undefined>();
+  const [stage, setStage] = useState<'INITIAL' | 'RESIDUAL'>('RESIDUAL');
+  const [months, setMonths] = useState(12);
+  const [includeClosed, setIncludeClosed] = useState(false);
+  const [attentionTab, setAttentionTab] = useState<'reviews' | 'controls'>('reviews');
+  /** Clicking a level in the distribution dims the other cells in the matrix. */
+  const [focusLevel, setFocusLevel] = useState<string | undefined>();
+
+  const scopeCount =
+    (registerId ? 1 : 0) + (siteId ? 1 : 0) + (includeClosed ? 1 : 0) + (months !== 12 ? 1 : 0);
+
+  const { data: heatmap, isLoading: heatmapLoading, error: heatmapError } = useRiskHeatmap({
+    registerId,
+    siteId,
+    stage,
+  });
+  const { data: summary } = useRiskSummary({ registerId, siteId });
   const { data: registerPage } = useRiskRegisters(
     canReadRegisters ? { isActive: true, page: 1, pageSize: 200 } : undefined,
   );
+  const { data: sitesResp } = useSites({ pageSize: 200 });
   const { data: framework } = useRiskFramework(heatmap?.framework?.id ?? '');
 
   const { data: byCategory } = useQuery({
-    queryKey: [...riskKeys.all, 'analytics', 'by-category', registerId ?? null],
+    queryKey: [...riskKeys.all, 'analytics', 'by-category', registerId ?? null, siteId ?? null, includeClosed],
     queryFn: () =>
       api
-        .get('/risk/analytics/by-category', { params: { registerId } })
+        .get('/risk/analytics/by-category', {
+          // Sent only when true: the endpoint coerces this param with
+          // z.coerce.boolean(), and Boolean("false") is true — so an explicit
+          // `false` would switch closed risks *on*. Same convention the controls
+          // page uses for `overdue`.
+          params: { registerId, siteId, ...(includeClosed ? { includeClosed: true } : {}) },
+        })
         .then((r) => r.data.data as ByCategoryResponse),
   });
 
   const { data: trend } = useQuery({
-    queryKey: [...riskKeys.all, 'analytics', 'trend', registerId ?? null],
+    queryKey: [...riskKeys.all, 'analytics', 'trend', registerId ?? null, siteId ?? null, months],
     queryFn: () =>
       api
-        .get('/risk/analytics/trend', { params: { registerId, months: 12 } })
+        .get('/risk/analytics/trend', { params: { registerId, siteId, months } })
         .then((r) => r.data.data as TrendResponse),
   });
 
   const { data: overdue } = useQuery({
-    queryKey: [...riskKeys.all, 'analytics', 'overdue', registerId ?? null],
+    queryKey: [...riskKeys.all, 'analytics', 'overdue', registerId ?? null, siteId ?? null],
     queryFn: () =>
       api
-        .get('/risk/analytics/overdue', { params: { registerId, limit: 10 } })
+        .get('/risk/analytics/overdue', { params: { registerId, siteId, limit: 10 } })
         .then((r) => r.data.data as OverdueResponse),
   });
 
@@ -175,6 +228,11 @@ export default function RiskDashboardPage() {
     for (const c of heatmap?.cells ?? []) map.set(`${c.row_rank}:${c.col_rank}`, c.count);
     return map;
   }, [heatmap]);
+
+  const countFor = useMemo(
+    () => (r: number, c: number) => cellIndex.get(`${r}:${c}`) ?? 0,
+    [cellIndex],
+  );
 
   const paretoData = useMemo(
     () =>
@@ -196,6 +254,106 @@ export default function RiskDashboardPage() {
     [trend],
   );
 
+  /**
+   * Per-level counts per month, from the trend endpoint's `series`. Stacked, this
+   * answers the question the average alone cannot: is the population shifting out
+   * of the high bands, or just growing?
+   */
+  const levelMixRows = useMemo(() => {
+    if (!trend) return [];
+    return trend.months.map((m, i) => {
+      const row: Record<string, string | number> = { month: monthLabel(m) };
+      for (const s of trend.series) row[s.level_code] = s.counts[i] ?? 0;
+      return row;
+    });
+  }, [trend]);
+
+  const levelMixSeries = useMemo(
+    () =>
+      (trend?.series ?? []).map((s, i) => ({
+        key: s.level_code,
+        name: s.level_label,
+        color: s.color ?? [PALETTE.emerald, PALETTE.amber, PALETTE.bad, PALETTE.purple, PALETTE.blue][i % 5],
+      })),
+    [trend],
+  );
+
+  const statusSlices = useMemo(() => {
+    const by = summary?.by_status ?? {};
+    return (Object.entries(by) as [RiskStatus, number][])
+      .filter(([, n]) => n > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([code, n]) => ({
+        name: RISK_STATUS_LABELS[code] ?? code.replace(/_/g, ' '),
+        value: n,
+        color: STATUS_COLOR[code] ?? PALETTE.slate,
+      }));
+  }, [summary]);
+
+  /**
+   * Control effect per category: the gap between the mean initial and mean
+   * residual score is what the treatment actually bought. Categories where the
+   * gap is zero are carrying untreated risk and belong at the top of the list.
+   */
+  const effectivenessRows = useMemo(() => {
+    return (byCategory?.categories ?? [])
+      .filter((c) => c.avg_initial_score != null && c.avg_residual_score != null)
+      .map((c) => {
+        const initial = c.avg_initial_score as number;
+        const residual = c.avg_residual_score as number;
+        const delta = Math.round((initial - residual) * 100) / 100;
+        return {
+          ...c,
+          initial,
+          residual,
+          delta,
+          reductionPct: initial > 0 ? Math.round((delta / initial) * 1000) / 10 : 0,
+        };
+      })
+      .sort((a, b) => a.reductionPct - b.reductionPct || b.risk_count - a.risk_count);
+  }, [byCategory]);
+
+  const effectivenessColumns = useMemo<ScorecardColumn<(typeof effectivenessRows)[number]>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Category',
+        render: (r) => (
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: r.color ?? PALETTE.slate }}
+            />
+            <span className="truncate">{r.category_name}</span>
+          </span>
+        ),
+      },
+      { key: 'n', header: 'Risks', align: 'right', render: (r) => r.risk_count },
+      { key: 'initial', header: 'Initial', align: 'right', render: (r) => r.initial.toFixed(1) },
+      { key: 'residual', header: 'Residual', align: 'right', render: (r) => r.residual.toFixed(1) },
+      {
+        key: 'delta',
+        header: 'Reduction',
+        align: 'right',
+        render: (r) => (
+          <span
+            className={
+              r.reductionPct <= 0
+                ? 'font-bold text-red-600'
+                : r.reductionPct < 25
+                  ? 'font-bold text-amber-600'
+                  : 'font-bold text-emerald-600'
+            }
+          >
+            {r.reductionPct > 0 ? '−' : ''}
+            {Math.abs(r.reductionPct).toFixed(0)}%
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   const openCell = (rowRank: number, colRank: number) => {
     if (!heatmap) return;
     const level = resolveCellLevel(
@@ -207,26 +365,45 @@ export default function RiskDashboardPage() {
     );
     const params = new URLSearchParams();
     if (registerId) params.set('registerId', registerId);
+    if (siteId) params.set('siteId', siteId);
     if (level) params.set('levelCode', level.code);
     nav(`/risk/risks${params.toString() ? `?${params.toString()}` : ''}`);
   };
 
   const registers = registerPage?.data ?? [];
+  const sites = sitesResp?.items ?? [];
   const byStatus = summary?.by_status ?? {};
+  const scoredPct =
+    summary && summary.total > 0
+      ? Math.round(((summary.total - summary.unscored) / summary.total) * 100)
+      : null;
+
+  const resetScope = () => {
+    setRegisterId(undefined);
+    setSiteId(undefined);
+    setMonths(12);
+    setIncludeClosed(false);
+  };
 
   return (
-    <div className="space-y-4">
-      {/* Scope controls. No page title/subtitle — the module layout above already
-          names the module and the active tab. */}
-      <div className="flex items-end justify-end gap-3 flex-wrap">
-        <div className="flex items-center gap-2">
+    <div className="space-y-3">
+      {/* ── Scope bar ─────────────────────────────────────────────────────────
+          One filter set for the whole page, in a card of its own so it reads as
+          chrome rather than as another panel. */}
+      <div className="rounded-xl border border-gray-200/80 bg-white px-3 py-2.5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-gray-400">
+            Scope
+          </span>
+
           {canReadRegisters && (
             <AntSelect
               allowClear
               showSearch
+              size="small"
               optionFilterProp="label"
               placeholder="All registers"
-              style={{ width: 240 }}
+              style={{ width: 230 }}
               value={registerId}
               onChange={(v) => setRegisterId(v ?? undefined)}
               options={registers.map((r) => ({
@@ -235,68 +412,125 @@ export default function RiskDashboardPage() {
               }))}
             />
           )}
+
           <AntSelect
-            style={{ width: 150 }}
+            allowClear
+            showSearch
+            size="small"
+            optionFilterProp="label"
+            placeholder="All sites"
+            style={{ width: 180 }}
+            value={siteId}
+            onChange={(v) => setSiteId(v ?? undefined)}
+            options={sites.map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }))}
+          />
+
+          <Segmented
+            size="small"
             value={stage}
-            onChange={(v) => setStage(v)}
+            onChange={(v) => setStage(v as 'INITIAL' | 'RESIDUAL')}
             options={[
-              { value: 'RESIDUAL', label: 'Residual risk' },
-              { value: 'INITIAL', label: 'Initial risk' },
+              { value: 'RESIDUAL', label: 'Residual' },
+              { value: 'INITIAL', label: 'Initial' },
             ]}
           />
+
+          <span className="ml-1 h-5 w-px bg-gray-200" />
+
+          <AntTooltip title="Window for the trend panels">
+            <Segmented
+              size="small"
+              value={months}
+              onChange={(v) => setMonths(v as number)}
+              options={WINDOWS}
+            />
+          </AntTooltip>
+
+          <AntTooltip title="Include closed risks in the category panels">
+            <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-gray-500">
+              <Switch size="small" checked={includeClosed} onChange={setIncludeClosed} />
+              Closed
+            </label>
+          </AntTooltip>
+
+          <div className="ml-auto flex items-center gap-2">
+            {scopeCount > 0 && (
+              <button
+                type="button"
+                onClick={resetScope}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+              >
+                <RotateCcw size={12} />
+                Reset ({scopeCount})
+              </button>
+            )}
+            {heatmap && (
+              <span className="text-[11px] text-gray-400">
+                {heatmap.framework.name}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* KPI tiles — server-computed counts only. Same stat strip the module
-          "My Tasks" tab uses, matching Controls and Reviews: equal-width cards
-          in a scrolling row, no subtitle footer, one compact height. */}
-      <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
-        <div className="flex-1 min-w-[168px]">
-          <KpiCard
-            icon={ShieldAlert}
-            label="Total risks"
-            value={summary?.total ?? '—'}
-            accent="blue"
-            onClick={() => nav('/risk/risks')}
-          />
-        </div>
-        <div className="flex-1 min-w-[168px]">
-          <KpiCard
-            icon={CalendarClock}
-            label="Overdue reviews"
-            value={summary?.overdue_reviews ?? '—'}
-            accent={summary && summary.overdue_reviews > 0 ? 'red' : 'emerald'}
-            onClick={() => nav('/risk/risks?overdueReview=true')}
-          />
-        </div>
-        <div className="flex-1 min-w-[168px]">
-          <KpiCard
-            icon={HelpCircle}
-            label="Unscored"
-            value={summary?.unscored ?? '—'}
-            accent={summary && summary.unscored > 0 ? 'amber' : 'slate'}
-            onClick={() => nav('/risk/risks')}
-          />
-        </div>
-        <div className="flex-1 min-w-[168px]">
-          <KpiCard
-            icon={ShieldCheck}
-            label="Accepted"
-            value={byStatus.ACCEPTED ?? 0}
-            accent="emerald"
-            onClick={() => nav('/risk/risks?status=ACCEPTED')}
-          />
-        </div>
+      {/* ── KPI strip ─────────────────────────────────────────────────────────
+          A responsive grid rather than a scrolling row: tiles wrap instead of
+          leaving a half-visible card at the edge, and every tile is the same
+          height because none of them carries a footer. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+        <KpiCard
+          icon={ShieldAlert}
+          label="Total risks"
+          value={summary?.total ?? '—'}
+          accent="blue"
+          onClick={() => nav('/risk/risks')}
+        />
+        <KpiCard
+          icon={CalendarClock}
+          label="Overdue reviews"
+          value={summary?.overdue_reviews ?? '—'}
+          accent={summary && summary.overdue_reviews > 0 ? 'red' : 'emerald'}
+          alert={!!summary && summary.overdue_reviews > 0}
+          onClick={() => nav('/risk/risks?overdueReview=true')}
+        />
+        <KpiCard
+          icon={ClipboardCheck}
+          label="Overdue controls"
+          value={overdue?.counts.overdue_controls ?? '—'}
+          accent={overdue && overdue.counts.overdue_controls > 0 ? 'red' : 'emerald'}
+          alert={!!overdue && overdue.counts.overdue_controls > 0}
+          onClick={() => nav('/risk/controls?overdue=true')}
+        />
+        <KpiCard
+          icon={HelpCircle}
+          label="Unscored"
+          value={summary?.unscored ?? '—'}
+          accent={summary && summary.unscored > 0 ? 'amber' : 'slate'}
+          onClick={() => nav('/risk/risks')}
+        />
+        <KpiCard
+          icon={TrendingDown}
+          label="Scored"
+          value={scoredPct == null ? '—' : `${scoredPct}%`}
+          accent={scoredPct != null && scoredPct >= 90 ? 'emerald' : 'amber'}
+        />
+        <KpiCard
+          icon={ShieldCheck}
+          label="Accepted"
+          value={byStatus.ACCEPTED ?? 0}
+          accent="emerald"
+          onClick={() => nav('/risk/risks?status=ACCEPTED')}
+        />
       </div>
 
-      {/* Heat map + level distribution */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+      {/* ── Matrix + level distribution ───────────────────────────────────── */}
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
         <ChartCard
           className="xl:col-span-2"
           title={`${stage === 'RESIDUAL' ? 'Residual' : 'Initial'} risk heat map`}
           subtitle={
             heatmap
-              ? `${heatmap.framework.name} · ${heatmap.total} risk(s), ${heatmap.unscored} unscored · click a cell to open the matching risks`
+              ? `${heatmap.total} risk(s) · ${heatmap.unscored} unscored · click a cell to open the matching risks`
               : 'Loading framework…'
           }
           accent={PALETTE.brand}
@@ -308,24 +542,25 @@ export default function RiskDashboardPage() {
           ) : !heatmap || heatmap.total === 0 ? (
             <EmptyChart label="No risks scored against this framework yet" height={280} />
           ) : (
-            <HeatMapGrid
+            <RiskHeatMap
               heatmap={heatmap}
               framework={framework}
-              countFor={(r, c) => cellIndex.get(`${r}:${c}`) ?? 0}
+              countFor={countFor}
               onCellClick={openCell}
+              {...(focusLevel ? { highlightLevelCode: focusLevel } : {})}
             />
           )}
         </ChartCard>
 
         <ChartCard
           title="Risks by level"
-          subtitle="Current level distribution"
+          subtitle="Hover to isolate the band in the matrix"
           accent={PALETTE.bad}
         >
           {!heatmap || Object.keys(heatmap.by_level).length === 0 ? (
             <EmptyChart label="No levels assigned yet" height={280} />
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5" onMouseLeave={() => setFocusLevel(undefined)}>
               {Object.entries(heatmap.by_level)
                 .sort((a, b) => b[1] - a[1])
                 .map(([code, count]) => {
@@ -335,20 +570,22 @@ export default function RiskDashboardPage() {
                     <button
                       key={code}
                       type="button"
+                      onMouseEnter={() => setFocusLevel(code)}
+                      onFocus={() => setFocusLevel(code)}
                       onClick={() =>
                         code !== 'UNSCORED' && nav(`/risk/risks?levelCode=${encodeURIComponent(code)}`)
                       }
-                      className="w-full text-left group"
+                      className="w-full rounded-md p-1 text-left transition-colors hover:bg-gray-50"
                     >
-                      <div className="flex items-center justify-between text-[11px] mb-1">
-                        <span className="font-medium text-gray-700">
+                      <div className="mb-1 flex items-center justify-between text-[11px]">
+                        <span className="truncate font-medium text-gray-700">
                           {def?.label ?? code.replace(/_/g, ' ')}
                         </span>
-                        <span className="tabular-nums text-gray-500">
-                          {count} · {pct.toFixed(0)}%
+                        <span className="shrink-0 tabular-nums text-gray-500">
+                          <span className="font-bold text-gray-800">{count}</span> · {pct.toFixed(0)}%
                         </span>
                       </div>
-                      <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="h-2 overflow-hidden rounded-full bg-gray-100">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
@@ -365,11 +602,41 @@ export default function RiskDashboardPage() {
         </ChartCard>
       </div>
 
-      {/* Pareto + trend */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+      {/* ── Movement over time + lifecycle mix ───────────────────────────── */}
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+        <ChartCard
+          className="xl:col-span-2"
+          title="Level mix over time"
+          subtitle={`Snapshots per severity band, last ${months} months`}
+          accent={PALETTE.amber}
+        >
+          {levelMixSeries.length === 0 ? (
+            <EmptyChart label="No scoring snapshots in this window" height={272} />
+          ) : (
+            <TrendLineChart
+              data={levelMixRows}
+              xKey="month"
+              series={levelMixSeries}
+              stacked
+              emptyLabel="No scoring snapshots in this window"
+            />
+          )}
+        </ChartCard>
+
+        <ChartCard title="Lifecycle position" subtitle="Risks by status" accent={PALETTE.cyan}>
+          <DonutChart
+            data={statusSlices}
+            centerLabel="Risks"
+            emptyLabel="No risks yet"
+            height={272}
+          />
+        </ChartCard>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
         <ChartCard
           title="Risks by category"
-          subtitle="Ranked with cumulative share (Pareto)"
+          subtitle={`Ranked with cumulative share (Pareto)${includeClosed ? ' · closed included' : ''}`}
           accent={PALETTE.blue}
         >
           <CategoryParetoChart
@@ -381,7 +648,7 @@ export default function RiskDashboardPage() {
 
         <ChartCard
           title="Residual score movement"
-          subtitle="From immutable score snapshots, last 12 months"
+          subtitle={`From immutable score snapshots, last ${months} months`}
           accent={PALETTE.purple}
         >
           <TrendLineChart
@@ -396,169 +663,171 @@ export default function RiskDashboardPage() {
         </ChartCard>
       </div>
 
-      {/* Overdue reviews */}
+      {/* ── Control effect ───────────────────────────────────────────────────
+          Not a restatement of the Pareto: this ranks by how little the treatment
+          moved the score, which is the opposite end of the list from "most
+          risks". Weakest reduction first. */}
+      <ChartCard
+        title="Treatment effect by category"
+        subtitle="Mean initial vs mean residual score — weakest reduction first"
+        accent={PALETTE.rose}
+      >
+        {effectivenessRows.length === 0 ? (
+          <EmptyChart
+            label="No category has both an initial and a residual score yet"
+            height={200}
+          />
+        ) : (
+          <ScorecardTable
+            rows={effectivenessRows}
+            columns={effectivenessColumns}
+            rowKey={(r) => r.category_id ?? r.category_name}
+            height={240}
+          />
+        )}
+      </ChartCard>
+
+      {/* ── Attention queue ──────────────────────────────────────────────────
+          Reviews and controls are two different backlogs with two different
+          owners, so they get a tab each rather than one merged list. Both counts
+          are the server's unbounded totals; the rows are the capped top 10. */}
       <Card noPadding>
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <AlertTriangle size={15} className="text-red-500" />
-            <h3 className="text-sm font-semibold text-gray-900">Overdue periodic reviews</h3>
-            {overdue && overdue.counts.overdue_reviews > 0 && (
-              <span className="inline-flex items-center rounded-full bg-red-50 text-red-600 text-[10px] font-semibold px-2 py-0.5">
-                {overdue.counts.overdue_reviews}
-              </span>
-            )}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-2.5">
+          <div className="flex items-center gap-1">
+            <AlertTriangle size={15} className="mr-1.5 text-red-500" />
+            {(
+              [
+                ['reviews', 'Overdue reviews', overdue?.counts.overdue_reviews],
+                ['controls', 'Overdue controls', overdue?.counts.overdue_controls],
+              ] as const
+            ).map(([key, label, count]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setAttentionTab(key)}
+                className={
+                  attentionTab === key
+                    ? 'inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-2.5 py-1.5 text-[13px] font-semibold text-gray-900'
+                    : 'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-gray-500 hover:bg-gray-50 hover:text-gray-800'
+                }
+              >
+                {label}
+                {!!count && count > 0 && (
+                  <span className="inline-flex items-center rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-red-600">
+                    {count}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
           <button
             type="button"
-            onClick={() => nav('/risk/reviews?overdue=true')}
+            onClick={() =>
+              nav(attentionTab === 'reviews' ? '/risk/reviews?overdue=true' : '/risk/controls?overdue=true')
+            }
             className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
           >
-            Review queue <ArrowRight size={13} />
+            {attentionTab === 'reviews' ? 'Review queue' : 'Control queue'} <ArrowRight size={13} />
           </button>
         </div>
 
         {!overdue ? (
           <p className="px-5 py-8 text-center text-xs text-gray-400">Loading…</p>
-        ) : overdue.overdue_reviews.length === 0 ? (
-          <p className="px-5 py-8 text-center text-xs text-gray-400">
-            No review is past its due date.
-          </p>
+        ) : attentionTab === 'reviews' ? (
+          <OverdueTable
+            emptyLabel="No review is past its due date."
+            headers={['Risk', 'Title', 'Register', 'Due', 'Days overdue']}
+            rows={overdue.overdue_reviews.map((r) => ({
+              key: r.id,
+              onClick: () => nav(`/risk/risks/${r.risk_id}`),
+              cells: [
+                <span className="font-mono text-xs text-blue-700">{r.risk_number}</span>,
+                <span className="block max-w-[280px] truncate text-xs text-gray-800">{r.title}</span>,
+                <span className="text-xs text-gray-500">{r.register?.name ?? '—'}</span>,
+                <span className="text-xs text-gray-500">{fmtDate(r.due_at)}</span>,
+                <span className="text-xs font-semibold tabular-nums text-red-600">
+                  {r.days_overdue}
+                </span>,
+              ],
+            }))}
+          />
         ) : (
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50/60">
-                {['Risk', 'Title', 'Register', 'Due', 'Days overdue'].map((h) => (
-                  <th
-                    key={h}
-                    className="px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {overdue.overdue_reviews.map((r) => (
-                <tr
-                  key={r.id}
-                  onClick={() => nav(`/risk/risks/${r.risk_id}`)}
-                  className="border-b border-gray-50 last:border-0 cursor-pointer hover:bg-blue-50/60"
-                >
-                  <td className="px-5 py-2.5 text-xs font-mono text-blue-700">{r.risk_number}</td>
-                  <td className="px-5 py-2.5 text-xs text-gray-800 max-w-[280px] truncate">
-                    {r.title}
-                  </td>
-                  <td className="px-5 py-2.5 text-xs text-gray-500">{r.register?.name ?? '—'}</td>
-                  <td className="px-5 py-2.5 text-xs text-gray-500">{fmtDate(r.due_at)}</td>
-                  <td className="px-5 py-2.5 text-xs font-semibold text-red-600 tabular-nums">
-                    {r.days_overdue}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <OverdueTable
+            emptyLabel="No control is past its due date."
+            headers={['Control', 'Title', 'Parent risk', 'Due', 'Days overdue']}
+            rows={overdue.overdue_controls.map((c) => ({
+              key: c.id,
+              onClick: () => nav(`/risk/risks/${c.risk_id}`),
+              cells: [
+                <span className="font-mono text-xs text-blue-700">{c.control_number}</span>,
+                <span className="block max-w-[280px] truncate text-xs text-gray-800">{c.title}</span>,
+                <span className="block max-w-[220px] truncate text-xs text-gray-500">
+                  {c.risk_number} — {c.risk_title}
+                </span>,
+                <span className="text-xs text-gray-500">{fmtDate(c.due_date)}</span>,
+                <span className="text-xs font-semibold tabular-nums text-red-600">
+                  {c.days_overdue}
+                </span>,
+              ],
+            }))}
+          />
+        )}
+
+        {overdue?.counts.truncated && (
+          <p className="border-t border-gray-50 px-5 py-2 text-[11px] text-gray-400">
+            <Activity size={11} className="mr-1 inline" />
+            Showing the 10 most overdue of {overdue.counts.total}. Open the queue for the full list.
+          </p>
         )}
       </Card>
     </div>
   );
 }
 
-/**
- * The interactive matrix. Rows run highest-rank-first so the grid reads like the
- * printed matrices in ICH Q9 / ISO 14971 annexes, where the worst outcome sits
- * at the top-left.
- */
-function HeatMapGrid({
-  heatmap,
-  framework,
-  countFor,
-  onCellClick,
+/** Shared shell for the two attention tables so both tabs render identically. */
+function OverdueTable({
+  headers,
+  rows,
+  emptyLabel,
 }: {
-  heatmap: RiskHeatmap;
-  framework: RiskFramework | undefined;
-  countFor: (rowRank: number, colRank: number) => number;
-  onCellClick: (rowRank: number, colRank: number) => void;
+  headers: string[];
+  rows: { key: string; onClick: () => void; cells: ReactNode[] }[];
+  emptyLabel: string;
 }) {
-  const rows = [...heatmap.axes.row.levels].sort((a, b) => b.rank - a.rank);
-  const cols = [...heatmap.axes.col.levels].sort((a, b) => a.rank - b.rank);
-
+  if (rows.length === 0) {
+    return <p className="px-5 py-8 text-center text-xs text-gray-400">{emptyLabel}</p>;
+  }
   return (
     <div className="overflow-x-auto">
-      <table className="border-separate" style={{ borderSpacing: 4 }}>
+      <table className="w-full text-left">
         <thead>
-          <tr>
-            <th className="text-[10px] font-medium text-gray-400 text-right pr-2 align-bottom whitespace-nowrap">
-              {heatmap.axes.row.label} \ {heatmap.axes.col.label}
-            </th>
-            {cols.map((c) => (
+          <tr className="border-b border-gray-100 bg-gray-50/60">
+            {headers.map((h) => (
               <th
-                key={c.rank}
-                className="text-[10px] font-medium text-gray-500 px-1 pb-1 text-center"
-                style={{ minWidth: 74, maxWidth: 110 }}
+                key={h}
+                className="px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500"
               >
-                <span className="block truncate" title={`${c.rank} — ${c.label}`}>
-                  {c.rank}. {c.label}
-                </span>
+                {h}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.rank}>
-              <td
-                className="text-[10px] font-medium text-gray-500 text-right pr-2 whitespace-nowrap max-w-[150px] truncate"
-                title={`${r.rank} — ${r.label}`}
-              >
-                {r.rank}. {r.label}
-              </td>
-              {cols.map((c) => {
-                const count = countFor(r.rank, c.rank);
-                const level = resolveCellLevel(
-                  framework,
-                  heatmap.axes.row.key,
-                  r.rank,
-                  heatmap.axes.col.key,
-                  c.rank,
-                );
-                const bg = level?.color ?? '#E2E8F0';
-                return (
-                  <td key={c.rank} className="p-0">
-                    <button
-                      type="button"
-                      onClick={() => onCellClick(r.rank, c.rank)}
-                      title={`${r.label} × ${c.label}${level ? ` · ${level.label}` : ''} — ${count} risk(s)`}
-                      className="w-full h-11 rounded-md flex items-center justify-center transition-all hover:ring-2 hover:ring-offset-1 hover:ring-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{
-                        backgroundColor: count > 0 ? bg : `${bg}33`,
-                        color: count > 0 ? '#fff' : '#94A3B8',
-                      }}
-                    >
-                      <span className="text-[13px] font-bold tabular-nums">
-                        {count > 0 ? count : ''}
-                      </span>
-                    </button>
-                  </td>
-                );
-              })}
+            <tr
+              key={r.key}
+              onClick={r.onClick}
+              className="cursor-pointer border-b border-gray-50 last:border-0 hover:bg-blue-50/60"
+            >
+              {r.cells.map((c, i) => (
+                <td key={i} className="px-5 py-2.5">
+                  {c}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
       </table>
-
-      {framework && framework.levels.length > 0 && (
-        <div className="flex items-center gap-3 flex-wrap mt-3 pl-1">
-          {framework.levels.map((l) => (
-            <span key={l.id} className="inline-flex items-center gap-1.5 text-[10px] text-gray-500">
-              <span
-                className="w-2.5 h-2.5 rounded-sm"
-                style={{ backgroundColor: l.color }}
-              />
-              {l.label}
-            </span>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

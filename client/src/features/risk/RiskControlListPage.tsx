@@ -54,6 +54,25 @@ const SORTS = [
   { value: 'controlNumber', label: 'Control number' },
 ] as const;
 
+/**
+ * Due-date presets. The API filters on `dueBefore` only, so every preset is
+ * expressed as one horizon — there is deliberately no "next 30 days *excluding*
+ * overdue" preset, because the endpoint cannot express a lower bound and a
+ * client-side trim would silently disagree with the row count.
+ */
+const DUE_HORIZONS = [
+  { value: '7', label: 'Due within 7 days' },
+  { value: '30', label: 'Due within 30 days' },
+  { value: '90', label: 'Due within 90 days' },
+] as const;
+
+const horizonToIso = (days: string) => {
+  const d = new Date();
+  d.setDate(d.getDate() + Number(days));
+  d.setHours(23, 59, 59, 999);
+  return d.toISOString();
+};
+
 const fmtDate = (iso: string | null | undefined) =>
   iso
     ? new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
