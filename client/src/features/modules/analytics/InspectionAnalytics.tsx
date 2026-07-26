@@ -6,7 +6,7 @@
  * hardcoded and sparse data falls back to honest empty states (spec §9/§11).
  *
  * Matches the look & feel of ModuleDashboard: an antd filter bar (options
- * derived from these records), a StatTile strip, and a two-column ChartCard grid.
+ * derived from these records), a KpiCard strip, and a two-column ChartCard grid.
  */
 import { useMemo } from 'react';
 import {
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import {
   ChartCard,
-  StatTile,
   ComplianceGauge,
   TrendLineChart,
   DonutChart,
@@ -35,11 +34,13 @@ import {
   closureRate,
   PALETTE,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 import type { ModuleAnalyticsProps } from './types';
-import { useTicketFilters } from './useTicketFilters';
 
 export default function InspectionAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
@@ -80,16 +81,13 @@ export default function InspectionAnalytics({ tickets, onDrill }: ModuleAnalytic
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover */}
-      {toolbar}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile tone="blue" icon={<CalendarClock size={16} />} label="Scheduled" value={m.scheduled} hint="Total inspections" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="emerald" icon={<CheckCircle2 size={16} />} label="Completed" value={m.completed} hint="Closed" onClick={onDrill && (() => onDrill('completed'))} />
-        <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue" value={m.overdue} hint="Open & past due" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile tone="amber" icon={<ClipboardList size={16} />} label="Findings" value={m.findings} hint="Open items" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="purple" icon={<ShieldCheck size={16} />} label="Compliance" value={`${m.compliance}%`} hint="Completed / total" onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="blue" icon={CalendarClock} label="Scheduled" value={m.scheduled} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="Completed" value={m.completed} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="amber" icon={ClipboardList} label="Findings" value={m.findings} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="purple" icon={ShieldCheck} label="Compliance" value={`${m.compliance}%`} onClick={onDrill && (() => onDrill('completed'))} />
       </div>
 
       {/* Chart grid */}

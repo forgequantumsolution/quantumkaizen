@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { App } from 'antd';
+import { App, Drawer } from 'antd';
 import {
   Plus,
   Search,
@@ -309,6 +309,20 @@ export default function ModulePage({
     return list;
   }, [allTickets, tab, activeKpi, search, priorityId, workflowFilterId, statusView, user, bookmarks, isWorkspaceWideViewer]);
 
+  // What the Overview analytics panel sees. The panels used to render their own
+  // Filter popover, which meant two Filter buttons on screen at once; that one
+  // is gone, so the header Filter has to reach the Overview tab as well. Only
+  // the header's own filter dimensions apply — the tab/KPI/search narrowing is
+  // for the table and would silently distort the analytics.
+  const analyticsTickets = useMemo(() => {
+    let list = allTickets;
+    if (priorityId) list = list.filter((t) => t.priority?.id === priorityId);
+    if (workflowFilterId) {
+      list = list.filter((t) => t.flows.some((f) => f.workflowId === workflowFilterId));
+    }
+    return list;
+  }, [allTickets, priorityId, workflowFilterId]);
+
   // Paginate the visible table (10 / page). The KPI counts still come from the
   // full `allTickets` set, so they stay accurate regardless of the page shown.
   const TABLE_PAGE_SIZE = 10;
@@ -400,35 +414,15 @@ export default function ModulePage({
   // Overview analytics panel, so they're no longer duplicated here.
   const hiddenKpiCount = Math.max(0, KPI_DEFS.length - 4);
 
-  // Download + Customize Columns — shown on its own row on the full page, but
-  // tucked to the right of the header row when embedded (Audit My Workspace).
+  // Download and column visibility used to be two buttons on a row of their own
+  // below the KPI strip. They are one "Table options" button in the header row
+  // now, opening a drawer — same two jobs, but they no longer cost a whole row
+  // of vertical space above the table they act on.
   const tableToolbar = (
-    <>
-      <Button variant="outline" size="sm" onClick={handleDownload}>
-        <Download size={14} />
-        <span className="ml-1.5">Download</span>
-      </Button>
-      <div className="relative">
-        <Button variant="outline" size="sm" onClick={() => setColumnsOpen((v) => !v)}>
-          <Settings2 size={14} />
-          <span className="ml-1.5">Customize Columns</span>
-        </Button>
-        {columnsOpen && (
-          <ColumnsPopover
-            visible={visibleCols}
-            onToggle={(id) => {
-              setVisibleCols((s) => {
-                const next = new Set(s);
-                if (next.has(id)) next.delete(id);
-                else next.add(id);
-                return next;
-              });
-            }}
-            onClose={() => setColumnsOpen(false)}
-          />
-        )}
-      </div>
-    </>
+    <Button variant="outline" size="sm" onClick={() => setColumnsOpen(true)}>
+      <Settings2 size={14} />
+      <span className="ml-1.5">Table options</span>
+    </Button>
   );
 
   // Shared controls reused by both the embedded compact bar and the full hero.
@@ -525,6 +519,8 @@ export default function ModulePage({
               <div className="flex items-center gap-2 flex-wrap justify-end">
                 {searchField}
                 {filterButton}
+                {/* Table options only makes sense where the table is. */}
+                {tab === 'workspace' && tableToolbar}
                 <Button
                   variant="outline"
                   size="sm"
@@ -564,7 +560,7 @@ export default function ModulePage({
       {/* ── Overview tab: purely the module analytics panel ─────────────── */}
       {tab === 'dashboard' && (
         <div className="mt-4">
-          <ModuleAnalytics tickets={allTickets} moduleName={moduleName} onDrill={handleDrill} />
+          <ModuleAnalytics tickets={analyticsTickets} moduleName={moduleName} onDrill={handleDrill} />
         </div>
       )}
 
@@ -607,13 +603,20 @@ export default function ModulePage({
         </div>
       )}
 
-      {/* ── Toolbar (Download + Customize Columns) — own row on the full page;
-           embedded mode renders these in the header row above instead. ──── */}
-      {!embedded && tab === 'workspace' && (
-        <div className="mt-4 flex items-center justify-end gap-2 flex-wrap">
-          {tableToolbar}
-        </div>
-      )}
+      <TableOptionsDrawer
+        open={columnsOpen}
+        visible={visibleCols}
+        onDownload={handleDownload}
+        onToggle={(id) => {
+          setVisibleCols((s) => {
+            const next = new Set(s);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          });
+        }}
+        onClose={() => setColumnsOpen(false)}
+      />
 
       <Modal
         isOpen={filterOpen}
@@ -829,43 +832,78 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
   );
 }
 
-interface ColumnsPopoverProps {
+interface TableOptionsDrawerProps {
+  open: boolean;
   visible: Set<string>;
   onToggle: (id: string) => void;
+  onDownload: () => void;
   onClose: () => void;
 }
 
-function ColumnsPopover({ visible, onToggle, onClose }: ColumnsPopoverProps) {
+/**
+ * Everything that acts on the table itself — export it, choose its columns —
+ * behind the one "Table options" button. Was a bare Download button plus a
+ * column popover on a dedicated row; both moved in here so the header row owns
+ * every control and the table starts higher up the page.
+ */
+function TableOptionsDrawer({
+  open,
+  visible,
+  onToggle,
+  onDownload,
+  onClose,
+}: TableOptionsDrawerProps) {
   return (
-    <>
-      <div className="fixed inset-0 z-10" onClick={onClose} />
-      <div className="absolute right-0 top-full mt-1 z-20 w-56 bg-white rounded-lg shadow-lg border border-gray-200 p-2">
-        <div className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide px-2 py-1">
-          Columns
+    <Drawer
+      open={open}
+      onClose={onClose}
+      width={340}
+      title={
+        <span className="inline-flex items-center gap-2">
+          <Settings2 size={16} />
+          Table options
+        </span>
+      }
+    >
+      <div className="space-y-5">
+        <div>
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Export
+          </p>
+          <Button variant="outline" size="sm" onClick={onDownload} className="!w-full">
+            <Download size={14} />
+            <span className="ml-1.5">Download CSV</span>
+          </Button>
         </div>
-        {COLUMN_CONFIG.map((c) => {
-          const isVisible = visible.has(c.id);
-          return (
-            <label
-              key={c.id}
-              className={cn(
-                'flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer',
-                c.required ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50',
-              )}
-            >
-              <input
-                type="checkbox"
-                checked={isVisible}
-                disabled={c.required}
-                onChange={() => onToggle(c.id)}
-                className="rounded"
-              />
-              <span className="text-gray-700">{c.label}</span>
-            </label>
-          );
-        })}
+
+        <div>
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            Columns
+          </p>
+          {COLUMN_CONFIG.map((c) => {
+            const isVisible = visible.has(c.id);
+            return (
+              <label
+                key={c.id}
+                className={cn(
+                  'flex items-center gap-2 px-2 py-1.5 rounded text-sm cursor-pointer',
+                  c.required ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50',
+                )}
+              >
+                <input
+                  type="checkbox"
+                  checked={isVisible}
+                  disabled={c.required}
+                  onChange={() => onToggle(c.id)}
+                  className="rounded"
+                />
+                <span className="text-gray-700">{c.label}</span>
+              </label>
+            );
+          })}
+        </div>
       </div>
-    </>
+    </Drawer>
   );
 }
 

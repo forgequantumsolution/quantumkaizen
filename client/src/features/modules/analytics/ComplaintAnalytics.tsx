@@ -12,16 +12,18 @@ import type { TicketSummary } from '@/lib/api/ticket';
 import {
   isClosed, isOverdue, countBy, monthlyCount, openClosedTrend,
   onTimeClosureRate, closureRate, avgCycleDays,
-  ChartCard, StatTile,
+  ChartCard,
   TrendLineChart, DonutChart, ComplianceGauge, CategoryParetoChart, CalendarList,
   type Slice, type CalendarEntry,
 } from '@/components/analytics';
-import { useTicketFilters } from './useTicketFilters';
+import { KpiCard } from '@/components/ui';
 
 const REPORTABLE = /report|regulator/i;
 
 export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   const k = useMemo(() => {
     const open = filtered.filter((t) => !isClosed(t));
@@ -67,16 +69,13 @@ export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalytics
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover */}
-      {toolbar}
-
       {/* Top KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile icon={<Activity size={16} />} label="Active" value={k.active} tone="blue" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile icon={<AlertTriangle size={16} />} label="Overdue" value={k.overdue} tone="red" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile icon={<Timer size={16} />} label="Avg cycle" value={`${k.cycle}d`} tone="amber" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile icon={<CheckCircle2 size={16} />} label="Closure" value={`${k.closure}%`} tone="emerald" onClick={onDrill && (() => onDrill('completed'))} />
-        <StatTile icon={<Megaphone size={16} />} label="Reportable" value={k.reportable} tone="purple" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard icon={Activity} label="Active" value={k.active} accent="blue" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard icon={AlertTriangle} label="Overdue" value={k.overdue} accent="red" onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard icon={Timer} label="Avg cycle" value={`${k.cycle}d`} accent="amber" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard icon={CheckCircle2} label="Closure" value={`${k.closure}%`} accent="emerald" onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard icon={Megaphone} label="Reportable" value={k.reportable} accent="purple" onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

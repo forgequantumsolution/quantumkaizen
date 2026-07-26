@@ -14,7 +14,7 @@ import {
   Tooltip,
   message,
 } from 'antd';
-import { Plus, Search, Download, Trash2, Eye, AlertTriangle } from 'lucide-react';
+import { Plus, Download, Trash2, Eye, AlertTriangle } from 'lucide-react';
 import { DataTable, type Column } from '@/components/ui';
 import { exportToCSV } from '@/lib/export';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -32,6 +32,7 @@ import {
   type Risk,
 } from '@/lib/api/risk';
 import { RiskStatusBadge, RiskLevelBadge } from './riskStatusBadge';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 
 const PAGE_SIZE = 15;
 
@@ -145,6 +146,14 @@ export default function RiskListPage() {
   const rows = data?.data ?? [];
   const total = data?.total ?? rows.length;
   const registers = registerPage?.data ?? [];
+
+  // Search sits in the bar itself and sort is not a filter, so neither counts.
+  const activeFilterCount =
+    (status ? 1 : 0) +
+    (registerId ? 1 : 0) +
+    (categoryId ? 1 : 0) +
+    (levelCode ? 1 : 0) +
+    (overdueReview ? 1 : 0);
 
   // Every distinct level configured across the active frameworks — the filter
   // works on level *code*, which is what the API accepts.
@@ -321,82 +330,91 @@ export default function RiskListPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Risk register</h2>
-          <p className="text-xs text-gray-500">
-            {total} risk{total === 1 ? '' : 's'} matching the current filters
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AntInput
-            allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="Search risk #, title or hazard"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 250 }}
-          />
-          <AntButton icon={<Download size={14} />} onClick={handleExport}>
-            Export CSV
-          </AntButton>
-          {canCreate && (
-            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
-              New risk
+      {/* Toolbar first, then the table — the filters scope what is listed. */}
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search risk #, title or hazard"
+        title="Filter risks"
+        activeCount={activeFilterCount}
+        onClear={() => {
+          setStatus(undefined);
+          setRegisterId(undefined);
+          setCategoryId(undefined);
+          setLevelCode(undefined);
+          setOverdueReview(false);
+        }}
+        actions={
+          <>
+            <AntButton icon={<Download size={14} />} onClick={handleExport}>
+              Export CSV
             </AntButton>
-          )}
-        </div>
-      </div>
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap mb-4 p-2.5 rounded-xl bg-gray-50 border border-gray-200/70">
-        <AntSelect
-          allowClear
-          placeholder="All statuses"
-          style={{ width: 190 }}
-          value={status}
-          onChange={(v) => setStatus(v ?? undefined)}
-          options={RISK_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
-        />
-        <AntSelect
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="All registers"
-          style={{ width: 220 }}
-          value={registerId}
-          onChange={(v) => setRegisterId(v ?? undefined)}
-          options={registers.map((r) => ({ value: r.id, label: r.name }))}
-        />
-        <AntSelect
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="All categories"
-          style={{ width: 190 }}
-          value={categoryId}
-          onChange={(v) => setCategoryId(v ?? undefined)}
-          options={categories.map((c) => ({ value: c.id, label: c.name }))}
-        />
-        <AntSelect
-          allowClear
-          placeholder="All levels"
-          style={{ width: 160 }}
-          value={levelCode}
-          onChange={(v) => setLevelCode(v ?? undefined)}
-          options={levelOptions}
-        />
-        <AntButton
-          type={overdueReview ? 'primary' : 'default'}
-          danger={overdueReview}
-          icon={<AlertTriangle size={14} />}
-          onClick={() => setOverdueReview((v) => !v)}
-        >
-          Review overdue
-        </AntButton>
-        <div className="ml-auto flex items-center gap-2">
+            {canCreate && (
+              <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
+                New risk
+              </AntButton>
+            )}
+          </>
+        }
+      >
+        <FilterField label="Status">
           <AntSelect
-            style={{ width: 200 }}
+            allowClear
+            placeholder="All statuses"
+            style={{ width: '100%' }}
+            value={status}
+            onChange={(v) => setStatus(v ?? undefined)}
+            options={RISK_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
+          />
+        </FilterField>
+        <FilterField label="Register">
+          <AntSelect
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="All registers"
+            style={{ width: '100%' }}
+            value={registerId}
+            onChange={(v) => setRegisterId(v ?? undefined)}
+            options={registers.map((r) => ({ value: r.id, label: r.name }))}
+          />
+        </FilterField>
+        <FilterField label="Category">
+          <AntSelect
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="All categories"
+            style={{ width: '100%' }}
+            value={categoryId}
+            onChange={(v) => setCategoryId(v ?? undefined)}
+            options={categories.map((c) => ({ value: c.id, label: c.name }))}
+          />
+        </FilterField>
+        <FilterField label="Risk level">
+          <AntSelect
+            allowClear
+            placeholder="All levels"
+            style={{ width: '100%' }}
+            value={levelCode}
+            onChange={(v) => setLevelCode(v ?? undefined)}
+            options={levelOptions}
+          />
+        </FilterField>
+        <FilterField label="Review state">
+          <AntButton
+            block
+            type={overdueReview ? 'primary' : 'default'}
+            danger={overdueReview}
+            icon={<AlertTriangle size={14} />}
+            onClick={() => setOverdueReview((v) => !v)}
+          >
+            Review overdue
+          </AntButton>
+        </FilterField>
+        <FilterField label="Sort by">
+          <AntSelect
+            style={{ width: '100%' }}
             value={sortBy}
             onChange={(v) => {
               setSortBy(v);
@@ -404,8 +422,8 @@ export default function RiskListPage() {
             }}
             options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
           />
-        </div>
-      </div>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

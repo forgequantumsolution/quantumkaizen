@@ -6,7 +6,7 @@
  * hardcoded and sparse data falls back to honest empty states (spec §9/§11).
  *
  * Matches the look & feel of ModuleDashboard: an antd filter bar (options
- * derived from these records), a StatTile strip, and a two-column ChartCard grid.
+ * derived from these records), a KpiCard strip, and a two-column ChartCard grid.
  */
 import { useMemo } from 'react';
 import {
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import {
   ChartCard,
-  StatTile,
   ComplianceGauge,
   AgingBucketChart,
   TrendLineChart,
@@ -36,9 +35,9 @@ import {
   monthlyCount,
   type CalendarEntry,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 import type { TicketSummary } from '@/lib/api/ticket';
 import type { ModuleAnalyticsProps } from './types';
-import { useTicketFilters } from './useTicketFilters';
 
 /** Out-of-tolerance signal: title or severity flags OOT / tolerance. */
 const OOT_RE = /oot|toleran/i;
@@ -50,7 +49,9 @@ const OOT_DEV_RE = /oot|deviation/i;
 const CRIT_RE = /crit|high/i;
 
 export default function CalibrationAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
@@ -90,16 +91,13 @@ export default function CalibrationAnalytics({ tickets, onDrill }: ModuleAnalyti
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover */}
-      {toolbar}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile tone="blue" icon={<ClipboardList size={16} />} label="Total" value={m.total} hint="Calibration records" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile tone="emerald" icon={<CheckCircle2 size={16} />} label="Compliant" value={`${m.compliance}%`} hint="On-time calibration" onClick={onDrill && (() => onDrill('completed'))} />
-        <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue" value={m.overdue} hint="Open & past due" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile tone="amber" icon={<CalendarClock size={16} />} label="Due (30d)" value={m.due30} hint="Open due within 30d" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile tone="purple" icon={<Ruler size={16} />} label="OOT" value={m.ootCount} hint="Out-of-tolerance" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="blue" icon={ClipboardList} label="Total" value={m.total} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="Compliant" value={`${m.compliance}%`} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="amber" icon={CalendarClock} label="Due (30d)" value={m.due30} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="purple" icon={Ruler} label="OOT" value={m.ootCount} onClick={onDrill && (() => onDrill('open'))} />
       </div>
 
       {/* Chart grid */}

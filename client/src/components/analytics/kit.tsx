@@ -11,7 +11,7 @@
  * data-integrity requirement).
  */
 import type { ReactNode } from 'react';
-import { ClipboardList, ArrowUpRight } from 'lucide-react';
+import { ClipboardList } from 'lucide-react';
 
 /** Brand palette — amber/gold accent with consistent semantic colours.
  * Keep green/amber/red meaning stable across every module (spec §8). */
@@ -125,80 +125,9 @@ export function EmptyChart({
   );
 }
 
-export type StatTone = 'blue' | 'emerald' | 'red' | 'amber' | 'purple' | 'slate';
-
-interface ToneStyle {
-  /** Top accent bar. */ bar: string;
-  /** Icon chip bg + fg. */ chipBg: string; chipFg: string;
-}
-
-const TONE: Record<StatTone, ToneStyle> = {
-  blue: { bar: 'linear-gradient(90deg,#3B82F6,#60A5FA)', chipBg: '#EFF6FF', chipFg: '#2563EB' },
-  emerald: { bar: 'linear-gradient(90deg,#10B981,#34D399)', chipBg: '#ECFDF5', chipFg: '#059669' },
-  red: { bar: 'linear-gradient(90deg,#EF4444,#F87171)', chipBg: '#FEF2F2', chipFg: '#DC2626' },
-  amber: { bar: 'linear-gradient(90deg,#F59E0B,#FBBF24)', chipBg: '#FFFBEB', chipFg: '#D97706' },
-  purple: { bar: 'linear-gradient(90deg,#8B5CF6,#A78BFA)', chipBg: '#F5F3FF', chipFg: '#7C3AED' },
-  slate: { bar: 'linear-gradient(90deg,#64748B,#94A3B8)', chipBg: '#F8FAFC', chipFg: '#475569' },
-};
-
-/** Premium KPI / counter tile used across analytics panels.
- * When `onClick` is set the whole tile becomes a button that drills through to
- * the matching records (an arrow affordance appears on hover). */
-export function StatTile({
-  icon,
-  label,
-  value,
-  hint,
-  tone = 'blue',
-  onClick,
-}: {
-  icon?: ReactNode;
-  label: string;
-  value: string | number;
-  hint?: string;
-  tone?: StatTone;
-  onClick?: () => void;
-}) {
-  const t = TONE[tone];
-  const clickable = !!onClick;
-  const Tag = clickable ? 'button' : 'div';
-  return (
-    <Tag
-      {...(clickable
-        ? { type: 'button' as const, onClick, title: 'View records' }
-        : {})}
-      className={`group relative w-full overflow-hidden rounded-2xl border border-gray-200/70 bg-white px-4 py-3.5 text-left shadow-[0_1px_2px_rgba(16,24,40,0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-10px_rgba(16,24,40,0.25)] ${
-        clickable ? 'cursor-pointer hover:border-gray-300' : ''
-      }`}
-    >
-      <span className="absolute inset-x-0 top-0 h-1" style={{ background: t.bar }} />
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-gray-400 leading-tight pt-0.5">
-          {label}
-        </span>
-        {icon && (
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105"
-            style={{ backgroundColor: t.chipBg, color: t.chipFg }}
-          >
-            {icon}
-          </span>
-        )}
-      </div>
-      <div className="mt-1.5 flex items-end justify-between gap-1">
-        <span className="text-[26px] font-bold leading-none tracking-tight text-gray-900 tabular-nums">
-          {value}
-        </span>
-        {clickable && (
-          <span className="mb-0.5 text-gray-300 opacity-0 transition-opacity group-hover:opacity-100">
-            <ArrowUpRight size={15} />
-          </span>
-        )}
-      </div>
-      {hint && <div className="mt-1.5 text-[11px] text-gray-400 truncate">{hint}</div>}
-    </Tag>
-  );
-}
+// StatTile lived here. Every KPI/counter tile in the app now renders the one
+// shared component — components/ui/KpiCard — so this file no longer defines a
+// second card design. Charts and layout helpers below are unaffected.
 
 /**
  * Panel action row (spec §8 export control). The redundant "<Module> Analytics"

@@ -6,9 +6,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button as AntButton, Drawer, Form, Input as AntInput, Select as AntSelect, Switch, Tooltip, message } from 'antd';
-import { Plus, Search, Pencil, Trash2, FolderKanban, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, FolderKanban, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DataTable, type Column, Badge } from '@/components/ui';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
@@ -263,37 +264,33 @@ export default function RiskRegisterListPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Risk registers</h2>
-          <p className="text-xs text-gray-500">
-            Scoped containers that bind their risks to a scoring framework
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AntInput
-            allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="Search name or number"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 240 }}
-          />
+      {/* Toolbar first, then the table — the filters scope what is listed. */}
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name or number"
+        title="Filter registers"
+        activeCount={scope ? 1 : 0}
+        onClear={() => setScope(undefined)}
+        actions={
+          canCreate ? (
+            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
+              New register
+            </AntButton>
+          ) : undefined
+        }
+      >
+        <FilterField label="Scope">
           <AntSelect
             allowClear
             placeholder="All scopes"
-            style={{ width: 160 }}
+            style={{ width: '100%' }}
             value={scope}
             onChange={(v) => setScope(v ?? undefined)}
             options={SCOPES.map((s) => ({ value: s, label: s }))}
           />
-          {canCreate && (
-            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
-              New register
-            </AntButton>
-          )}
-        </div>
-      </div>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

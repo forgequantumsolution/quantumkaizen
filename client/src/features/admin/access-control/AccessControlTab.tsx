@@ -25,6 +25,7 @@ import {
   type NavTabAccess,
   isAuditWorkflowTypeName,
   isRiskWorkflowTypeName,
+  isDocReviewWorkflowTypeName,
   workflowTypeModule,
   wfTypeReadKey,
   wfTypeEntity,
@@ -44,7 +45,13 @@ function useWorkflowTypeModules(): NavModuleAccess[] {
     () =>
       types
         .filter(
-          (t) => !t.isDeleted && !isAuditWorkflowTypeName(t.name) && !isRiskWorkflowTypeName(t.name),
+          (t) =>
+            !t.isDeleted &&
+            !isAuditWorkflowTypeName(t.name) &&
+            !isRiskWorkflowTypeName(t.name) &&
+            // Document Review folds into the static DMS module below, matching
+            // the sidebar where it is a tab of /dms rather than its own entry.
+            !isDocReviewWorkflowTypeName(t.name),
         )
         .map((t) => workflowTypeModule(t)),
     [types],
@@ -68,6 +75,20 @@ function useAuditTicketTabs(): Record<string, NavTabAccess[]> {
           label: 'Workflow Tickets',
           permission: wfTypeReadKey(audit.id),
           entity: wfTypeEntity(audit.id),
+        },
+      ];
+    }
+
+    // Document Review is reached as the "Document Approval" tab of /dms, so its
+    // ticket keys belong under the DMS module — same fold-in as Audit/Risk.
+    const docReview = types.find((t) => !t.isDeleted && isDocReviewWorkflowTypeName(t.name));
+    if (docReview) {
+      result.dms = [
+        {
+          key: 'dms.approval',
+          label: 'Document Approval',
+          permission: wfTypeReadKey(docReview.id),
+          entity: wfTypeEntity(docReview.id),
         },
       ];
     }

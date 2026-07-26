@@ -6,7 +6,7 @@
  * or hardcoded and sparse data falls back to honest empty states (spec §9/§11).
  *
  * Matches the look & feel of ModuleDashboard: an antd filter bar (options
- * derived from these records), a StatTile strip, and a two-column ChartCard grid.
+ * derived from these records), a KpiCard strip, and a two-column ChartCard grid.
  */
 import { useMemo } from 'react';
 import {
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import {
   ChartCard,
-  StatTile,
   FunnelChart,
   TrendLineChart,
   DonutChart,
@@ -36,11 +35,13 @@ import {
   onTimeClosureRate,
   avgCycleDays,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 import type { ModuleAnalyticsProps } from './types';
-import { useTicketFilters } from './useTicketFilters';
 
 export default function DocumentApprovalAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
@@ -68,16 +69,13 @@ export default function DocumentApprovalAnalytics({ tickets, onDrill }: ModuleAn
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover (shared across all module panels) */}
-      {toolbar}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile tone="blue" icon={<ClipboardList size={16} />} label="Pending Approvals" value={m.pending} hint="Open documents" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue" value={m.overdue} hint="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile tone="amber" icon={<Timer size={16} />} label="Avg Cycle" value={`${m.avgCycle}d`} hint="Draft → effective" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile tone="emerald" icon={<CheckCircle2 size={16} />} label="On-Time %" value={`${m.onTime}%`} hint="Approved within SLA" onClick={onDrill && (() => onDrill('completed'))} />
-        <StatTile tone="purple" icon={<CalendarClock size={16} />} label="Due Soon" value={m.dueSoon} hint="Approaching due date" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={ClipboardList} label="Pending Approvals" value={m.pending} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="amber" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="On-Time %" value={`${m.onTime}%`} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="purple" icon={CalendarClock} label="Due Soon" value={m.dueSoon} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

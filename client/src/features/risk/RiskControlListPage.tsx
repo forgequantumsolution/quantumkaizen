@@ -20,7 +20,7 @@ import {
   message,
 } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { BadgeCheck, Download, ExternalLink, Search, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { BadgeCheck, Download, ExternalLink, ListChecks, ShieldCheck, TriangleAlert } from 'lucide-react';
 import { Badge, DataTable, KpiCard, type Column } from '@/components/ui';
 import { exportToCSV } from '@/lib/export';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -39,6 +39,7 @@ import {
   type RiskControl,
 } from '@/lib/api/risk';
 import { ControlStatusBadge } from './riskStatusBadge';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 
 const PAGE_SIZE = 15;
 
@@ -109,6 +110,15 @@ export default function RiskControlListPage() {
   const total = data?.total ?? rows.length;
   const registers = registerPage?.data ?? [];
   const users = directory?.items ?? [];
+
+  // Search sits in the bar itself and sort is not a filter, so neither counts.
+  const activeFilterCount =
+    (status ? 1 : 0) +
+    (type ? 1 : 0) +
+    (hierarchy ? 1 : 0) +
+    (registerId ? 1 : 0) +
+    (ownerId ? 1 : 0) +
+    (overdue ? 1 : 0);
   const ownerName = useMemo(() => {
     const map = new Map(users.map((u) => [u.id, u.name]));
     return (uid: string | null) => (uid ? map.get(uid) ?? 'Assigned' : 'Unassigned');
@@ -271,105 +281,132 @@ export default function RiskControlListPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Risk controls</h2>
-          <p className="text-xs text-gray-500">
-            {total} control{total === 1 ? '' : 's'} across every register matching the current filters
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AntInput
-            allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="Search control # or title"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 250 }}
-          />
+      {/* Toolbar first, KPI strip second — the filters scope what the numbers
+          below are counting, so they read in that order. */}
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search control # or title"
+        title="Filter controls"
+        activeCount={activeFilterCount}
+        onClear={() => {
+          setStatus(undefined);
+          setType(undefined);
+          setHierarchy(undefined);
+          setRegisterId(undefined);
+          setOwnerId(undefined);
+          setOverdue(false);
+        }}
+        actions={
           <AntButton icon={<Download size={14} />} onClick={handleExport}>
             Export CSV
           </AntButton>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <KpiCard label="Matching controls" value={total} icon={ShieldCheck} accent="gold" />
-        <KpiCard
-          label="Overdue"
-          value={overduePage?.total ?? 0}
-          icon={TriangleAlert}
-          accent="red"
-          alert={(overduePage?.total ?? 0) > 0}
-          subtitle="Across all registers"
-          onClick={() => setOverdue(true)}
-        />
-        <KpiCard label="Open on this page" value={openOnPage} accent="blue" subtitle="Planned or in progress" />
-        <KpiCard label="Verified on this page" value={verifiedOnPage} icon={BadgeCheck} accent="green" />
-      </div>
-
-      <div className="flex items-center gap-2 flex-wrap mb-4 p-2.5 rounded-xl bg-gray-50 border border-gray-200/70">
-        <AntSelect
-          allowClear
-          placeholder="All statuses"
-          style={{ width: 170 }}
-          value={status}
-          onChange={(v) => setStatus(v ?? undefined)}
-          options={CONTROL_STATUSES.map((s) => ({ value: s, label: CONTROL_STATUS_LABELS[s] }))}
-        />
-        <AntSelect
-          allowClear
-          placeholder="All types"
-          style={{ width: 160 }}
-          value={type}
-          onChange={(v) => setType(v ?? undefined)}
-          options={CONTROL_TYPES.map((t) => ({ value: t, label: CONTROL_TYPE_LABELS[t] }))}
-        />
-        <AntSelect
-          allowClear
-          placeholder="All hierarchies"
-          style={{ width: 200 }}
-          value={hierarchy}
-          onChange={(v) => setHierarchy(v ?? undefined)}
-          options={CONTROL_HIERARCHIES.map((h) => ({ value: h, label: CONTROL_HIERARCHY_LABELS[h] }))}
-        />
-        <AntSelect
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="All registers"
-          style={{ width: 200 }}
-          value={registerId}
-          onChange={(v) => setRegisterId(v ?? undefined)}
-          options={registers.map((r) => ({ value: r.id, label: r.name }))}
-        />
-        <AntSelect
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="All owners"
-          style={{ width: 180 }}
-          value={ownerId}
-          onChange={(v) => setOwnerId(v ?? undefined)}
-          options={users.map((u) => ({ value: u.id, label: u.name }))}
-        />
-        <AntButton
-          type={overdue ? 'primary' : 'default'}
-          danger={overdue}
-          icon={<TriangleAlert size={14} />}
-          onClick={() => setOverdue((v) => !v)}
-        >
-          Overdue only
-        </AntButton>
-        <div className="ml-auto">
+        }
+      >
+        <FilterField label="Status">
           <AntSelect
-            style={{ width: 180 }}
+            allowClear
+            placeholder="All statuses"
+            style={{ width: '100%' }}
+            value={status}
+            onChange={(v) => setStatus(v ?? undefined)}
+            options={CONTROL_STATUSES.map((s) => ({ value: s, label: CONTROL_STATUS_LABELS[s] }))}
+          />
+        </FilterField>
+        <FilterField label="Type">
+          <AntSelect
+            allowClear
+            placeholder="All types"
+            style={{ width: '100%' }}
+            value={type}
+            onChange={(v) => setType(v ?? undefined)}
+            options={CONTROL_TYPES.map((t) => ({ value: t, label: CONTROL_TYPE_LABELS[t] }))}
+          />
+        </FilterField>
+        <FilterField label="Hierarchy">
+          <AntSelect
+            allowClear
+            placeholder="All hierarchies"
+            style={{ width: '100%' }}
+            value={hierarchy}
+            onChange={(v) => setHierarchy(v ?? undefined)}
+            options={CONTROL_HIERARCHIES.map((h) => ({ value: h, label: CONTROL_HIERARCHY_LABELS[h] }))}
+          />
+        </FilterField>
+        <FilterField label="Register">
+          <AntSelect
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="All registers"
+            style={{ width: '100%' }}
+            value={registerId}
+            onChange={(v) => setRegisterId(v ?? undefined)}
+            options={registers.map((r) => ({ value: r.id, label: r.name }))}
+          />
+        </FilterField>
+        <FilterField label="Owner">
+          <AntSelect
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="All owners"
+            style={{ width: '100%' }}
+            value={ownerId}
+            onChange={(v) => setOwnerId(v ?? undefined)}
+            options={users.map((u) => ({ value: u.id, label: u.name }))}
+          />
+        </FilterField>
+        <FilterField label="Due state">
+          <AntButton
+            block
+            type={overdue ? 'primary' : 'default'}
+            danger={overdue}
+            icon={<TriangleAlert size={14} />}
+            onClick={() => setOverdue((v) => !v)}
+          >
+            Overdue only
+          </AntButton>
+        </FilterField>
+        <FilterField label="Sort by">
+          <AntSelect
+            style={{ width: '100%' }}
             value={sortBy}
             onChange={(v) => setSortBy(v)}
             options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
           />
+        </FilterField>
+      </FilterBar>
+
+      {/* Same stat strip the module "My Tasks" tab uses: equal-width cards in a
+          scrolling row, no subtitle footer, so every tile is one compact height.
+          The Risk Overview keeps the taller subtitled cards. */}
+      <div className="flex items-stretch gap-3 overflow-x-auto pb-1 mb-4">
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard icon={ShieldCheck} label="Matching controls" value={total} accent="slate" />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={TriangleAlert}
+            label="Overdue"
+            value={overduePage?.total ?? 0}
+            accent={(overduePage?.total ?? 0) > 0 ? 'red' : 'slate'}
+            onClick={() => setOverdue(true)}
+          />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard icon={ListChecks} label="Open on this page" value={openOnPage} accent="blue" />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={BadgeCheck}
+            label="Verified on this page"
+            value={verifiedOnPage}
+            accent="emerald"
+          />
         </div>
       </div>
+
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

@@ -254,29 +254,12 @@ export default function Sidebar() {
       .filter((e) => e.group === "Compliance")
       .map((e) => e.item);
 
-    // Children of the "Document Management System" group: the DMS document
-    // library plus the "Document Review" workflow ticket workspace (if seeded).
+    // The "Document Review" workflow type, if seeded. It is no longer a sidebar
+    // entry of its own — /dms hosts it as a tab — but it still decides whether a
+    // doc-review-only user can see the DMS entry at all.
     const docReviewType = (workflowTypes ?? []).find(
       (t) => !t.isDeleted && isDocReview(t.name)
     );
-    const documentChildren: NavItem[] = [
-      ...(docReviewType
-        ? [
-            {
-              label: "Document Approval",
-              path: `/modules/${docReviewType.id}`,
-              icon: ClipboardCheck,
-              permission: wfTypeReadKey(docReviewType.id),
-            },
-          ]
-        : []),
-      {
-        label: "Documents",
-        path: "/dms",
-        icon: FileText,
-        permission: "document.read",
-      },
-    ];
 
     // ── Hardcoded modules, placed into their GMP groups in `sections` below ──
     const dashboardItem: NavItem = {
@@ -293,12 +276,20 @@ export default function Sidebar() {
       icon: ScrollText,
       permission: "audit_trail.read",
     };
-    // Groups the DMS document library with the "Document Review" workflow so the
-    // two document-centric areas live under one roof.
+    // One flat entry, not an expandable group. The document library and the
+    // Document Approval workflow are two tabs of the same screen now, so nesting
+    // them here would have duplicated the tab bar in the sidebar. Gated on ANY
+    // of the two reads: a user who only holds the doc-review key still needs the
+    // entry to reach their approval queue.
     const dmsItem: NavItem = {
-      label: "DMS ",
+      label: "DMS",
+      path: "/dms",
       icon: FileText,
-      children: documentChildren,
+      anyPermission: [
+        "document.read",
+        ...(docReviewType ? [wfTypeReadKey(docReviewType.id)] : []),
+      ],
+      activeForPrefixes: ["/dms"],
     };
     // Training & Qualification (GMP term for the LMS). "My Training" is the
     // learner view; "Courses" is the author studio. Labels/icons follow

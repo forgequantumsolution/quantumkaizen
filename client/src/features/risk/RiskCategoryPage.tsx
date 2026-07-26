@@ -16,8 +16,9 @@ import {
   Tooltip,
   message,
 } from 'antd';
-import { Plus, Search, Pencil, Trash2, FolderTree, CornerDownRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, FolderTree, CornerDownRight } from 'lucide-react';
 import { DataTable, type Column, Badge } from '@/components/ui';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
@@ -291,26 +292,27 @@ export default function RiskCategoryPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Risk categories</h2>
-          <p className="text-xs text-gray-500">
-            The taxonomy risks are grouped and reported by — nest with a parent category
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AntInput
-            allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="Search name or code"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 240 }}
-          />
+      {/* Toolbar first, then the table — the filters scope what is listed. */}
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name or code"
+        title="Filter categories"
+        activeCount={activeFilter ? 1 : 0}
+        onClear={() => setActiveFilter(undefined)}
+        actions={
+          canCreate ? (
+            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
+              New category
+            </AntButton>
+          ) : undefined
+        }
+      >
+        <FilterField label="Status">
           <AntSelect
             allowClear
             placeholder="All statuses"
-            style={{ width: 140 }}
+            style={{ width: '100%' }}
             value={activeFilter}
             onChange={(v) => setActiveFilter(v ?? undefined)}
             options={[
@@ -318,13 +320,8 @@ export default function RiskCategoryPage() {
               { value: 'false', label: 'Inactive' },
             ]}
           />
-          {canCreate && (
-            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
-              New category
-            </AntButton>
-          )}
-        </div>
-      </div>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

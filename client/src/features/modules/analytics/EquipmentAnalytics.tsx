@@ -6,7 +6,7 @@
  * hardcoded and sparse data falls back to honest empty states (spec §9/§11).
  *
  * Matches the look & feel of ModuleDashboard: an antd filter bar (options
- * derived from these records), a StatTile strip, and a two-column ChartCard grid.
+ * derived from these records), a KpiCard strip, and a two-column ChartCard grid.
  */
 import { useMemo } from 'react';
 import {
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import {
   ChartCard,
-  StatTile,
   DonutChart,
   BarSplit,
   TrendLineChart,
@@ -35,11 +34,13 @@ import {
   onTimeClosureRate,
   avgOpenAge,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 import type { ModuleAnalyticsProps } from './types';
-import { useTicketFilters } from './useTicketFilters';
 
 export default function EquipmentAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
@@ -64,16 +65,13 @@ export default function EquipmentAnalytics({ tickets, onDrill }: ModuleAnalytics
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover (shared across all module panels) */}
-      {toolbar}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile tone="blue" icon={<Boxes size={16} />} label="Total" value={m.total} hint="Equipment records" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile tone="emerald" icon={<ActivityIcon size={16} />} label="In Use" value={m.inUse} hint="Open / active" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="amber" icon={<Wrench size={16} />} label="Under Maintenance" value={m.underMaintenance} hint="On hold" onClick={onDrill && (() => onDrill('onhold'))} />
-        <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue Qualification" value={m.overdueQual} hint="Open & past due" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile tone="purple" icon={<Timer size={16} />} label="Avg Age" value={`${m.avgAge}d`} hint="Open records" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={Boxes} label="Total" value={m.total} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="emerald" icon={ActivityIcon} label="In Use" value={m.inUse} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="amber" icon={Wrench} label="Under Maintenance" value={m.underMaintenance} onClick={onDrill && (() => onDrill('onhold'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue Qualification" value={m.overdueQual} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="purple" icon={Timer} label="Avg Age" value={`${m.avgAge}d`} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

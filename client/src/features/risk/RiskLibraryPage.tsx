@@ -17,8 +17,9 @@ import {
   Tooltip,
   message,
 } from 'antd';
-import { Plus, Search, Pencil, Trash2, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Plus, Pencil, Trash2, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { DataTable, type Column, Badge } from '@/components/ui';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
@@ -311,37 +312,33 @@ function HazardLibraryTab() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Hazard library</h2>
-          <p className="text-xs text-gray-500">
-            Reusable hazards, causes, consequences and failure modes for assessment worksheets
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AntInput
-            allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="Search name or code"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 240 }}
-          />
+      {/* Toolbar first, then the table — the filters scope what is listed. */}
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name or code"
+        title="Filter hazards"
+        activeCount={type ? 1 : 0}
+        onClear={() => setType(undefined)}
+        actions={
+          canCreate ? (
+            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
+              New hazard
+            </AntButton>
+          ) : undefined
+        }
+      >
+        <FilterField label="Type">
           <AntSelect
             allowClear
             placeholder="All types"
-            style={{ width: 170 }}
+            style={{ width: '100%' }}
             value={type}
             onChange={(v) => setType(v ?? undefined)}
             options={HAZARD_TYPES.map((t) => ({ value: t, label: HAZARD_TYPE_LABELS[t] }))}
           />
-          {canCreate && (
-            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
-              New hazard
-            </AntButton>
-          )}
-        </div>
-      </div>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable
@@ -645,34 +642,40 @@ function ControlLibraryTab() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Control library</h2>
-          <p className="text-xs text-gray-500">
-            Standard mitigations, ordered by the hierarchy of controls, reused across risks
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AntInput
-            allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="Search name or code"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 240 }}
-          />
+      {/* Toolbar first, then the table — the filters scope what is listed. */}
+      <FilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name or code"
+        title="Filter controls"
+        activeCount={(type ? 1 : 0) + (hierarchy ? 1 : 0)}
+        onClear={() => {
+          setType(undefined);
+          setHierarchy(undefined);
+        }}
+        actions={
+          canCreate ? (
+            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
+              New control
+            </AntButton>
+          ) : undefined
+        }
+      >
+        <FilterField label="Type">
           <AntSelect
             allowClear
             placeholder="All types"
-            style={{ width: 150 }}
+            style={{ width: '100%' }}
             value={type}
             onChange={(v) => setType(v ?? undefined)}
             options={CONTROL_TYPES.map((t) => ({ value: t, label: CONTROL_TYPE_LABELS[t] }))}
           />
+        </FilterField>
+        <FilterField label="Hierarchy">
           <AntSelect
             allowClear
             placeholder="All hierarchies"
-            style={{ width: 200 }}
+            style={{ width: '100%' }}
             value={hierarchy}
             onChange={(v) => setHierarchy(v ?? undefined)}
             options={CONTROL_HIERARCHIES.map((h) => ({
@@ -680,13 +683,8 @@ function ControlLibraryTab() {
               label: CONTROL_HIERARCHY_LABELS[h],
             }))}
           />
-          {canCreate && (
-            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
-              New control
-            </AntButton>
-          )}
-        </div>
-      </div>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

@@ -6,7 +6,7 @@
  * or hardcoded and sparse data falls back to honest empty states (spec §9/§11).
  *
  * Matches ModuleDashboard: an antd filter bar (options derived from these
- * records), a StatTile strip, and a two-column ChartCard grid.
+ * records), a KpiCard strip, and a two-column ChartCard grid.
  */
 import { useMemo } from 'react';
 import {
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import {
   ChartCard,
-  StatTile,
   TrendLineChart,
   DonutChart,
   HBarSplit,
@@ -35,11 +34,13 @@ import {
   avgCycleDays,
   agingByCreation,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 import type { ModuleAnalyticsProps } from './types';
-import { useTicketFilters } from './useTicketFilters';
 
 export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
@@ -62,16 +63,13 @@ export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnaly
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover */}
-      {toolbar}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile tone="blue" icon={<ActivityIcon size={16} />} label="Active" value={m.active} hint="Open changes" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue" value={m.overdue} hint="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile tone="emerald" icon={<CheckCircle2 size={16} />} label="Closure %" value={`${m.closure}%`} hint="Completed / total" onClick={onDrill && (() => onDrill('completed'))} />
-        <StatTile tone="amber" icon={<PauseCircle size={16} />} label="On Hold" value={m.onHold} hint="Open & held" onClick={onDrill && (() => onDrill('onhold'))} />
-        <StatTile tone="purple" icon={<Timer size={16} />} label="Avg Cycle" value={`${m.avgCycle}d`} hint="Open → close" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={ActivityIcon} label="Active" value={m.active} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="Closure %" value={`${m.closure}%`} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="amber" icon={PauseCircle} label="On Hold" value={m.onHold} onClick={onDrill && (() => onDrill('onhold'))} />
+        <KpiCard accent="purple" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

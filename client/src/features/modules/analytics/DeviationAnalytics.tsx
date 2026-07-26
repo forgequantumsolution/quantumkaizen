@@ -12,14 +12,16 @@ import type { TicketSummary } from '@/lib/api/ticket';
 import {
   isClosed, isOverdue, countBy, openClosedTrend,
   onTimeClosureRate, avgCycleDays, avgOpenAge,
-  ChartCard, StatTile,
+  ChartCard,
   TrendLineChart, DonutChart, HBarSplit, ComplianceGauge, CategoryParetoChart,
   type Slice,
 } from '@/components/analytics';
-import { useTicketFilters } from './useTicketFilters';
+import { KpiCard } from '@/components/ui';
 
 export default function DeviationAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   const k = useMemo(() => {
     const open = filtered.filter((t) => !isClosed(t));
@@ -50,16 +52,13 @@ export default function DeviationAnalytics({ tickets, onDrill }: ModuleAnalytics
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover */}
-      {toolbar}
-
       {/* Top KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile icon={<Activity size={16} />} label="Active" value={k.active} tone="blue" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile icon={<AlertTriangle size={16} />} label="Overdue" value={k.overdue} tone="red" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile icon={<Timer size={16} />} label="Avg age (open)" value={`${k.avgOpen}d`} tone="amber" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile icon={<PauseCircle size={16} />} label="On hold" value={k.onHold} tone="amber" onClick={onDrill && (() => onDrill('onhold'))} />
-        <StatTile icon={<ShieldAlert size={16} />} label="Critical open" value={k.criticalOpen} tone="red" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard icon={Activity} label="Active" value={k.active} accent="blue" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard icon={AlertTriangle} label="Overdue" value={k.overdue} accent="red" onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard icon={Timer} label="Avg age (open)" value={`${k.avgOpen}d`} accent="amber" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard icon={PauseCircle} label="On hold" value={k.onHold} accent="amber" onClick={onDrill && (() => onDrill('onhold'))} />
+        <KpiCard icon={ShieldAlert} label="Critical open" value={k.criticalOpen} accent="red" onClick={onDrill && (() => onDrill('open'))} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

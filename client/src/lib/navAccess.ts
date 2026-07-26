@@ -49,7 +49,10 @@ export const NAV_ACCESS: NavModuleAccess[] = [
   {
     key: 'dms',
     label: 'Documents (DMS)',
-    description: 'Controlled document management — SOPs, policies, protocols.',
+    description:
+      'Controlled document management — SOPs, policies, protocols, and the ' +
+      'Document Approval workflow. The Approval tab is appended at runtime ' +
+      'from the Document Review workflow type (see AccessControlTab).',
     tabs: [
       { key: 'dms.documents', label: 'Documents', permission: 'document.read', entity: 'document' },
     ],
@@ -176,6 +179,13 @@ export const isAuditWorkflowTypeName = (name: string): boolean => /^audit$/i.tes
  *  (like Audit) so its ticket/findings keys don't form a duplicate group. */
 export const isRiskWorkflowTypeName = (name: string): boolean =>
   /^risk(\s*management)?$/i.test(name.trim());
+
+/** The Document Review workflow type. It no longer has a sidebar entry of its
+ *  own — /dms renders it as the "Document Approval" tab — so it folds into the
+ *  static DMS module here rather than forming a standalone group. Keep this in
+ *  step with the same test in Sidebar.tsx and DocumentListPage.tsx. */
+export const isDocReviewWorkflowTypeName = (name: string): boolean =>
+  /^document\s*review$/i.test(name.trim());
 
 /** Permission-key entity prefix for a workflow type (buckets the matrix columns). */
 export const wfTypeEntity = (typeId: string): string => `wf_type.${typeId}`;
