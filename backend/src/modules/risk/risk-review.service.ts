@@ -13,6 +13,7 @@ import { BadRequest, NotFound } from '../../lib/httpError';
 import { writeTrail } from '../audit/compliance.service';
 import { nextReviewDateFor } from './risk-scoring.service';
 import { ensureCapaForRisk } from './risk-control.service';
+import { onRiskChanged } from './risk-profile.service';
 import type { CompleteReview, ListReviewQuery, ReviewCreate } from './risk-control.schema';
 
 const reviewInclude = {
@@ -266,6 +267,8 @@ export const completeReview = async (id: string, body: CompleteReview, userId?: 
 
   // An escalation is exactly the situation a CAPA-requiring level exists for.
   if (body.outcome === 'ESCALATED') await ensureCapaForRisk(existing.riskId, userId);
+  // Completing a review clears (or re-dates) the overdue flag the profile counts.
+  await onRiskChanged(existing.riskId);
 
   return serializeReview(updated);
 };

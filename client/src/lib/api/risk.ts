@@ -310,10 +310,72 @@ export interface RiskFrameworkRef {
 export interface RiskLink {
   id: string;
   entity_type: string;
+  /** Human name of the type ("CAPA", "Document") from the backend registry. */
+  entity_type_label: string;
   entity_id: string;
   label: string | null;
+  /** Freshly resolved reference — present on the detail view only. */
+  entity_number: string | null;
+  entity_title: string | null;
+  /** Client route to the linked record; null for types with no detail page. */
+  entity_route: string | null;
+  /**
+   * Whether the target still exists. null on list payloads (not resolved);
+   * false marks a dangling link, which is a traceability defect worth showing.
+   */
+  entity_exists: boolean | null;
   relation: string | null;
   created_at: string;
+}
+
+/** A record type a risk may be linked to (from GET /risk/links/types). */
+export interface LinkableType {
+  type: string;
+  label: string;
+  has_route: boolean;
+}
+
+/** One typeahead hit (from GET /risk/links/search). */
+export interface LinkableHit {
+  id: string;
+  number: string;
+  title: string;
+  label: string;
+  route: string | null;
+}
+
+/** A risk linked to some other record (from GET /risk/links). */
+export interface LinkedRisk {
+  link_id: string;
+  relation: string | null;
+  linked_at: string;
+  risk: Risk;
+}
+
+/**
+ * "How risky is this record?" — the materialised cross-module read model
+ * (GET /risk/profile). Every field is derived from the risks linked to the
+ * entity; an entity with no risks comes back zeroed rather than 404.
+ */
+export interface RiskProfile {
+  entity_type: string;
+  entity_id: string;
+  open_risk_count: number;
+  total_risk_count: number;
+  highest_level_code: string | null;
+  highest_level_label: string | null;
+  highest_level_color: string | null;
+  /** Cross-framework severity, 0-100. Comparable between frameworks; level
+   *  `order` is not. Null when no linked risk has been scored. */
+  severity_rank: number | null;
+  acceptance: RiskAcceptance | null;
+  max_residual_score: number | null;
+  /** Open risks at an UNACCEPTABLE level with no acceptance record. */
+  unacceptable_count: number;
+  overdue_reviews: number;
+  open_controls: number;
+  last_risk_event_at: string | null;
+  recomputed_at: string | null;
 }
 
 export interface Risk {
@@ -928,6 +990,16 @@ export const riskKeys = {
   library: (p?: object) => ['risk', 'library', p] as const,
   heatmap: (p?: object) => ['risk', 'heatmap', p] as const,
   summary: (p?: object) => ['risk', 'summary', p] as const,
+  linkableTypes: () => ['risk', 'linkable-types'] as const,
+  linkableSearch: (type: string, q: string) => ['risk', 'linkable-search', type, q] as const,
+  linkedRisks: (entityType: string, entityId: string) =>
+    ['risk', 'linked-risks', entityType, entityId] as const,
+  profile: (entityType: string, entityId: string) =>
+    ['risk', 'profile', entityType, entityId] as const,
+  profiles: (entityType: string, ids: string[]) =>
+    ['risk', 'profiles', entityType, [...ids].sort().join(',')] as const,
+  profileRanked: (entityType: string, take: number) =>
+    ['risk', 'profile-ranked', entityType, take] as const,
 };
 
 // ── Transport helpers ───────────────────────────────────────────────────────
@@ -1286,6 +1358,73 @@ export const useRemoveRiskLink = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: riskKeys.all }),
   });
 };
+
+// ── Link resolution (entity registry) ───────────────────────────────────────
+
+/** The linkable record types, straight from the backend registry. Never
+ *  hardcode this list on the client — adding a type is a backend-only change. */
+export const useLinkableTypes = () =>
+  useQuery<LinkableType[]>({
+    queryKey: riskKeys.linkableTypes(),
+    queryFn: () => getArray<LinkableType>('/risk/links/types'),
+    staleTime: CONFIG_STALE,
+  });
+
+/** Typeahead over one record type. Disabled below 2 characters — the backend
+ *  would happily scan, but a 1-char query is never a real search. */
+export const useLinkableSearch = (type: string | undefined, q: string) =>
+  useQuery<LinkableHit[]>({
+    queryKey: riskKeys.linkableSearch(type ?? '', q),
+    queryFn: () => getArray<LinkableHit>('/risk/links/search', { type, q }),
+    enabled: !!type && q.trim().length >= 2,
+    staleTime: 30_000,
+  });
+
+/**
+ * Reverse lookup — the risks linked to some other record. This is the hook every
+ * other module's risk panel uses; it is what makes a link bidirectional.
+ */
+export const useRisksLinkedTo = (entityType: string | undefined, entityId: string | undefined) =>
+  useQuery<LinkedRisk[]>({
+    queryKey: riskKeys.linkedRisks(entityType ?? '', entityId ?? ''),
+    queryFn: () => getArray<LinkedRisk>('/risk/links', { entityType, entityId }),
+    enabled: !!entityType && !!entityId,
+  });
+
+// ── Risk profile (cross-module read model) ──────────────────────────────────
+
+/** One record's risk profile. Any module's detail page can call this. */
+export const useRiskProfile = (entityType: string | undefined, entityId: string | undefined) =>
+  useQuery<RiskProfile>({
+    queryKey: riskKeys.profile(entityType ?? '', entityId ?? ''),
+    queryFn: () => getOne<RiskProfile>('/risk/profile', { entityType, entityId }),
+    enabled: !!entityType && !!entityId,
+    staleTime: 60_000,
+  });
+
+/**
+ * Batch profiles for a list view — one request for the whole page instead of
+ * one per row. Returns a Map so callers index by id without a find() per cell.
+ */
+export const useRiskProfiles = (entityType: string | undefined, ids: string[]) => {
+  const query = useQuery<RiskProfile[]>({
+    queryKey: riskKeys.profiles(entityType ?? '', ids),
+    queryFn: () => getArray<RiskProfile>('/risk/profile', { entityType, ids: ids.join(',') }),
+    enabled: !!entityType && ids.length > 0,
+    staleTime: 60_000,
+  });
+  const byId = new Map((query.data ?? []).map((p) => [p.entity_id, p]));
+  return { ...query, byId };
+};
+
+/** The riskiest N records of a type — "top risk suppliers" style panels. */
+export const useRiskiestEntities = (entityType: string | undefined, take = 10) =>
+  useQuery<RiskProfile[]>({
+    queryKey: riskKeys.profileRanked(entityType ?? '', take),
+    queryFn: () => getArray<RiskProfile>('/risk/profile/ranked', { entityType, take }),
+    enabled: !!entityType,
+    staleTime: 60_000,
+  });
 
 // Formal residual-risk acceptance: e-signed, and it moves the risk to ACCEPTED.
 export const useAcceptRisk = (id: string) => {

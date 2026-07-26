@@ -19,6 +19,7 @@
     "db:seed:risk": "tsx prisma/seed-risk-master.ts",
     "db:seed:risk-workflow": "tsx prisma/seed-risk-workflow.ts",
     "db:seed:risk-data": "tsx prisma/seed-risk-data.ts",
+    "db:seed:risk-integration": "tsx prisma/seed-risk-integration.ts",
     "sla:sweep": "tsx src/jobs/run-once.ts",
     "audit:sweep": "tsx src/jobs/audit-sweep-once.ts",
     "worker": "tsx src/jobs/worker.ts",

@@ -17,6 +17,7 @@ import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
 import { recordSignature, writeTrail } from '../audit/compliance.service';
 import { createCapa } from '../audit/capa.service';
+import { onRiskChanged } from './risk-profile.service';
 import type {
   AcceptRisk,
   ControlCreate,
@@ -358,6 +359,8 @@ export const createControl = async (riskId: string, body: ControlCreate, userId?
   // Planning a treatment is the point at which a CAPA-requiring level should
   // already have a CAPA behind it. Best-effort; never blocks the response.
   await ensureCapaForRisk(riskId, userId);
+  // openControls is part of the profile, so a new control shifts it.
+  await onRiskChanged(riskId);
 
   return serializeControl(created);
 };
@@ -525,6 +528,7 @@ export const updateControlStatus = async (
     await invalidateResidual(existing.riskId, existing.controlNumber, userId);
     await ensureCapaForRisk(existing.riskId, userId);
   }
+  await onRiskChanged(existing.riskId);
 
   return serializeControl(updated);
 };
@@ -574,6 +578,7 @@ export const verifyControl = async (id: string, body: VerifyControl, userId?: st
     await invalidateResidual(existing.riskId, existing.controlNumber, userId);
     await ensureCapaForRisk(existing.riskId, userId);
   }
+  await onRiskChanged(existing.riskId);
 
   return serializeControl(updated);
 };
@@ -593,6 +598,7 @@ export const deleteControl = async (id: string, userId?: string) => {
     { entityType: 'RiskControl', entityId: id, action: 'DELETE', oldValue: existing.controlNumber },
     userId,
   );
+  await onRiskChanged(existing.riskId);
 };
 
 // ── Residual-risk acceptance ────────────────────────────────────────────────
@@ -700,6 +706,10 @@ export const acceptRisk = async (riskId: string, body: AcceptRisk, userId?: stri
     },
     userId,
   );
+  // Acceptance clears the risk from unacceptableCount — the field the CoA and
+  // batch-release gates key off — so the profile must not lag behind the
+  // signature that authorised it.
+  await onRiskChanged(riskId);
 
   return { ...serializeAcceptance(record), signature };
 };

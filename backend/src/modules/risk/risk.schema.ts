@@ -256,10 +256,51 @@ export type ListRiskQuery = z.infer<typeof ListRiskQuerySchema>;
 export const LinkUpsertSchema = z.object({
   entityType: z.string().min(1).max(64),
   entityId: z.string().min(1).max(64),
+  // Optional: the service captures a label from the entity registry when none
+  // is supplied, so a link is never left rendering a bare UUID.
   label: z.string().max(300).optional().nullable(),
   relation: z.string().max(64).optional().nullable(),
 });
 export type LinkUpsert = z.infer<typeof LinkUpsertSchema>;
+
+/** Reverse lookup: "which risks point at this record?" */
+export const ReverseLinkQuerySchema = z.object({
+  entityType: z.string().min(1).max(64),
+  entityId: z.string().min(1).max(64),
+});
+export type ReverseLinkQuery = z.infer<typeof ReverseLinkQuerySchema>;
+
+/** Typeahead over one linkable record type. */
+export const LinkSearchQuerySchema = z.object({
+  type: z.string().min(1).max(64),
+  q: z.string().min(1).max(200),
+  take: z.coerce.number().int().min(1).max(25).default(10),
+});
+export type LinkSearchQuery = z.infer<typeof LinkSearchQuerySchema>;
+
+// ── Risk profile ────────────────────────────────────────────────────────────
+
+/**
+ * Either one entity (`entityId`) or a page of them (`ids`, comma-separated) —
+ * the batch form is what stops a 200-row list view issuing 200 requests.
+ */
+export const ProfileQuerySchema = z
+  .object({
+    entityType: z.string().min(1).max(64),
+    entityId: z.string().min(1).max(64).optional(),
+    ids: z.string().max(8000).optional(),
+  })
+  .refine((v) => !!v.entityId || !!v.ids, {
+    message: 'Provide entityId for one record, or ids for a batch',
+  });
+export type ProfileQuery = z.infer<typeof ProfileQuerySchema>;
+
+/** "Riskiest N entities of this type" — top-risk panels and phase-6 scheduling. */
+export const ProfileRankQuerySchema = z.object({
+  entityType: z.string().min(1).max(64),
+  take: z.coerce.number().int().min(1).max(100).default(10),
+});
+export type ProfileRankQuery = z.infer<typeof ProfileRankQuerySchema>;
 
 export const HeatmapQuerySchema = z.object({
   registerId: z.string().uuid().optional(),

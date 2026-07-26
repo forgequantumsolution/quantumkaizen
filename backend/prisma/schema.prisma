@@ -4313,3 +4313,59 @@ model RiskAcceptanceRecord {
 
   @@index([riskId])
 }
+
+/// Materialised answer to "how risky is this record?", keyed by any entity a
+/// risk can be linked to (Supplier, Equipment, Document, Product, Site, …).
+///
+/// Exists so other modules never have to walk RiskLink -> Risk -> RiskLevelDef
+/// on every page load: risk-based audit scheduling, supplier tiering, the CoA
+/// release gate and every risk chip in the platform read this one row. It is a
+/// pure projection of the risks linked to the entity — recomputed on every
+/// scoring/link/control/review event, never written by hand, and always safe to
+/// rebuild from scratch.
+///
+/// See docs/RISK-cross-module-integration-plan.md §C.2.
+model RiskProfile {
+  id         String @id @default(uuid())
+  entityType String
+  entityId   String
+
+  /// Linked risks that are not CLOSED. ACCEPTED still counts — an accepted risk
+  /// is a live risk somebody signed for, not an absent one.
+  openRiskCount  Int @default(0)
+  totalRiskCount Int @default(0)
+
+  /// The worst current level across the open linked risks, denormalised so a
+  /// consumer can render the chip without touching the framework tables.
+  highestLevelCode  String?
+  highestLevelLabel String?
+  highestLevelColor String?
+
+  /// Cross-framework severity, 0-100. NOT RiskLevelDef.order: that is only
+  /// comparable inside one framework (a 6-band framework's "3" is mid-range,
+  /// a 4-band framework's "3" is the top). Normalised as acceptance band first,
+  /// then relative position within the level's own framework, so a supplier
+  /// scored on ICH Q9 and a device scored on ISO 14971 sort against each other
+  /// meaningfully.
+  severityRank Int?
+
+  /// Acceptance of the highest level — the semantic, framework-independent read.
+  acceptance RiskAcceptanceLevel?
+
+  maxResidualScore Int?
+
+  /// Open risks sitting at an UNACCEPTABLE level with no acceptance record.
+  /// This is the count the CoA / batch-release gate keys off.
+  unacceptableCount Int @default(0)
+
+  overdueReviews Int @default(0)
+  /// Controls on the linked risks that are neither VERIFIED nor CANCELLED.
+  openControls   Int @default(0)
+
+  lastRiskEventAt DateTime?
+  recomputedAt    DateTime  @updatedAt
+
+  @@unique([entityType, entityId])
+  @@index([entityType, severityRank])
+  @@index([severityRank])
+}

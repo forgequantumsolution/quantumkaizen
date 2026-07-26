@@ -7,7 +7,7 @@
  */
 import { Router } from 'express';
 import { requireAuth } from '../../middleware/auth';
-import { requirePermission } from '../../middleware/permissions';
+import { requireAnyPermission, requirePermission } from '../../middleware/permissions';
 import { validate } from '../../middleware/validate';
 import { asyncHandler } from '../../lib/asyncHandler';
 import * as ctrl from './risk.controller';
@@ -16,12 +16,16 @@ import {
   FrameworkUpsertSchema,
   HeatmapQuerySchema,
   IdParamSchema,
+  LinkSearchQuerySchema,
   LinkUpsertSchema,
   ListCategoryQuerySchema,
   ListFrameworkQuerySchema,
   ListRegisterQuerySchema,
   ListRiskQuerySchema,
+  ProfileQuerySchema,
+  ProfileRankQuerySchema,
   RegisterUpsertSchema,
+  ReverseLinkQuerySchema,
   RiskCreateSchema,
   RiskUpdateSchema,
   ScoreRiskSchema,
@@ -46,6 +50,17 @@ router.post('/categories', requirePermission('risk_category.create'), validate(C
 router.put('/categories/:id', requirePermission('risk_category.update'), validate(IdParamSchema, 'params'), validate(CategoryUpsertSchema), asyncHandler(ctrl.updateCategory));
 router.delete('/categories/:id', requirePermission('risk_category.delete'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.deleteCategory));
 
+// ── Risk profile (cross-module read model) ──────────────────────────────────
+// `risk_profile.read` exists so the grant that lets a supplier page show a risk
+// level is separable from the grant that opens the risk register. It is an OR
+// with `risk.read` rather than a replacement: anyone already trusted with the
+// register implicitly may see a derived chip, and existing roles keep working
+// on the day this ships without an admin having to grant a brand-new key first.
+router.get('/profile', requireAnyPermission('risk_profile.read', 'risk.read'), validate(ProfileQuerySchema, 'query'), asyncHandler(ctrl.getProfile));
+router.get('/profile/ranked', requireAnyPermission('risk_profile.read', 'risk.read'), validate(ProfileRankQuerySchema, 'query'), asyncHandler(ctrl.listByRisk));
+// Full rebuild — an admin repair path, not a routine call.
+router.post('/profile/recompute', requirePermission('risk_framework.update'), asyncHandler(ctrl.recomputeProfiles));
+
 // ── Analytics — declared before /registers/:id so the literal path wins ──────
 router.get('/analytics/heatmap', requirePermission('risk.read'), validate(HeatmapQuerySchema, 'query'), asyncHandler(ctrl.getHeatmap));
 router.get('/analytics/summary', requirePermission('risk.read'), validate(HeatmapQuerySchema, 'query'), asyncHandler(ctrl.getSummary));
@@ -68,6 +83,15 @@ router.patch('/risks/:id/status', requirePermission('risk.update'), validate(IdP
 router.delete('/risks/:id', requirePermission('risk.delete'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.deleteRisk));
 
 // ── Links ───────────────────────────────────────────────────────────────────
+// The literal /links/* GETs are kept above the DELETE /links/:id purely for
+// readability — the methods differ, so no shadowing is possible. Add any future
+// GET /links/:id *below* these two or it will swallow them.
+router.get('/links/types', requirePermission('risk.read'), asyncHandler(ctrl.listLinkableTypes));
+router.get('/links/search', requirePermission('risk.read'), validate(LinkSearchQuerySchema, 'query'), asyncHandler(ctrl.searchLinkable));
+// Reverse lookup — "which risks point at this record?". Read-gated on risk.read
+// because the payload is risks; the picker's per-target filtering lives in
+// /links/search, which is the path that can leak other modules' numbers.
+router.get('/links', requirePermission('risk.read'), validate(ReverseLinkQuerySchema, 'query'), asyncHandler(ctrl.listRisksLinkedTo));
 router.post('/risks/:id/links', requirePermission('risk.update'), validate(IdParamSchema, 'params'), validate(LinkUpsertSchema), asyncHandler(ctrl.addLink));
 router.delete('/links/:id', requirePermission('risk.update'), validate(IdParamSchema, 'params'), asyncHandler(ctrl.removeLink));
 

@@ -13,7 +13,7 @@
  * that map in the browser would rot; surfacing the server's own sentence does not.
  */
 import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Button as AntButton,
@@ -28,11 +28,13 @@ import {
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   BadgeCheck,
   ChevronsRight,
   CalendarClock,
+  ExternalLink,
   FileText,
   Gauge,
   History,
@@ -62,6 +64,8 @@ import {
   useCreateControl,
   useCreateReview,
   useDeleteControl,
+  useLinkableSearch,
+  useLinkableTypes,
   useRemoveRiskLink,
   useRisk,
   useRiskControls,
@@ -88,6 +92,7 @@ import {
   type Risk,
   type RiskControl,
   type RiskFramework,
+  type RiskLink,
   type RiskReview,
   type RiskScoreSnapshot,
   type RiskStatus,
@@ -123,19 +128,10 @@ const SCORE_STAGES: { value: ScoreStage; label: string }[] = [
   { value: 'REVIEW', label: 'Review — periodic re-score' },
 ];
 
-/** Entity types the backend link table accepts across the QMS. */
-const LINK_ENTITY_TYPES = [
-  'Capa',
-  'NonConformance',
-  'Finding',
-  'Audit',
-  'Document',
-  'Supplier',
-  'Ticket',
-  'Deviation',
-  'ChangeControl',
-  'RiskAssessment',
-] as const;
+// The linkable record types are served by the backend entity registry
+// (GET /risk/links/types) rather than hardcoded here — adding a type must not
+// require a client release, and a list that drifts from the backend's is how
+// links ended up unresolvable in the first place.
 
 const LINK_RELATIONS = ['CAUSED_BY', 'MITIGATED_BY', 'APPLIES_TO', 'EVIDENCE', 'ESCALATED_TO'] as const;
 
@@ -1350,6 +1346,38 @@ function ControlStatusForm({ control, onDone }: { control: RiskControl; onDone: 
 
 // ── Links ───────────────────────────────────────────────────────────────────
 
+/**
+ * One linked record. Clickable when the registry gave the type a detail route;
+ * plain text otherwise. A link whose target no longer exists renders as an
+ * explicit warning rather than as a normal-looking row — a dangling link is a
+ * break in the traceability chain and hiding it is the worst option.
+ */
+function LinkedRecordCell({ link }: { link: RiskLink }) {
+  const text = link.label ?? link.entity_number ?? link.entity_id;
+
+  if (link.entity_exists === false) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-red-600">
+        <AlertTriangle size={12} className="shrink-0" />
+        <span className="line-through">{text}</span>
+        <span className="text-[10px] font-medium uppercase tracking-wide">deleted</span>
+      </span>
+    );
+  }
+
+  if (!link.entity_route) return <span>{text}</span>;
+
+  return (
+    <RouterLink
+      to={link.entity_route}
+      className="group inline-flex items-center gap-1.5 text-blue-700 hover:text-blue-800 hover:underline"
+    >
+      {text}
+      <ExternalLink size={11} className="text-gray-300 group-hover:text-blue-500 shrink-0" />
+    </RouterLink>
+  );
+}
+
 function LinksTab({ risk, canUpdate }: { risk: Risk; canUpdate: boolean }) {
   const [open, setOpen] = useState(false);
   const [form] = Form.useForm<{
@@ -1358,6 +1386,13 @@ function LinksTab({ risk, canUpdate }: { risk: Risk; canUpdate: boolean }) {
     label?: string;
     relation?: string;
   }>();
+  // The picker searches one type at a time, so the chosen type drives the query
+  // and clearing it must clear any half-typed search along with the selection.
+  const [pickType, setPickType] = useState<string | undefined>('Capa');
+  const [pickQuery, setPickQuery] = useState('');
+  const { data: linkTypes = [] } = useLinkableTypes();
+  const { data: hits = [], isFetching: searching } = useLinkableSearch(pickType, pickQuery);
+
   const addMut = useAddRiskLink(risk.id);
   const removeMut = useRemoveRiskLink();
   const confirmDelete = useConfirmDelete();
@@ -1368,6 +1403,8 @@ function LinksTab({ risk, canUpdate }: { risk: Risk; canUpdate: boolean }) {
       await addMut.mutateAsync({
         entityType: v.entityType,
         entityId: v.entityId.trim(),
+        // Left blank, the backend captures the record's own reference as the
+        // label — so this stays an optional override, not a chore.
         label: v.label?.trim() || null,
         relation: v.relation || null,
       });
@@ -1394,8 +1431,15 @@ function LinksTab({ risk, canUpdate }: { risk: Risk; canUpdate: boolean }) {
             icon={<Plus size={13} />}
             onClick={() => {
               setOpen(true);
+              setPickType('Capa');
+              setPickQuery('');
               setTimeout(() =>
-                form.setFieldsValue({ entityType: 'Capa', entityId: '', label: '', relation: undefined }),
+                form.setFieldsValue({
+                  entityType: 'Capa',
+                  entityId: undefined,
+                  label: '',
+                  relation: undefined,
+                }),
               );
             }}
           >
@@ -1428,10 +1472,10 @@ function LinksTab({ risk, canUpdate }: { risk: Risk; canUpdate: boolean }) {
               {links.map((l) => (
                 <tr key={l.id} className="border-b border-gray-50 last:border-0">
                   <td className="px-5 py-2.5">
-                    <Badge variant="info">{l.entity_type}</Badge>
+                    <Badge variant="info">{l.entity_type_label ?? l.entity_type}</Badge>
                   </td>
                   <td className="px-5 py-2.5 text-xs text-gray-800">
-                    {l.label ?? <span className="font-mono text-gray-500">{l.entity_id}</span>}
+                    <LinkedRecordCell link={l} />
                   </td>
                   <td className="px-5 py-2.5 text-xs text-gray-500">
                     {l.relation ? humanise(l.relation) : '—'}
@@ -1485,17 +1529,44 @@ function LinksTab({ risk, canUpdate }: { risk: Risk; canUpdate: boolean }) {
       >
         <Form form={form} layout="vertical" requiredMark>
           <Form.Item name="entityType" label="Record type" rules={[{ required: true }]}>
-            <AntSelect options={LINK_ENTITY_TYPES.map((t) => ({ value: t, label: t }))} />
+            <AntSelect
+              options={linkTypes.map((t) => ({ value: t.type, label: t.label }))}
+              onChange={(v: string) => {
+                setPickType(v);
+                setPickQuery('');
+                // The previously picked record belongs to the old type.
+                form.setFieldsValue({ entityId: undefined });
+              }}
+            />
           </Form.Item>
           <Form.Item
             name="entityId"
-            label="Record id"
-            rules={[{ required: true, message: 'The id of the record being linked' }]}
+            label="Record"
+            rules={[{ required: true, message: 'Search for and select the record to link' }]}
+            extra="Search by reference number or title."
           >
-            <AntInput placeholder="UUID of the linked record" />
+            <AntSelect
+              showSearch
+              filterOption={false}
+              placeholder={pickType ? 'Type at least 2 characters…' : 'Choose a record type first'}
+              disabled={!pickType}
+              notFoundContent={
+                searching
+                  ? 'Searching…'
+                  : pickQuery.trim().length < 2
+                    ? 'Type at least 2 characters'
+                    : 'No matching records you have access to'
+              }
+              onSearch={setPickQuery}
+              options={hits.map((h) => ({ value: h.id, label: h.label }))}
+            />
           </Form.Item>
-          <Form.Item name="label" label="Display label" extra="What this link should read as in the table.">
-            <AntInput placeholder="e.g. CAPA-2026-0042 — Changeover procedure revision" />
+          <Form.Item
+            name="label"
+            label="Display label"
+            extra="Optional — the record's own reference is used when left blank."
+          >
+            <AntInput placeholder="e.g. Changeover procedure revision" />
           </Form.Item>
           <Form.Item name="relation" label="Relation">
             <AntSelect

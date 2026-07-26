@@ -14,11 +14,22 @@ import { writeTrail } from '../audit/compliance.service';
 import { computeScore, nextReviewDateFor } from './risk-scoring.service';
 import { loadScoringFramework } from './risk-framework.service';
 import { ensureCapaForRisk } from './risk-control.service';
+import {
+  canSeeEntity,
+  linkableEntities,
+  linkableEntity,
+  linkableTypeNames,
+  resolveRefs,
+} from '../../lib/risk-entity-registry';
+import { getEffectivePermissionKeys } from '../../middleware/permissions';
+import { onLinkChanged, onRiskChanged } from './risk-profile.service';
 import type {
   LinkUpsert,
+  LinkSearchQuery,
   ListRegisterQuery,
   ListRiskQuery,
   RegisterUpsert,
+  ReverseLinkQuery,
   RiskCreate,
   RiskUpdate,
   ScoreRisk,
@@ -218,7 +229,46 @@ type RiskRow = Prisma.RiskGetPayload<{ include: typeof riskInclude }>;
 // framework. Resolved in one lookup per request rather than per row.
 type LevelLookup = Map<string, { code: string; label: string; color: string; acceptance: string }>;
 
-const serializeRisk = (r: RiskRow, levels?: LevelLookup) => {
+/**
+ * Serialize one link.
+ *
+ * `entity_route` is derived from the registry rather than stored, so a link
+ * written before a module's routes moved still resolves to the current path —
+ * and so no migration is needed when one does. `entity_label` prefers the label
+ * captured at link time (a point-in-time reference the trail depends on) and
+ * falls back to a freshly resolved one.
+ *
+ * `refs` is supplied only where a round trip per link is warranted (the detail
+ * view). When it is present, `entity_exists: false` marks a link whose target
+ * has since been deleted — a dangling link is a traceability defect and must be
+ * visible, not silently rendered as a plausible-looking row.
+ */
+const serializeLink = (
+  l: { id: string; entityType: string; entityId: string; label: string | null; relation: string | null; createdAt: Date },
+  refs?: Map<string, { number: string; title: string }>,
+) => {
+  const entity = linkableEntity(l.entityType);
+  const ref = refs?.get(`${l.entityType}:${l.entityId}`);
+  return {
+    id: l.id,
+    entity_type: l.entityType,
+    entity_type_label: entity?.label ?? l.entityType,
+    entity_id: l.entityId,
+    label: l.label ?? (ref ? `${ref.number} — ${ref.title}` : null),
+    entity_number: ref?.number ?? null,
+    entity_title: ref?.title ?? null,
+    entity_route: entity?.route ? entity.route(l.entityId) : null,
+    entity_exists: refs ? !!ref : null,
+    relation: l.relation,
+    created_at: l.createdAt,
+  };
+};
+
+const serializeRisk = (
+  r: RiskRow,
+  levels?: LevelLookup,
+  refs?: Map<string, { number: string; title: string }>,
+) => {
   const level = (id: string | null) => (id && levels?.get(id)) || null;
   return {
     id: r.id,
@@ -255,14 +305,7 @@ const serializeRisk = (r: RiskRow, levels?: LevelLookup) => {
     workflow_id: r.workflowId,
     workflow_ticket_id: r.workflowTicketId,
     workflow_ticket_unique_id: r.workflowTicketUniqueId,
-    links: r.links.map((l) => ({
-      id: l.id,
-      entity_type: l.entityType,
-      entity_id: l.entityId,
-      label: l.label,
-      relation: l.relation,
-      created_at: l.createdAt,
-    })),
+    links: r.links.map((l) => serializeLink(l, refs)),
     snapshot_count: r._count.snapshots,
     link_count: r._count.links,
     created_at: r.createdAt,
@@ -354,8 +397,8 @@ export const listRisks = async (q: ListRiskQuery) => {
 export const getRisk = async (id: string) => {
   const row = await prisma.risk.findUnique({ where: { id }, include: riskInclude });
   if (!row) throw NotFound('Risk not found');
-  const levels = await levelLookupFor([row]);
-  return serializeRisk(row, levels);
+  const [levels, refs] = await Promise.all([levelLookupFor([row]), resolveRefs(row.links)]);
+  return serializeRisk(row, levels, refs);
 };
 
 /**
@@ -447,6 +490,9 @@ export const scoreRisk = async (id: string, body: ScoreRisk, userId?: string) =>
   if (result.level.requiresCapa) {
     await ensureCapaForRisk(id, userId);
   }
+
+  // A new level is the main thing every risk chip in the platform reflects.
+  await onRiskChanged(id);
 
   return {
     ...(await getRisk(id)),
@@ -590,17 +636,30 @@ export const updateRiskStatus = async (id: string, body: UpdateRiskStatus, userI
     },
     userId,
   );
+  // CLOSED / REOPENED move a risk in and out of the open population every
+  // profile counts, so a status change is as material as a re-score.
+  await onRiskChanged(id);
   return getRisk(id);
 };
 
 export const deleteRisk = async (id: string, userId?: string) => {
   const existing = await prisma.risk.findUnique({ where: { id } });
   if (!existing) throw NotFound('Risk not found');
+
+  // Read the links before the delete cascades them away — afterwards there is
+  // nothing left to tell us which entities' profiles just went stale.
+  const affected = await prisma.riskLink.findMany({
+    where: { riskId: id },
+    select: { entityType: true, entityId: true },
+  });
+
   await prisma.risk.delete({ where: { id } });
   await writeTrail(
     { entityType: 'Risk', entityId: id, action: 'DELETE', oldValue: existing.riskNumber },
     userId,
   );
+
+  for (const a of affected) await onLinkChanged(a.entityType, a.entityId);
 };
 
 export const getRiskHistory = async (id: string) => {
@@ -631,13 +690,33 @@ export const addLink = async (riskId: string, body: LinkUpsert, userId?: string)
   const risk = await prisma.risk.findUnique({ where: { id: riskId }, select: { id: true } });
   if (!risk) throw NotFound('Risk not found');
 
+  // A link is a traceability claim. Both halves of it must be true at the moment
+  // it is written: the type must be one the platform knows how to resolve, and
+  // the record must actually exist. Neither was checked before, which is how the
+  // links tab ended up rendering raw UUIDs nobody could follow.
+  const entity = linkableEntity(body.entityType);
+  if (!entity) {
+    throw BadRequest(
+      `"${body.entityType}" is not a linkable record type. Known types: ${linkableTypeNames().join(', ')}`,
+    );
+  }
+  const ref = await entity.find(body.entityId);
+  if (!ref) {
+    throw BadRequest(`No ${entity.label} exists with id ${body.entityId}`);
+  }
+
+  // The label is a point-in-time reference: it must keep reading correctly even
+  // after the target is renamed, so it is captured now rather than resolved on
+  // every read. A caller-supplied label still wins — some links want prose.
+  const label = body.label?.trim() || `${ref.number} — ${ref.title}`;
+
   const created = await prisma.riskLink
     .create({
       data: {
         riskId,
         entityType: body.entityType,
         entityId: body.entityId,
-        label: body.label ?? null,
+        label,
         relation: body.relation ?? null,
         createdById: userId ?? null,
       },
@@ -656,17 +735,101 @@ export const addLink = async (riskId: string, body: LinkUpsert, userId?: string)
       action: 'UPDATE',
       field: 'links',
       newValue: `${body.entityType}:${body.entityId}`,
+      reason: `Linked ${entity.label} ${ref.number}`,
     },
     userId,
   );
-  return {
-    id: created.id,
-    entity_type: created.entityType,
-    entity_id: created.entityId,
-    label: created.label,
-    relation: created.relation,
-    created_at: created.createdAt,
-  };
+  await onLinkChanged(body.entityType, body.entityId);
+  return serializeLink(created, new Map([[`${body.entityType}:${body.entityId}`, ref]]));
+};
+
+// ── Reverse lookup + typeahead ──────────────────────────────────────────────
+
+/**
+ * The risks linked to some other record — the endpoint every other module's
+ * risk panel calls. Without it links were one-directional: a CAPA raised from a
+ * risk had no way to say so.
+ *
+ * Results are filtered by the caller's `risk.read`, which the route already
+ * enforces; the risks themselves are the payload, so no per-target permission
+ * check is needed here (unlike `resolveLinksFor`, which walks the other way).
+ */
+export const listRisksLinkedTo = async (q: ReverseLinkQuery) => {
+  const entity = linkableEntity(q.entityType);
+  if (!entity) {
+    throw BadRequest(
+      `"${q.entityType}" is not a linkable record type. Known types: ${linkableTypeNames().join(', ')}`,
+    );
+  }
+
+  const links = await prisma.riskLink.findMany({
+    where: { entityType: q.entityType, entityId: q.entityId, riskId: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, relation: true, createdAt: true, riskId: true },
+  });
+  if (links.length === 0) return [];
+
+  const rows = await prisma.risk.findMany({
+    where: { id: { in: links.map((l) => l.riskId as string) } },
+    include: riskInclude,
+  });
+  const levels = await levelLookupFor(rows);
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  return links
+    .map((l) => {
+      const row = byId.get(l.riskId as string);
+      if (!row) return null;
+      return {
+        link_id: l.id,
+        relation: l.relation,
+        linked_at: l.createdAt,
+        risk: serializeRisk(row, levels),
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+};
+
+/** The record types a risk may be linked to. Drives the client's picker. */
+export const listLinkableTypes = () =>
+  linkableEntities().map((e) => ({
+    type: e.type,
+    label: e.label,
+    has_route: !!e.route,
+  }));
+
+/**
+ * Typeahead over one linkable type, filtered to what the caller may read.
+ *
+ * The permission filter is the point: a risk owner who cannot read CAPAs must
+ * not be able to enumerate CAPA numbers through this picker. `canSeeEntity`
+ * handles the two types gated by dynamic per-workflow-type keys.
+ */
+export const searchLinkable = async (q: LinkSearchQuery, userId?: string) => {
+  const entity = linkableEntity(q.type);
+  if (!entity) {
+    throw BadRequest(
+      `"${q.type}" is not a linkable record type. Known types: ${linkableTypeNames().join(', ')}`,
+    );
+  }
+
+  const hits = await entity.search(q.q, q.take);
+  if (hits.length === 0) return [];
+
+  const keys = userId ? await getEffectivePermissionKeys(userId) : new Set<string>();
+  const visible = await Promise.all(
+    hits.map(async (h) => ((await canSeeEntity(entity, h.id, keys)) ? h : null)),
+  );
+
+  return visible
+    .filter((h): h is NonNullable<typeof h> => h !== null)
+    .map((h) => ({
+      id: h.id,
+      number: h.number,
+      title: h.title,
+      label: `${h.number} — ${h.title}`,
+      route: entity.route ? entity.route(h.id) : null,
+    }));
 };
 
 export const removeLink = async (linkId: string, userId?: string) => {
@@ -687,6 +850,7 @@ export const removeLink = async (linkId: string, userId?: string) => {
     },
     userId,
   );
+  await onLinkChanged(existing.entityType, existing.entityId);
 };
 
 // ── Analytics ───────────────────────────────────────────────────────────────
