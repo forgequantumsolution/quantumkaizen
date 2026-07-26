@@ -6,7 +6,7 @@
  * and sparse data falls back to honest empty states (spec §9/§11).
  *
  * Matches the look & feel of ModuleDashboard: an antd filter bar (options
- * derived from these records), a StatTile strip, and a two-column ChartCard grid.
+ * derived from these records), a KpiCard strip, and a two-column ChartCard grid.
  */
 import { useMemo } from 'react';
 import {
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import {
   ChartCard,
-  StatTile,
   TrendLineChart,
   AgingBucketChart,
   ComplianceGauge,
@@ -35,16 +34,18 @@ import {
   onTimeClosureRate,
   avgCycleDays,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 import type { TicketSummary } from '@/lib/api/ticket';
 import type { ModuleAnalyticsProps } from './types';
-import { useTicketFilters } from './useTicketFilters';
 
 /** A CAPA counts as "recurring" when its title flags a repeat/recurring issue. */
 const RECURRING_RE = /recurr|repeat/i;
 const isRecurring = (t: TicketSummary) => RECURRING_RE.test(t.title);
 
 export default function CapaAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
@@ -71,16 +72,13 @@ export default function CapaAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover (shared across all module panels) */}
-      {toolbar}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile tone="blue" icon={<ActivityIcon size={16} />} label="Active" value={m.active} hint="Open CAPAs" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue" value={m.overdue} hint="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile tone="emerald" icon={<CheckCircle2 size={16} />} label="On-Time Closure" value={`${m.onTimeClosure}%`} hint="Closed within SLA" onClick={onDrill && (() => onDrill('completed'))} />
-        <StatTile tone="amber" icon={<Timer size={16} />} label="Avg Cycle" value={`${m.avgCycle}d`} hint="Open → close" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile tone="purple" icon={<Repeat size={16} />} label="Recurring Rate" value={`${m.recurringRate}%`} hint={`${m.recurringCount} recurring`} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={ActivityIcon} label="Active" value={m.active} subtitle="Open CAPAs" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="On-Time Closure" value={`${m.onTimeClosure}%`} subtitle="Closed within SLA" onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="amber" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} subtitle="Open → close" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="purple" icon={Repeat} label="Recurring Rate" value={`${m.recurringRate}%`} subtitle={`${m.recurringCount} recurring`} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

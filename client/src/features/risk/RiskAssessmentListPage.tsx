@@ -21,7 +21,6 @@ import {
 } from 'antd';
 import {
   Plus,
-  Search,
   Download,
   Trash2,
   Eye,
@@ -49,6 +48,7 @@ import {
   type RiskMethodology,
 } from '@/lib/api/risk';
 import { AssessmentStatusBadge } from './riskStatusBadge';
+import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
 
 const PAGE_SIZE = 15;
 
@@ -163,6 +163,10 @@ export default function RiskAssessmentListPage() {
   const rows = data?.data ?? [];
   const total = data?.total ?? rows.length;
   const registers = registerPage?.data ?? [];
+
+  // Search sits in the bar itself and sort is not a filter, so neither counts.
+  const activeFilterCount =
+    (methodology ? 1 : 0) + (status ? 1 : 0) + (registerId ? 1 : 0);
   const users = directory?.items ?? [];
 
   const userName = useMemo(() => {
@@ -360,70 +364,72 @@ export default function RiskAssessmentListPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Risk assessments</h2>
-          <p className="text-xs text-gray-500">
-            {total} assessment{total === 1 ? '' : 's'} matching the current filters
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AntInput
-            allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="Search number, title or objective"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 260 }}
-          />
-          <AntButton icon={<Download size={14} />} onClick={handleExport}>
-            Export CSV
-          </AntButton>
-          {canCreate && (
-            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
-              New assessment
+      {/* Toolbar first, then the table — the filters scope what is listed. */}
+      <RiskFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search number, title or objective"
+        title="Filter assessments"
+        activeCount={activeFilterCount}
+        onClear={() => {
+          setMethodology(undefined);
+          setStatus(undefined);
+          setRegisterId(undefined);
+        }}
+        actions={
+          <>
+            <AntButton icon={<Download size={14} />} onClick={handleExport}>
+              Export CSV
             </AntButton>
-          )}
-        </div>
-      </div>
-
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 flex-wrap mb-4 p-2.5 rounded-xl bg-gray-50 border border-gray-200/70">
-        <AntSelect
-          allowClear
-          placeholder="All methodologies"
-          style={{ width: 210 }}
-          value={methodology}
-          onChange={(v) => setMethodology(v ?? undefined)}
-          options={METHODOLOGIES.map((m) => ({ value: m, label: METHODOLOGY_LABELS[m] }))}
-        />
-        <AntSelect
-          allowClear
-          placeholder="All statuses"
-          style={{ width: 190 }}
-          value={status}
-          onChange={(v) => setStatus(v ?? undefined)}
-          options={STATUSES.map((s) => ({ value: s, label: ASSESSMENT_STATUS_LABELS[s] }))}
-        />
-        <AntSelect
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="All registers"
-          style={{ width: 230 }}
-          value={registerId}
-          onChange={(v) => setRegisterId(v ?? undefined)}
-          options={registers.map((r) => ({ value: r.id, label: r.name }))}
-        />
-        <div className="ml-auto">
+            {canCreate && (
+              <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
+                New assessment
+              </AntButton>
+            )}
+          </>
+        }
+      >
+        <RiskFilterField label="Methodology">
           <AntSelect
-            style={{ width: 210 }}
+            allowClear
+            placeholder="All methodologies"
+            style={{ width: '100%' }}
+            value={methodology}
+            onChange={(v) => setMethodology(v ?? undefined)}
+            options={METHODOLOGIES.map((m) => ({ value: m, label: METHODOLOGY_LABELS[m] }))}
+          />
+        </RiskFilterField>
+        <RiskFilterField label="Status">
+          <AntSelect
+            allowClear
+            placeholder="All statuses"
+            style={{ width: '100%' }}
+            value={status}
+            onChange={(v) => setStatus(v ?? undefined)}
+            options={STATUSES.map((s) => ({ value: s, label: ASSESSMENT_STATUS_LABELS[s] }))}
+          />
+        </RiskFilterField>
+        <RiskFilterField label="Register">
+          <AntSelect
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="All registers"
+            style={{ width: '100%' }}
+            value={registerId}
+            onChange={(v) => setRegisterId(v ?? undefined)}
+            options={registers.map((r) => ({ value: r.id, label: r.name }))}
+          />
+        </RiskFilterField>
+        <RiskFilterField label="Sort by">
+          <AntSelect
+            style={{ width: '100%' }}
             value={sortBy}
             onChange={(v) => setSortBy(v)}
             options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
           />
-        </div>
-      </div>
+        </RiskFilterField>
+      </RiskFilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

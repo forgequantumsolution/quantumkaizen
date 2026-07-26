@@ -13,7 +13,7 @@ import {
   FileText, CheckCircle2, Clock, AlertTriangle, ClipboardList,
   SlidersHorizontal, RotateCcw,
 } from 'lucide-react';
-import { Card } from '@/components/ui';
+import { Card, KpiCard } from '@/components/ui';
 import {
   useDocuments, DOC_TYPE_LABELS,
   type DocSummary, type DocumentStatus, type DocumentType,
@@ -185,10 +185,10 @@ export default function DmsDashboard() {
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Chip icon={<FileText size={14} />} label="Total documents" value={`${m.kpi.total}`} tone="blue" />
-        <Chip icon={<CheckCircle2 size={14} />} label="Effective" value={`${m.kpi.effective}`} tone="emerald" />
-        <Chip icon={<Clock size={14} />} label="In review" value={`${m.kpi.inReview}`} tone="amber" />
-        <Chip icon={<AlertTriangle size={14} />} label="Review overdue" value={`${m.kpi.overdue}`} tone="red" />
+        <KpiCard icon={FileText} label="Total documents" value={`${m.kpi.total}`} accent="blue" />
+        <KpiCard icon={CheckCircle2} label="Effective" value={`${m.kpi.effective}`} accent="emerald" />
+        <KpiCard icon={Clock} label="In review" value={`${m.kpi.inReview}`} accent="amber" />
+        <KpiCard icon={AlertTriangle} label="Review overdue" value={`${m.kpi.overdue}`} accent="red" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -6,7 +6,7 @@
  * or hardcoded and sparse data falls back to honest empty states (spec §9/§11).
  *
  * Matches the look & feel of ModuleDashboard: an antd filter bar (options
- * derived from these records), a StatTile strip, and a two-column ChartCard grid.
+ * derived from these records), a KpiCard strip, and a two-column ChartCard grid.
  *
  * Supplier identity is proxied by `department.name` (the closest structured
  * grouping available on a ticket) so the AVL scorecard / rejection Pareto read
@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import {
   ChartCard,
-  StatTile,
   DonutChart,
   TrendLineChart,
   ScorecardTable,
@@ -38,9 +37,9 @@ import {
   openClosedTrend,
   type ScorecardColumn,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 import type { TicketSummary } from '@/lib/api/ticket';
 import type { ModuleAnalyticsProps } from './types';
-import { useTicketFilters } from './useTicketFilters';
 
 /** A supplier/record counts as disqualified when completed or flagged so. */
 const DISQ_RE = /disq/i;
@@ -55,7 +54,9 @@ interface SupplierRow {
 }
 
 export default function SupplierQualityAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
@@ -110,16 +111,13 @@ export default function SupplierQualityAnalytics({ tickets, onDrill }: ModuleAna
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover */}
-      {toolbar}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile tone="blue" icon={<Building2 size={16} />} label="Total Records" value={m.total} hint="Supplier-quality records" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile tone="emerald" icon={<ActivityIcon size={16} />} label="Active" value={m.active} hint="Open evaluations" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="red" icon={<Ban size={16} />} label="Disqualified" value={m.disqualified} hint="Completed / flagged disq." onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile tone="amber" icon={<AlertTriangle size={16} />} label="Overdue Audits" value={m.overdue} hint="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile tone="purple" icon={<Gauge size={16} />} label="Avg Score" value={m.avgScore} hint="Mean supplier score" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={Building2} label="Total Records" value={m.total} subtitle="Supplier-quality records" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="emerald" icon={ActivityIcon} label="Active" value={m.active} subtitle="Open evaluations" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={Ban} label="Disqualified" value={m.disqualified} subtitle="Completed / flagged disq." onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="amber" icon={AlertTriangle} label="Overdue Audits" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="purple" icon={Gauge} label="Avg Score" value={m.avgScore} subtitle="Mean supplier score" onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

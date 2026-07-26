@@ -6,7 +6,7 @@
  * and sparse data falls back to honest empty states (spec §9/§11).
  *
  * Matches the look & feel of ModuleDashboard: an antd filter bar (options
- * derived from these records), a StatTile strip, and a two-column ChartCard grid.
+ * derived from these records), a KpiCard strip, and a two-column ChartCard grid.
  */
 import { useMemo } from 'react';
 import {
@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import {
   ChartCard,
-  StatTile,
   HeatMapMatrix,
   CategoryParetoChart,
   TrendLineChart,
@@ -36,10 +35,10 @@ import {
   agingByCreation,
   avgOpenAge,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 import type { CalendarEntry } from '@/components/analytics';
 import type { TicketSummary } from '@/lib/api/ticket';
 import type { ModuleAnalyticsProps } from './types';
-import { useTicketFilters } from './useTicketFilters';
 
 /** High-RPN proxy — risks whose severity reads as high/critical. */
 const HIGH_RPN_RE = /high|crit/i;
@@ -81,7 +80,9 @@ function severityIndex(name: string | null | undefined): number {
 }
 
 export default function RiskAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
-  const { filtered, toolbar } = useTicketFilters(tickets);
+  // No panel-level Filter: the module header owns the one Filter button and
+  // hands this panel an already-scoped list.
+  const filtered = tickets;
 
   // ─── Derived metrics ──────────────────────────────────────────────────────
   const m = useMemo(() => {
@@ -127,16 +128,13 @@ export default function RiskAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
 
   return (
     <div className="space-y-4">
-      {/* Right-aligned Filter popover (shared across all module panels) */}
-      {toolbar}
-
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <StatTile tone="blue" icon={<ActivityIcon size={16} />} label="Active Risks" value={m.active} hint="Open in register" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="red" icon={<AlertTriangle size={16} />} label="Overdue Mitigations" value={m.overdue} hint="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <StatTile tone="amber" icon={<Timer size={16} />} label="Avg Age" value={`${m.avgAge}d`} hint="Open risks" onClick={onDrill && (() => onDrill('all'))} />
-        <StatTile tone="purple" icon={<Flame size={16} />} label="High RPN" value={m.highRpn} hint="High / critical severity" onClick={onDrill && (() => onDrill('open'))} />
-        <StatTile tone="slate" icon={<PauseCircle size={16} />} label="On Hold" value={m.onHold} hint="Paused risks" onClick={onDrill && (() => onDrill('onhold'))} />
+        <KpiCard accent="blue" icon={ActivityIcon} label="Active Risks" value={m.active} subtitle="Open in register" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue Mitigations" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="amber" icon={Timer} label="Avg Age" value={`${m.avgAge}d`} subtitle="Open risks" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="purple" icon={Flame} label="High RPN" value={m.highRpn} subtitle="High / critical severity" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="slate" icon={PauseCircle} label="On Hold" value={m.onHold} subtitle="Paused risks" onClick={onDrill && (() => onDrill('onhold'))} />
       </div>
 
       {/* Chart grid */}

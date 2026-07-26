@@ -23,7 +23,6 @@ import {
 } from 'antd';
 import {
   Plus,
-  Search,
   Pencil,
   Trash2,
   Copy,
@@ -34,6 +33,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { DataTable, type Column, Badge, Card, CardHeader, CardTitle, Spinner } from '@/components/ui';
+import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
@@ -291,37 +291,33 @@ export default function RiskFrameworkPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-900">Risk frameworks</h2>
-          <p className="text-xs text-gray-500">
-            Scoring scales, level bands and the governance each band triggers
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AntInput
-            allowClear
-            prefix={<Search size={14} className="text-gray-400" />}
-            placeholder="Search name, code or standard"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            style={{ width: 260 }}
-          />
+      {/* Toolbar first, then the table — the filters scope what is listed. */}
+      <RiskFilterBar
+        search={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search name, code or standard"
+        title="Filter frameworks"
+        activeCount={methodology ? 1 : 0}
+        onClear={() => setMethodology(undefined)}
+        actions={
+          canCreate ? (
+            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
+              New framework
+            </AntButton>
+          ) : undefined
+        }
+      >
+        <RiskFilterField label="Methodology">
           <AntSelect
             allowClear
             placeholder="All methodologies"
-            style={{ width: 190 }}
+            style={{ width: '100%' }}
             value={methodology}
             onChange={(v) => setMethodology(v ?? undefined)}
             options={METHODOLOGIES.map((m) => ({ value: m, label: METHODOLOGY_LABELS[m] }))}
           />
-          {canCreate && (
-            <AntButton type="primary" icon={<Plus size={14} />} onClick={openCreate}>
-              New framework
-            </AntButton>
-          )}
-        </div>
-      </div>
+        </RiskFilterField>
+      </RiskFilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

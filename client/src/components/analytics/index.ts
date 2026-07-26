@@ -3,7 +3,7 @@
  * Import everything a module analytics panel needs from here:
  *
  *   import {
- *     AnalyticsHeader, ChartCard, StatTile,
+ *     AnalyticsHeader, ChartCard,
  *     AgingBucketChart, ComplianceGauge, CategoryParetoChart, TrendLineChart,
  *     DonutChart, BarSplit, HBarSplit, FunnelChart, HeatMapMatrix,
  *     ScorecardTable, CalendarList,

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import { KpiCard } from '@/components/ui';
 import D3BarChart, { type BarDatum } from './D3BarChart';
 import {
   useLimsDashboard,
@@ -30,7 +31,6 @@ import {
   type LimsDashboardKpis,
 } from '@/lib/api/limsAnalytics';
 
-type Tone = 'default' | 'emerald' | 'blue' | 'amber' | 'red' | 'indigo';
 
 const STATUS_FILL: Record<string, string> = {
   REGISTERED: '#94a3b8',
@@ -106,24 +106,24 @@ export default function LimsDashboardPage() {
         </div>
 
         <div className="flex gap-3 overflow-x-auto pb-1">
-          <Kpi label="Samples in Testing" value={k.samples_in_testing} icon={FlaskConical} tone="blue" />
-          <Kpi label="Pending Reviews" value={k.pending_reviews} icon={ClipboardCheck} tone={k.pending_reviews > 0 ? 'amber' : 'default'} />
-          <Kpi label="Open OOS" value={k.open_oos} icon={AlertTriangle} tone={k.open_oos > 0 ? 'red' : 'default'} />
-          <Kpi label="OOS Rate 30d" value={`${k.oos_rate_30d}%`} icon={Percent} tone={k.oos_rate_30d > 0 ? 'amber' : 'default'} />
-          <Kpi label="CoAs Issued" value={k.coas_issued} icon={FileCheck2} tone="emerald" />
+          <KpiCard label="Samples in Testing" value={k.samples_in_testing} icon={FlaskConical} accent="blue" />
+          <KpiCard label="Pending Reviews" value={k.pending_reviews} icon={ClipboardCheck} accent={k.pending_reviews > 0 ? 'amber' : 'neutral'} />
+          <KpiCard label="Open OOS" value={k.open_oos} icon={AlertTriangle} accent={k.open_oos > 0 ? 'red' : 'neutral'} />
+          <KpiCard label="OOS Rate 30d" value={`${k.oos_rate_30d}%`} icon={Percent} accent={k.oos_rate_30d > 0 ? 'amber' : 'neutral'} />
+          <KpiCard label="CoAs Issued" value={k.coas_issued} icon={FileCheck2} accent="emerald" />
         </div>
 
         {/* Secondary metrics — revealed by the toggle */}
         {showAll && (
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mt-3">
-            <Kpi label="QC Rejects 30d" value={k.qc_rejects_30d} icon={XCircle} tone={k.qc_rejects_30d > 0 ? 'red' : 'default'} />
-            <Kpi label="Stability Due Pulls" value={k.stability_due_pulls} icon={CalendarClock} tone={k.stability_due_pulls > 0 ? 'amber' : 'default'} />
-            <Kpi label="Equipment Overdue" value={k.equipment_overdue} icon={Wrench} tone={k.equipment_overdue > 0 ? 'red' : 'default'} />
-            <Kpi label="Certs Expiring 30d" value={k.certs_expiring_30d} icon={BadgeCheck} tone={k.certs_expiring_30d > 0 ? 'amber' : 'default'} />
-            <Kpi label="Avg TAT" value={`${tat?.avg_tat_days ?? 0}d`} icon={Timer} tone="blue" />
-            <Kpi label="P90 TAT" value={`${tat?.p90_tat_days ?? 0}d`} icon={Gauge} tone="blue" />
-            <Kpi label="Overdue in Testing" value={tat?.overdue_in_testing ?? 0} icon={Hourglass} tone={(tat?.overdue_in_testing ?? 0) > 0 ? 'red' : 'default'} />
-            <Kpi label="Released" value={tat?.released_count ?? 0} icon={CheckCircle2} tone="emerald" />
+            <KpiCard label="QC Rejects 30d" value={k.qc_rejects_30d} icon={XCircle} accent={k.qc_rejects_30d > 0 ? 'red' : 'neutral'} />
+            <KpiCard label="Stability Due Pulls" value={k.stability_due_pulls} icon={CalendarClock} accent={k.stability_due_pulls > 0 ? 'amber' : 'neutral'} />
+            <KpiCard label="Equipment Overdue" value={k.equipment_overdue} icon={Wrench} accent={k.equipment_overdue > 0 ? 'red' : 'neutral'} />
+            <KpiCard label="Certs Expiring 30d" value={k.certs_expiring_30d} icon={BadgeCheck} accent={k.certs_expiring_30d > 0 ? 'amber' : 'neutral'} />
+            <KpiCard label="Avg TAT" value={`${tat?.avg_tat_days ?? 0}d`} icon={Timer} accent="blue" />
+            <KpiCard label="P90 TAT" value={`${tat?.p90_tat_days ?? 0}d`} icon={Gauge} accent="blue" />
+            <KpiCard label="Overdue in Testing" value={tat?.overdue_in_testing ?? 0} icon={Hourglass} accent={(tat?.overdue_in_testing ?? 0) > 0 ? 'red' : 'neutral'} />
+            <KpiCard label="Released" value={tat?.released_count ?? 0} icon={CheckCircle2} accent="emerald" />
           </div>
         )}
       </div>
@@ -196,46 +196,6 @@ function ChartCard({
         {badge}
       </div>
       {children}
-    </div>
-  );
-}
-
-function Kpi({
-  label,
-  value,
-  icon: Icon,
-  tone = 'default',
-}: {
-  label: string;
-  value: React.ReactNode;
-  icon: LucideIcon;
-  tone?: Tone;
-}) {
-  const valueCls: Record<Tone, string> = {
-    default: 'text-gray-900',
-    emerald: 'text-emerald-600',
-    blue: 'text-blue-600',
-    amber: 'text-amber-600',
-    red: 'text-red-600',
-    indigo: 'text-indigo-600',
-  };
-  const accentCls: Record<Tone, string> = {
-    default: 'bg-gray-100 text-gray-500',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    amber: 'bg-amber-50 text-amber-600',
-    red: 'bg-red-50 text-red-600',
-    indigo: 'bg-indigo-50 text-indigo-600',
-  };
-  return (
-    <div className="flex-1 min-w-[168px] bg-white rounded-xl border border-gray-200 p-3.5 flex items-center gap-3 hover:shadow-sm hover:border-gray-300 transition-all">
-      <span className={`shrink-0 inline-flex items-center justify-center h-10 w-10 rounded-lg ${accentCls[tone]}`}>
-        <Icon size={18} />
-      </span>
-      <div className="min-w-0">
-        <div className={`text-2xl font-semibold leading-none ${valueCls[tone]}`}>{value}</div>
-        <div className="text-[11px] text-gray-500 uppercase tracking-wide mt-1 truncate">{label}</div>
-      </div>
     </div>
   );
 }

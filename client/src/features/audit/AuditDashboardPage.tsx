@@ -16,7 +16,6 @@ import { useAuditDashboard, type AuditDashboardFilters } from '@/lib/api/audit';
 import { FindingSeverityBadge } from './auditStatusBadge';
 import {
   ChartCard,
-  StatTile,
   DonutChart,
   HBarSplit,
   BarSplit,
@@ -25,6 +24,7 @@ import {
   EmptyChart,
   type Slice,
 } from '@/components/analytics';
+import { KpiCard } from '@/components/ui';
 
 const SEVERITY_ORDER = ['OBSERVATION', 'MINOR', 'MAJOR', 'CRITICAL'];
 const SEVERITY_FILL: Record<string, string> = {
@@ -173,13 +173,13 @@ export default function AuditDashboardPage() {
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3">
-        <StatTile icon={<ClipboardCheck size={16} />} label="Total Audits" value={k.total_audits} tone="slate" onClick={() => navigate('/audit/register')} />
-        <StatTile icon={<CheckCircle2 size={16} />} label="Completion" value={`${k.completion_rate}%`} hint={`${k.completed_audits} done`} tone="emerald" onClick={() => navigate('/audit/register')} />
-        <StatTile icon={<Activity size={16} />} label="In Progress" value={k.in_progress_audits} tone="blue" onClick={() => navigate('/audit/register')} />
-        <StatTile icon={<AlertTriangle size={16} />} label="Open Findings" value={k.open_findings} tone="amber" onClick={() => navigate('/audit/register')} />
-        <StatTile icon={<FileWarning size={16} />} label="Open NCs" value={k.open_ncs} hint={k.overdue_ncs ? `${k.overdue_ncs} overdue` : undefined} tone={k.overdue_ncs ? 'red' : 'slate'} onClick={() => navigate('/audit/non-conformance')} />
-        <StatTile icon={<Wrench size={16} />} label="Open CAPAs" value={k.open_capas} hint={k.overdue_capas ? `${k.overdue_capas} overdue` : undefined} tone={k.overdue_capas ? 'red' : 'slate'} onClick={() => navigate('/audit/capa')} />
-        <StatTile icon={<ListChecks size={16} />} label="Open Actions" value={k.open_actions} hint={k.overdue_actions ? `${k.overdue_actions} overdue` : undefined} tone={k.overdue_actions ? 'red' : 'slate'} onClick={() => navigate('/audit/register')} />
+        <KpiCard icon={ClipboardCheck} label="Total Audits" value={k.total_audits} accent="slate" onClick={() => navigate('/audit/register')} />
+        <KpiCard icon={CheckCircle2} label="Completion" value={`${k.completion_rate}%`} subtitle={`${k.completed_audits} done`} accent="emerald" onClick={() => navigate('/audit/register')} />
+        <KpiCard icon={Activity} label="In Progress" value={k.in_progress_audits} accent="blue" onClick={() => navigate('/audit/register')} />
+        <KpiCard icon={AlertTriangle} label="Open Findings" value={k.open_findings} accent="amber" onClick={() => navigate('/audit/register')} />
+        <KpiCard icon={FileWarning} label="Open NCs" value={k.open_ncs} subtitle={k.overdue_ncs ? `${k.overdue_ncs} overdue` : undefined} accent={k.overdue_ncs ? 'red' : 'slate'} onClick={() => navigate('/audit/non-conformance')} />
+        <KpiCard icon={Wrench} label="Open CAPAs" value={k.open_capas} subtitle={k.overdue_capas ? `${k.overdue_capas} overdue` : undefined} accent={k.overdue_capas ? 'red' : 'slate'} onClick={() => navigate('/audit/capa')} />
+        <KpiCard icon={ListChecks} label="Open Actions" value={k.open_actions} subtitle={k.overdue_actions ? `${k.overdue_actions} overdue` : undefined} accent={k.overdue_actions ? 'red' : 'slate'} onClick={() => navigate('/audit/register')} />
       </div>
 
       {/* Trends */}

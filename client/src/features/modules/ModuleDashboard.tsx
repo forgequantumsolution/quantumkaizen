@@ -10,8 +10,7 @@
  * shown, and which charts appear — so each module reads as a purpose-built
  * dashboard rather than a shared template.
  */
-import { useMemo, useState } from 'react';
-import { Select } from 'antd';
+import { useMemo } from 'react';
 import {
   PieChart,
   Pie,
@@ -35,8 +34,6 @@ import {
   PauseCircle,
   Timer,
   ClipboardList,
-  SlidersHorizontal,
-  RotateCcw,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Card } from '@/components/ui';
@@ -264,54 +261,12 @@ interface Slice { name: string; value: number; color?: string }
 function daysSince(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
 }
-function ticketStatus(
-  t: TicketSummary,
-): 'Open' | 'In Progress' | 'On Hold' | 'Completed' | 'Rejected' {
-  if (isRejected(t)) return 'Rejected';
-  if (isCompletedSuccessfully(t)) return 'Completed';
-  if (t.isOnHold) return 'On Hold';
-  if (t.flows[0]?.currentStages.length) return 'In Progress';
-  return 'Open';
-}
-
-interface Filters {
-  status?: string;
-  priority?: string;
-  department?: string;
-  site?: string;
-  severity?: string;
-}
-
 export default function ModuleDashboard({ tickets, moduleName, showIndicators = true }: Props) {
   const profile = useMemo(() => profileFor(moduleName), [moduleName]);
   const accent = PALETTE[profile.accent];
-  const [filters, setFilters] = useState<Filters>({});
-
-  // Filter options — derived live from this module's own tickets.
-  const options = useMemo(() => {
-    const uniq = (vals: Array<string | null | undefined>) =>
-      Array.from(new Set(vals.filter((v): v is string => !!v))).sort();
-    return {
-      status: uniq(tickets.map(ticketStatus)),
-      priority: uniq(tickets.map((t) => t.priority?.name)),
-      department: uniq(tickets.map((t) => t.department?.name)),
-      site: uniq(tickets.map((t) => t.site?.name)),
-      severity: uniq(tickets.map((t) => t.severity?.name)),
-    };
-  }, [tickets]);
-
-  const filtered = useMemo(
-    () =>
-      tickets.filter(
-        (t) =>
-          (!filters.status || ticketStatus(t) === filters.status) &&
-          (!filters.priority || t.priority?.name === filters.priority) &&
-          (!filters.department || t.department?.name === filters.department) &&
-          (!filters.site || t.site?.name === filters.site) &&
-          (!filters.severity || t.severity?.name === filters.severity),
-      ),
-    [tickets, filters],
-  );
+  // Scoping happens upstream: the module header's Filter narrows the list this
+  // panel is handed, so there is nothing left to filter here.
+  const filtered = tickets;
 
   const m = useMemo(() => {
     const open = filtered.filter((t) => !isClosed(t));
@@ -426,10 +381,6 @@ export default function ModuleDashboard({ tickets, moduleName, showIndicators = 
     };
   }, [filtered]);
 
-  const activeFilters = Object.values(filters).filter(Boolean).length;
-  const set = (key: keyof Filters) => (v?: string) =>
-    setFilters((f) => ({ ...f, [key]: v || undefined }));
-
   // ─── KPI chip definitions ──────────────────────────────────────────────
   const kpiDefs: Record<KpiKey, { icon: React.ReactNode; label: string; value: string; tone: ChipTone }> = {
     active:      { icon: <ActivityIcon size={14} />, label: 'Active',        value: `${m.kpi.active}`,         tone: 'blue' },
@@ -442,36 +393,11 @@ export default function ModuleDashboard({ tickets, moduleName, showIndicators = 
     total:       { icon: <ClipboardList size={14} />, label: 'Total records', value: `${m.kpi.total}`,         tone: 'blue' },
   };
 
-  const optsFor = (vals: string[]) => vals.map((v) => ({ value: v, label: v }));
-
   return (
     <div className="space-y-4">
-      {/* Dynamic filter bar — options derived from this module's records */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500">
-          <SlidersHorizontal size={13} /> Filters
-        </span>
-        <Select size="small" allowClear placeholder="Status" style={{ width: 130 }}
-          value={filters.status} onChange={set('status')} options={optsFor(options.status)} />
-        <Select size="small" allowClear placeholder="Priority" style={{ width: 130 }}
-          value={filters.priority} onChange={set('priority')} options={optsFor(options.priority)} />
-        {options.severity.length > 0 && (
-          <Select size="small" allowClear placeholder="Severity" style={{ width: 130 }}
-            value={filters.severity} onChange={set('severity')} options={optsFor(options.severity)} />
-        )}
-        <Select size="small" allowClear placeholder="Department" style={{ width: 150 }}
-          value={filters.department} onChange={set('department')} options={optsFor(options.department)} />
-        {options.site.length > 1 && (
-          <Select size="small" allowClear placeholder="Site" style={{ width: 140 }}
-            value={filters.site} onChange={set('site')} options={optsFor(options.site)} />
-        )}
-        {activeFilters > 0 && (
-          <button onClick={() => setFilters({})}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md px-2 py-1">
-            <RotateCcw size={12} /> Reset
-          </button>
-        )}
-      </div>
+      {/* No filter bar here. This dashboard is the Overview tab's fallback panel,
+          and the module header above it already carries the one Filter control —
+          two filter surfaces on one screen is what this replaced. */}
 
       {/* Indicator strip — suppressed when the parent hoists these into its
           own top KPI strip (ModulePage passes showIndicators={false}). */}

@@ -20,6 +20,7 @@ import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useRoleDirectory } from '@/features/admin/roles/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useSites } from '@/lib/api/sites';
+import { KpiCard } from '@/components/ui';
 
 function downloadCsv(filename: string, rows: (string | number | null)[][]) {
   const esc = (v: string | number | null) => {
@@ -34,15 +35,6 @@ function downloadCsv(filename: string, rows: (string | number | null)[][]) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-}
-
-function Kpi({ label, value, tone }: { label: string; value: string | number; tone?: string }) {
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4">
-      <p className="text-[11px] uppercase tracking-wide text-gray-400">{label}</p>
-      <p className={`text-2xl font-bold mt-1 ${tone ?? 'text-gray-900'}`}>{value}</p>
-    </div>
-  );
 }
 
 type Dimension = 'Department' | 'Role' | 'Site';
@@ -139,12 +131,12 @@ export default function ReportsPage() {
       ) : (
         <>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
-            <Kpi label="Total" value={report.summary.total} />
-            <Kpi label="Completed" value={report.summary.completed} tone="text-emerald-600" />
-            <Kpi label="In progress" value={report.summary.in_progress} tone="text-amber-600" />
-            <Kpi label="Overdue" value={report.summary.overdue} tone="text-red-600" />
-            <Kpi label="Completion" value={`${report.summary.completion_rate}%`} />
-            <Kpi label="Matrix coverage" value={`${report.summary.matrix_coverage}%`} />
+            <KpiCard label="Total" value={report.summary.total} accent="slate" />
+            <KpiCard label="Completed" value={report.summary.completed} accent="emerald" />
+            <KpiCard label="In progress" value={report.summary.in_progress} accent="amber" />
+            <KpiCard label="Overdue" value={report.summary.overdue} accent="red" />
+            <KpiCard label="Completion" value={`${report.summary.completion_rate}%`} accent="slate" />
+            <KpiCard label="Matrix coverage" value={`${report.summary.matrix_coverage}%`} accent="slate" />
           </div>
 
           {/* Charts — enrollment status + assessment outcomes */}
@@ -172,12 +164,12 @@ export default function ReportsPage() {
           <div className="rounded-xl border border-gray-200 bg-white p-4 mb-6">
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Assessment results</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-              <Kpi label="Attempts" value={report.assessment.attempts} />
-              <Kpi label="Passed" value={report.assessment.passed} tone="text-emerald-600" />
-              <Kpi label="Failed" value={report.assessment.failed} tone="text-red-600" />
-              <Kpi label="Pass rate" value={`${report.assessment.pass_rate}%`} />
-              <Kpi label="Avg score" value={`${report.assessment.avg_score}%`} />
-              <Kpi label="Learners" value={report.assessment.learners} />
+              <KpiCard label="Attempts" value={report.assessment.attempts} accent="slate" />
+              <KpiCard label="Passed" value={report.assessment.passed} accent="emerald" />
+              <KpiCard label="Failed" value={report.assessment.failed} accent="red" />
+              <KpiCard label="Pass rate" value={`${report.assessment.pass_rate}%`} accent="slate" />
+              <KpiCard label="Avg score" value={`${report.assessment.avg_score}%`} accent="slate" />
+              <KpiCard label="Learners" value={report.assessment.learners} accent="slate" />
             </div>
           </div>
 
