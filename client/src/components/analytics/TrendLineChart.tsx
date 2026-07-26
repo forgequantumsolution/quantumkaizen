@@ -27,6 +27,12 @@ export interface TrendLineChartProps {
   benchmarkLabel?: string;
   unit?: string;
   emptyLabel?: string;
+  /**
+   * Stack the area series on top of each other instead of overlaying them. Use
+   * when the series are parts of one whole (e.g. risks per severity level per
+   * month) so the silhouette reads as the total. Line series are never stacked.
+   */
+  stacked?: boolean;
 }
 
 export default function TrendLineChart({
@@ -38,6 +44,7 @@ export default function TrendLineChart({
   benchmarkLabel = 'Target',
   unit,
   emptyLabel = 'No trend data yet',
+  stacked = false,
 }: TrendLineChartProps) {
   const hasData =
     data.length > 0 &&
@@ -78,7 +85,8 @@ export default function TrendLineChart({
               stroke={c} strokeWidth={2} dot={{ r: 2.5 }} />
           ) : (
             <Area key={s.key} type="monotone" dataKey={s.key} name={s.name}
-              stroke={c} strokeWidth={2} fill={`url(#grad-${s.key})`} />
+              {...(stacked ? { stackId: 'stack', fillOpacity: 0.85, fill: c } : { fill: `url(#grad-${s.key})` })}
+              stroke={c} strokeWidth={stacked ? 1 : 2} />
           );
         })}
       </ComposedChart>

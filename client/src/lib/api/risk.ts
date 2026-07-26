@@ -13,7 +13,7 @@
  * { status: 'success', message, data }. Both unwrap through `r.data.data`.
  * Paginated list payloads are { data, total, page, page_size }.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { BadgeVariant } from '@/components/ui/Badge';
 
@@ -1047,6 +1047,36 @@ export const useRiskControls = (params: ListControlParams = {}) =>
   useQuery<Paginated<RiskControl>>({
     queryKey: riskKeys.controls(params),
     queryFn: () => getList<RiskControl>('/risk/controls', params),
+  });
+
+/**
+ * Cross-page control counts, one per status, under a shared set of filters.
+ *
+ * The controls list is paginated, so counting statuses in the loaded rows only
+ * ever describes the current page. These are count-only calls (`pageSize: 1`,
+ * read `total`) against the real filter set, so a breakdown built from them holds
+ * for the whole result — not just the fifteen rows on screen. There is no
+ * group-by endpoint for controls; when one exists this collapses to a single
+ * request.
+ */
+export const useRiskControlStatusCounts = (
+  statuses: readonly ControlStatus[],
+  base: Omit<ListControlParams, 'status' | 'page' | 'pageSize'> = {},
+) =>
+  useQueries({
+    queries: statuses.map((status) => {
+      const params = { ...base, status, page: 1, pageSize: 1 };
+      return {
+        queryKey: riskKeys.controls(params),
+        queryFn: () => getList<RiskControl>('/risk/controls', params),
+      };
+    }),
+    combine: (results) => ({
+      isLoading: results.some((r) => r.isLoading),
+      counts: Object.fromEntries(
+        statuses.map((s, i) => [s, results[i]?.data?.total ?? 0]),
+      ) as Record<ControlStatus, number>,
+    }),
   });
 
 export const useRiskReviews = (params: ListReviewParams = {}) =>
