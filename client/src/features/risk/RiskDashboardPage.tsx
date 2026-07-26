@@ -278,6 +278,38 @@ export default function RiskDashboardPage() {
     [trend],
   );
 
+  /**
+   * The full framework ladder, in framework order, with the server's per-level
+   * counts — bands with no risks included. Showing the whole ladder is what makes
+   * this a distribution: "nothing is Critical" is a finding, and a list that
+   * silently omits the empty bands cannot state it.
+   */
+  const levelLadder = useMemo(() => {
+    const by = heatmap?.by_level ?? {};
+    const bands = (framework?.levels ?? []).map((l) => ({
+      code: l.code,
+      label: l.label,
+      color: l.color ?? PALETTE.slate,
+      count: by[l.code] ?? 0,
+      unassigned: false,
+    }));
+    // Any code the server reported that the framework does not define (including
+    // its 'UNSCORED' bucket) is appended rather than dropped.
+    for (const [code, count] of Object.entries(by)) {
+      if (bands.some((b) => b.code === code)) continue;
+      bands.push({
+        code,
+        label: code === 'UNSCORED' ? 'No level assigned' : code.replace(/_/g, ' '),
+        color: '#CBD5E1',
+        count,
+        unassigned: true,
+      });
+    }
+    return bands;
+  }, [heatmap, framework]);
+
+  const unassignedLevels = heatmap?.by_level?.UNSCORED ?? 0;
+
   const statusSlices = useMemo(() => {
     const by = summary?.by_status ?? {};
     return (Object.entries(by) as [RiskStatus, number][])
@@ -554,49 +586,73 @@ export default function RiskDashboardPage() {
 
         <ChartCard
           title="Risks by level"
-          subtitle="Hover to isolate the band in the matrix"
+          subtitle="Hover a band to isolate it in the matrix"
           accent={PALETTE.bad}
         >
-          {!heatmap || Object.keys(heatmap.by_level).length === 0 ? (
+          {!heatmap ? (
             <EmptyChart label="No levels assigned yet" height={280} />
           ) : (
-            <div className="space-y-2.5" onMouseLeave={() => setFocusLevel(undefined)}>
-              {Object.entries(heatmap.by_level)
-                .sort((a, b) => b[1] - a[1])
-                .map(([code, count]) => {
-                  const def = framework?.levels.find((l) => l.code === code);
-                  const pct = heatmap.total > 0 ? (count / heatmap.total) * 100 : 0;
+            <div className="flex h-full flex-col">
+              <div className="space-y-2.5" onMouseLeave={() => setFocusLevel(undefined)}>
+                {levelLadder.map((band) => {
+                  const pct = heatmap.total > 0 ? (band.count / heatmap.total) * 100 : 0;
                   return (
                     <button
-                      key={code}
+                      key={band.code}
                       type="button"
-                      onMouseEnter={() => setFocusLevel(code)}
-                      onFocus={() => setFocusLevel(code)}
+                      disabled={band.unassigned}
+                      onMouseEnter={() => !band.unassigned && setFocusLevel(band.code)}
+                      onFocus={() => !band.unassigned && setFocusLevel(band.code)}
                       onClick={() =>
-                        code !== 'UNSCORED' && nav(`/risk/risks?levelCode=${encodeURIComponent(code)}`)
+                        !band.unassigned &&
+                        nav(`/risk/risks?levelCode=${encodeURIComponent(band.code)}`)
                       }
-                      className="w-full rounded-md p-1 text-left transition-colors hover:bg-gray-50"
+                      className="w-full rounded-md p-1 text-left transition-colors enabled:hover:bg-gray-50 disabled:cursor-default"
                     >
                       <div className="mb-1 flex items-center justify-between text-[11px]">
-                        <span className="truncate font-medium text-gray-700">
-                          {def?.label ?? code.replace(/_/g, ' ')}
+                        <span
+                          className={
+                            band.count > 0
+                              ? 'truncate font-medium text-gray-700'
+                              : 'truncate font-medium text-gray-400'
+                          }
+                        >
+                          {band.label}
                         </span>
                         <span className="shrink-0 tabular-nums text-gray-500">
-                          <span className="font-bold text-gray-800">{count}</span> · {pct.toFixed(0)}%
+                          <span
+                            className={band.count > 0 ? 'font-bold text-gray-800' : 'font-bold text-gray-400'}
+                          >
+                            {band.count}
+                          </span>{' '}
+                          · {pct.toFixed(0)}%
                         </span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-gray-100">
                         <div
                           className="h-full rounded-full transition-all"
                           style={{
-                            width: `${Math.max(2, pct)}%`,
-                            backgroundColor: def?.color ?? PALETTE.slate,
+                            width: `${Math.max(band.count > 0 ? 2 : 0, pct)}%`,
+                            backgroundColor: band.color,
                           }}
                         />
                       </div>
                     </button>
                   );
                 })}
+              </div>
+
+              {/* The matrix resolves a cell to a band geometrically, but this
+                  panel counts the level actually stored on each risk. When those
+                  disagree the panel says so rather than borrowing the matrix's
+                  answer — a risk with no stored level has not been through
+                  scoring, and quietly inferring one would hide that. */}
+              {unassignedLevels > 0 && heatmap.unscored < unassignedLevels && (
+                <p className="mt-3 border-t border-gray-100 pt-2 text-[10px] leading-snug text-amber-700">
+                  {unassignedLevels} risk(s) are plotted on the matrix but carry no stored level.
+                  Re-score them to populate the bands.
+                </p>
+              )}
             </div>
           )}
         </ChartCard>

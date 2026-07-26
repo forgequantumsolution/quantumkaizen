@@ -20,7 +20,7 @@ import {
   message,
 } from 'antd';
 import type { Dayjs } from 'dayjs';
-import { BadgeCheck, Download, ExternalLink, ListChecks, ShieldCheck, TriangleAlert } from 'lucide-react';
+import { BadgeCheck, Download, ExternalLink, ListChecks, ShieldCheck, TriangleAlert, X } from 'lucide-react';
 import { Badge, DataTable, KpiCard, type Column } from '@/components/ui';
 import { exportToCSV } from '@/lib/export';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
@@ -28,6 +28,7 @@ import { useHasPermission } from '@/stores/authStore';
 import { useUserDirectory } from '@/features/admin/users/hooks';
 import {
   useRiskControls,
+  useRiskControlStatusCounts,
   useRiskRegisters,
   useVerifyControl,
   CONTROL_HIERARCHY_LABELS,
@@ -47,11 +48,16 @@ const CONTROL_STATUSES = Object.keys(CONTROL_STATUS_LABELS) as ControlStatus[];
 const CONTROL_TYPES = Object.keys(CONTROL_TYPE_LABELS) as ControlType[];
 const CONTROL_HIERARCHIES = Object.keys(CONTROL_HIERARCHY_LABELS) as ControlHierarchy[];
 
+/**
+ * `dir` is the direction that makes each key useful on arrival — soonest-due
+ * first, newest-created first. Picking a sort key resets to it; the direction
+ * toggle then overrides it explicitly.
+ */
 const SORTS = [
-  { value: 'dueDate', label: 'Due date' },
-  { value: 'createdAt', label: 'Newest first' },
-  { value: 'status', label: 'Status' },
-  { value: 'controlNumber', label: 'Control number' },
+  { value: 'dueDate', label: 'Due date', dir: 'asc' },
+  { value: 'createdAt', label: 'Created', dir: 'desc' },
+  { value: 'status', label: 'Status', dir: 'asc' },
+  { value: 'controlNumber', label: 'Control number', dir: 'asc' },
 ] as const;
 
 /**
@@ -65,6 +71,16 @@ const DUE_HORIZONS = [
   { value: '30', label: 'Due within 30 days' },
   { value: '90', label: 'Due within 90 days' },
 ] as const;
+
+/** Bar/legend colours for the status mix — mirrors ControlStatusBadge's tones. */
+const STATUS_BAR_COLOR: Record<ControlStatus, string> = {
+  PLANNED: '#94A3B8',
+  IN_PROGRESS: '#3B82F6',
+  IMPLEMENTED: '#6366F1',
+  VERIFIED: '#10B981',
+  INEFFECTIVE: '#EF4444',
+  CANCELLED: '#CBD5E1',
+};
 
 const horizonToIso = (days: string) => {
   const d = new Date();
@@ -95,14 +111,16 @@ export default function RiskControlListPage() {
   const [registerId, setRegisterId] = useState<string | undefined>();
   const [ownerId, setOwnerId] = useState<string | undefined>();
   const [overdue, setOverdue] = useState(false);
+  const [dueHorizon, setDueHorizon] = useState<string | undefined>();
   const [sortBy, setSortBy] = useState<(typeof SORTS)[number]['value']>('dueDate');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [verifyTarget, setVerifyTarget] = useState<RiskControl | null>(null);
 
   const debouncedSearch = useDebouncedValue(search, 400);
   useEffect(
     () => setPage(1),
-    [debouncedSearch, status, type, hierarchy, registerId, ownerId, overdue, sortBy],
+    [debouncedSearch, status, type, hierarchy, registerId, ownerId, overdue, dueHorizon, sortBy, sortDir],
   );
 
   const { data, isLoading } = useRiskControls({
@@ -115,13 +133,30 @@ export default function RiskControlListPage() {
     registerId,
     ownerId,
     overdue: overdue || undefined,
+    dueBefore: dueHorizon ? horizonToIso(dueHorizon) : undefined,
     sortBy,
-    sortDir: sortBy === 'createdAt' ? 'desc' : 'asc',
+    sortDir,
   });
 
   // A second, count-only query gives an honest overdue KPI even while the main
   // table is filtered to something else.
   const { data: overduePage } = useRiskControls({ overdue: true, page: 1, pageSize: 1 });
+
+  /**
+   * Status breakdown across the whole filtered result, not just the loaded page.
+   * `status` is deliberately excluded from the base so the bar keeps showing the
+   * full distribution while one band is selected — otherwise picking a status
+   * would collapse the chart that is meant to let you pick another.
+   */
+  const { counts: statusCounts } = useRiskControlStatusCounts(CONTROL_STATUSES, {
+    search: debouncedSearch || undefined,
+    type,
+    hierarchy,
+    registerId,
+    ownerId,
+    overdue: overdue || undefined,
+    dueBefore: dueHorizon ? horizonToIso(dueHorizon) : undefined,
+  });
   const { data: registerPage } = useRiskRegisters({ isActive: true, page: 1, pageSize: 200 });
   const { data: directory } = useUserDirectory();
 
@@ -130,21 +165,69 @@ export default function RiskControlListPage() {
   const registers = registerPage?.data ?? [];
   const users = directory?.items ?? [];
 
-  // Search sits in the bar itself and sort is not a filter, so neither counts.
-  const activeFilterCount =
-    (status ? 1 : 0) +
-    (type ? 1 : 0) +
-    (hierarchy ? 1 : 0) +
-    (registerId ? 1 : 0) +
-    (ownerId ? 1 : 0) +
-    (overdue ? 1 : 0);
   const ownerName = useMemo(() => {
     const map = new Map(users.map((u) => [u.id, u.name]));
     return (uid: string | null) => (uid ? map.get(uid) ?? 'Assigned' : 'Unassigned');
   }, [users]);
 
-  const openOnPage = rows.filter((c) => c.status === 'PLANNED' || c.status === 'IN_PROGRESS').length;
-  const verifiedOnPage = rows.filter((c) => c.status === 'VERIFIED').length;
+  const clearFilters = () => {
+    setStatus(undefined);
+    setType(undefined);
+    setHierarchy(undefined);
+    setRegisterId(undefined);
+    setOwnerId(undefined);
+    setOverdue(false);
+    setDueHorizon(undefined);
+  };
+
+  /**
+   * One list drives both the Filter badge count and the chip row, so the badge
+   * can never disagree with what is actually shown as removable. Search sits in
+   * the bar itself and sort is not a filter, so neither appears here.
+   */
+  const activeChips = useMemo(() => {
+    const chips: { key: string; label: string; value: string; clear: () => void }[] = [];
+    if (status)
+      chips.push({ key: 'status', label: 'Status', value: CONTROL_STATUS_LABELS[status], clear: () => setStatus(undefined) });
+    if (type)
+      chips.push({ key: 'type', label: 'Type', value: CONTROL_TYPE_LABELS[type], clear: () => setType(undefined) });
+    if (hierarchy)
+      chips.push({ key: 'hierarchy', label: 'Hierarchy', value: CONTROL_HIERARCHY_LABELS[hierarchy], clear: () => setHierarchy(undefined) });
+    if (registerId)
+      chips.push({
+        key: 'register',
+        label: 'Register',
+        value: registers.find((r) => r.id === registerId)?.name ?? 'Selected',
+        clear: () => setRegisterId(undefined),
+      });
+    if (ownerId)
+      chips.push({ key: 'owner', label: 'Owner', value: ownerName(ownerId), clear: () => setOwnerId(undefined) });
+    if (overdue)
+      chips.push({ key: 'overdue', label: 'Due state', value: 'Overdue only', clear: () => setOverdue(false) });
+    if (dueHorizon)
+      chips.push({
+        key: 'horizon',
+        label: 'Horizon',
+        value: DUE_HORIZONS.find((h) => h.value === dueHorizon)?.label ?? `${dueHorizon} days`,
+        clear: () => setDueHorizon(undefined),
+      });
+    return chips;
+  }, [status, type, hierarchy, registerId, ownerId, overdue, dueHorizon, registers, ownerName]);
+
+  const activeFilterCount = activeChips.length;
+
+  /**
+   * Cross-page totals from the status breakdown. "Open" is every status that
+   * still owes work — the same set the server's overdue sweep treats as open, so
+   * the tile and the overdue count cannot describe different populations.
+   */
+  const openTotal =
+    (statusCounts.PLANNED ?? 0) +
+    (statusCounts.IN_PROGRESS ?? 0) +
+    (statusCounts.IMPLEMENTED ?? 0) +
+    (statusCounts.INEFFECTIVE ?? 0);
+  const verifiedTotal = statusCounts.VERIFIED ?? 0;
+  const statusTotal = CONTROL_STATUSES.reduce((acc, s) => acc + (statusCounts[s] ?? 0), 0);
 
   const handleExport = () => {
     if (rows.length === 0) {
@@ -308,14 +391,7 @@ export default function RiskControlListPage() {
         searchPlaceholder="Search control # or title"
         title="Filter controls"
         activeCount={activeFilterCount}
-        onClear={() => {
-          setStatus(undefined);
-          setType(undefined);
-          setHierarchy(undefined);
-          setRegisterId(undefined);
-          setOwnerId(undefined);
-          setOverdue(false);
-        }}
+        onClear={clearFilters}
         actions={
           <AntButton icon={<Download size={14} />} onClick={handleExport}>
             Export CSV
@@ -387,44 +463,180 @@ export default function RiskControlListPage() {
             Overdue only
           </AntButton>
         </FilterField>
-        <FilterField label="Sort by">
+        <FilterField label="Due horizon">
           <AntSelect
+            allowClear
+            placeholder="Any due date"
             style={{ width: '100%' }}
-            value={sortBy}
-            onChange={(v) => setSortBy(v)}
-            options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
+            value={dueHorizon}
+            onChange={(v) => setDueHorizon(v ?? undefined)}
+            options={DUE_HORIZONS.map((h) => ({ value: h.value, label: h.label }))}
           />
+        </FilterField>
+        <FilterField label="Sort by">
+          <div className="flex gap-2">
+            <AntSelect
+              style={{ flex: 1 }}
+              value={sortBy}
+              onChange={(v) => {
+                setSortBy(v);
+                setSortDir(SORTS.find((s) => s.value === v)?.dir ?? 'asc');
+              }}
+              options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
+            />
+            <AntSelect
+              style={{ width: 118 }}
+              value={sortDir}
+              onChange={(v) => setSortDir(v)}
+              options={[
+                { value: 'asc', label: 'Ascending' },
+                { value: 'desc', label: 'Descending' },
+              ]}
+            />
+          </div>
         </FilterField>
       </FilterBar>
 
-      {/* Same stat strip the module "My Tasks" tab uses: equal-width cards in a
-          scrolling row, no subtitle footer, so every tile is one compact height.
-          The Risk Overview keeps the taller subtitled cards. */}
-      <div className="flex items-stretch gap-3 overflow-x-auto pb-1 mb-4">
-        <div className="flex-1 min-w-[168px]">
-          <KpiCard icon={ShieldCheck} label="Matching controls" value={total} accent="slate" />
+      {/* Active filters as removable chips. The modal is where filters are set;
+          this row is how you see and undo them without reopening it. */}
+      {activeChips.length > 0 && (
+        <div className="-mt-2 mb-3 flex flex-wrap items-center gap-1.5">
+          {activeChips.map((c) => (
+            <span
+              key={c.key}
+              className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white py-1 pl-2.5 pr-1 text-[11px] shadow-sm"
+            >
+              <span className="font-semibold uppercase tracking-wide text-gray-400">{c.label}</span>
+              <span className="max-w-[180px] truncate font-medium text-gray-800">{c.value}</span>
+              <button
+                type="button"
+                onClick={c.clear}
+                aria-label={`Remove ${c.label} filter`}
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="ml-0.5 rounded-full px-2 py-1 text-[11px] font-semibold text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+          >
+            Clear all
+          </button>
         </div>
-        <div className="flex-1 min-w-[168px]">
-          <KpiCard
-            icon={TriangleAlert}
-            label="Overdue"
-            value={overduePage?.total ?? 0}
-            accent={(overduePage?.total ?? 0) > 0 ? 'red' : 'slate'}
-            onClick={() => setOverdue(true)}
-          />
-        </div>
-        <div className="flex-1 min-w-[168px]">
-          <KpiCard icon={ListChecks} label="Open on this page" value={openOnPage} accent="blue" />
-        </div>
-        <div className="flex-1 min-w-[168px]">
-          <KpiCard
-            icon={BadgeCheck}
-            label="Verified on this page"
-            value={verifiedOnPage}
-            accent="emerald"
-          />
-        </div>
+      )}
+
+      {/* A wrapping grid, not a scrolling flex row: tiles share one row on wide
+          screens and reflow on narrow ones, rather than stretching to the tallest
+          card. Every tile carries a subtitle — mixing subtitled and bare tiles in
+          one stretched row is what left the empty band inside the short ones, and
+          the line of context is worth more here than the saved pixels. */}
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard
+          icon={ShieldCheck}
+          label="Matching controls"
+          value={total}
+          accent="slate"
+          subtitle={
+            activeFilterCount > 0
+              ? `${activeFilterCount} filter(s) applied`
+              : 'Every control, all registers'
+          }
+        />
+        <KpiCard
+          icon={TriangleAlert}
+          label="Overdue"
+          value={overduePage?.total ?? 0}
+          accent={(overduePage?.total ?? 0) > 0 ? 'red' : 'slate'}
+          alert={(overduePage?.total ?? 0) > 0}
+          selected={overdue}
+          onClick={() => setOverdue((v) => !v)}
+          subtitle={overdue ? 'Filtering to overdue' : 'Past due, across all registers'}
+        />
+        <KpiCard
+          icon={ListChecks}
+          label="Open"
+          value={openTotal}
+          accent="blue"
+          subtitle={`Of ${statusTotal} in scope · still owes work`}
+        />
+        <KpiCard
+          icon={BadgeCheck}
+          label="Verified effective"
+          value={verifiedTotal}
+          accent="emerald"
+          // Denominator is the status-mix population, which ignores the status
+          // filter — so it must not be called "matching", a word the tile above
+          // uses for the fully-filtered count.
+          subtitle={
+            statusTotal > 0
+              ? `${Math.round((verifiedTotal / statusTotal) * 100)}% of ${statusTotal} in scope`
+              : 'Nothing in scope'
+          }
+        />
       </div>
+
+      {/* Status distribution across the whole filtered result — the page's one
+          analysis panel, and the fastest way to pick a status without opening the
+          filter modal. */}
+      {statusTotal > 0 && (
+        <div className="mb-4 rounded-xl border border-gray-200/80 bg-white px-4 py-3 shadow-sm">
+          <div className="mb-2 flex items-baseline justify-between">
+            <h3 className="text-[11px] font-bold uppercase tracking-[0.08em] text-gray-400">
+              Status mix
+            </h3>
+            <span className="text-[11px] text-gray-400">
+              {statusTotal} control(s) across all pages
+            </span>
+          </div>
+
+          <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+            {CONTROL_STATUSES.filter((s) => (statusCounts[s] ?? 0) > 0).map((s) => (
+              <button
+                key={s}
+                type="button"
+                title={`${CONTROL_STATUS_LABELS[s]} — ${statusCounts[s]}`}
+                onClick={() => setStatus(status === s ? undefined : s)}
+                className="h-full transition-opacity first:rounded-l-full last:rounded-r-full hover:opacity-80"
+                style={{
+                  width: `${((statusCounts[s] ?? 0) / statusTotal) * 100}%`,
+                  backgroundColor: STATUS_BAR_COLOR[s],
+                  opacity: status && status !== s ? 0.28 : 1,
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="mt-2.5 flex flex-wrap gap-x-4 gap-y-1.5">
+            {CONTROL_STATUSES.map((s) => {
+              const n = statusCounts[s] ?? 0;
+              const active = status === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  disabled={n === 0}
+                  onClick={() => setStatus(active ? undefined : s)}
+                  className={
+                    active
+                      ? 'inline-flex items-center gap-1.5 rounded-md bg-gray-100 px-1.5 py-0.5 text-[11px] font-semibold text-gray-900'
+                      : 'inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[11px] text-gray-500 enabled:hover:bg-gray-50 enabled:hover:text-gray-900 disabled:text-gray-300'
+                  }
+                >
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: n > 0 ? STATUS_BAR_COLOR[s] : '#E2E8F0' }}
+                  />
+                  {CONTROL_STATUS_LABELS[s]}
+                  <span className="font-bold tabular-nums">{n}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
