@@ -1,20 +1,33 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Input, Select, Table, Button } from 'antd';
-import { Search, Plus, FileText, BookOpenCheck, LayoutDashboard, List as ListIcon } from 'lucide-react';
+import { useCallback, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Select, Table, Button } from 'antd';
+import {
+  Plus,
+  FileText,
+  LayoutDashboard,
+  List as ListIcon,
+  ClipboardCheck,
+} from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { cn } from '@/lib/utils';
 import { useHasPermission } from '@/stores/authStore';
+import { useWorkflowTypes } from '@/lib/api/workflowLookups';
+import { wfTypeReadKey } from '@/lib/navAccess';
+import ModulePage from '@/features/modules/ModulePage';
 import {
   useDocuments,
-  useMyPendingReads,
   DOC_TYPE_LABELS,
   type DocSummary,
   type DocumentStatus,
   type DocumentType,
 } from '@/lib/api/dms';
 import DocStatusBadge from './DocStatusBadge';
-import DmsDashboard from './DmsDashboard';
+import DmsDashboard, {
+  DOC_STATUS_LABELS,
+  type DmsDashboardFilters,
+  type DmsDashboardOptions,
+} from './DmsDashboard';
 
 type Tab = DocumentStatus | 'ALL' | 'REVIEW_DUE';
 const STATUS_TABS: { key: Tab; label: string }[] = [
@@ -26,15 +39,69 @@ const STATUS_TABS: { key: Tab; label: string }[] = [
   { key: 'RETIRED', label: 'Retired' },
 ];
 
+/** Document Review is matched by name, the same rule the sidebar used when this
+ *  workflow had its own nav entry. */
+const isDocReview = (name: string) => /^document\s*review$/i.test(name.trim());
+
+type View = 'dashboard' | 'list' | 'approval';
+
 export default function DocumentListPage() {
   const nav = useNavigate();
   const canCreate = useHasPermission('document.create');
-  const [view, setView] = useState<'dashboard' | 'list'>('dashboard');
+
+  // The view lives in the URL so a tab is linkable and survives a refresh —
+  // "Document Approval" used to be its own sidebar route, and links to it that
+  // predate this merge should still land somewhere sensible.
+  const [params, setParams] = useSearchParams();
+  const urlView = params.get('view');
+  const view: View =
+    urlView === 'list' || urlView === 'approval' || urlView === 'dashboard'
+      ? urlView
+      : 'dashboard';
+  const setView = (v: View) => {
+    const next = new URLSearchParams(params);
+    if (v === 'dashboard') next.delete('view');
+    else next.set('view', v);
+    setParams(next, { replace: true });
+  };
+
+  // Document Approval is the "Document Review" ticket workspace, embedded as a
+  // tab rather than living at its own /modules/:id sidebar entry.
+  const { data: workflowTypes } = useWorkflowTypes();
+  const docReviewType = (workflowTypes ?? []).find(
+    (t) => !t.isDeleted && isDocReview(t.name),
+  );
+  // Unconditional hook call; the key just varies once the lookup resolves. The
+  // placeholder below is never held by anyone, so the tab stays hidden until a
+  // real Document Review type is known.
+  const canReadApproval = useHasPermission(
+    docReviewType ? wfTypeReadKey(docReviewType.id) : '__no_doc_review_type__',
+  );
+  const showApprovalTab = !!docReviewType && canReadApproval;
+
   const [status, setStatus] = useState<Tab>('ALL');
   const [type, setType] = useState<DocumentType | undefined>();
   const [search, setSearch] = useState('');
 
-  const { data: myReads } = useMyPendingReads();
+  // "All" is the default view, so it is not a filter — only a deliberate move
+  // off it counts towards the badge. Search shows in the bar itself.
+  const activeFilterCount = (status !== 'ALL' ? 1 : 0) + (type ? 1 : 0);
+
+  // Dashboard filters are owned here so their controls can sit in the header
+  // alongside every other module's, instead of on a row inside the panel.
+  const [dashFilters, setDashFilters] = useState<DmsDashboardFilters>({});
+  const [dashOptions, setDashOptions] = useState<DmsDashboardOptions>({
+    statuses: [],
+    types: [],
+    departments: [],
+  });
+  const dashActiveCount = Object.values(dashFilters).filter(Boolean).length;
+  // Stable identity — DmsDashboard fires this from an effect, so a new function
+  // each render would loop.
+  const handleDashOptions = useCallback(
+    (o: DmsDashboardOptions) => setDashOptions(o),
+    [],
+  );
 
   const { data, isLoading } = useDocuments({
     status: status === 'ALL' || status === 'REVIEW_DUE' ? undefined : status,
@@ -58,6 +125,11 @@ export default function DocumentListPage() {
               <h1 className="text-[15px] font-bold text-gray-900 tracking-tight truncate leading-none">
                 Documents
               </h1>
+              {/* Code badge, same slot the module hero uses for its workflow
+                  codePrefix. DMS numbers documents DOC-<year>-NNNN. */}
+              <span className="text-[10px] font-mono font-bold text-gold-700 bg-gold-50 ring-1 ring-gold-200 px-1.5 py-0.5 rounded-md shrink-0">
+                DOC
+              </span>
               <div className="h-6 w-px bg-gray-200 shrink-0 hidden md:block" />
               <div className="w-fit max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -my-1">
                 <nav className="inline-flex gap-1.5 p-1 rounded-lg bg-gray-100/80 ring-1 ring-gray-200/60">
@@ -85,37 +157,113 @@ export default function DocumentListPage() {
                   >
                     <ListIcon size={14} /> Documents
                   </button>
+                  {showApprovalTab && (
+                    <button
+                      type="button"
+                      onClick={() => setView('approval')}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold rounded-lg whitespace-nowrap transition-all duration-150',
+                        view === 'approval'
+                          ? 'bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80'
+                          : 'text-gray-500 hover:text-gray-900 hover:bg-white/70',
+                      )}
+                    >
+                      <ClipboardCheck size={14} /> Document Approval
+                    </button>
+                  )}
                 </nav>
               </div>
             </div>
 
-            {/* Actions */}
+            {/* Actions — same position and order as the generic module hero
+                (ModulePage): search, Filter, then the create button. */}
             <div className="flex items-center gap-2 flex-wrap justify-end">
               {view === 'list' && (
-                <>
-                  <Select
-                    value={type}
-                    onChange={setType}
-                    allowClear
-                    placeholder="All types"
-                    style={{ width: 170 }}
-                    options={Object.entries(DOC_TYPE_LABELS).map(([v, label]) => ({ value: v, label }))}
-                  />
-                  <div className="relative w-60">
-                    <Search
-                      size={15}
-                      className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10"
+                <FilterBar
+                  inline
+                  search={search}
+                  onSearchChange={setSearch}
+                  searchPlaceholder="Search number / title…"
+                  title="Filter documents"
+                  activeCount={activeFilterCount}
+                  onClear={() => {
+                    setStatus('ALL');
+                    setType(undefined);
+                  }}
+                >
+                  <FilterField label="Status">
+                    <Select
+                      value={status}
+                      onChange={(v) => setStatus(v ?? 'ALL')}
+                      style={{ width: '100%' }}
+                      options={STATUS_TABS.map((t) => ({ value: t.key, label: t.label }))}
                     />
-                    <Input
-                      placeholder="Search number / title…"
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-10 !rounded-full"
+                  </FilterField>
+                  <FilterField label="Type">
+                    <Select
+                      value={type}
+                      onChange={setType}
+                      allowClear
+                      placeholder="All types"
+                      style={{ width: '100%' }}
+                      options={Object.entries(DOC_TYPE_LABELS).map(([v, label]) => ({
+                        value: v,
+                        label,
+                      }))}
                     />
-                  </div>
-                </>
+                  </FilterField>
+                </FilterBar>
               )}
-              {canCreate && (
+              {view === 'dashboard' && (
+                <FilterBar
+                  inline
+                  title="Filter dashboard"
+                  activeCount={dashActiveCount}
+                  onClear={() => setDashFilters({})}
+                >
+                  <FilterField label="Status">
+                    <Select
+                      value={dashFilters.status}
+                      onChange={(v?: DocumentStatus) =>
+                        setDashFilters((f) => ({ ...f, status: v }))
+                      }
+                      allowClear
+                      placeholder="Any status"
+                      style={{ width: '100%' }}
+                      options={dashOptions.statuses.map((s) => ({
+                        value: s,
+                        label: DOC_STATUS_LABELS[s] ?? s,
+                      }))}
+                    />
+                  </FilterField>
+                  <FilterField label="Type">
+                    <Select
+                      value={dashFilters.type}
+                      onChange={(v?: DocumentType) => setDashFilters((f) => ({ ...f, type: v }))}
+                      allowClear
+                      placeholder="Any type"
+                      style={{ width: '100%' }}
+                      options={dashOptions.types.map((t) => ({
+                        value: t,
+                        label: DOC_TYPE_LABELS[t] ?? t,
+                      }))}
+                    />
+                  </FilterField>
+                  <FilterField label="Department">
+                    <Select
+                      value={dashFilters.department}
+                      onChange={(v?: string) => setDashFilters((f) => ({ ...f, department: v }))}
+                      allowClear
+                      placeholder="Any department"
+                      style={{ width: '100%' }}
+                      options={dashOptions.departments.map((d) => ({ value: d, label: d }))}
+                    />
+                  </FilterField>
+                </FilterBar>
+              )}
+              {/* Creating a document belongs to the library, not to the
+                  read-only dashboard or the approval queue. */}
+              {view === 'list' && canCreate && (
                 <Button type="primary" icon={<Plus size={14} />} onClick={() => nav('/dms/new')}>
                   New Document
                 </Button>
@@ -125,75 +273,34 @@ export default function DocumentListPage() {
         </div>
       </div>
 
-      {view === 'dashboard' ? (
-        <DmsDashboard />
-      ) : (
-        <DocumentListBody
-          status={status}
-          setStatus={setStatus}
-          rows={rows}
-          isLoading={isLoading}
-          myReads={myReads}
-          nav={nav}
-        />
+      {view === 'dashboard' && (
+        <DmsDashboard filters={dashFilters} onOptionsChange={handleDashOptions} />
+      )}
+
+      {/* `embedded` suppresses ModulePage's own hero header — this page already
+          rendered one above, and two stacked module headers read as a bug. */}
+      {view === 'approval' && showApprovalTab && docReviewType && (
+        <ModulePage typeId={docReviewType.id} embedded />
+      )}
+
+      {view === 'list' && (
+        <DocumentListBody rows={rows} isLoading={isLoading} nav={nav} />
       )}
     </PageContainer>
   );
 }
 
 interface BodyProps {
-  status: Tab;
-  setStatus: (t: Tab) => void;
   rows: DocSummary[];
   isLoading: boolean;
-  myReads: ReturnType<typeof useMyPendingReads>['data'];
   nav: ReturnType<typeof useNavigate>;
 }
 
-function DocumentListBody({ status, setStatus, rows, isLoading, myReads, nav }: BodyProps) {
+/** Just the table. Search and filters live in the module header above, matching
+ *  the generic module pages (ModulePage). */
+function DocumentListBody({ rows, isLoading, nav }: BodyProps) {
   return (
     <>
-      <div className="mb-4 w-fit max-w-full overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        <nav className="inline-flex gap-1.5 p-1 rounded-lg bg-gray-100/80 ring-1 ring-gray-200/60">
-          {STATUS_TABS.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              onClick={() => setStatus(t.key)}
-              className={cn(
-                'inline-flex items-center gap-1.5 px-3.5 py-1.5 text-[13px] font-semibold rounded-lg whitespace-nowrap transition-all duration-150',
-                status === t.key
-                  ? 'bg-white text-gold-700 shadow-sm ring-1 ring-gray-200/80'
-                  : 'text-gray-500 hover:text-gray-900 hover:bg-white/70',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {myReads && myReads.count > 0 && (
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-          <div className="flex items-center gap-2 text-sm font-medium text-amber-900 mb-1.5">
-            <BookOpenCheck size={15} />
-            You have {myReads.count} document{myReads.count === 1 ? '' : 's'} to read &amp; acknowledge
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {myReads.items.map((it) => (
-              <button
-                key={it.receipt_id}
-                onClick={() => nav(`/dms/${it.document_id}`)}
-                className="inline-flex items-center gap-1.5 text-xs bg-white border border-amber-200 text-amber-800 hover:bg-amber-100 rounded px-2 py-1"
-              >
-                <span className="font-mono">{it.doc_number}</span>
-                <span className="truncate max-w-[200px]">{it.title}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       <Table<DocSummary>
         size="small"
         rowKey="id"

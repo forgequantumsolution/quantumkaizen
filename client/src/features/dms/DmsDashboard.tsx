@@ -3,15 +3,13 @@
  * library. Every figure is derived from live documents (no demo data); when the
  * library is empty the charts show honest empty states.
  */
-import { useMemo, useState } from 'react';
-import { Select } from 'antd';
+import { useEffect, useMemo } from 'react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import {
   FileText, CheckCircle2, Clock, AlertTriangle, ClipboardList,
-  SlidersHorizontal, RotateCcw,
 } from 'lucide-react';
 import { Card, KpiCard } from '@/components/ui';
 import {
@@ -51,20 +49,54 @@ const STATUS_META: Record<DocumentStatus, { label: string; color: string }> = {
   RETIRED:    { label: 'Retired',    color: PALETTE.retired },
 };
 
+/** Display labels for every document status, so callers rendering a status
+ *  picker (the page's header Filter) don't reinvent the wording. */
+export const DOC_STATUS_LABELS: Record<DocumentStatus, string> = Object.fromEntries(
+  (Object.keys(STATUS_META) as DocumentStatus[]).map((s) => [s, STATUS_META[s].label]),
+) as Record<DocumentStatus, string>;
+
 const daysSince = (iso: string) => Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000);
+
+/** Server-enforced maximum for `page_size` on /dms/documents — see the request
+ *  schema in backend/src/modules/dms/dms.schema.ts. Requesting more is a 400,
+ *  not a clamp, so this must not drift above the server's limit. */
+const DASHBOARD_PAGE_SIZE = 200;
 
 interface Slice { name: string; value: number; color?: string }
 
-interface Filters { status?: DocumentStatus; type?: DocumentType; department?: string }
+export interface DmsDashboardFilters {
+  status?: DocumentStatus;
+  type?: DocumentType;
+  department?: string;
+}
 
-export default function DmsDashboard() {
-  // Pull the whole library for aggregation (dashboard-scale, not paginated view).
-  const { data, isLoading } = useDocuments({ page_size: 500 });
+/** Facet values present in the library — the page renders the filter controls
+ *  in the module header, so it needs the options this component derives. */
+export interface DmsDashboardOptions {
+  statuses: DocumentStatus[];
+  types: DocumentType[];
+  departments: string[];
+}
+
+interface Props {
+  /** Controlled by the page so the controls can live in the module header. */
+  filters: DmsDashboardFilters;
+  /** Fired when the derived facet lists change, so the header can offer them. */
+  onOptionsChange?: (options: DmsDashboardOptions) => void;
+}
+
+export default function DmsDashboard({ filters, onOptionsChange }: Props) {
+  // Pull the library for aggregation (dashboard-scale, not paginated view).
+  // 200 is the server's hard cap on page_size (dms.schema.ts) — asking for more
+  // fails validation with a 400 and the whole dashboard renders empty.
+  const { data, isLoading } = useDocuments({ page_size: DASHBOARD_PAGE_SIZE });
   const allDocs = data?.data ?? [];
-  const [filters, setFilters] = useState<Filters>({});
+  // Aggregations below cover the first 200 documents only. Say so rather than
+  // presenting a truncated count as if it were the whole library.
+  const truncated = (data?.total ?? 0) > allDocs.length;
 
   // Filter options — derived live from the document library.
-  const options = useMemo(() => {
+  const options = useMemo<DmsDashboardOptions>(() => {
     const uniq = (vals: Array<string | null | undefined>) =>
       Array.from(new Set(vals.filter((v): v is string => !!v))).sort();
     return {
@@ -73,6 +105,12 @@ export default function DmsDashboard() {
       departments: uniq(allDocs.map((d) => d.department_name)),
     };
   }, [allDocs]);
+
+  // Hand the facets up once they settle. Keyed on the memo, so this fires only
+  // when the library actually changes — not on every filter keystroke.
+  useEffect(() => {
+    onOptionsChange?.(options);
+  }, [options, onOptionsChange]);
 
   const docs = useMemo(
     () =>
@@ -84,8 +122,6 @@ export default function DmsDashboard() {
       ),
     [allDocs, filters],
   );
-
-  const activeFilters = Object.values(filters).filter(Boolean).length;
 
   const m = useMemo(() => {
     // Status donut
@@ -147,11 +183,90 @@ export default function DmsDashboard() {
       if (idx >= 0 && idx < 6) trend[idx]!.created++;
     }
 
+    // ── Review-due horizon — when the periodic-review workload actually lands.
+    // The posture donut says how many are late; this says which months are
+    // about to get busy, which is the question a QA lead plans against.
+    const horizon: Array<{ month: string; due: number }> = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      horizon.push({ month: `${MONTHS[d.getMonth()]!} ${String(d.getFullYear()).slice(2)}`, due: 0 });
+    }
+    let horizonOverdue = 0;
+    for (const d of docs) {
+      if (d.status !== 'EFFECTIVE' || !d.review_due_date) continue;
+      const due = new Date(d.review_due_date);
+      const mb =
+        (due.getFullYear() - now.getFullYear()) * 12 + (due.getMonth() - now.getMonth());
+      if (mb < 0) horizonOverdue++;
+      else if (mb < 12) horizon[mb]!.due++;
+    }
+
+    // ── Status mix per department — where drafts and reviews are piling up.
+    const deptNames = byDept.map((d) => d.name);
+    const statusByDept = deptNames.map((name) => {
+      const row: Record<string, string | number> = { name };
+      for (const s of Object.keys(STATUS_META) as DocumentStatus[]) row[STATUS_META[s].label] = 0;
+      for (const d of docs) {
+        if ((d.department_name ?? 'Unassigned') !== name) continue;
+        const label = STATUS_META[d.status].label;
+        row[label] = (row[label] as number) + 1;
+      }
+      return row;
+    });
+    // Only chart the statuses that actually occur, or the legend fills with zeros.
+    const statusSeries = (Object.keys(STATUS_META) as DocumentStatus[])
+      .filter((s) => (statusCounts.get(s) ?? 0) > 0)
+      .map((s) => ({ key: STATUS_META[s].label, color: STATUS_META[s].color }));
+
+    // ── Age of the in-force library. A shelf of documents effective for years
+    // without revision is a finding waiting to happen.
+    const ageBuckets = [
+      { name: '< 6 mo', value: 0 },
+      { name: '6–12 mo', value: 0 },
+      { name: '1–2 yr', value: 0 },
+      { name: '> 2 yr', value: 0 },
+    ];
+    for (const d of docs) {
+      if (d.status !== 'EFFECTIVE' || !d.effective_date) continue;
+      const days = daysSince(d.effective_date);
+      if (days < 182) ageBuckets[0]!.value++;
+      else if (days < 365) ageBuckets[1]!.value++;
+      else if (days < 730) ageBuckets[2]!.value++;
+      else ageBuckets[3]!.value++;
+    }
+    const age: Slice[] = ageBuckets.filter((b) => b.value > 0);
+
+    // ── Revision depth — how much churn the library carries.
+    const revBuckets = [
+      { name: 'Rev 1', value: 0 },
+      { name: 'Rev 2', value: 0 },
+      { name: 'Rev 3', value: 0 },
+      { name: 'Rev 4+', value: 0 },
+    ];
+    for (const d of docs) {
+      const v = d.version_count || 1;
+      revBuckets[Math.min(v, 4) - 1]!.value++;
+    }
+    const revisions: Slice[] = revBuckets.filter((b) => b.value > 0);
+
+    // ── Ownership concentration — a single owner holding most of the library
+    // is a continuity risk.
+    const ownerCounts = new Map<string, number>();
+    for (const d of docs) {
+      const name = d.owner_name ?? 'Unassigned';
+      ownerCounts.set(name, (ownerCounts.get(name) ?? 0) + 1);
+    }
+    const byOwner: Slice[] = Array.from(ownerCounts.entries())
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+
     const effective = statusCounts.get('EFFECTIVE') ?? 0;
     const inReview = statusCounts.get('IN_REVIEW') ?? 0;
 
     return {
       status, byType, byDept, review, trend,
+      horizon, horizonOverdue, statusByDept, statusSeries, age, revisions, byOwner,
       kpi: { total: docs.length, effective, inReview, overdue },
     };
   }, [docs]);
@@ -163,26 +278,16 @@ export default function DmsDashboard() {
   return (
     <div className="space-y-4">
       {/* Dynamic filter bar — options derived from the document library */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500">
-          <SlidersHorizontal size={13} /> Filters
-        </span>
-        <Select size="small" allowClear placeholder="Status" style={{ width: 150 }}
-          value={filters.status} onChange={(v?: DocumentStatus) => setFilters((f) => ({ ...f, status: v }))}
-          options={options.statuses.map((s) => ({ value: s, label: STATUS_META[s].label }))} />
-        <Select size="small" allowClear placeholder="Type" style={{ width: 160 }}
-          value={filters.type} onChange={(v?: DocumentType) => setFilters((f) => ({ ...f, type: v }))}
-          options={options.types.map((t) => ({ value: t, label: DOC_TYPE_LABELS[t] ?? t }))} />
-        <Select size="small" allowClear placeholder="Department" style={{ width: 160 }}
-          value={filters.department} onChange={(v?: string) => setFilters((f) => ({ ...f, department: v }))}
-          options={options.departments.map((d) => ({ value: d, label: d }))} />
-        {activeFilters > 0 && (
-          <button onClick={() => setFilters({})}
-            className="inline-flex items-center gap-1 text-[12px] font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-md px-2 py-1">
-            <RotateCcw size={12} /> Reset
-          </button>
-        )}
-      </div>
+      {/* No filter row here — Status / Type / Department are rendered by the
+          page's header Filter button, right-aligned with every other module. */}
+
+      {truncated && (
+        <div className="flex items-center gap-1.5 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+          <AlertTriangle size={12} className="shrink-0" />
+          Showing the first {allDocs.length} of {data?.total} documents — figures
+          below cover that subset, not the whole library.
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard icon={FileText} label="Total documents" value={`${m.kpi.total}`} accent="blue" />
@@ -227,6 +332,56 @@ export default function DmsDashboard() {
               </AreaChart>
             </ResponsiveContainer>
           ) : <Empty />}
+        </ChartCard>
+
+        <ChartCard
+          title="Review-due horizon"
+          subtitle={
+            m.horizonOverdue > 0
+              ? `Next 12 months · ${m.horizonOverdue} already overdue and not counted below`
+              : 'Effective documents by the month their review falls due — next 12 months'
+          }
+        >
+          {m.horizon.some((h) => h.due > 0) ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={m.horizon} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#64748B' }} interval={0} angle={-35} textAnchor="end" height={50} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748B' }} />
+                <Tooltip contentStyle={TT_STYLE} />
+                <Bar dataKey="due" name="Reviews due" fill={PALETTE.amber} radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <Empty label="No reviews scheduled in the next 12 months" />}
+        </ChartCard>
+
+        <ChartCard title="Status mix by department" subtitle="Where drafts and reviews are accumulating — top 6">
+          {m.statusByDept.length > 0 && m.statusSeries.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={m.statusByDept} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#64748B' }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#64748B' }} width={140} />
+                <Tooltip contentStyle={TT_STYLE} />
+                <Legend iconType="circle" iconSize={8} />
+                {m.statusSeries.map((s) => (
+                  <Bar key={s.key} dataKey={s.key} stackId="a" fill={s.color} />
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <Empty />}
+        </ChartCard>
+
+        <ChartCard title="Age of in-force documents" subtitle="Time since each effective document took force">
+          <VBar data={m.age} color={PALETTE.emerald} />
+        </ChartCard>
+
+        <ChartCard title="Revision depth" subtitle="How many versions each document has been through">
+          <VBar data={m.revisions} color={PALETTE.blue} />
+        </ChartCard>
+
+        <ChartCard title="By owner" subtitle="Ownership concentration — top 6">
+          <HBar data={m.byOwner} color={PALETTE.gold} />
         </ChartCard>
       </div>
     </div>
@@ -302,20 +457,3 @@ function ChartCard({ title, subtitle, children }: { title: string; subtitle?: st
   );
 }
 
-function Chip({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: 'blue' | 'emerald' | 'red' | 'amber' }) {
-  const tones = {
-    blue: 'border-blue-200 bg-blue-50 text-blue-700',
-    emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    red: 'border-red-200 bg-red-50 text-red-700',
-    amber: 'border-amber-200 bg-amber-50 text-amber-700',
-  } as const;
-  return (
-    <div className={`flex items-center gap-3 px-3 py-2 rounded-lg border ${tones[tone]}`}>
-      <div className="shrink-0">{icon}</div>
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-wide font-medium opacity-80">{label}</div>
-        <div className="text-lg font-bold leading-tight">{value}</div>
-      </div>
-    </div>
-  );
-}

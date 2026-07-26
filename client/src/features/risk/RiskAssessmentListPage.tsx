@@ -48,7 +48,7 @@ import {
   type RiskMethodology,
 } from '@/lib/api/risk';
 import { AssessmentStatusBadge } from './riskStatusBadge';
-import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 
 const PAGE_SIZE = 15;
 
@@ -365,7 +365,7 @@ export default function RiskAssessmentListPage() {
   return (
     <>
       {/* Toolbar first, then the table — the filters scope what is listed. */}
-      <RiskFilterBar
+      <FilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search number, title or objective"
@@ -389,7 +389,7 @@ export default function RiskAssessmentListPage() {
           </>
         }
       >
-        <RiskFilterField label="Methodology">
+        <FilterField label="Methodology">
           <AntSelect
             allowClear
             placeholder="All methodologies"
@@ -398,8 +398,8 @@ export default function RiskAssessmentListPage() {
             onChange={(v) => setMethodology(v ?? undefined)}
             options={METHODOLOGIES.map((m) => ({ value: m, label: METHODOLOGY_LABELS[m] }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Status">
+        </FilterField>
+        <FilterField label="Status">
           <AntSelect
             allowClear
             placeholder="All statuses"
@@ -408,8 +408,8 @@ export default function RiskAssessmentListPage() {
             onChange={(v) => setStatus(v ?? undefined)}
             options={STATUSES.map((s) => ({ value: s, label: ASSESSMENT_STATUS_LABELS[s] }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Register">
+        </FilterField>
+        <FilterField label="Register">
           <AntSelect
             allowClear
             showSearch
@@ -420,16 +420,16 @@ export default function RiskAssessmentListPage() {
             onChange={(v) => setRegisterId(v ?? undefined)}
             options={registers.map((r) => ({ value: r.id, label: r.name }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Sort by">
+        </FilterField>
+        <FilterField label="Sort by">
           <AntSelect
             style={{ width: '100%' }}
             value={sortBy}
             onChange={(v) => setSortBy(v)}
             options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

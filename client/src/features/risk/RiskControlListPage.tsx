@@ -39,7 +39,7 @@ import {
   type RiskControl,
 } from '@/lib/api/risk';
 import { ControlStatusBadge } from './riskStatusBadge';
-import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 
 const PAGE_SIZE = 15;
 
@@ -283,7 +283,7 @@ export default function RiskControlListPage() {
     <>
       {/* Toolbar first, KPI strip second — the filters scope what the numbers
           below are counting, so they read in that order. */}
-      <RiskFilterBar
+      <FilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search control # or title"
@@ -303,7 +303,7 @@ export default function RiskControlListPage() {
           </AntButton>
         }
       >
-        <RiskFilterField label="Status">
+        <FilterField label="Status">
           <AntSelect
             allowClear
             placeholder="All statuses"
@@ -312,8 +312,8 @@ export default function RiskControlListPage() {
             onChange={(v) => setStatus(v ?? undefined)}
             options={CONTROL_STATUSES.map((s) => ({ value: s, label: CONTROL_STATUS_LABELS[s] }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Type">
+        </FilterField>
+        <FilterField label="Type">
           <AntSelect
             allowClear
             placeholder="All types"
@@ -322,8 +322,8 @@ export default function RiskControlListPage() {
             onChange={(v) => setType(v ?? undefined)}
             options={CONTROL_TYPES.map((t) => ({ value: t, label: CONTROL_TYPE_LABELS[t] }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Hierarchy">
+        </FilterField>
+        <FilterField label="Hierarchy">
           <AntSelect
             allowClear
             placeholder="All hierarchies"
@@ -332,8 +332,8 @@ export default function RiskControlListPage() {
             onChange={(v) => setHierarchy(v ?? undefined)}
             options={CONTROL_HIERARCHIES.map((h) => ({ value: h, label: CONTROL_HIERARCHY_LABELS[h] }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Register">
+        </FilterField>
+        <FilterField label="Register">
           <AntSelect
             allowClear
             showSearch
@@ -344,8 +344,8 @@ export default function RiskControlListPage() {
             onChange={(v) => setRegisterId(v ?? undefined)}
             options={registers.map((r) => ({ value: r.id, label: r.name }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Owner">
+        </FilterField>
+        <FilterField label="Owner">
           <AntSelect
             allowClear
             showSearch
@@ -356,8 +356,8 @@ export default function RiskControlListPage() {
             onChange={(v) => setOwnerId(v ?? undefined)}
             options={users.map((u) => ({ value: u.id, label: u.name }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Due state">
+        </FilterField>
+        <FilterField label="Due state">
           <AntButton
             block
             type={overdue ? 'primary' : 'default'}
@@ -367,16 +367,16 @@ export default function RiskControlListPage() {
           >
             Overdue only
           </AntButton>
-        </RiskFilterField>
-        <RiskFilterField label="Sort by">
+        </FilterField>
+        <FilterField label="Sort by">
           <AntSelect
             style={{ width: '100%' }}
             value={sortBy}
             onChange={(v) => setSortBy(v)}
             options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <KpiCard

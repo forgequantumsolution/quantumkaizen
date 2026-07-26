@@ -9,7 +9,7 @@ import { Button as AntButton, Drawer, Form, Input as AntInput, Select as AntSele
 import { Plus, Pencil, Trash2, FolderKanban, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { DataTable, type Column, Badge } from '@/components/ui';
-import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
@@ -265,7 +265,7 @@ export default function RiskRegisterListPage() {
   return (
     <>
       {/* Toolbar first, then the table — the filters scope what is listed. */}
-      <RiskFilterBar
+      <FilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search name or number"
@@ -280,7 +280,7 @@ export default function RiskRegisterListPage() {
           ) : undefined
         }
       >
-        <RiskFilterField label="Scope">
+        <FilterField label="Scope">
           <AntSelect
             allowClear
             placeholder="All scopes"
@@ -289,8 +289,8 @@ export default function RiskRegisterListPage() {
             onChange={(v) => setScope(v ?? undefined)}
             options={SCOPES.map((s) => ({ value: s, label: s }))}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

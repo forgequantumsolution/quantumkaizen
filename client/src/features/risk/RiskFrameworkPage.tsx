@@ -33,7 +33,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { DataTable, type Column, Badge, Card, CardHeader, CardTitle, Spinner } from '@/components/ui';
-import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
@@ -292,7 +292,7 @@ export default function RiskFrameworkPage() {
   return (
     <>
       {/* Toolbar first, then the table — the filters scope what is listed. */}
-      <RiskFilterBar
+      <FilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search name, code or standard"
@@ -307,7 +307,7 @@ export default function RiskFrameworkPage() {
           ) : undefined
         }
       >
-        <RiskFilterField label="Methodology">
+        <FilterField label="Methodology">
           <AntSelect
             allowClear
             placeholder="All methodologies"
@@ -316,8 +316,8 @@ export default function RiskFrameworkPage() {
             onChange={(v) => setMethodology(v ?? undefined)}
             options={METHODOLOGIES.map((m) => ({ value: m, label: METHODOLOGY_LABELS[m] }))}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

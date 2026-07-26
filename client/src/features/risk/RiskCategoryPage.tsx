@@ -18,7 +18,7 @@ import {
 } from 'antd';
 import { Plus, Pencil, Trash2, FolderTree, CornerDownRight } from 'lucide-react';
 import { DataTable, type Column, Badge } from '@/components/ui';
-import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
@@ -293,7 +293,7 @@ export default function RiskCategoryPage() {
   return (
     <>
       {/* Toolbar first, then the table — the filters scope what is listed. */}
-      <RiskFilterBar
+      <FilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search name or code"
@@ -308,7 +308,7 @@ export default function RiskCategoryPage() {
           ) : undefined
         }
       >
-        <RiskFilterField label="Status">
+        <FilterField label="Status">
           <AntSelect
             allowClear
             placeholder="All statuses"
@@ -320,8 +320,8 @@ export default function RiskCategoryPage() {
               { value: 'false', label: 'Inactive' },
             ]}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

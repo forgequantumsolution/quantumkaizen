@@ -15,7 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button as AntButton, Select as AntSelect, Tooltip, message } from 'antd';
 import { CalendarCheck, CalendarClock, CheckCircle2, Download, ExternalLink, TriangleAlert } from 'lucide-react';
 import { Badge, DataTable, KpiCard, type Column } from '@/components/ui';
-import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { exportToCSV } from '@/lib/export';
 import { useHasPermission } from '@/stores/authStore';
 import {
@@ -255,7 +255,7 @@ export default function RiskReviewListPage() {
     <>
       {/* Toolbar first, KPI strip second — the filters scope what the numbers
           below are counting, so they read in that order. */}
-      <RiskFilterBar
+      <FilterBar
         title="Filter reviews"
         activeCount={activeFilterCount}
         onClear={() => {
@@ -269,15 +269,15 @@ export default function RiskReviewListPage() {
           </AntButton>
         }
       >
-        <RiskFilterField label="View">
+        <FilterField label="View">
           <AntSelect
             style={{ width: '100%' }}
             value={view}
             onChange={(v) => setView(v)}
             options={VIEWS.map((v) => ({ value: v.value, label: v.label }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Register">
+        </FilterField>
+        <FilterField label="Register">
           <AntSelect
             allowClear
             showSearch
@@ -288,8 +288,8 @@ export default function RiskReviewListPage() {
             onChange={(v) => setRegisterId(v ?? undefined)}
             options={registers.map((r) => ({ value: r.id, label: r.name }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Outcome">
+        </FilterField>
+        <FilterField label="Outcome">
           <AntSelect
             allowClear
             placeholder="Any outcome"
@@ -298,16 +298,16 @@ export default function RiskReviewListPage() {
             onChange={(v) => setOutcome(v ?? undefined)}
             options={REVIEW_OUTCOMES.map((o) => ({ value: o, label: REVIEW_OUTCOME_LABELS[o] }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Sort by">
+        </FilterField>
+        <FilterField label="Sort by">
           <AntSelect
             style={{ width: '100%' }}
             value={sortBy}
             onChange={(v) => setSortBy(v)}
             options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <KpiCard

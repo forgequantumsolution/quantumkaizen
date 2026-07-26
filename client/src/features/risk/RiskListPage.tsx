@@ -32,7 +32,7 @@ import {
   type Risk,
 } from '@/lib/api/risk';
 import { RiskStatusBadge, RiskLevelBadge } from './riskStatusBadge';
-import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 
 const PAGE_SIZE = 15;
 
@@ -331,7 +331,7 @@ export default function RiskListPage() {
   return (
     <>
       {/* Toolbar first, then the table — the filters scope what is listed. */}
-      <RiskFilterBar
+      <FilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search risk #, title or hazard"
@@ -357,7 +357,7 @@ export default function RiskListPage() {
           </>
         }
       >
-        <RiskFilterField label="Status">
+        <FilterField label="Status">
           <AntSelect
             allowClear
             placeholder="All statuses"
@@ -366,8 +366,8 @@ export default function RiskListPage() {
             onChange={(v) => setStatus(v ?? undefined)}
             options={RISK_STATUSES.map((s) => ({ value: s, label: s.replace(/_/g, ' ') }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Register">
+        </FilterField>
+        <FilterField label="Register">
           <AntSelect
             allowClear
             showSearch
@@ -378,8 +378,8 @@ export default function RiskListPage() {
             onChange={(v) => setRegisterId(v ?? undefined)}
             options={registers.map((r) => ({ value: r.id, label: r.name }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Category">
+        </FilterField>
+        <FilterField label="Category">
           <AntSelect
             allowClear
             showSearch
@@ -390,8 +390,8 @@ export default function RiskListPage() {
             onChange={(v) => setCategoryId(v ?? undefined)}
             options={categories.map((c) => ({ value: c.id, label: c.name }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Risk level">
+        </FilterField>
+        <FilterField label="Risk level">
           <AntSelect
             allowClear
             placeholder="All levels"
@@ -400,8 +400,8 @@ export default function RiskListPage() {
             onChange={(v) => setLevelCode(v ?? undefined)}
             options={levelOptions}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Review state">
+        </FilterField>
+        <FilterField label="Review state">
           <AntButton
             block
             type={overdueReview ? 'primary' : 'default'}
@@ -411,8 +411,8 @@ export default function RiskListPage() {
           >
             Review overdue
           </AntButton>
-        </RiskFilterField>
-        <RiskFilterField label="Sort by">
+        </FilterField>
+        <FilterField label="Sort by">
           <AntSelect
             style={{ width: '100%' }}
             value={sortBy}
@@ -422,8 +422,8 @@ export default function RiskListPage() {
             }}
             options={SORTS.map((s) => ({ value: s.value, label: s.label }))}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable

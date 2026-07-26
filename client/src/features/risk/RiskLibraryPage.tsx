@@ -19,7 +19,7 @@ import {
 } from 'antd';
 import { Plus, Pencil, Trash2, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { DataTable, type Column, Badge } from '@/components/ui';
-import RiskFilterBar, { RiskFilterField } from './RiskFilterBar';
+import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
@@ -313,7 +313,7 @@ function HazardLibraryTab() {
   return (
     <>
       {/* Toolbar first, then the table — the filters scope what is listed. */}
-      <RiskFilterBar
+      <FilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search name or code"
@@ -328,7 +328,7 @@ function HazardLibraryTab() {
           ) : undefined
         }
       >
-        <RiskFilterField label="Type">
+        <FilterField label="Type">
           <AntSelect
             allowClear
             placeholder="All types"
@@ -337,8 +337,8 @@ function HazardLibraryTab() {
             onChange={(v) => setType(v ?? undefined)}
             options={HAZARD_TYPES.map((t) => ({ value: t, label: HAZARD_TYPE_LABELS[t] }))}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable
@@ -643,7 +643,7 @@ function ControlLibraryTab() {
   return (
     <>
       {/* Toolbar first, then the table — the filters scope what is listed. */}
-      <RiskFilterBar
+      <FilterBar
         search={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search name or code"
@@ -661,7 +661,7 @@ function ControlLibraryTab() {
           ) : undefined
         }
       >
-        <RiskFilterField label="Type">
+        <FilterField label="Type">
           <AntSelect
             allowClear
             placeholder="All types"
@@ -670,8 +670,8 @@ function ControlLibraryTab() {
             onChange={(v) => setType(v ?? undefined)}
             options={CONTROL_TYPES.map((t) => ({ value: t, label: CONTROL_TYPE_LABELS[t] }))}
           />
-        </RiskFilterField>
-        <RiskFilterField label="Hierarchy">
+        </FilterField>
+        <FilterField label="Hierarchy">
           <AntSelect
             allowClear
             placeholder="All hierarchies"
@@ -683,8 +683,8 @@ function ControlLibraryTab() {
               label: CONTROL_HIERARCHY_LABELS[h],
             }))}
           />
-        </RiskFilterField>
-      </RiskFilterBar>
+        </FilterField>
+      </FilterBar>
 
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
         <DataTable
