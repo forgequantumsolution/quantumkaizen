@@ -67,6 +67,8 @@ export interface DirectoryUser {
   role: { id: string; name: string } | null;
   department: { id: string; code: string; name: string } | null;
   site: { id: string; code: string; name: string } | null;
+  /** False when the user is currently in an out-of-office window. */
+  isAvailable: boolean;
 }
 
 /**

@@ -57,6 +57,22 @@ export const SetOverridesSchema = z.object({
 
 export const IdParamSchema = z.object({ id: z.string().uuid() });
 
+// Out-of-office window. `delegateToId` is an optional named backup the
+// escalation resolver tries before walking the manager chain.
+export const CreateAvailabilitySchema = z
+  .object({
+    from: z.coerce.date(),
+    to: z.coerce.date(),
+    reason: z.string().max(500).optional().nullable(),
+    delegateToId: z.string().uuid().optional().nullable(),
+  })
+  .refine((v) => v.to > v.from, { message: 'End must be after start', path: ['to'] });
+
+export const AvailabilityParamSchema = z.object({
+  id: z.string().uuid(),
+  windowId: z.string().uuid(),
+});
+
 export const ListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(20),
@@ -68,6 +84,7 @@ export const ListQuerySchema = z.object({
 });
 
 export type CreateUserInput = z.infer<typeof CreateUserSchema>;
+export type CreateAvailabilityInput = z.infer<typeof CreateAvailabilitySchema>;
 export type UpdateUserInput = z.infer<typeof UpdateUserSchema>;
 export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
 export type SetOverridesInput = z.infer<typeof SetOverridesSchema>;

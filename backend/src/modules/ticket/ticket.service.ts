@@ -9,10 +9,12 @@ import {
   resumeTicket as engineResume,
 } from '../workflow/engine/orchestrator';
 import { emitAuditEvent } from '../workflow/engine/audit.emitter';
+import { notify } from '../escalation/notify';
 import type { TicketTypeScope, SiteScope } from '../../middleware/permissions';
 import { siteFilterFor } from '../../middleware/permissions';
 import type {
   AddCommentInput,
+  AssignTicketInput,
   AttachDocInput,
   HoldBody,
   ListCommentsQuery,
@@ -31,6 +33,7 @@ const ticketSummarySelect = {
   isDeleted: true,
   dueDate: true,
   classification: true,
+  escalationLevel: true,
   createdAt: true,
   updatedAt: true,
   priority: { select: { id: true, name: true } },
@@ -38,6 +41,7 @@ const ticketSummarySelect = {
   department: { select: { id: true, name: true, code: true } },
   site: { select: { id: true, name: true, code: true } },
   createdBy: { select: { id: true, name: true, email: true } },
+  assignee: { select: { id: true, name: true, email: true } },
   flows: {
     select: {
       id: true,
@@ -65,6 +69,7 @@ const ticketDetailSelect = {
   deletedAt: true,
   dueDate: true,
   classification: true,
+  escalationLevel: true,
   createdAt: true,
   updatedAt: true,
   priority: { select: { id: true, name: true } },
@@ -74,6 +79,7 @@ const ticketDetailSelect = {
   parentTicket: { select: { id: true, uniqueId: true, title: true } },
   parentTicketStage: { select: { id: true, name: true, canonicalId: true } },
   createdBy: { select: { id: true, name: true, email: true } },
+  assignee: { select: { id: true, name: true, email: true } },
   heldBy: { select: { id: true, name: true } },
   flows: {
     select: {
@@ -133,6 +139,8 @@ export const list = async (
 
   if (Object.keys(flowsSome).length > 0) where.flows = { some: flowsSome };
   if (query.mine === 'true') where.createdById = userId;
+  if (query.assigneeId === 'unassigned') where.assigneeId = null;
+  else if (query.assigneeId) where.assigneeId = query.assigneeId;
   if (query.search) {
     where.OR = [
       { title: { contains: query.search, mode: 'insensitive' } },
@@ -274,6 +282,78 @@ export const softDelete = async (id: string, userId: string) => {
     });
     await emitAuditEvent(tx, { ticketId: id }, 'TICKET_DELETED', {}, { id: userId });
   });
+};
+
+// ─── Assignment ──────────────────────────────────────────────────────────────
+
+// Manual (re)assignment of the individual responsible for a ticket. Distinct
+// from the automatic escalation the SLA sweep performs — this is a human
+// explicitly handing the ticket over. Preserves `escalationLevel` (a manual
+// hand-off keeps the ladder position; only automatic escalation advances it —
+// see the escalation-matrix plan §9.3) and records an EscalationEvent for audit.
+export const assign = async (id: string, input: AssignTicketInput, userId: string) => {
+  const ticket = await prisma.ticket.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      uniqueId: true,
+      title: true,
+      isDeleted: true,
+      assigneeId: true,
+      escalationLevel: true,
+    },
+  });
+  if (!ticket) throw NotFound('Ticket not found');
+  if (ticket.isDeleted) throw BadRequest('Ticket is deleted');
+
+  const targetId = input.assigneeId ?? null;
+  if (targetId) {
+    const target = await prisma.user.findUnique({
+      where: { id: targetId },
+      select: { isActive: true },
+    });
+    if (!target) throw NotFound('Assignee not found');
+    if (!target.isActive) throw BadRequest('Cannot assign a ticket to an inactive user');
+  }
+
+  // No-op assignment — return the current record without writing an event.
+  if (ticket.assigneeId === targetId) {
+    return getById(id);
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.ticket.update({
+      where: { id },
+      data: {
+        assignee: targetId ? { connect: { id: targetId } } : { disconnect: true },
+      },
+    });
+    await tx.escalationEvent.create({
+      data: {
+        ticketId: id,
+        fromUserId: ticket.assigneeId,
+        toUserId: targetId,
+        reason: 'MANUAL',
+        levelOrder: ticket.escalationLevel,
+        detail: input.note ?? null,
+      },
+    });
+    if (targetId) {
+      await notify(
+        {
+          userId: targetId,
+          type: 'TASK_ASSIGNED',
+          title: `Assigned: ${ticket.uniqueId}`,
+          body: ticket.title,
+          entityType: 'ticket',
+          entityId: id,
+        },
+        tx,
+      );
+    }
+  });
+
+  return getById(id);
 };
 
 // ─── Engine pass-through ────────────────────────────────────────────────────

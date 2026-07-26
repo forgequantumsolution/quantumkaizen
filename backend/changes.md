@@ -4,6 +4,83 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+# Ticket escalation matrix — 2026-07-26
+
+Auto-reassign a ticket to someone else in its department when it crosses its SLA
+time **or** the assignee is unavailable, plus manual assignment and a per-department
+config matrix. Full design + status in `docs/TICKETS-escalation-matrix-plan.md`.
+Built in 6 steps; verified end-to-end via Playwright (5/5) against `kaizen_qms2`.
+**Not committed** — working tree only.
+
+## Schema + migration (`20260724172032_escalation_matrix`)
+- `Ticket`: `assigneeId` → `assignee User?` (relation `TicketAssignee`, SetNull),
+  `escalationLevel Int @default(0)` (0 = owner, 1 = manager, 2 = dept head),
+  `escalationEvents`, index `[assigneeId, isDeleted]`.
+- New models: `UserAvailability` (out-of-office `from`/`to` + `reason` + optional
+  `delegateTo`), `EscalationRule` (one per department, `@unique departmentId`,
+  `null` = global default), `EscalationLevel` (`order`, `target`, `atThresholdName`),
+  `EscalationEvent` (audit trail + idempotency latch on `[ticketId, levelOrder]`),
+  `Notification`. Enums `EscalationTarget {MANAGER, DEPARTMENT_HEAD}`,
+  `EscalationReason {SLA_THRESHOLD, SLA_BREACH, ASSIGNEE_UNAVAILABLE, MANUAL}`,
+  `NotificationType`. All additive.
+
+## New `escalation` module (`src/modules/escalation/`)
+- `resolveTarget.ts` — `isAvailable()` (inactive OR covered by an OOO window),
+  `resolveNextAssignee(ticket, target)` (resolves MANAGER / DEPARTMENT_HEAD,
+  skipping unavailable people via delegate → manager fallthrough, cycle-capped),
+  `resolveCoverFor(userId)` (who covers for an OOO user).
+- `notify.ts` — the `notify()` seam; persists a `Notification` row (email is a
+  future channel that plugs in here).
+- `escalation.{schema,service,controller,routes}.ts` — rule CRUD
+  (`GET /api/escalation-rules`, `PUT` upsert-by-department, `DELETE /:id`),
+  `GET /escalation-rules/threshold-names` (distinct SLA threshold names for the UI),
+  and `getActiveRuleForDepartment()` (dept rule → global fallback) used by the sweep.
+
+## SLA sweep — step 4 (auto-escalation)
+- `src/jobs/sweeps/applyEscalations.ts` **(new)** — for every timer that fired a
+  `THRESHOLD_HIT`/`BREACHED` event, looks up the ticket's department ladder,
+  reassigns up it (row-locked, latched on `EscalationEvent` so each level fires
+  once), writes the event, notifies. On breach with no available target it records
+  a latched no-op event (plan §9.2). Wired after `checkBreaches` in
+  `checkSlaTimers.ts`; `SweepResult` gained `escalationsApplied` + an
+  `'escalation'` error phase.
+
+## `ticket` module — assignment
+- `ticket.service.ts` — `assign()` (validates active target, sets `assigneeId`,
+  **preserves `escalationLevel`**, writes `EscalationEvent(MANUAL)`, notifies);
+  `assignee` + `escalationLevel` added to summary/detail selects; `list` gained an
+  `assigneeId` filter (uuid or `'unassigned'`).
+- `PATCH /tickets/:id/assign` route + `AssignTicketSchema` + controller.
+
+## `user` module — availability
+- `UserAvailability` CRUD on `GET/POST/DELETE /api/users/:id/availability`
+  (self-service; managing others needs `user.read`/`user.update` — enforced in the
+  controller via `ensureSelfOrPermission`).
+- `createAvailability` runs **reassign-on-OOO**: a window covering *now* moves the
+  user's open assigned tickets to their cover (`resolveCoverFor`), preserving
+  `escalationLevel`, with `EscalationEvent(ASSIGNEE_UNAVAILABLE)` + notify.
+- `directory` now returns `isAvailable` per user.
+
+## New `notification` module (`src/modules/notification/`)
+- `GET /api/notifications` (recent + `unreadCount`), `POST /:id/read`,
+  `POST /read-all`. Self-scoped (auth only).
+
+## RBAC + wiring
+- `src/lib/rbac-catalog.ts` — `escalation.{read,create,update,delete}` keys
+  (auto-synced + granted to SUPER_ADMIN at boot).
+- `app.ts` — mounted `/api/escalation-rules` and `/api/notifications`.
+
+## Tests
+- `tests/e2e/escalation-matrix.spec.ts` (rule CRUD, manual assign + notify, OOO
+  reassignment, mark-all-read) and `tests/e2e/escalation-sla-breach.spec.ts`
+  (real SLA breach → matrix → escalate to department head, self-restoring). 5/5.
+
+## Deferred ⏳
+- **Approval on assignment** — not started; see plan §8a. Assignment is immediate
+  on all paths today.
+
+---
+
 # System-wide ALCOA++ audit trail — 2026-07-24
 
 A single tamper-evident audit trail recording **what changed, from what to what,

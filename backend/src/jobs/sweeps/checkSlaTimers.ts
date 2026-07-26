@@ -21,13 +21,19 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { computeElapsedSec, computePercentageConsumed } from './computeElapsed';
+import { applyEscalations } from './applyEscalations';
 
 export interface SweepResult {
   timersInspected: number;
   thresholdsFired: number;
   transitionsTriggered: number;
   breachesFound: number;
-  errors: { timerId: string; phase: 'threshold' | 'transition' | 'breach'; message: string }[];
+  escalationsApplied: number;
+  errors: {
+    timerId: string;
+    phase: 'threshold' | 'transition' | 'breach' | 'escalation';
+    message: string;
+  }[];
 }
 
 const log = (msg: string, extra?: Record<string, unknown>) => {
@@ -335,12 +341,26 @@ export const checkSlaTimers = async (): Promise<SweepResult> => {
   const t = await checkThresholds();
   const tr = await triggerSlaTransitions();
   const b = await checkBreaches();
+  // Step 4 — reassign the parent ticket up the department escalation ladder for
+  // any threshold/breach that just fired. Runs after breaches so a breach-keyed
+  // ladder level sees the BREACHED event in the same tick.
+  const esc = await applyEscalations();
   const result: SweepResult = {
     timersInspected: t.inspected,
     thresholdsFired: t.fired,
     transitionsTriggered: tr.triggered,
     breachesFound: b.found,
-    errors: [...t.errors, ...tr.errors, ...b.errors],
+    escalationsApplied: esc.applied,
+    errors: [
+      ...t.errors,
+      ...tr.errors,
+      ...b.errors,
+      ...esc.errors.map((e) => ({
+        timerId: e.ticketId,
+        phase: 'escalation' as const,
+        message: e.message,
+      })),
+    ],
   };
   log('checkSlaTimers complete', { ...result, ms: Date.now() - start });
   return result;

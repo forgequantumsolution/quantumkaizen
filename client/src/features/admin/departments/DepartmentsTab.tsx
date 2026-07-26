@@ -20,6 +20,7 @@ import {
   type Department,
   type CreateDepartmentInput,
 } from './hooks';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useHasPermission } from '@/stores/authStore';
 
 interface FormValues {
@@ -27,6 +28,7 @@ interface FormValues {
   name: string;
   description: string;
   parentId: string;
+  headUserId: string;
   costCenter: string;
   isActive: boolean;
 }
@@ -36,6 +38,7 @@ const emptyValues: FormValues = {
   name: '',
   description: '',
   parentId: '',
+  headUserId: '',
   costCenter: '',
   isActive: true,
 };
@@ -45,6 +48,7 @@ const buildPayload = (values: FormValues): CreateDepartmentInput => ({
   name: values.name.trim(),
   description: values.description?.trim() || null,
   parentId: values.parentId || null,
+  headUserId: values.headUserId || null,
   costCenter: values.costCenter?.trim() || null,
   isActive: values.isActive,
 });
@@ -102,6 +106,7 @@ export default function DepartmentsTab() {
       name: editing.name,
       description: editing.description ?? '',
       parentId: editing.parentId ?? '',
+      headUserId: editing.headUserId ?? '',
       costCenter: editing.costCenter ?? '',
       isActive: editing.isActive,
     };
@@ -247,6 +252,15 @@ export default function DepartmentsTab() {
     .filter((d) => !editing || d.id !== editing.id)
     .map((d) => ({ value: d.id, label: `${d.code} · ${d.name}` }));
 
+  // People directory for the department-head picker — the head is the top rung
+  // of the escalation ladder (DEPARTMENT_HEAD), so an unset head means that
+  // level can't fire.
+  const { data: directory } = useUserDirectory();
+  const headOptions = (directory?.items ?? []).map((u) => ({
+    value: u.id,
+    label: u.designation ? `${u.name} · ${u.designation}` : u.name,
+  }));
+
   const isSaving = create.isPending || update.isPending;
 
   return (
@@ -372,6 +386,19 @@ export default function DepartmentsTab() {
                 placeholder="None (top-level)"
                 allowClear
                 options={parentOptions}
+              />
+            </AppForm.Item>
+            <AppForm.Item
+              label="Head"
+              name="headUserId"
+              help="Escalation target for this department (DEPARTMENT_HEAD)"
+            >
+              <AntSelect
+                placeholder="Unassigned"
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={headOptions}
               />
             </AppForm.Item>
             <AppForm.Item label="Cost Center" name="costCenter">

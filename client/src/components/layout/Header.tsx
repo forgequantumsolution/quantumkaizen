@@ -3,11 +3,13 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Search, Bell, Menu, LogOut, User, ChevronDown,
   ChevronRight, AlertTriangle, Clock, Shield, PenLine, Building2, Check,
+  CalendarClock,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useSiteStore } from '@/stores/siteStore';
 import { useUIStore } from '@/stores/uiStore';
-import { useNotificationStore, AppNotification } from '@/stores/notificationStore';
+import { useNotificationStore } from '@/stores/notificationStore';
+import { useNotifications, toAppNotification } from '@/lib/api/notifications';
 import { useTicket } from '@/lib/api/ticket';
 import { useWorkflowTypes } from '@/lib/api/workflowLookups';
 import { useWorkflow } from '@/lib/api/workflow';
@@ -16,8 +18,6 @@ import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { cn } from '@/lib/utils';
 import GlobalSearch from '@/components/shared/GlobalSearch';
 import { useFiscalYearStore, FISCAL_YEARS } from '@/stores/fiscalYearStore';
-
-const MOCK_NOTIFICATIONS: AppNotification[] = [];
 
 const breadcrumbMap: Record<string, string> = {
   dashboard: 'Dashboard', qms: 'Quality', dms: 'Documents',
@@ -175,10 +175,10 @@ export default function Header() {
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  const { data: notifData } = useNotifications();
   useEffect(() => {
-    setNotifications(MOCK_NOTIFICATIONS);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (notifData) setNotifications(notifData.items.map(toAppNotification));
+  }, [notifData, setNotifications]);
 
   const unread = notifications.filter(n => !n.isRead);
   const criticalCount = unread.filter(n => n.type === 'OVERDUE').length;
@@ -426,6 +426,13 @@ export default function Header() {
                   <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-ink hover:bg-surface-bg transition-colors">
                     <User size={13} className="text-ink-tertiary" />
                     Profile & Preferences
+                  </button>
+                  <button
+                    onClick={() => { setShowUserMenu(false); navigate('/out-of-office'); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-ink hover:bg-surface-bg transition-colors"
+                  >
+                    <CalendarClock size={13} className="text-ink-tertiary" />
+                    Out of Office
                   </button>
                   <div className="h-px bg-surface-border my-1 mx-2" />
                   <button

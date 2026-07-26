@@ -38,6 +38,7 @@ import {
   type TicketSummary,
 } from '@/lib/api/ticket';
 import { useWorkflowDirectory } from '@/lib/api/workflow';
+import { useUserDirectory } from '@/features/admin/users/hooks';
 import { usePriorities } from '@/lib/api/workflowLookups';
 import { useSlaTimers, type SlaTimer } from '@/lib/api/sla';
 import RaiseTicketDrawer from './shared/RaiseTicketDrawer';
@@ -116,6 +117,7 @@ export default function TicketsPage() {
   const [mine, setMine] = useState<'true' | 'false'>('false');
   const [priorityId, setPriorityId] = useState<string>('');
   const [workflowFilterId, setWorkflowFilterId] = useState<string>('');
+  const [assigneeId, setAssigneeId] = useState<string>('');
   const [pageSize, setPageSize] = useState(50);
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -125,14 +127,16 @@ export default function TicketsPage() {
       status,
       mine,
       workflowId: workflowFilterId || undefined,
+      assigneeId: assigneeId || undefined,
       pageSize,
     }),
-    [search, status, mine, workflowFilterId, pageSize],
+    [search, status, mine, workflowFilterId, assigneeId, pageSize],
   );
 
   const { data, isLoading, error } = useTickets(filters);
   const { data: priorities = [] } = usePriorities();
   const { data: activeWorkflowsData } = useWorkflowDirectory();
+  const { data: userDirectory } = useUserDirectory();
   const breached = useSlaTimers({ status: 'BREACHED', pageSize: 1 });
   const running = useSlaTimers({ status: 'RUNNING', pageSize: 100 });
 
@@ -166,7 +170,12 @@ export default function TicketsPage() {
   );
 
   const hasActiveFilters =
-    !!search || status !== 'all' || mine === 'true' || !!priorityId || !!workflowFilterId;
+    !!search ||
+    status !== 'all' ||
+    mine === 'true' ||
+    !!priorityId ||
+    !!workflowFilterId ||
+    !!assigneeId;
 
   const clearFilters = () => {
     setSearchInput('');
@@ -174,6 +183,7 @@ export default function TicketsPage() {
     setMine('false');
     setPriorityId('');
     setWorkflowFilterId('');
+    setAssigneeId('');
   };
 
   return (
@@ -303,7 +313,7 @@ export default function TicketsPage() {
                 { value: '', label: 'Any priority' },
                 ...priorities.map((p) => ({ value: p.id, label: p.name })),
               ]}
-              className="md:col-span-3"
+              className="md:col-span-2"
             />
             <Select
               value={workflowFilterId}
@@ -316,7 +326,21 @@ export default function TicketsPage() {
                   label: displayWorkflowName(w),
                 })),
               ]}
-              className="md:col-span-3"
+              className="md:col-span-2"
+            />
+            <Select
+              value={assigneeId}
+              onChange={(e) => setAssigneeId(e.target.value)}
+              placeholder="Any assignee"
+              options={[
+                { value: '', label: 'Any assignee' },
+                { value: 'unassigned', label: 'Unassigned' },
+                ...(userDirectory?.items ?? []).map((u) => ({
+                  value: u.id,
+                  label: u.name,
+                })),
+              ]}
+              className="md:col-span-2"
             />
           </div>
 
@@ -472,6 +496,28 @@ function buildColumns({
       render: (_, t) => (
         <span className="text-xs text-gray-700">{t.priority?.name ?? '—'}</span>
       ),
+    },
+    {
+      title: 'Assignee',
+      key: 'assignee',
+      width: 150,
+      ellipsis: true,
+      render: (_, t) =>
+        t.assignee ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span className="text-sm text-gray-800 truncate">{t.assignee.name}</span>
+            {t.escalationLevel > 0 && (
+              <span
+                className="inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700"
+                title={`Escalated to level ${t.escalationLevel}`}
+              >
+                L{t.escalationLevel}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="text-xs text-gray-400">Unassigned</span>
+        ),
     },
     {
       title: 'Status',

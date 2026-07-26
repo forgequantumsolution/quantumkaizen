@@ -6,11 +6,16 @@ import {
   CheckCircle,
   Clock,
   AlertTriangle,
+  ArrowUpNarrowWide,
   User,
   X,
   CheckCheck,
 } from 'lucide-react';
 import { useNotificationStore, AppNotification } from '@/stores/notificationStore';
+import {
+  useMarkNotificationRead,
+  useMarkAllNotificationsRead,
+} from '@/lib/api/notifications';
 import { cn } from '@/lib/utils';
 
 type FilterTab = 'all' | 'unread' | 'approvals' | 'tasks';
@@ -44,6 +49,11 @@ const typeConfig: Record<
     color: 'text-purple-500',
     bg: 'bg-purple-50',
   },
+  ESCALATED: {
+    icon: ArrowUpNarrowWide,
+    color: 'text-orange-500',
+    bg: 'bg-orange-50',
+  },
 };
 
 function timeAgo(dateStr: string): string {
@@ -70,6 +80,8 @@ const filterTabs: { key: FilterTab; label: string }[] = [
 export default function NotificationPanel() {
   const navigate = useNavigate();
   const { notifications, markRead, markAllRead, closePanel } = useNotificationStore();
+  const markReadMut = useMarkNotificationRead();
+  const markAllReadMut = useMarkAllNotificationsRead();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   const filtered = notifications.filter((n) => {
@@ -83,11 +95,19 @@ export default function NotificationPanel() {
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   function handleItemClick(n: AppNotification) {
-    markRead(n.id);
+    if (!n.isRead) {
+      markRead(n.id); // optimistic
+      markReadMut.mutate(n.id); // persist
+    }
     if (n.link) {
       navigate(n.link);
     }
     closePanel();
+  }
+
+  function handleMarkAllRead() {
+    markAllRead(); // optimistic
+    markAllReadMut.mutate(); // persist
   }
 
   return (
@@ -126,7 +146,7 @@ export default function NotificationPanel() {
             <div className="flex items-center gap-1">
               {unreadCount > 0 && (
                 <button
-                  onClick={markAllRead}
+                  onClick={handleMarkAllRead}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-slate-900 hover:bg-gray-100 rounded-lg transition-colors duration-175"
                 >
                   <CheckCheck size={13} />

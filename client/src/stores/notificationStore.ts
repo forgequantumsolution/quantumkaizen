@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 export interface AppNotification {
   id: string;
-  type: 'APPROVAL_REQUEST' | 'TASK_ASSIGNED' | 'OVERDUE' | 'EXPIRING' | 'SYSTEM';
+  type: 'APPROVAL_REQUEST' | 'TASK_ASSIGNED' | 'ESCALATED' | 'OVERDUE' | 'EXPIRING' | 'SYSTEM';
   title: string;
   message: string;
   entityType?: string;

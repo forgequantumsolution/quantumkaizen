@@ -87,6 +87,14 @@ model User {
   slaExtensionsApproved   SlaExtension[]   @relation("SlaExtensionApprover")
   slaTimerEventsTriggered SlaTimerEvent[]  @relation("SlaTimerEventTriggeredBy")
 
+  // Escalation matrix
+  assignedTickets Ticket[]           @relation("TicketAssignee")
+  availability    UserAvailability[] @relation("UserAvailability")
+  delegateFor     UserAvailability[] @relation("UserDelegate")
+  escalationsFrom EscalationEvent[]  @relation("EscalationFrom")
+  escalationsTo   EscalationEvent[]  @relation("EscalationTo")
+  notifications   Notification[]     @relation("UserNotifications")
+
   // Phase 3.5 — stage form bindings
   stageFormBindingsCreated StageFormBinding[] @relation("StageFormBindingCreatedBy")
 
@@ -130,6 +138,9 @@ model Department {
 
   // Access control — department-level permission grants (mirrors Role.permissions).
   permissions Permission[] @relation("DepartmentPermissions")
+
+  // Escalation matrix — the escalation ladder for tickets in this department.
+  escalationRule EscalationRule? @relation("DepartmentEscalationRule")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -221,18 +232,18 @@ model Site {
 }
 
 model Organization {
-  id         String   @id @default(uuid())
-  name       String
-  tenantCode String   @unique
-  industry   String
-  website    String?
-  address    String?
-  standards  String[]
-  timezone   String   @default("Asia/Kolkata")
-  dateFormat String   @default("DD/MM/YYYY")
+  id               String   @id @default(uuid())
+  name             String
+  tenantCode       String   @unique
+  industry         String
+  website          String?
+  address          String?
+  standards        String[]
+  timezone         String   @default("Asia/Kolkata")
+  dateFormat       String   @default("DD/MM/YYYY")
   // logoUrl holds either an http(s) URL or an inline data:image/...;base64,...
   // string (used as the report header logo).
-  logoUrl    String?
+  logoUrl          String?
   // Footer line printed on every page of generated ticket reports.
   reportFooterText String?
 
@@ -616,6 +627,16 @@ model Ticket {
   departmentId String?
   department   Department? @relation("TicketDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
 
+  // Escalation matrix — the individual currently responsible for the ticket.
+  // Null until first assigned. Reassigned automatically when an SLA threshold /
+  // breach fires or the assignee is unavailable (see EscalationRule). Distinct
+  // from workflow-stage role/user access, which governs who *may* act.
+  assigneeId       String?
+  assignee         User?             @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  // Ladder position: 0 = original owner, 1 = manager, 2 = department head.
+  escalationLevel  Int               @default(0)
+  escalationEvents EscalationEvent[]
+
   siteId String?
   site   Site?   @relation("TicketSite", fields: [siteId], references: [id], onDelete: SetNull)
 
@@ -674,6 +695,7 @@ model Ticket {
   @@index([priorityId, createdAt])
   @@index([isDeleted, createdAt])
   @@index([parentTicketId, isDeleted])
+  @@index([assigneeId, isDeleted])
 }
 
 model TicketFlow {
@@ -1533,6 +1555,123 @@ model SlaExtension {
   @@index([timerId, status])
 }
 
+// ─── Escalation matrix (4 tables + notifications) ──────────────────────────
+// Reassigns a ticket to someone up the chain when its SLA threshold/breach
+// fires, or when its assignee is out-of-office. Reuses the SLA sweep for
+// timing (see jobs/sweeps/checkSlaTimers.ts). Ladder is fixed two steps —
+// MANAGER then DEPARTMENT_HEAD — configured per department (null = global).
+
+model UserAvailability {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation("UserAvailability", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Out-of-office window [from, to). While `now` falls inside an active window
+  // the user is treated as unavailable and skipped by the escalation resolver.
+  from   DateTime
+  to     DateTime
+  reason String?
+
+  // Optional named backup the resolver tries first before walking the chain.
+  delegateToId String?
+  delegateTo   User?   @relation("UserDelegate", fields: [delegateToId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, from, to])
+  @@index([delegateToId])
+}
+
+model EscalationRule {
+  id           String      @id @default(uuid())
+  // One rule per department; the single row with departmentId = null is the
+  // global default used when a ticket's department has no rule of its own.
+  departmentId String?     @unique
+  department   Department? @relation("DepartmentEscalationRule", fields: [departmentId], references: [id], onDelete: Cascade)
+
+  isActive Boolean           @default(true)
+  levels   EscalationLevel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model EscalationLevel {
+  id     String         @id @default(uuid())
+  ruleId String
+  rule   EscalationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  order  Int // 1, 2, ... — ladder position
+  target EscalationTarget // MANAGER | DEPARTMENT_HEAD
+
+  // SLA threshold name (SlaThreshold.name) that fires this level. Null = fire
+  // when the SLA is breached rather than at a threshold percentage.
+  atThresholdName String?
+
+  @@unique([ruleId, order])
+}
+
+// Audit trail of every reassignment + the idempotency latch for the sweep:
+// at most one row per (ticketId, levelOrder) so a level never double-fires.
+model EscalationEvent {
+  id       String @id @default(uuid())
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  fromUserId String?
+  fromUser   User?   @relation("EscalationFrom", fields: [fromUserId], references: [id], onDelete: SetNull)
+  toUserId   String?
+  toUser     User?   @relation("EscalationTo", fields: [toUserId], references: [id], onDelete: SetNull)
+
+  reason     EscalationReason
+  levelOrder Int
+  detail     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ticketId, levelOrder])
+}
+
+// Minimal persisted notification feeding the frontend NotificationPanel. Email
+// is a later channel that plugs into the same notify() seam.
+model Notification {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+
+  type       NotificationType
+  title      String
+  body       String?
+  entityType String?
+  entityId   String?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+enum EscalationTarget {
+  MANAGER
+  DEPARTMENT_HEAD
+}
+
+enum EscalationReason {
+  SLA_THRESHOLD
+  SLA_BREACH
+  ASSIGNEE_UNAVAILABLE
+  MANUAL
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  ESCALATED
+  OVERDUE
+  EXPIRING
+  SYSTEM
+}
+
 // =====================================================================
 // Audit module — Register → Approval → Program → Findings → Non-Conformance → CAPA
 // Industry-standard flow (Honeywell-style). The legacy AuditSchedule model
@@ -2012,9 +2151,9 @@ model Finding {
 
   // The module ticket this finding was recorded on.
   sourceTicketId String
-  sourceTicket   Ticket @relation("TicketFindings", fields: [sourceTicketId], references: [id], onDelete: Cascade)
+  sourceTicket   Ticket  @relation("TicketFindings", fields: [sourceTicketId], references: [id], onDelete: Cascade)
   // Optional: the workflow stage (canonical id) the finding was raised on.
-  sourceStageId String?
+  sourceStageId  String?
 
   severity FindingSeverity
   status   FindingStatus   @default(OPEN)
@@ -2062,7 +2201,7 @@ enum AuditActorType {
 }
 
 model AuditTrailEntry {
-  id String @id @default(uuid())
+  id  String @id @default(uuid())
   // Monotonic write order, independent of createdAt (clock changes cannot
   // reorder the trail). NOT gap-free: a rolled-back transaction consumes its
   // sequence value, so a missing seq is not by itself evidence of deletion —
@@ -2122,26 +2261,26 @@ model AuditTrailEntry {
 }
 
 model ESignature {
-  id         String   @id @default(uuid())
-  entityType String
-  entityId   String
-  meaning    String // "Approved" | "Reviewed" | "Verified & Closed" | ...
+  id                 String    @id @default(uuid())
+  entityType         String
+  entityId           String
+  meaning            String // "Approved" | "Reviewed" | "Verified & Closed" | ...
   // Controlled vocabulary behind the display text — free text alone cannot be
   // reported on or validated (21 CFR Part 11 §11.50(a)(3)).
-  meaningCode String?
-  userId     String
-  userName   String
+  meaningCode        String?
+  userId             String
+  userName           String
   // Snapshot of the signed record, so a later change to that record cannot be
   // passed off as having been signed (§11.70 signature/record linking).
-  recordHash String?
+  recordHash         String?
   // The SIGN audit entry emitted alongside this signature.
-  auditEntryId String?
-  sessionId    String?
-  ipAddress    String?
-  signedAt     DateTime @default(now()) @db.Timestamptz(6)
+  auditEntryId       String?
+  sessionId          String?
+  ipAddress          String?
+  signedAt           DateTime  @default(now()) @db.Timestamptz(6)
   // Signatures are never deleted; an erroneous one is invalidated in place.
-  invalidatedAt     DateTime?
-  invalidatedById   String?
+  invalidatedAt      DateTime?
+  invalidatedById    String?
   invalidationReason String?
 
   @@index([entityType, entityId])
@@ -2169,15 +2308,15 @@ model AuditTrailReview {
 /// Result of the nightly hash-chain walk — the standing evidence that the trail
 /// has not been altered. A failed checkpoint is a data-integrity incident.
 model AuditChainCheckpoint {
-  id        String   @id @default(uuid())
-  chainKey  String
-  fromSeq   BigInt
-  toSeq     BigInt
-  headHash  String
-  entryCount Int
-  verified  Boolean
+  id            String   @id @default(uuid())
+  chainKey      String
+  fromSeq       BigInt
+  toSeq         BigInt
+  headHash      String
+  entryCount    Int
+  verified      Boolean
   failureDetail String?
-  checkedAt DateTime @default(now()) @db.Timestamptz(6)
+  checkedAt     DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([chainKey])
   @@index([checkedAt])

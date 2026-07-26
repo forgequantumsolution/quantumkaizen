@@ -276,7 +276,7 @@ export default function TicketDetailPage() {
           </div>
 
           <div className="lg:sticky lg:top-4">
-            <TicketSidebar ticket={ticket} />
+            <TicketSidebar ticket={ticket} canUpdate={canUpdate} />
           </div>
         </div>
       </div>

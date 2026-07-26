@@ -58,6 +58,8 @@ import {
   ticketScopedSlaRouter,
 } from './modules/sla/sla.routes';
 import businessCalendarRoutes from './modules/business-calendar/business-calendar.routes';
+import escalationRoutes from './modules/escalation/escalation.routes';
+import notificationRoutes from './modules/notification/notification.routes';
 import {
   workflowScopedBindingRouter as stageFormWorkflowScopedRouter,
   bindingRouter as stageFormBindingRouter,
@@ -165,6 +167,12 @@ export const buildApp = () => {
 
   // Phase 3 — Business calendars admin.
   app.use('/api/business-calendars', businessCalendarRoutes);
+
+  // Escalation matrix admin (per-department reassignment ladders).
+  app.use('/api/escalation-rules', escalationRoutes);
+
+  // Per-user notification feed (bell + panel).
+  app.use('/api/notifications', notificationRoutes);
 
   // Phase 3.5 — StageFormBinding admin + ticket-scoped reads + workflow-bound
   // form submission. See docs/WORKFLOW_PHASE_3_5_PLAN.md §4.
