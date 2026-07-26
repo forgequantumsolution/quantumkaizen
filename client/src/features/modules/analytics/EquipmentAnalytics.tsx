@@ -67,11 +67,11 @@ export default function EquipmentAnalytics({ tickets, onDrill }: ModuleAnalytics
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={Boxes} label="Total" value={m.total} subtitle="Equipment records" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="emerald" icon={ActivityIcon} label="In Use" value={m.inUse} subtitle="Open / active" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="amber" icon={Wrench} label="Under Maintenance" value={m.underMaintenance} subtitle="On hold" onClick={onDrill && (() => onDrill('onhold'))} />
-        <KpiCard accent="red" icon={AlertTriangle} label="Overdue Qualification" value={m.overdueQual} subtitle="Open & past due" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="purple" icon={Timer} label="Avg Age" value={`${m.avgAge}d`} subtitle="Open records" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={Boxes} label="Total" value={m.total} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="emerald" icon={ActivityIcon} label="In Use" value={m.inUse} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="amber" icon={Wrench} label="Under Maintenance" value={m.underMaintenance} onClick={onDrill && (() => onDrill('onhold'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue Qualification" value={m.overdueQual} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="purple" icon={Timer} label="Avg Age" value={`${m.avgAge}d`} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

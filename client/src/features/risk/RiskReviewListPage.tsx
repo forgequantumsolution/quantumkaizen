@@ -110,11 +110,7 @@ export default function RiskReviewListPage() {
     [rows],
   );
 
-  // Share of the whole review population that has actually been closed out —
-  // the cadence question the register is meant to answer, not just a raw count.
   const completedTotal = completedPage?.total ?? 0;
-  const reviewPopulation = completedTotal + (outstandingPage?.total ?? 0);
-  const closedShare = reviewPopulation > 0 ? Math.round((completedTotal / reviewPopulation) * 100) : 0;
 
   // `outstanding` is the default view, so it does not count as a filter — only a
   // deliberate move off it does. Sort order is not a filter at all.
@@ -309,38 +305,45 @@ export default function RiskReviewListPage() {
         </FilterField>
       </FilterBar>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <KpiCard
-          icon={TriangleAlert}
-          label="Overdue reviews"
-          value={overduePage?.total ?? 0}
-          subtitle="Past their due date"
-          accent={(overduePage?.total ?? 0) > 0 ? 'red' : 'slate'}
-          onClick={() => setView('overdue')}
-        />
-        <KpiCard
-          icon={CalendarClock}
-          label="Outstanding"
-          value={outstandingPage?.total ?? 0}
-          subtitle="Scheduled and not yet closed"
-          accent="amber"
-          onClick={() => setView('outstanding')}
-        />
-        <KpiCard
-          icon={CalendarCheck}
-          label="Due within 30 days"
-          value={dueSoon}
-          subtitle="On this page"
-          accent="blue"
-        />
-        <KpiCard
-          icon={CheckCircle2}
-          label="Completed"
-          value={completedTotal}
-          subtitle={reviewPopulation > 0 ? `${closedShare}% of all reviews` : 'None recorded yet'}
-          accent="emerald"
-          onClick={() => setView('completed')}
-        />
+      {/* Same stat strip the module "My Tasks" tab uses: equal-width cards in a
+          scrolling row, no subtitle footer, so every tile is one compact height.
+          The Risk Overview keeps the taller subtitled cards. */}
+      <div className="flex items-stretch gap-3 overflow-x-auto pb-1 mb-4">
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={TriangleAlert}
+            label="Overdue reviews"
+            value={overduePage?.total ?? 0}
+            accent={(overduePage?.total ?? 0) > 0 ? 'red' : 'slate'}
+            onClick={() => setView('overdue')}
+          />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={CalendarClock}
+            label="Outstanding"
+            value={outstandingPage?.total ?? 0}
+            accent="amber"
+            onClick={() => setView('outstanding')}
+          />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={CalendarCheck}
+            label="Due within 30 days"
+            value={dueSoon}
+            accent="blue"
+          />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={CheckCircle2}
+            label="Completed"
+            value={completedTotal}
+            accent="emerald"
+            onClick={() => setView('completed')}
+          />
+        </div>
       </div>
 
 

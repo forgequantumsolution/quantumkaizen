@@ -54,11 +54,11 @@ export default function DeviationAnalytics({ tickets, onDrill }: ModuleAnalytics
     <div className="space-y-4">
       {/* Top KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard icon={Activity} label="Active" value={k.active} subtitle="Open deviations" accent="blue" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard icon={AlertTriangle} label="Overdue" value={k.overdue} subtitle="Past due date" accent="red" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard icon={Timer} label="Avg age (open)" value={`${k.avgOpen}d`} subtitle="Open records" accent="amber" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard icon={PauseCircle} label="On hold" value={k.onHold} subtitle="Paused deviations" accent="amber" onClick={onDrill && (() => onDrill('onhold'))} />
-        <KpiCard icon={ShieldAlert} label="Critical open" value={k.criticalOpen} subtitle="Critical severity" accent="red" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard icon={Activity} label="Active" value={k.active} accent="blue" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard icon={AlertTriangle} label="Overdue" value={k.overdue} accent="red" onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard icon={Timer} label="Avg age (open)" value={`${k.avgOpen}d`} accent="amber" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard icon={PauseCircle} label="On hold" value={k.onHold} accent="amber" onClick={onDrill && (() => onDrill('onhold'))} />
+        <KpiCard icon={ShieldAlert} label="Critical open" value={k.criticalOpen} accent="red" onClick={onDrill && (() => onDrill('open'))} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

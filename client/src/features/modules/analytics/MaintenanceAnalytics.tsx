@@ -107,11 +107,11 @@ export default function MaintenanceAnalytics({ tickets, onDrill }: ModuleAnalyti
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={Wrench} label="Open Tasks" value={m.openTasks} subtitle="In progress" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="emerald" icon={ShieldCheck} label="PM Compliance" value={`${m.pmCompliance}%`} subtitle="On-time closure" onClick={onDrill && (() => onDrill('completed'))} />
-        <KpiCard accent="amber" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} subtitle="Open → close" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="purple" icon={CalendarClock} label="Due (7d)" value={m.due7} subtitle="Next 7 days" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={Wrench} label="Open Tasks" value={m.openTasks} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="emerald" icon={ShieldCheck} label="PM Compliance" value={`${m.pmCompliance}%`} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="amber" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="purple" icon={CalendarClock} label="Due (7d)" value={m.due7} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

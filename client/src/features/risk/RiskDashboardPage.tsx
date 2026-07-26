@@ -213,8 +213,6 @@ export default function RiskDashboardPage() {
 
   const registers = registerPage?.data ?? [];
   const byStatus = summary?.by_status ?? {};
-  const openRisks =
-    summary != null ? summary.total - (byStatus.CLOSED ?? 0) : 0;
 
   return (
     <div className="space-y-4">
@@ -249,40 +247,46 @@ export default function RiskDashboardPage() {
         </div>
       </div>
 
-      {/* KPI tiles — server-computed counts only. */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <KpiCard
-          icon={ShieldAlert}
-          label="Total risks"
-          value={summary?.total ?? '—'}
-          subtitle={summary ? `${openRisks} open` : 'Loading…'}
-          accent="blue"
-          onClick={() => nav('/risk/risks')}
-        />
-        <KpiCard
-          icon={CalendarClock}
-          label="Overdue reviews"
-          value={summary?.overdue_reviews ?? '—'}
-          subtitle={overdue ? `${overdue.counts.overdue_controls} overdue controls` : undefined}
-          accent={summary && summary.overdue_reviews > 0 ? 'red' : 'emerald'}
-          onClick={() => nav('/risk/risks?overdueReview=true')}
-        />
-        <KpiCard
-          icon={HelpCircle}
-          label="Unscored"
-          value={summary?.unscored ?? '—'}
-          subtitle="No initial score recorded"
-          accent={summary && summary.unscored > 0 ? 'amber' : 'slate'}
-          onClick={() => nav('/risk/risks')}
-        />
-        <KpiCard
-          icon={ShieldCheck}
-          label="Accepted"
-          value={byStatus.ACCEPTED ?? 0}
-          subtitle={`${byStatus.MONITORED ?? 0} monitored`}
-          accent="emerald"
-          onClick={() => nav('/risk/risks?status=ACCEPTED')}
-        />
+      {/* KPI tiles — server-computed counts only. Same stat strip the module
+          "My Tasks" tab uses, matching Controls and Reviews: equal-width cards
+          in a scrolling row, no subtitle footer, one compact height. */}
+      <div className="flex items-stretch gap-3 overflow-x-auto pb-1">
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={ShieldAlert}
+            label="Total risks"
+            value={summary?.total ?? '—'}
+            accent="blue"
+            onClick={() => nav('/risk/risks')}
+          />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={CalendarClock}
+            label="Overdue reviews"
+            value={summary?.overdue_reviews ?? '—'}
+            accent={summary && summary.overdue_reviews > 0 ? 'red' : 'emerald'}
+            onClick={() => nav('/risk/risks?overdueReview=true')}
+          />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={HelpCircle}
+            label="Unscored"
+            value={summary?.unscored ?? '—'}
+            accent={summary && summary.unscored > 0 ? 'amber' : 'slate'}
+            onClick={() => nav('/risk/risks')}
+          />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={ShieldCheck}
+            label="Accepted"
+            value={byStatus.ACCEPTED ?? 0}
+            accent="emerald"
+            onClick={() => nav('/risk/risks?status=ACCEPTED')}
+          />
+        </div>
       </div>
 
       {/* Heat map + level distribution */}

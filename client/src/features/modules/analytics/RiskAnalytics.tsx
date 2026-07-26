@@ -130,11 +130,11 @@ export default function RiskAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={ActivityIcon} label="Active Risks" value={m.active} subtitle="Open in register" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="red" icon={AlertTriangle} label="Overdue Mitigations" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="amber" icon={Timer} label="Avg Age" value={`${m.avgAge}d`} subtitle="Open risks" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="purple" icon={Flame} label="High RPN" value={m.highRpn} subtitle="High / critical severity" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="slate" icon={PauseCircle} label="On Hold" value={m.onHold} subtitle="Paused risks" onClick={onDrill && (() => onDrill('onhold'))} />
+        <KpiCard accent="blue" icon={ActivityIcon} label="Active Risks" value={m.active} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue Mitigations" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="amber" icon={Timer} label="Avg Age" value={`${m.avgAge}d`} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="purple" icon={Flame} label="High RPN" value={m.highRpn} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="slate" icon={PauseCircle} label="On Hold" value={m.onHold} onClick={onDrill && (() => onDrill('onhold'))} />
       </div>
 
       {/* Chart grid */}

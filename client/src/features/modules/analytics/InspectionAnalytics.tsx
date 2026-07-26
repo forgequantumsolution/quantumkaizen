@@ -83,11 +83,11 @@ export default function InspectionAnalytics({ tickets, onDrill }: ModuleAnalytic
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={CalendarClock} label="Scheduled" value={m.scheduled} subtitle="Total inspections" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="emerald" icon={CheckCircle2} label="Completed" value={m.completed} subtitle="Closed" onClick={onDrill && (() => onDrill('completed'))} />
-        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} subtitle="Open & past due" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="amber" icon={ClipboardList} label="Findings" value={m.findings} subtitle="Open items" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="purple" icon={ShieldCheck} label="Compliance" value={`${m.compliance}%`} subtitle="Completed / total" onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="blue" icon={CalendarClock} label="Scheduled" value={m.scheduled} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="Completed" value={m.completed} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="amber" icon={ClipboardList} label="Findings" value={m.findings} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="purple" icon={ShieldCheck} label="Compliance" value={`${m.compliance}%`} onClick={onDrill && (() => onDrill('completed'))} />
       </div>
 
       {/* Chart grid */}

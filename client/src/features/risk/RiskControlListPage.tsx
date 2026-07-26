@@ -378,34 +378,33 @@ export default function RiskControlListPage() {
         </FilterField>
       </FilterBar>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <KpiCard
-          icon={ShieldCheck}
-          label="Matching controls"
-          value={total}
-          accent="slate"
-        />
-        <KpiCard
-          icon={TriangleAlert}
-          label="Overdue"
-          value={overduePage?.total ?? 0}
-          subtitle="Across all registers"
-          accent={(overduePage?.total ?? 0) > 0 ? 'red' : 'slate'}
-          onClick={() => setOverdue(true)}
-        />
-        <KpiCard
-          icon={ListChecks}
-          label="Open on this page"
-          value={openOnPage}
-          subtitle="Planned or in progress"
-          accent="blue"
-        />
-        <KpiCard
-          icon={BadgeCheck}
-          label="Verified on this page"
-          value={verifiedOnPage}
-          accent="emerald"
-        />
+      {/* Same stat strip the module "My Tasks" tab uses: equal-width cards in a
+          scrolling row, no subtitle footer, so every tile is one compact height.
+          The Risk Overview keeps the taller subtitled cards. */}
+      <div className="flex items-stretch gap-3 overflow-x-auto pb-1 mb-4">
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard icon={ShieldCheck} label="Matching controls" value={total} accent="slate" />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={TriangleAlert}
+            label="Overdue"
+            value={overduePage?.total ?? 0}
+            accent={(overduePage?.total ?? 0) > 0 ? 'red' : 'slate'}
+            onClick={() => setOverdue(true)}
+          />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard icon={ListChecks} label="Open on this page" value={openOnPage} accent="blue" />
+        </div>
+        <div className="flex-1 min-w-[168px]">
+          <KpiCard
+            icon={BadgeCheck}
+            label="Verified on this page"
+            value={verifiedOnPage}
+            accent="emerald"
+          />
+        </div>
       </div>
 
 

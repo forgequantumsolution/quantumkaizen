@@ -71,11 +71,11 @@ export default function ComplaintAnalytics({ tickets, onDrill }: ModuleAnalytics
     <div className="space-y-4">
       {/* Top KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard icon={Activity} label="Active" value={k.active} subtitle="Open complaints" accent="blue" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard icon={AlertTriangle} label="Overdue" value={k.overdue} subtitle="Past due date" accent="red" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard icon={Timer} label="Avg cycle" value={`${k.cycle}d`} subtitle="Open → close" accent="amber" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard icon={CheckCircle2} label="Closure" value={`${k.closure}%`} subtitle="Closed / total" accent="emerald" onClick={onDrill && (() => onDrill('completed'))} />
-        <KpiCard icon={Megaphone} label="Reportable" value={k.reportable} subtitle="Flagged reportable" accent="purple" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard icon={Activity} label="Active" value={k.active} accent="blue" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard icon={AlertTriangle} label="Overdue" value={k.overdue} accent="red" onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard icon={Timer} label="Avg cycle" value={`${k.cycle}d`} accent="amber" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard icon={CheckCircle2} label="Closure" value={`${k.closure}%`} accent="emerald" onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard icon={Megaphone} label="Reportable" value={k.reportable} accent="purple" onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

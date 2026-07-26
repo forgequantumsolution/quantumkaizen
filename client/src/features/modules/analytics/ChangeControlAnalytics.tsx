@@ -65,11 +65,11 @@ export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnaly
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={ActivityIcon} label="Active" value={m.active} subtitle="Open changes" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="emerald" icon={CheckCircle2} label="Closure %" value={`${m.closure}%`} subtitle="Completed / total" onClick={onDrill && (() => onDrill('completed'))} />
-        <KpiCard accent="amber" icon={PauseCircle} label="On Hold" value={m.onHold} subtitle="Open & held" onClick={onDrill && (() => onDrill('onhold'))} />
-        <KpiCard accent="purple" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} subtitle="Open → close" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={ActivityIcon} label="Active" value={m.active} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="Closure %" value={`${m.closure}%`} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="amber" icon={PauseCircle} label="On Hold" value={m.onHold} onClick={onDrill && (() => onDrill('onhold'))} />
+        <KpiCard accent="purple" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

@@ -71,11 +71,11 @@ export default function DocumentApprovalAnalytics({ tickets, onDrill }: ModuleAn
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={ClipboardList} label="Pending Approvals" value={m.pending} subtitle="Open documents" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="amber" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} subtitle="Draft → effective" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="emerald" icon={CheckCircle2} label="On-Time %" value={`${m.onTime}%`} subtitle="Approved within SLA" onClick={onDrill && (() => onDrill('completed'))} />
-        <KpiCard accent="purple" icon={CalendarClock} label="Due Soon" value={m.dueSoon} subtitle="Approaching due date" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={ClipboardList} label="Pending Approvals" value={m.pending} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="amber" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="On-Time %" value={`${m.onTime}%`} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="purple" icon={CalendarClock} label="Due Soon" value={m.dueSoon} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

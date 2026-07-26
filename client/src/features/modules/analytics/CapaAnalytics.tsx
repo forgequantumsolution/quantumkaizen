@@ -60,7 +60,6 @@ export default function CapaAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
       onTimeClosure: onTimeClosureRate(filtered),
       avgCycle: avgCycleDays(filtered),
       recurringRate: filtered.length === 0 ? 0 : Math.round((recurringCount / filtered.length) * 100),
-      recurringCount,
       completedCount: completed.length,
       trend: openClosedTrend(filtered),
       posture: dueDatePosture(filtered),
@@ -74,11 +73,11 @@ export default function CapaAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={ActivityIcon} label="Active" value={m.active} subtitle="Open CAPAs" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="emerald" icon={CheckCircle2} label="On-Time Closure" value={`${m.onTimeClosure}%`} subtitle="Closed within SLA" onClick={onDrill && (() => onDrill('completed'))} />
-        <KpiCard accent="amber" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} subtitle="Open → close" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="purple" icon={Repeat} label="Recurring Rate" value={`${m.recurringRate}%`} subtitle={`${m.recurringCount} recurring`} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={ActivityIcon} label="Active" value={m.active} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="On-Time Closure" value={`${m.onTimeClosure}%`} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="amber" icon={Timer} label="Avg Cycle" value={`${m.avgCycle}d`} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="purple" icon={Repeat} label="Recurring Rate" value={`${m.recurringRate}%`} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

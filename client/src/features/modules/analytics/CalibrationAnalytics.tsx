@@ -93,11 +93,11 @@ export default function CalibrationAnalytics({ tickets, onDrill }: ModuleAnalyti
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={ClipboardList} label="Total" value={m.total} subtitle="Calibration records" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="emerald" icon={CheckCircle2} label="Compliant" value={`${m.compliance}%`} subtitle="On-time calibration" onClick={onDrill && (() => onDrill('completed'))} />
-        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} subtitle="Open & past due" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="amber" icon={CalendarClock} label="Due (30d)" value={m.due30} subtitle="Open due within 30d" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="purple" icon={Ruler} label="OOT" value={m.ootCount} subtitle="Out-of-tolerance" onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="blue" icon={ClipboardList} label="Total" value={m.total} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="emerald" icon={CheckCircle2} label="Compliant" value={`${m.compliance}%`} onClick={onDrill && (() => onDrill('completed'))} />
+        <KpiCard accent="red" icon={AlertTriangle} label="Overdue" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="amber" icon={CalendarClock} label="Due (30d)" value={m.due30} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="purple" icon={Ruler} label="OOT" value={m.ootCount} onClick={onDrill && (() => onDrill('open'))} />
       </div>
 
       {/* Chart grid */}

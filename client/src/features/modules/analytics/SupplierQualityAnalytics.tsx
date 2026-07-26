@@ -113,11 +113,11 @@ export default function SupplierQualityAnalytics({ tickets, onDrill }: ModuleAna
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        <KpiCard accent="blue" icon={Building2} label="Total Records" value={m.total} subtitle="Supplier-quality records" onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="emerald" icon={ActivityIcon} label="Active" value={m.active} subtitle="Open evaluations" onClick={onDrill && (() => onDrill('open'))} />
-        <KpiCard accent="red" icon={Ban} label="Disqualified" value={m.disqualified} subtitle="Completed / flagged disq." onClick={onDrill && (() => onDrill('all'))} />
-        <KpiCard accent="amber" icon={AlertTriangle} label="Overdue Audits" value={m.overdue} subtitle="Past due date" onClick={onDrill && (() => onDrill('overdue'))} />
-        <KpiCard accent="purple" icon={Gauge} label="Avg Score" value={m.avgScore} subtitle="Mean supplier score" onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="blue" icon={Building2} label="Total Records" value={m.total} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="emerald" icon={ActivityIcon} label="Active" value={m.active} onClick={onDrill && (() => onDrill('open'))} />
+        <KpiCard accent="red" icon={Ban} label="Disqualified" value={m.disqualified} onClick={onDrill && (() => onDrill('all'))} />
+        <KpiCard accent="amber" icon={AlertTriangle} label="Overdue Audits" value={m.overdue} onClick={onDrill && (() => onDrill('overdue'))} />
+        <KpiCard accent="purple" icon={Gauge} label="Avg Score" value={m.avgScore} onClick={onDrill && (() => onDrill('all'))} />
       </div>
 
       {/* Chart grid */}

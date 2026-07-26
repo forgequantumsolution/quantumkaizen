@@ -174,12 +174,12 @@ export default function AuditDashboardPage() {
       {/* KPI strip */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiCard icon={ClipboardCheck} label="Total Audits" value={k.total_audits} accent="slate" onClick={() => navigate('/audit/register')} />
-        <KpiCard icon={CheckCircle2} label="Completion" value={`${k.completion_rate}%`} subtitle={`${k.completed_audits} done`} accent="emerald" onClick={() => navigate('/audit/register')} />
+        <KpiCard icon={CheckCircle2} label="Completion" value={`${k.completion_rate}%`} accent="emerald" onClick={() => navigate('/audit/register')} />
         <KpiCard icon={Activity} label="In Progress" value={k.in_progress_audits} accent="blue" onClick={() => navigate('/audit/register')} />
         <KpiCard icon={AlertTriangle} label="Open Findings" value={k.open_findings} accent="amber" onClick={() => navigate('/audit/register')} />
-        <KpiCard icon={FileWarning} label="Open NCs" value={k.open_ncs} subtitle={k.overdue_ncs ? `${k.overdue_ncs} overdue` : undefined} accent={k.overdue_ncs ? 'red' : 'slate'} onClick={() => navigate('/audit/non-conformance')} />
-        <KpiCard icon={Wrench} label="Open CAPAs" value={k.open_capas} subtitle={k.overdue_capas ? `${k.overdue_capas} overdue` : undefined} accent={k.overdue_capas ? 'red' : 'slate'} onClick={() => navigate('/audit/capa')} />
-        <KpiCard icon={ListChecks} label="Open Actions" value={k.open_actions} subtitle={k.overdue_actions ? `${k.overdue_actions} overdue` : undefined} accent={k.overdue_actions ? 'red' : 'slate'} onClick={() => navigate('/audit/register')} />
+        <KpiCard icon={FileWarning} label="Open NCs" value={k.open_ncs} accent={k.overdue_ncs ? 'red' : 'slate'} onClick={() => navigate('/audit/non-conformance')} />
+        <KpiCard icon={Wrench} label="Open CAPAs" value={k.open_capas} accent={k.overdue_capas ? 'red' : 'slate'} onClick={() => navigate('/audit/capa')} />
+        <KpiCard icon={ListChecks} label="Open Actions" value={k.open_actions} accent={k.overdue_actions ? 'red' : 'slate'} onClick={() => navigate('/audit/register')} />
       </div>
 
       {/* Trends */}
