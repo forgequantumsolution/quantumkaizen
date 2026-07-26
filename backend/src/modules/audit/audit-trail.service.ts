@@ -169,6 +169,74 @@ export const chainStatus = async () => {
   };
 };
 
+/**
+ * Timezone the export's human-readable timestamp column is rendered in.
+ *
+ * One declared zone per deployment, named in the column header, so two
+ * reviewers reading the same file never disagree about when something happened.
+ */
+const REPORT_TZ = process.env.AUDIT_REPORT_TZ ?? 'Asia/Kolkata';
+const REPORT_FMT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: REPORT_TZ,
+  year: 'numeric', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit',
+  hour12: false,
+});
+
+/**
+ * Column layout of the export, grouped exactly like the detail drawer.
+ *
+ * The export is the offline copy of the trail, so it carries every field the
+ * drawer shows — an auditor working from the file must never have to come back
+ * to the screen for the rest of the record.
+ */
+const EXPORT_GROUPS: Array<[group: string, columns: string[]]> = [
+  ['WHAT CHANGED', [
+    'Record Type', 'Record', 'Record ID', 'Module', 'Action',
+    'Field Changed', 'Old Value', 'New Value', 'Value Type', 'Criticality',
+  ]],
+  ['WHY', ['Reason', 'Reason Code', 'E-Signature ID']],
+  ['WHO', [
+    'User', 'Role', 'Department', 'Employee ID',
+    'Actor Type', 'User ID (System)', 'On Behalf Of',
+  ]],
+  ['WHEN & WHERE', [
+    'Timestamp (UTC)', `Timestamp (${REPORT_TZ})`, 'Actor Timezone', 'IP Address',
+    'Source', 'Session ID', 'Request ID', 'User Agent',
+  ]],
+  ['INTEGRITY', [
+    'Status', 'Sequence', 'Chain (day)', 'Sealed', 'Hash (SHA-256)', 'Prev Hash',
+  ]],
+  ['RECORD SNAPSHOT', ['Full Record Snapshot (JSON)']],
+];
+
+/**
+ * The same instant in the site's reporting timezone.
+ *
+ * UTC alone is unreadable to a reviewer working local hours, and the actor's
+ * own offset is only known when the browser sent it — so the second timestamp
+ * is anchored to one declared zone that is always populated and DST-correct.
+ */
+const reportStamp = (at: Date): string => {
+  const p = Object.fromEntries(
+    REPORT_FMT.formatToParts(at).map((x) => [x.type, x.value]),
+  ) as Record<string, string>;
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+};
+
+/**
+ * The actor's own UTC offset, when the browser reported it.
+ *
+ * `clientTzOffsetMin` follows `getTimezoneOffset()` (UTC minus local), hence
+ * the sign flip. Blank means the client never sent it — which is a fact about
+ * the record, not something to paper over with the server's zone.
+ */
+const actorTz = (offsetMin: number | null): string => {
+  if (offsetMin === null || offsetMin === undefined) return '';
+  const abs = Math.abs(offsetMin);
+  return `UTC${offsetMin <= 0 ? '+' : '-'}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+};
+
 /** CSV for offline review. The export itself is audited by the route. */
 export const exportCsv = async (q: TrailQuery): Promise<string> => {
   const rows = await prisma.auditTrailEntry.findMany({
@@ -178,24 +246,84 @@ export const exportCsv = async (q: TrailQuery): Promise<string> => {
   });
 
   const cell = (v: unknown): string => {
-    if (v === null || v === undefined) return '';
-    const s = v instanceof Date ? v.toISOString() : String(v);
-    return `"${s.replace(/"/g, '""')}"`;
+    if (v === null || v === undefined) return '""';
+    const raw = v instanceof Date ? v.toISOString() : String(v);
+    // Spreadsheets treat a leading =, +, - or @ as a formula. An audit export is
+    // evidence, not a program: neutralise it so the cell reads back verbatim.
+    const safe = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+    return `"${safe.replace(/"/g, '""')}"`;
   };
 
-  const header = [
-    'seq', 'timestamp', 'module', 'entity_type', 'entity_id', 'entity_label',
-    'action', 'field', 'old_value', 'new_value', 'reason', 'criticality',
-    'user_name', 'user_role', 'actor_type', 'ip_address', 'session_id', 'sealed',
-  ];
-  const lines = [header.join(',')];
+  const snapshot = (diff: unknown): string => {
+    if (diff === null || diff === undefined) return '';
+    try {
+      return JSON.stringify(diff);
+    } catch {
+      return String(diff);
+    }
+  };
+
+  // Two header rows: the group band, then the column names — the same reading
+  // order as the drawer's sections.
+  const groupRow: string[] = [];
+  const columnRow: string[] = [];
+  for (const [group, columns] of EXPORT_GROUPS) {
+    columns.forEach((col, i) => {
+      groupRow.push(cell(i === 0 ? group : ''));
+      columnRow.push(cell(col));
+    });
+  }
+
+  const lines = [groupRow.join(','), columnRow.join(',')];
+
   for (const t of rows) {
     lines.push([
-      cell(t.seq), cell(t.createdAt), cell(t.module), cell(t.entityType), cell(t.entityId),
-      cell(t.entityLabel), cell(t.action), cell(t.field), cell(t.oldValue), cell(t.newValue),
-      cell(t.reason), cell(t.criticality), cell(t.userName), cell(t.userRole),
-      cell(t.actorType), cell(t.ipAddress), cell(t.sessionId), cell(t.hash !== null),
+      // WHAT CHANGED
+      cell(t.entityType),
+      cell(t.entityLabel ?? t.entityId),
+      cell(t.entityId),
+      cell(t.module),
+      cell(t.action.replace(/_/g, ' ')),
+      cell(t.field),
+      cell(t.oldValue),
+      cell(t.newValue),
+      cell(t.valueType),
+      cell(t.criticality),
+      // WHY
+      cell(t.reason),
+      cell(t.reasonCode),
+      cell(t.signatureId),
+      // WHO
+      cell(t.userName),
+      cell(t.userRole),
+      cell(t.userDepartment),
+      cell(t.userEmployeeId),
+      cell(t.actorType),
+      cell(t.userId),
+      cell(t.onBehalfOfId),
+      // WHEN & WHERE
+      cell(t.createdAt),
+      cell(reportStamp(t.createdAt)),
+      cell(actorTz(t.clientTzOffsetMin)),
+      cell(t.ipAddress),
+      cell(t.source),
+      cell(t.sessionId),
+      cell(t.requestId),
+      cell(t.userAgent),
+      // INTEGRITY
+      cell(t.hash !== null
+        ? 'Chained — alteration would be detectable'
+        : 'Awaiting the next chain seal'),
+      cell(t.seq),
+      cell(t.chainKey),
+      cell(t.hash !== null ? 'TRUE' : 'FALSE'),
+      cell(t.hash),
+      cell(t.prevHash),
+      // RECORD SNAPSHOT
+      cell(snapshot(t.diff)),
     ].join(','));
   }
-  return lines.join('\n');
+
+  // BOM + CRLF so Excel opens the file as UTF-8 without an import dialog.
+  return '﻿' + lines.join('\r\n');
 };

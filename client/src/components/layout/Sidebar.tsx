@@ -710,38 +710,63 @@ export default function Sidebar() {
         )}
       </div>
 
-      {/* Logged-in user — centered photo (fully rounded) with login id below */}
+      {/* Logged-in user — raised card so the identity block reads as its own
+          surface rather than another sidebar row (FQS-QK-UIUX-003 §4). */}
       {!sidebarCollapsed && (
-        <div
-          style={{ borderBottom: "1px solid " + DIVIDER }}
-          className="flex flex-col items-center text-center shrink-0 py-4 px-4"
-        >
-          {user?.avatarUrl ? (
-            <img
-              src={user.avatarUrl}
-              alt={user?.name ?? "User"}
-              style={{ border: "2px solid rgba(201,168,76,0.4)" }}
-              className="w-24 h-24 rounded-full object-cover"
-            />
-          ) : (
-            <div
-              style={{
-                backgroundColor: "rgba(201,168,76,0.15)",
-                border: "1px solid rgba(201,168,76,0.3)",
-              }}
-              className="w-20 h-20 rounded-full flex items-center justify-center"
-            >
-              <span style={{ color: ACCENT }} className="text-2xl font-bold">
-                {initials}
-              </span>
-            </div>
-          )}
-          <p
-            style={{ color: ACTIVE_CLR }}
-            className="text-sm font-medium truncate leading-tight mt-2 max-w-full"
+        <div className="shrink-0 px-3 pt-3 pb-2">
+          <div
+            style={{
+              background:
+                "linear-gradient(160deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.03) 55%, rgba(255,255,255,0.015) 100%)",
+              border: "1px solid rgba(201,168,76,0.22)",
+              boxShadow:
+                "0 6px 18px -6px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.07)",
+            }}
+            className="relative flex flex-col items-center text-center rounded-xl py-4 px-3 overflow-hidden"
           >
-            {user?.name ?? "—"}
-          </p>
+            {/* Soft gold glow behind the avatar */}
+            <div
+              aria-hidden
+              style={{
+                background:
+                  "radial-gradient(circle, rgba(201,168,76,0.20) 0%, rgba(201,168,76,0) 70%)",
+              }}
+              className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 w-40 h-40 rounded-full"
+            />
+            {user?.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user?.name ?? "User"}
+                style={{
+                  border: "2px solid rgba(201,168,76,0.55)",
+                  boxShadow:
+                    "0 0 0 4px rgba(201,168,76,0.10), 0 8px 18px -6px rgba(0,0,0,0.7)",
+                }}
+                className="relative w-24 h-24 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                style={{
+                  background:
+                    "linear-gradient(145deg, rgba(201,168,76,0.30) 0%, rgba(201,168,76,0.10) 100%)",
+                  border: "1px solid rgba(201,168,76,0.45)",
+                  boxShadow:
+                    "0 0 0 4px rgba(201,168,76,0.10), 0 8px 18px -6px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.12)",
+                }}
+                className="relative w-20 h-20 rounded-full flex items-center justify-center"
+              >
+                <span style={{ color: ACCENT }} className="text-2xl font-bold">
+                  {initials}
+                </span>
+              </div>
+            )}
+            <p
+              style={{ color: ACTIVE_CLR }}
+              className="relative text-sm font-semibold truncate leading-tight mt-2.5 max-w-full"
+            >
+              {user?.name ?? "—"}
+            </p>
+          </div>
         </div>
       )}
 
