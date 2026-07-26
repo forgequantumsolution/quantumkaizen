@@ -12,6 +12,7 @@ import {
 import { Card } from '@/components/ui';
 import type { TicketDetail } from '@/lib/api/ticket';
 import { useTicketChildren } from '@/lib/api/finding';
+import AssigneeCard from './AssigneeCard';
 
 // Child records (CAPA / Deviation raised from this ticket's findings), nested
 // under the parent. One level deep — click a child to see its own children.
@@ -85,13 +86,21 @@ function Row({
  * mirrors the CAPA sidebar but sourced from the generic ticket record so
  * Change Control, Deviations, and all other modules get the same experience.
  */
-export default function TicketSidebar({ ticket }: { ticket: TicketDetail }) {
+export default function TicketSidebar({
+  ticket,
+  canUpdate = false,
+}: {
+  ticket: TicketDetail;
+  canUpdate?: boolean;
+}) {
   const flow = ticket.flows[0];
   const overdue =
     !!ticket.dueDate && !flow?.isCompleted && new Date(ticket.dueDate) < new Date();
 
   return (
     <div className="space-y-4">
+      <AssigneeCard ticket={ticket} canUpdate={canUpdate} />
+
       <Card>
         <h3 className="mb-3 text-sm font-semibold text-gray-900">Metadata</h3>
         <div className="space-y-3">

@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   Save, Check, Plus,
   Building2, Users as UsersIcon, Layers, KeyRound, Lock,
-  Workflow, Bell, Shield, MapPin, AlertOctagon,
+  Workflow, Bell, Shield, MapPin, AlertOctagon, ArrowUpNarrowWide,
 } from "lucide-react";
 // Note: when section === "forms", FormListPage renders its own ListPageHeader
 // (title + search + view toggle + create button), so we skip PageHeader here.
@@ -21,6 +21,7 @@ import AccessControlTab from "@/features/admin/access-control/AccessControlTab";
 import WorkflowTypesTab from "@/features/admin/workflow-types/WorkflowTypesTab";
 import SitesTab from "@/features/admin/sites/SitesTab";
 import SeveritiesTab from "@/features/admin/severities/SeveritiesTab";
+import EscalationMatrixTab from "@/features/admin/escalation/EscalationMatrixTab";
 import WorkflowsPage from "@/features/workflows/WorkflowsPage";
 import FormListPage from "@/features/forms/FormListPage";
 
@@ -37,6 +38,7 @@ const masterDataTabs = [
   { key: "access",         label: "Access Control",       icon: Lock,        permission: "role.read" },
   { key: "workflow-types", label: "Workflow Categories",  icon: Workflow,    permission: "workflow.lookups.read" },
   { key: "severities",     label: "Severity Matrix",      icon: AlertOctagon, permission: "workflow.lookups.read" },
+  { key: "escalation",     label: "Escalation Matrix",    icon: ArrowUpNarrowWide, permission: "escalation.read" },
   { key: "notifications",  label: "Notifications",        icon: Bell,        permission: undefined },
   { key: "security",       label: "Security & Compliance", icon: Shield,     permission: undefined },
 ] as const;
@@ -53,7 +55,7 @@ const SECTION_TITLES: Record<Section, string> = {
 };
 
 // Master Data tabs whose content has its own toolbar — hide the global Save.
-const NO_SAVE_MD_TABS = new Set<MdTab>(["workflow-types"]);
+const NO_SAVE_MD_TABS = new Set<MdTab>(["workflow-types", "escalation"]);
 
 export default function SettingsPage() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
@@ -212,6 +214,7 @@ export default function SettingsPage() {
             {activeTab === "access" && <AccessControlTab />}
             {activeTab === "workflow-types" && <WorkflowTypesTab />}
             {activeTab === "severities" && <SeveritiesTab />}
+            {activeTab === "escalation" && <EscalationMatrixTab />}
 
             {/* ── NOTIFICATIONS ────────────────────────── */}
         {activeTab === "notifications" && (

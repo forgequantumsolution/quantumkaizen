@@ -1,12 +1,15 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { hashPassword } from '../../lib/password';
-import { Conflict, NotFound } from '../../lib/httpError';
+import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
 import { invalidatePermissionCache } from '../../middleware/permissions';
 import { computeEffectiveWithSources } from '../../lib/effective-permissions';
 import { writeTrail } from '../audit/compliance.service';
 import { recordAudit } from '../../lib/audit';
+import { resolveCoverFor } from '../escalation/resolveTarget';
+import { notify } from '../escalation/notify';
 import type {
+  CreateAvailabilityInput,
   CreateUserInput,
   ListQuery,
   ResetPasswordInput,
@@ -118,7 +121,147 @@ export const directory = async (siteIds: string[] | null = null) => {
     },
     orderBy: { name: 'asc' },
   });
-  return { items };
+
+  // Flag anyone currently in an out-of-office window so pickers can show it.
+  const now = new Date();
+  const oooRows = await prisma.userAvailability.findMany({
+    where: {
+      userId: { in: items.map((u) => u.id) },
+      from: { lte: now },
+      to: { gt: now },
+    },
+    select: { userId: true },
+  });
+  const unavailable = new Set(oooRows.map((r) => r.userId));
+
+  return { items: items.map((u) => ({ ...u, isAvailable: !unavailable.has(u.id) })) };
+};
+
+// ─── Availability (out-of-office windows) ────────────────────────────────────
+
+const availabilitySelect = {
+  id: true,
+  from: true,
+  to: true,
+  reason: true,
+  delegateToId: true,
+  delegateTo: { select: { id: true, name: true } },
+} satisfies Prisma.UserAvailabilitySelect;
+
+export const listAvailability = async (userId: string) => {
+  const rows = await prisma.userAvailability.findMany({
+    where: { userId },
+    orderBy: { from: 'desc' },
+    select: availabilitySelect,
+  });
+  return rows.map((r) => ({ ...r, from: r.from.toISOString(), to: r.to.toISOString() }));
+};
+
+export const createAvailability = async (userId: string, input: CreateAvailabilityInput) => {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+  if (!user) throw NotFound('User not found');
+
+  if (input.delegateToId) {
+    if (input.delegateToId === userId) throw BadRequest('Delegate cannot be the same user');
+    const delegate = await prisma.user.findUnique({
+      where: { id: input.delegateToId },
+      select: { id: true },
+    });
+    if (!delegate) throw NotFound('Delegate not found');
+  }
+
+  const window = await prisma.userAvailability.create({
+    data: {
+      userId,
+      from: input.from,
+      to: input.to,
+      reason: input.reason ?? null,
+      delegateToId: input.delegateToId ?? null,
+    },
+    select: availabilitySelect,
+  });
+
+  // If the new window covers now, the user is unavailable right away — move
+  // their open tickets to whoever covers for them.
+  const now = new Date();
+  const reassigned =
+    input.from <= now && input.to > now ? await reassignOpenTicketsAway(userId, now) : 0;
+
+  return {
+    window: { ...window, from: window.from.toISOString(), to: window.to.toISOString() },
+    reassigned,
+  };
+};
+
+export const deleteAvailability = async (userId: string, windowId: string) => {
+  const w = await prisma.userAvailability.findUnique({
+    where: { id: windowId },
+    select: { userId: true },
+  });
+  if (!w || w.userId !== userId) throw NotFound('Availability window not found');
+  await prisma.userAvailability.delete({ where: { id: windowId } });
+};
+
+/**
+ * Reassign every open ticket currently assigned to `userId` to whoever covers
+ * for them (delegate → manager chain). Each ticket is locked and re-checked so
+ * a concurrent change can't be clobbered; a ticket with no available cover is
+ * left as-is. Preserves `escalationLevel` — an OOO hand-off isn't a ladder step.
+ * Returns the number of tickets moved.
+ */
+const reassignOpenTicketsAway = async (userId: string, at: Date): Promise<number> => {
+  const tickets = await prisma.ticket.findMany({
+    where: { assigneeId: userId, isDeleted: false, flows: { some: { isCompleted: false } } },
+    select: { id: true, uniqueId: true, title: true, escalationLevel: true },
+  });
+
+  let moved = 0;
+  for (const t of tickets) {
+    try {
+      const changed = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "Ticket" WHERE id = ${t.id} FOR UPDATE`;
+        const fresh = await tx.ticket.findUnique({
+          where: { id: t.id },
+          select: { assigneeId: true },
+        });
+        if (!fresh || fresh.assigneeId !== userId) return false;
+
+        const to = await resolveCoverFor(userId, at, tx);
+        if (!to) return false;
+
+        await tx.ticket.update({
+          where: { id: t.id },
+          data: { assignee: { connect: { id: to } } },
+        });
+        await tx.escalationEvent.create({
+          data: {
+            ticketId: t.id,
+            fromUserId: userId,
+            toUserId: to,
+            reason: 'ASSIGNEE_UNAVAILABLE',
+            levelOrder: t.escalationLevel,
+            detail: 'Assignee marked out of office',
+          },
+        });
+        await notify(
+          {
+            userId: to,
+            type: 'ESCALATED',
+            title: `Reassigned to you: ${t.uniqueId}`,
+            body: t.title,
+            entityType: 'ticket',
+            entityId: t.id,
+          },
+          tx,
+        );
+        return true;
+      });
+      if (changed) moved += 1;
+    } catch {
+      // One bad ticket shouldn't abort the whole OOO sweep.
+    }
+  }
+  return moved;
 };
 
 export const create = async (input: CreateUserInput) => {

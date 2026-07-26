@@ -1,5 +1,41 @@
 # Changes Log
 
+## Ticket escalation matrix UI — 2026-07-26
+
+Front end for the escalation matrix (backend in `backend/changes.md`; design in
+`docs/TICKETS-escalation-matrix-plan.md`). Assignee ownership, a per-department
+config matrix, out-of-office scheduling, and a live notification feed. **Not
+committed** — working tree only.
+
+- **API clients** — `src/lib/api/escalation.ts` (rule CRUD hooks +
+  `useThresholdNames`), `src/lib/api/notifications.ts` (`useNotifications` polling,
+  mark-read/all + `toAppNotification` mapper), `src/lib/api/availability.ts`
+  (OOO windows). Extended `src/lib/api/ticket.ts` — `assignee`/`escalationLevel`
+  on `TicketSummary`, `useAssignTicket`, `assigneeId` list filter; and
+  `DirectoryUser.isAvailable` in `features/admin/users/hooks.ts`.
+- **Assignee on the ticket** — `features/tickets/detail/AssigneeCard.tsx`
+  (assignee display + escalation-level badge + Assign/Reassign modal with an
+  availability-aware people picker), mounted in `TicketSidebar.tsx` (gated on
+  `canUpdate` from `TicketDetailPage.tsx`). `TicketsPage.tsx` gained an **Assignee**
+  column with an `L{n}` escalation badge and an assignee filter dropdown.
+- **Escalation matrix admin** — `features/admin/escalation/EscalationMatrixTab.tsx`:
+  a global-default ladder editor + per-department overrides (each level = target
+  MANAGER/DEPARTMENT_HEAD + a "when" trigger from the real SLA threshold names, or
+  on breach). Flags departments with "· no head set". Registered as an **Escalation
+  Matrix** tab in `pages/SettingsPage.tsx` (gated on `escalation.read`).
+- **Out of Office (self-service)** — `features/profile/OutOfOfficePage.tsx` at
+  `/out-of-office` (route in `App.tsx`, entry in the header user menu in
+  `components/layout/Header.tsx`): schedule windows, pick a delegate, see how many
+  tickets got reassigned on save.
+- **Notifications wired live** — `components/layout/Header.tsx` now feeds the real
+  `/api/notifications` into the store (removed the `MOCK_NOTIFICATIONS` stub) so the
+  bell badge reflects real unread counts; `components/shared/NotificationPanel.tsx`
+  persists reads to the backend and renders the new `ESCALATED` type;
+  `stores/notificationStore.ts` union gained `ESCALATED`.
+- **Department-head picker** (follow-up) — `features/admin/departments/DepartmentsTab.tsx`
+  create/edit form gained a searchable **Head** select bound to `headUserId`,
+  making `DEPARTMENT_HEAD` escalation configurable from the UI (was API-only).
+
 ## Audit Trail UI — global viewer, detail drawer, per-record history — 2026-07-24
 
 Front end for the system-wide audit trail (backend in `backend/changes.md`). Not

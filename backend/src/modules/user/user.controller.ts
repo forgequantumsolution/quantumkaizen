@@ -1,12 +1,27 @@
 import type { Request, Response } from 'express';
 import * as service from './user.service';
-import type { ListQuery } from './user.schema';
-import { resolveSiteScope, siteFilterFor } from '../../middleware/permissions';
+import type { CreateAvailabilityInput, ListQuery } from './user.schema';
+import {
+  getEffectivePermissionKeys,
+  resolveSiteScope,
+  siteFilterFor,
+} from '../../middleware/permissions';
+import { Forbidden } from '../../lib/httpError';
 
 const userId = (req: Request): string => {
   const id = req.user?.userId;
   if (!id) throw new Error('Missing user on request after requireAuth');
   return id;
+};
+
+// Availability is self-service: a user manages their own out-of-office windows
+// without any user-admin permission. Managing someone else's requires the
+// matching `user.*` key.
+const ensureSelfOrPermission = async (req: Request, targetId: string, permKey: string) => {
+  const caller = userId(req);
+  if (caller === targetId) return;
+  const keys = await getEffectivePermissionKeys(caller);
+  if (!keys.has(permKey)) throw Forbidden(`Missing required permission: ${permKey}`);
 };
 
 export const list = async (req: Request, res: Response) => {
@@ -55,4 +70,27 @@ export const getPermissions = async (req: Request, res: Response) => {
 
 export const setPermissions = async (req: Request, res: Response) => {
   res.json(await service.setOverrides(req.params.id as string, req.body, req.user?.userId));
+};
+
+// ─── Availability (out-of-office) ────────────────────────────────────────────
+
+export const listAvailability = async (req: Request, res: Response) => {
+  const targetId = req.params.id as string;
+  await ensureSelfOrPermission(req, targetId, 'user.read');
+  res.json(await service.listAvailability(targetId));
+};
+
+export const createAvailability = async (req: Request, res: Response) => {
+  const targetId = req.params.id as string;
+  await ensureSelfOrPermission(req, targetId, 'user.update');
+  res.status(201).json(
+    await service.createAvailability(targetId, req.body as CreateAvailabilityInput),
+  );
+};
+
+export const deleteAvailability = async (req: Request, res: Response) => {
+  const targetId = req.params.id as string;
+  await ensureSelfOrPermission(req, targetId, 'user.update');
+  await service.deleteAvailability(targetId, req.params.windowId as string);
+  res.status(204).send();
 };

@@ -310,6 +310,11 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'sla.timer.read',          module: 'SLA', action: 'READ',    description: 'View SLA timers and events' },
   { key: 'sla.timer.extend',        module: 'SLA', action: 'UPDATE',  description: 'Request SLA timer extensions' },
   { key: 'sla.timer.extend.approve',module: 'SLA', action: 'APPROVE', description: 'Approve or reject SLA extension requests' },
+  // ── Escalation matrix ────────────────────────────────
+  { key: 'escalation.read',   module: 'ESCALATION', action: 'READ',   description: 'View escalation rules' },
+  { key: 'escalation.create', module: 'ESCALATION', action: 'CREATE', description: 'Create escalation rules' },
+  { key: 'escalation.update', module: 'ESCALATION', action: 'UPDATE', description: 'Edit escalation rules' },
+  { key: 'escalation.delete', module: 'ESCALATION', action: 'DELETE', description: 'Delete escalation rules' },
   // ── Phase 3 — Business calendars ─────────────────────
   { key: 'business-calendar.read',   module: 'BUSINESS_CALENDAR', action: 'READ',   description: 'View business calendars' },
   { key: 'business-calendar.create', module: 'BUSINESS_CALENDAR', action: 'CREATE', description: 'Create business calendars' },

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as ctrl from './ticket.controller';
 import {
   AddCommentSchema,
+  AssignTicketSchema,
   AttachDocSchema,
   CommentIdParamSchema,
   DocIdParamSchema,
@@ -38,6 +39,10 @@ router.patch('/:id', requireTicketAction('update'),
 
 router.delete('/:id', requireTicketAction('delete'),
   validate(IdParamSchema, 'params'), asyncHandler(ctrl.remove));
+
+// Assignment — (re)assign the responsible individual.
+router.patch('/:id/assign', requireTicketAction('update'),
+  validate(IdParamSchema, 'params'), validate(AssignTicketSchema), asyncHandler(ctrl.assign));
 
 // Engine
 router.get('/:id/allowed-actions', requireTicketAction('read'),

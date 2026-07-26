@@ -48,6 +48,9 @@ export const ListTicketsQuerySchema = z.object({
   // Navbar site selection. Narrows the list to one site; ignored (never widens)
   // if the caller isn't allowed to see it. Omit for the caller's full scope.
   siteId: z.string().uuid().optional(),
+  // Filter by responsible individual. A user id narrows to their tickets;
+  // the literal 'unassigned' narrows to tickets with no assignee.
+  assigneeId: z.union([z.string().uuid(), z.literal('unassigned')]).optional(),
   status: z.enum(['open', 'completed', 'all']).optional().default('all'),
   mine: z.enum(['true', 'false']).optional().default('false'),
   includeDeleted: z.enum(['true', 'false']).optional().default('false'),
@@ -90,6 +93,12 @@ export const TransitionBodySchema = z.object({
   approvalComment: z.string().max(2000).optional(),
 });
 
+export const AssignTicketSchema = z.object({
+  // null / omitted clears the assignment.
+  assigneeId: z.string().uuid().nullable().optional(),
+  note: z.string().max(2000).optional(),
+});
+
 export const HoldBodySchema = z.object({
   reason: z.string().min(1).max(2000),
 });
@@ -121,6 +130,7 @@ export const SpawnChildSchema = z.object({
 
 export type RaiseTicketInput = z.infer<typeof RaiseTicketSchema>;
 export type UpdateTicketInput = z.infer<typeof UpdateTicketSchema>;
+export type AssignTicketInput = z.infer<typeof AssignTicketSchema>;
 export type ListTicketsQuery = z.infer<typeof ListTicketsQuerySchema>;
 export type TransitionBody = z.infer<typeof TransitionBodySchema>;
 export type HoldBody = z.infer<typeof HoldBodySchema>;

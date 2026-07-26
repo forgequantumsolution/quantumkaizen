@@ -9,6 +9,7 @@ import {
 import { Forbidden, NotFound } from '../../lib/httpError';
 import type {
   AddCommentInput,
+  AssignTicketInput,
   AttachDocInput,
   HoldBody,
   ListCommentsQuery,
@@ -71,6 +72,13 @@ export const patch = async (req: Request, res: Response) => {
 export const remove = async (req: Request, res: Response) => {
   await service.softDelete(req.params.id as string, userId(req));
   res.status(204).send();
+};
+
+// Assignment
+export const assign = async (req: Request, res: Response) => {
+  res.json(
+    await service.assign(req.params.id as string, req.body as AssignTicketInput, userId(req)),
+  );
 };
 
 // Engine

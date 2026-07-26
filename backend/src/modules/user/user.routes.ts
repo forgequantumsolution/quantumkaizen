@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import * as ctrl from './user.controller';
 import {
+  AvailabilityParamSchema,
+  CreateAvailabilitySchema,
   CreateUserSchema,
   IdParamSchema,
   ListQuerySchema,
@@ -55,6 +57,25 @@ router.delete(
   requirePermission('user.delete'),
   validate(IdParamSchema, 'params'),
   asyncHandler(ctrl.remove)
+);
+
+// Availability (out-of-office windows). Self-service — the controller allows a
+// user to manage their own windows and requires `user.*` only for others.
+router.get(
+  '/:id/availability',
+  validate(IdParamSchema, 'params'),
+  asyncHandler(ctrl.listAvailability),
+);
+router.post(
+  '/:id/availability',
+  validate(IdParamSchema, 'params'),
+  validate(CreateAvailabilitySchema),
+  asyncHandler(ctrl.createAvailability),
+);
+router.delete(
+  '/:id/availability/:windowId',
+  validate(AvailabilityParamSchema, 'params'),
+  asyncHandler(ctrl.deleteAvailability),
 );
 
 export default router;

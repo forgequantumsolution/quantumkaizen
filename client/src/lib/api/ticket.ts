@@ -43,6 +43,10 @@ export interface TicketSummary {
   department: { id: string; name: string; code: string } | null;
   site: { id: string; name: string; code: string } | null;
   createdBy: UserRef | null;
+  /** Individual currently responsible for the ticket. Null until first assigned. */
+  assignee: UserRef | null;
+  /** Escalation ladder position: 0 = original owner, 1 = manager, 2 = dept head. */
+  escalationLevel: number;
   flows: TicketFlowSummary[];
   /** Direct child tickets (e.g. CAPAs raised from this ticket). Drives the
    *  list's expand affordance. Children may be a different workflow type. */
@@ -179,6 +183,12 @@ export interface UpdateTicketInput {
   classification?: TicketClassification | null;
 }
 
+export interface AssignTicketInput {
+  /** null clears the assignment. */
+  assigneeId: string | null;
+  note?: string;
+}
+
 export interface TransitionInput {
   actionId: string;
   remarks?: string;
@@ -204,6 +214,8 @@ export interface ListTicketsQuery {
   workflowTypeId?: string;
   /** Navbar site selection. Narrows to one site; server ignores it if out of scope. */
   siteId?: string;
+  /** A user id, or the literal 'unassigned', to filter by responsible individual. */
+  assigneeId?: string;
   status?: 'open' | 'completed' | 'all';
   mine?: 'true' | 'false';
   includeDeleted?: 'true' | 'false';
@@ -331,6 +343,19 @@ export const useUpdateTicket = (id: string) => {
   const qc = useQueryClient();
   return useMutation<TicketDetail, unknown, UpdateTicketInput>({
     mutationFn: (body) => api.patch(`/tickets/${id}`, body).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ticketKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: ticketKeys.all });
+    },
+  });
+};
+
+// (Re)assign the individual responsible for a ticket. Preserves the escalation
+// ladder position (manual hand-off ≠ escalation). Refreshes detail + list.
+export const useAssignTicket = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation<TicketDetail, unknown, AssignTicketInput>({
+    mutationFn: (body) => api.patch(`/tickets/${id}/assign`, body).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ticketKeys.detail(id) });
       qc.invalidateQueries({ queryKey: ticketKeys.all });
