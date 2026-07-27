@@ -142,7 +142,7 @@ export default function ModulePage({
 }: ModulePageProps = {}) {
   const params = useParams<{ typeId: string }>();
   const typeId = propTypeId ?? params.typeId ?? '';
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const hasPermission = useAuthStore((s) => s.hasPermission);
@@ -165,11 +165,26 @@ export default function ModulePage({
     [types, typeId],
   );
 
-  // Allow deep-linking straight to the workspace (e.g. the Audit module's
-  // "My Workspace" tab links here with ?tab=workspace).
-  const initialTab: Tab =
-    embedded || searchParams.get('tab') === 'workspace' ? 'workspace' : 'dashboard';
-  const [tab, setTab] = useState<Tab>(initialTab);
+  // Tab is driven by the ?tab= URL param (not local state) so the active tab
+  // survives a page refresh, and deep-links (e.g. the Audit module's "My
+  // Workspace" tab) can land straight on it.
+  const tabParam = searchParams.get('tab');
+  const tab: Tab = embedded
+    ? 'workspace'
+    : tabParam === 'workspace' || tabParam === 'findings'
+      ? tabParam
+      : 'dashboard';
+  const setTab = (next: Tab) => {
+    setSearchParams(
+      (prev) => {
+        const params = new URLSearchParams(prev);
+        if (next === 'dashboard') params.delete('tab');
+        else params.set('tab', next);
+        return params;
+      },
+      { replace: true },
+    );
+  };
   const [activeKpi, setActiveKpi] = useState<KpiId | null>(null);
   // Drill-through target set when a KPI card on the Overview is clicked.
   const [statusView, setStatusView] = useState<StatusView | null>(null);
@@ -184,17 +199,17 @@ export default function ModulePage({
   const [createOpen, setCreateOpen] = useState(false);
   const [tablePage, setTablePage] = useState(1);
 
-  // Reset state when switching modules — honoring a ?tab= deep-link.
+  // Reset transient filter state when switching modules. Tab itself is
+  // derived from the URL above, so it doesn't need resetting here — and
+  // must not depend on searchParams, or setTab's own update would loop back
+  // and clobber statusView/activeKpi right after handleDrill sets them.
   useEffect(() => {
-    setTab(
-      embedded || searchParams.get('tab') === 'workspace' ? 'workspace' : 'dashboard',
-    );
     setActiveKpi(null);
     setSearchInput('');
     setPriorityId('');
     setWorkflowFilterId('');
     setStatusView(null);
-  }, [typeId, searchParams, embedded]);
+  }, [typeId]);
 
   // Overview KPI card → jump to the My Tasks list filtered to that slice.
   const handleDrill = (view: StatusView) => {
@@ -962,7 +977,7 @@ function TicketTable({
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               {visibleCols.has('bookmark') && <Th className="w-10" />}
-              {visibleCols.has('uniqueId') && <Th>ID</Th>}
+              {visibleCols.has('uniqueId') && <Th className="w-px whitespace-nowrap text-center px-2">ID</Th>}
               {visibleCols.has('createdAt') && <Th>Created Date</Th>}
               {visibleCols.has('process') && <Th>Process Name</Th>}
               {visibleCols.has('title') && <Th>Title</Th>}
@@ -1013,8 +1028,8 @@ function TicketTable({
                     </Td>
                   )}
                   {visibleCols.has('uniqueId') && (
-                    <Td>
-                      <div className="flex items-center gap-1">
+                    <Td className="px-2 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1">
                         {hasChildren ? (
                           <button
                             type="button"
@@ -1022,15 +1037,15 @@ function TicketTable({
                               e.stopPropagation();
                               toggleExpand(t.id);
                             }}
-                            className="p-0.5 -ml-1 rounded hover:bg-gray-200 text-gray-500"
+                            className="p-0.5 rounded hover:bg-gray-200 text-gray-500 shrink-0"
                             title={isExpanded ? 'Hide child tickets' : `Show ${t.childCount} child ticket(s)`}
                           >
                             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </button>
                         ) : (
-                          <span className="w-[18px]" />
+                          <span className="w-[18px] shrink-0" />
                         )}
-                        <span className="text-[12px] font-mono text-gray-700">{t.uniqueId}</span>
+                        <span className="text-[12px] font-mono text-gray-700 shrink-0">{t.uniqueId}</span>
                       </div>
                     </Td>
                   )}

@@ -1,4 +1,79 @@
-# Changes Log
+## Submitted stage form labels/values hard to tell apart — 2026-07-27
+
+`src/features/forms/FormFillEmbed.tsx` + `src/features/forms/FieldValueText.tsx`
+— in the read-only submitted-form view (Stage Forms tab on a completed/past
+stage), the field label (`text-[13px] font-medium text-slate-700`) and its
+value (`text-sm text-gray-800`) were nearly the same size/weight/color, so a
+filled form read as an undifferentiated block of text.
+- `FormFillEmbed.tsx` — the field label is now a small caption
+  (`text-[11px] font-semibold uppercase tracking-wide text-slate-500`) **only
+  when `readOnly`**; the editable-fill label is untouched.
+- `FieldValueText.tsx` — bumped every plain-text value renderer (`Text`
+  helper, textarea/richtext, compliance, color, file/image) to
+  `font-medium text-gray-900` so the answer reads bold and dark against the
+  now-muted label above it. Table cells and chip values (checkbox/multi_text)
+  were already visually distinct (borders/pills) and left as-is.
+- Verified against INS-FQS-060's Approval Closure form — labels ("FINAL
+  DISPOSITION") now read as small caption text, values ("Released") as bold
+  dark text.
+- **Follow-up** — the weight/color contrast alone still read as a flat wall
+  of text with no separation between adjacent fields packed into the same
+  row. Wrapped each read-only field in its own tile
+  (`rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5`, grid gap
+  tightened to `gap-3`) so every field is a visually distinct unit — mirrors
+  the existing card-based look used throughout the app rather than
+  introducing a new pattern. Fill-mode (editable) layout/spacing untouched.
+
+## Stage Forms tab empty on completed tickets — 2026-07-27
+
+`src/features/tickets/TicketDetailPage.tsx` — the "Stage Forms" tab
+(`tab === 'forms'`) only rendered `TicketFormHistory` (which already knows
+how to default to the last stage's submitted forms for a completed ticket —
+see its own doc comment) when the user had manually clicked a past stage in
+the flow band (`viewingPastStage`). With nothing clicked, a completed ticket
+fell through to `StageFormSection`, which fetches forms for the ticket's
+*current* stage — but a completed flow has no current stage
+(`flow.currentStages` is empty by design), so it rendered nothing. Changed
+the branch condition to `viewingPastStage || isCompleted`, so a completed
+(or rejected — also `isCompleted`) ticket auto-selects its last stage and
+shows those forms read-only without requiring a click first. Verified against
+INS-FQS-060 (completed) — Approval Closure's submitted form now renders.
+
+## Ticket description no longer capped to 70ch measure — 2026-07-27
+
+`src/features/tickets/detail/TicketDetailsTab.tsx` — removed `.gmp-narrative`
+from the ticket description field. That class caps text at a 70-character
+line measure (`client/src/index.css:407`, added for the FQS-QK-UIUX-002 §8
+narrative-readability rule and applied to CAPA/OOS/audit narratives). On the
+ticket Details card it made the description wrap narrowly with a lot of
+unused card width to its right — reported against
+`/tickets/1c57e056-6b67-42e9-b536-959606ffd682`. User chose to drop the cap
+for this field specifically rather than keep it consistent with
+CAPA/OOS/audit; those narrative fields are untouched and still capped.
+
+## Module list table — ID column alignment + URL-based tab routing — 2026-07-27
+
+`src/features/modules/ModulePage.tsx` — the shared table behind every module's
+Overview/My Tasks/Findings list (Inspection, CAPA, Deviations, etc.). Not
+committed.
+
+- **ID column alignment** — the `ID` header sat flush-left while each cell was
+  pushed right by the child-ticket expand chevron (or its 18px spacer), so the
+  header and values never lined up. Centered both, and gave the column
+  `w-px whitespace-nowrap` so the table's auto-layout shrinks it to content
+  width instead of stretching it with the row's leftover space (which also
+  fixed IDs wrapping once centering was added). Reduced side padding
+  (`px-4` → `px-2`) and added `shrink-0` to the chevron/spacer/id-text flex
+  children so the column stays tight without wrapping.
+- **Tab state moved to the URL** — Overview/My Tasks/Findings was local
+  `useState`, so a refresh always bounced back to Overview. `tab` is now
+  derived from the `?tab=` search param (`workspace`/`findings`/absent→
+  `dashboard`), and `setTab` writes it via `setSearchParams(..., { replace:
+  true })` (same pattern as `features/forms/FormListPage.tsx`). The
+  module-switch reset effect no longer resets `tab` or depends on
+  `searchParams` — it only clears filters on `typeId` change now, so it can't
+  loop back and wipe `activeKpi`/`statusView` right after a KPI drill-through
+  sets them via its own `setTab` call.
 
 ## Ticket escalation matrix UI — 2026-07-26
 

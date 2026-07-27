@@ -228,9 +228,10 @@ export default function TicketDetailPage() {
 
             {tab === 'forms' && (
               <div className="space-y-4">
-                {viewingPastStage ? (
-                  // A completed/earlier stage is selected in the band → show that
-                  // stage's submitted forms (read-only) rather than the current one.
+                {viewingPastStage || isCompleted ? (
+                  // A completed/earlier stage is selected in the band, or the
+                  // ticket is finished (no current stage left to fill) → show
+                  // submitted forms (read-only) instead of a fillable stage form.
                   <TicketFormHistory
                     ticketId={ticket.id}
                     selectedStageId={selectedStage?.persistedId ?? null}
@@ -238,14 +239,12 @@ export default function TicketDetailPage() {
                     isCompleted={isCompleted}
                   />
                 ) : (
+                  <StageFormSection ticketId={ticket.id} />
+                )}
+                {typeof ticket.customFields?.audit_register_id === 'string' && (
                   <>
-                    <StageFormSection ticketId={ticket.id} />
-                    {typeof ticket.customFields?.audit_register_id === 'string' && (
-                      <>
-                        <AuditComplianceCard registerId={ticket.customFields.audit_register_id} />
-                        <AuditCapaChildrenCard registerId={ticket.customFields.audit_register_id} />
-                      </>
-                    )}
+                    <AuditComplianceCard registerId={ticket.customFields.audit_register_id} />
+                    <AuditCapaChildrenCard registerId={ticket.customFields.audit_register_id} />
                   </>
                 )}
               </div>
