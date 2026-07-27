@@ -87,6 +87,21 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'risk_category.create',    module: 'RISK_CATEGORY',   action: 'CREATE',  description: 'Create risk categories' },
   { key: 'risk_category.update',    module: 'RISK_CATEGORY',   action: 'UPDATE',  description: 'Edit risk categories' },
   { key: 'risk_category.delete',    module: 'RISK_CATEGORY',   action: 'DELETE',  description: 'Delete risk categories' },
+  // Cross-module read model: gates the risk chip other modules render on their
+  // own records (supplier, equipment, document, …). Separable from risk.read so
+  // a supplier-page viewer can see "this supplier is HIGH risk" without being
+  // granted the risk register itself.
+  { key: 'risk_profile.read',       module: 'RISK_PROFILE',    action: 'READ',    description: 'View the risk profile of any linked record' },
+  { key: 'risk_trigger.read',       module: 'RISK_TRIGGER',    action: 'READ',    description: 'View risk trigger rules' },
+  { key: 'risk_trigger.create',     module: 'RISK_TRIGGER',    action: 'CREATE',  description: 'Create risk trigger rules' },
+  { key: 'risk_trigger.update',     module: 'RISK_TRIGGER',    action: 'UPDATE',  description: 'Edit risk trigger rules' },
+  { key: 'risk_trigger.delete',     module: 'RISK_TRIGGER',    action: 'DELETE',  description: 'Delete risk trigger rules' },
+  { key: 'risk_appetite.read',      module: 'RISK_APPETITE',   action: 'READ',    description: 'View organisational risk appetite' },
+  { key: 'risk_appetite.create',    module: 'RISK_APPETITE',   action: 'CREATE',  description: 'Define risk appetite' },
+  { key: 'risk_appetite.update',    module: 'RISK_APPETITE',   action: 'UPDATE',  description: 'Edit risk appetite' },
+  { key: 'risk_appetite.delete',    module: 'RISK_APPETITE',   action: 'DELETE',  description: 'Delete risk appetite' },
+  { key: 'risk.override_gate',      module: 'RISK',            action: 'APPROVE', description: 'Override a risk-driven block (change approval, CoA issue, batch release) with an e-signature' },
+  { key: 'risk_link.read',          module: 'RISK_LINK',       action: 'READ',    description: 'View risk links / reverse lookups' },
   { key: 'risk_library.read',       module: 'RISK_LIBRARY',    action: 'READ',    description: 'View hazard/control libraries' },
   { key: 'risk_library.create',     module: 'RISK_LIBRARY',    action: 'CREATE',  description: 'Create library items' },
   { key: 'risk_library.update',     module: 'RISK_LIBRARY',    action: 'UPDATE',  description: 'Edit library items' },

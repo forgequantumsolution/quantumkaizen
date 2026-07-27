@@ -5,18 +5,30 @@
  */
 import type { Request, Response } from 'express';
 import { ok, success } from '../dynamic-form/dynamic-form.response';
+import { BadRequest } from '../../lib/httpError';
 import * as svc from './risk.service';
 import * as cfg from './risk-framework.service';
+import * as profiles from './risk-profile.service';
+import * as triggers from './risk-trigger.service';
+import * as appetite from './risk-appetite.service';
 import type {
   CategoryUpsert,
   FrameworkUpsert,
   HeatmapQuery,
+  LinkSearchQuery,
   LinkUpsert,
   ListCategoryQuery,
   ListFrameworkQuery,
   ListRegisterQuery,
   ListRiskQuery,
+  AppetiteUpsert,
+  ListTriggerRuleQuery,
+  ProfileQuery,
+  ProfileRankQuery,
+  TriggerBody,
+  TriggerRuleUpsert,
   RegisterUpsert,
+  ReverseLinkQuery,
   RiskCreate,
   RiskUpdate,
   ScoreRisk,
@@ -117,6 +129,42 @@ export const removeLink = async (req: Request, res: Response) => {
   return success(res, 'Link removed');
 };
 
+export const listRisksLinkedTo = async (req: Request, res: Response) =>
+  ok(res, await svc.listRisksLinkedTo(req.query as unknown as ReverseLinkQuery));
+
+export const listLinkableTypes = async (_req: Request, res: Response) =>
+  ok(res, svc.listLinkableTypes());
+
+export const searchLinkable = async (req: Request, res: Response) =>
+  ok(res, await svc.searchLinkable(req.query as unknown as LinkSearchQuery, actor(req)));
+
+// ── Risk profile ────────────────────────────────────────────────────────────
+
+export const getProfile = async (req: Request, res: Response) => {
+  const q = req.query as unknown as ProfileQuery;
+  if (!profiles.assertLinkableType(q.entityType)) {
+    throw BadRequest(`"${q.entityType}" is not a linkable record type`);
+  }
+  // The batch form wins when both are given: a caller asking for a list wants
+  // the list, and silently returning one row would be the harder bug to spot.
+  if (q.ids) {
+    const ids = q.ids.split(',').map((s) => s.trim()).filter(Boolean);
+    return ok(res, await profiles.getProfiles(q.entityType, ids));
+  }
+  return ok(res, await profiles.getProfile(q.entityType, q.entityId as string));
+};
+
+export const listByRisk = async (req: Request, res: Response) => {
+  const q = req.query as unknown as ProfileRankQuery;
+  if (!profiles.assertLinkableType(q.entityType)) {
+    throw BadRequest(`"${q.entityType}" is not a linkable record type`);
+  }
+  return ok(res, await profiles.listByRisk(q.entityType, q.take));
+};
+
+export const recomputeProfiles = async (_req: Request, res: Response) =>
+  success(res, 'Risk profiles recomputed', await profiles.recomputeAll());
+
 // ── Analytics ───────────────────────────────────────────────────────────────
 
 export const getHeatmap = async (req: Request, res: Response) =>
@@ -124,3 +172,39 @@ export const getHeatmap = async (req: Request, res: Response) =>
 
 export const getSummary = async (req: Request, res: Response) =>
   ok(res, await svc.getSummary(req.query as unknown as HeatmapQuery));
+
+// ── Triggers ────────────────────────────────────────────────────────────────
+
+export const runTrigger = async (req: Request, res: Response) => {
+  const b = req.body as TriggerBody;
+  return success(res, 'Risk work raised', await triggers.createRiskFromTrigger(b, actor(req)), 201);
+};
+
+export const listTriggerRules = async (req: Request, res: Response) =>
+  ok(res, await triggers.listTriggerRules(req.query as unknown as ListTriggerRuleQuery));
+
+export const createTriggerRule = async (req: Request, res: Response) =>
+  success(res, 'Trigger rule created', await triggers.createTriggerRule(req.body as TriggerRuleUpsert, actor(req)), 201);
+
+export const updateTriggerRule = async (req: Request, res: Response) =>
+  success(res, 'Trigger rule updated', await triggers.updateTriggerRule(req.params.id as string, req.body as TriggerRuleUpsert, actor(req)));
+
+export const deleteTriggerRule = async (req: Request, res: Response) => {
+  await triggers.deleteTriggerRule(req.params.id as string, actor(req));
+  return success(res, 'Trigger rule deleted');
+};
+
+// ── Risk appetite ───────────────────────────────────────────────────────────
+
+export const listAppetites = async (_req: Request, res: Response) => ok(res, await appetite.listAppetites());
+
+export const createAppetite = async (req: Request, res: Response) =>
+  success(res, 'Risk appetite created', await appetite.createAppetite(req.body as AppetiteUpsert, actor(req)), 201);
+
+export const updateAppetite = async (req: Request, res: Response) =>
+  success(res, 'Risk appetite updated', await appetite.updateAppetite(req.params.id as string, req.body as AppetiteUpsert, actor(req)));
+
+export const deleteAppetite = async (req: Request, res: Response) => {
+  await appetite.deleteAppetite(req.params.id as string, actor(req));
+  return success(res, 'Risk appetite deleted');
+};

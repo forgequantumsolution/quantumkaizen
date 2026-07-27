@@ -21,6 +21,8 @@ import {
   type CapaInitField,
 } from '@/lib/api/oos';
 import { useCapas, type CapaType } from '@/lib/api/audit';
+import RiskLinkPanel from '@/components/risk/RiskLinkPanel';
+import AssessRiskButton from '@/components/risk/AssessRiskButton';
 
 const CAPA_TYPES: CapaType[] = ['CORRECTIVE', 'PREVENTIVE', 'BOTH'];
 
@@ -177,6 +179,23 @@ export default function OosDetailPage() {
             <div className="text-[11px] text-gray-500 uppercase tracking-wide mb-1">Conclusion</div>
             <p className="text-sm text-gray-800 whitespace-pre-wrap gmp-narrative">{inv.conclusion}</p>
           </div>
+        )}
+      </div>
+
+      {/* Risk. A confirmed OOS is a product-quality risk by definition — closing
+          one as CONFIRMED_OOS raises the risk automatically when the trigger
+          rule says so, and this is where it shows up. */}
+      <div className="mb-4 space-y-3">
+        <RiskLinkPanel entityType="OosInvestigation" entityId={inv.id} title="Linked risks" />
+        {canUpdate && (
+          <AssessRiskButton
+            entityType="OosInvestigation"
+            entityId={inv.id}
+            defaultTitle={`${inv.code} — ${inv.title}`}
+            defaultDescription={inv.conclusion ?? null}
+            attributes={{ classification: inv.classification ?? null }}
+            relation="CAUSED_BY"
+          />
         )}
       </div>
 

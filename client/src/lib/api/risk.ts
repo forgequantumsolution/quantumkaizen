@@ -285,6 +285,12 @@ export interface RiskLevelRef {
   label: string;
   color: string;
   acceptance: RiskAcceptance;
+  /** Policy the level implies — travels with the level so a page can tell
+   *  whether a risk needs approval/controls/training without a second call. */
+  requires_approval: boolean;
+  requires_control: boolean;
+  requires_capa: boolean;
+  requires_training: boolean;
 }
 
 /** Prisma relation blocks passed through the serializer verbatim (camelCase). */
@@ -310,10 +316,72 @@ export interface RiskFrameworkRef {
 export interface RiskLink {
   id: string;
   entity_type: string;
+  /** Human name of the type ("CAPA", "Document") from the backend registry. */
+  entity_type_label: string;
   entity_id: string;
   label: string | null;
+  /** Freshly resolved reference — present on the detail view only. */
+  entity_number: string | null;
+  entity_title: string | null;
+  /** Client route to the linked record; null for types with no detail page. */
+  entity_route: string | null;
+  /**
+   * Whether the target still exists. null on list payloads (not resolved);
+   * false marks a dangling link, which is a traceability defect worth showing.
+   */
+  entity_exists: boolean | null;
   relation: string | null;
   created_at: string;
+}
+
+/** A record type a risk may be linked to (from GET /risk/links/types). */
+export interface LinkableType {
+  type: string;
+  label: string;
+  has_route: boolean;
+}
+
+/** One typeahead hit (from GET /risk/links/search). */
+export interface LinkableHit {
+  id: string;
+  number: string;
+  title: string;
+  label: string;
+  route: string | null;
+}
+
+/** A risk linked to some other record (from GET /risk/links). */
+export interface LinkedRisk {
+  link_id: string;
+  relation: string | null;
+  linked_at: string;
+  risk: Risk;
+}
+
+/**
+ * "How risky is this record?" — the materialised cross-module read model
+ * (GET /risk/profile). Every field is derived from the risks linked to the
+ * entity; an entity with no risks comes back zeroed rather than 404.
+ */
+export interface RiskProfile {
+  entity_type: string;
+  entity_id: string;
+  open_risk_count: number;
+  total_risk_count: number;
+  highest_level_code: string | null;
+  highest_level_label: string | null;
+  highest_level_color: string | null;
+  /** Cross-framework severity, 0-100. Comparable between frameworks; level
+   *  `order` is not. Null when no linked risk has been scored. */
+  severity_rank: number | null;
+  acceptance: RiskAcceptance | null;
+  max_residual_score: number | null;
+  /** Open risks at an UNACCEPTABLE level with no acceptance record. */
+  unacceptable_count: number;
+  overdue_reviews: number;
+  open_controls: number;
+  last_risk_event_at: string | null;
+  recomputed_at: string | null;
 }
 
 export interface Risk {
@@ -928,6 +996,16 @@ export const riskKeys = {
   library: (p?: object) => ['risk', 'library', p] as const,
   heatmap: (p?: object) => ['risk', 'heatmap', p] as const,
   summary: (p?: object) => ['risk', 'summary', p] as const,
+  linkableTypes: () => ['risk', 'linkable-types'] as const,
+  linkableSearch: (type: string, q: string) => ['risk', 'linkable-search', type, q] as const,
+  linkedRisks: (entityType: string, entityId: string) =>
+    ['risk', 'linked-risks', entityType, entityId] as const,
+  profile: (entityType: string, entityId: string) =>
+    ['risk', 'profile', entityType, entityId] as const,
+  profiles: (entityType: string, ids: string[]) =>
+    ['risk', 'profiles', entityType, [...ids].sort().join(',')] as const,
+  profileRanked: (entityType: string, take: number) =>
+    ['risk', 'profile-ranked', entityType, take] as const,
 };
 
 // ── Transport helpers ───────────────────────────────────────────────────────
@@ -1286,6 +1364,73 @@ export const useRemoveRiskLink = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: riskKeys.all }),
   });
 };
+
+// ── Link resolution (entity registry) ───────────────────────────────────────
+
+/** The linkable record types, straight from the backend registry. Never
+ *  hardcode this list on the client — adding a type is a backend-only change. */
+export const useLinkableTypes = () =>
+  useQuery<LinkableType[]>({
+    queryKey: riskKeys.linkableTypes(),
+    queryFn: () => getArray<LinkableType>('/risk/links/types'),
+    staleTime: CONFIG_STALE,
+  });
+
+/** Typeahead over one record type. Disabled below 2 characters — the backend
+ *  would happily scan, but a 1-char query is never a real search. */
+export const useLinkableSearch = (type: string | undefined, q: string) =>
+  useQuery<LinkableHit[]>({
+    queryKey: riskKeys.linkableSearch(type ?? '', q),
+    queryFn: () => getArray<LinkableHit>('/risk/links/search', { type, q }),
+    enabled: !!type && q.trim().length >= 2,
+    staleTime: 30_000,
+  });
+
+/**
+ * Reverse lookup — the risks linked to some other record. This is the hook every
+ * other module's risk panel uses; it is what makes a link bidirectional.
+ */
+export const useRisksLinkedTo = (entityType: string | undefined, entityId: string | undefined) =>
+  useQuery<LinkedRisk[]>({
+    queryKey: riskKeys.linkedRisks(entityType ?? '', entityId ?? ''),
+    queryFn: () => getArray<LinkedRisk>('/risk/links', { entityType, entityId }),
+    enabled: !!entityType && !!entityId,
+  });
+
+// ── Risk profile (cross-module read model) ──────────────────────────────────
+
+/** One record's risk profile. Any module's detail page can call this. */
+export const useRiskProfile = (entityType: string | undefined, entityId: string | undefined) =>
+  useQuery<RiskProfile>({
+    queryKey: riskKeys.profile(entityType ?? '', entityId ?? ''),
+    queryFn: () => getOne<RiskProfile>('/risk/profile', { entityType, entityId }),
+    enabled: !!entityType && !!entityId,
+    staleTime: 60_000,
+  });
+
+/**
+ * Batch profiles for a list view — one request for the whole page instead of
+ * one per row. Returns a Map so callers index by id without a find() per cell.
+ */
+export const useRiskProfiles = (entityType: string | undefined, ids: string[]) => {
+  const query = useQuery<RiskProfile[]>({
+    queryKey: riskKeys.profiles(entityType ?? '', ids),
+    queryFn: () => getArray<RiskProfile>('/risk/profile', { entityType, ids: ids.join(',') }),
+    enabled: !!entityType && ids.length > 0,
+    staleTime: 60_000,
+  });
+  const byId = new Map((query.data ?? []).map((p) => [p.entity_id, p]));
+  return { ...query, byId };
+};
+
+/** The riskiest N records of a type — "top risk suppliers" style panels. */
+export const useRiskiestEntities = (entityType: string | undefined, take = 10) =>
+  useQuery<RiskProfile[]>({
+    queryKey: riskKeys.profileRanked(entityType ?? '', take),
+    queryFn: () => getArray<RiskProfile>('/risk/profile/ranked', { entityType, take }),
+    enabled: !!entityType,
+    staleTime: 60_000,
+  });
 
 // Formal residual-risk acceptance: e-signed, and it moves the risk to ACCEPTED.
 export const useAcceptRisk = (id: string) => {
@@ -1728,4 +1873,235 @@ export const HAZARD_TYPE_LABELS: Record<HazardType, string> = {
   CONSEQUENCE: 'Consequence',
   FAILURE_MODE: 'Failure Mode',
   THREAT: 'Threat',
+};
+
+// ── Triggers: raise risk work from another module's record ──────────────────
+
+export interface TriggerResult {
+  created: boolean;
+  reused?: boolean;
+  mode: 'RISK' | 'ASSESSMENT';
+  id: string;
+  number: string;
+}
+
+export interface TriggerBody {
+  triggerType: string;
+  triggerId: string;
+  mode?: 'RISK' | 'ASSESSMENT';
+  relation?: string;
+  attributes?: Record<string, unknown>;
+  seed: {
+    title: string;
+    description?: string | null;
+    hazard?: string | null;
+    cause?: string | null;
+    consequence?: string | null;
+    ownerId?: string | null;
+    departmentId?: string | null;
+    siteId?: string | null;
+  };
+}
+
+export interface TriggerRule {
+  id: string;
+  name: string;
+  trigger_type: string;
+  condition: Record<string, unknown> | null;
+  mode: 'RISK' | 'ASSESSMENT';
+  register_id: string | null;
+  framework_id: string | null;
+  category_id: string | null;
+  auto_create: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TriggerRuleUpsert {
+  name: string;
+  triggerType: string;
+  condition?: Record<string, unknown> | null;
+  mode: 'RISK' | 'ASSESSMENT';
+  registerId?: string | null;
+  frameworkId?: string | null;
+  categoryId?: string | null;
+  autoCreate: boolean;
+  isActive: boolean;
+}
+
+/** Raise a risk (or assessment) from another module's record. */
+export const useRunTrigger = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TriggerBody) => post<TriggerResult>('/risk/triggers', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: riskKeys.all }),
+  });
+};
+
+export const useTriggerRules = (params: { triggerType?: string; isActive?: boolean } = {}) =>
+  useQuery<TriggerRule[]>({
+    queryKey: ['risk', 'trigger-rules', params],
+    queryFn: () => getArray<TriggerRule>('/risk/trigger-rules', params),
+    staleTime: CONFIG_STALE,
+  });
+
+export const useCreateTriggerRule = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TriggerRuleUpsert) => post<TriggerRule>('/risk/trigger-rules', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'trigger-rules'] }),
+  });
+};
+
+export const useUpdateTriggerRule = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TriggerRuleUpsert) => put<TriggerRule>(`/risk/trigger-rules/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'trigger-rules'] }),
+  });
+};
+
+export const useDeleteTriggerRule = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => del(`/risk/trigger-rules/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'trigger-rules'] }),
+  });
+};
+
+// ── Second-person approval (requiresApproval) ───────────────────────────────
+
+export interface RiskApproval {
+  id: string;
+  risk_id: string;
+  level_code: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requested_by_id: string | null;
+  requested_at: string;
+  decided_by_id: string | null;
+  decided_at: string | null;
+  decision: string | null;
+  comment: string | null;
+  e_signature_id: string | null;
+}
+
+export const useRiskApprovals = (riskId: string | undefined) =>
+  useQuery<RiskApproval[]>({
+    queryKey: ['risk', 'approvals', riskId ?? ''],
+    queryFn: () => getArray<RiskApproval>(`/risk/risks/${riskId}/approvals`),
+    enabled: !!riskId,
+  });
+
+export const useRequestRiskApproval = (riskId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { comment?: string | null }) =>
+      post<RiskApproval>(`/risk/risks/${riskId}/approvals`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['risk', 'approvals', riskId] });
+      qc.invalidateQueries({ queryKey: riskKeys.risk(riskId) });
+    },
+  });
+};
+
+export const useDecideRiskApproval = (riskId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ approvalId, ...body }: {
+      approvalId: string;
+      decision: 'APPROVED' | 'REJECTED';
+      comment?: string | null;
+      credential: string;
+      meaning?: string;
+    }) => post<RiskApproval>(`/risk/approvals/${approvalId}/decide`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['risk', 'approvals', riskId] });
+      qc.invalidateQueries({ queryKey: riskKeys.risk(riskId) });
+    },
+  });
+};
+
+// ── Risk appetite ───────────────────────────────────────────────────────────
+
+export interface RiskAppetite {
+  id: string;
+  name: string;
+  organization_id: string | null;
+  site_id: string | null;
+  category_id: string | null;
+  tolerance_rank: number;
+  statement: string | null;
+  requires_board_review: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppetiteUpsert {
+  name: string;
+  organizationId?: string | null;
+  siteId?: string | null;
+  categoryId?: string | null;
+  toleranceRank: number;
+  statement?: string | null;
+  requiresBoardReview: boolean;
+  isActive: boolean;
+}
+
+export const useRiskAppetites = () =>
+  useQuery<RiskAppetite[]>({
+    queryKey: ['risk', 'appetite'],
+    queryFn: () => getArray<RiskAppetite>('/risk/appetite'),
+    staleTime: CONFIG_STALE,
+  });
+
+export const useCreateAppetite = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AppetiteUpsert) => post<RiskAppetite>('/risk/appetite', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'appetite'] }),
+  });
+};
+
+export const useUpdateAppetite = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AppetiteUpsert) => put<RiskAppetite>(`/risk/appetite/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'appetite'] }),
+  });
+};
+
+export const useDeleteAppetite = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => del(`/risk/appetite/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'appetite'] }),
+  });
+};
+
+// ── Assessment links (attach an assessment to the record it bears on) ───────
+
+export interface LinkedAssessment {
+  link_id: string;
+  relation: string | null;
+  linked_at: string;
+  assessment: RiskAssessment;
+}
+
+/** Assessments attached to a record — e.g. the change ticket they evaluate. */
+export const useAssessmentsLinkedTo = (entityType: string | undefined, entityId: string | undefined) =>
+  useQuery<LinkedAssessment[]>({
+    queryKey: ['risk', 'linked-assessments', entityType ?? '', entityId ?? ''],
+    queryFn: () => getArray<LinkedAssessment>('/risk/assessment-links', { entityType, entityId }),
+    enabled: !!entityType && !!entityId,
+  });
+
+/** Attach an existing assessment to a record. */
+export const useAddAssessmentLink = (assessmentId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RiskLinkUpsert) => post<RiskLink>(`/risk/assessments/${assessmentId}/links`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: riskKeys.all }),
+  });
 };

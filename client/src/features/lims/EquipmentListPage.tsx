@@ -4,6 +4,8 @@ import { App, Button, Drawer, Input, InputNumber, Select, Space, Table } from 'a
 import { Gauge, Plus, Search, Edit3, Trash2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
+import RiskProfileChip from '@/components/risk/RiskProfileChip';
+import { useRiskProfiles } from '@/lib/api/risk';
 import {
   useEquipment,
   useCreateEquipment,
@@ -35,6 +37,11 @@ export default function EquipmentListPage() {
   const [search, setSearch] = useState('');
   const { data, isLoading } = useEquipment({ status, calibration_due: dueOnly || undefined, search: search || undefined });
   const rows = data?.data ?? [];
+
+  // One batched profile request for the whole page — letting each chip fetch its
+  // own would be a request per row. GAMP 5 / USP <1058> risk-based qualification
+  // starts with being able to see which instruments carry risk at all.
+  const { byId: riskById } = useRiskProfiles('Equipment', rows.map((r) => r.id));
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editing, setEditing] = useState<EquipmentSummary | null>(null);
@@ -91,6 +98,14 @@ export default function EquipmentListPage() {
             render: (v: EquipmentStatus) => (
               <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border ${STATUS_BADGE[v]}`}>{EQUIPMENT_STATUS_LABELS[v]}</span>
             ),
+          },
+          {
+            title: 'Risk',
+            width: 110,
+            render: (_: unknown, r) => {
+              const p = riskById.get(r.id);
+              return p ? <RiskProfileChip entityType="Equipment" entityId={r.id} profile={p} /> : null;
+            },
           },
           {
             title: 'Calibration Due',

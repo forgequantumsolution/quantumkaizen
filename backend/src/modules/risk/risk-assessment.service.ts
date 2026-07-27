@@ -22,6 +22,9 @@ import { recordSignature, writeTrail } from '../audit/compliance.service';
 import { computeScore, nextReviewDateFor } from './risk-scoring.service';
 import type { FactorValues, ScoringFramework, ScoringLevel } from './risk-scoring.service';
 import { loadScoringFramework, serializeFramework } from './risk-framework.service';
+import { onRiskChanged } from './risk-profile.service';
+import { linkableEntity, linkableTypeNames } from '../../lib/risk-entity-registry';
+import type { LinkUpsert } from './risk.schema';
 import type {
   ApproveAssessment,
   AssessmentCreate,
@@ -1194,6 +1197,42 @@ export const promoteLine = async (lineId: string, body: PromoteLine, userId?: st
       }
       if (snapshots.length > 0) await tx.riskScoreSnapshot.createMany({ data: snapshots });
 
+      // Inherit the assessment's links. Without this a risk promoted out of a
+      // change-control assessment has no connection to the change that produced
+      // it: the ticket's Risk panel stays empty, and the NO_BLOCKING_RISK and
+      // RISK_CONTROLS_VERIFIED stage gates find nothing to evaluate — they would
+      // pass a change carrying a critical risk. The trigger source is included,
+      // so the chain ticket → assessment → risk is complete in both directions.
+      const inherited = await tx.riskLink.findMany({
+        where: { assessmentId: assessment.id },
+        select: { entityType: true, entityId: true, label: true, relation: true },
+      });
+      const seen = new Set(inherited.map((l) => `${l.entityType}:${l.entityId}`));
+      if (
+        assessment.triggerType &&
+        assessment.triggerId &&
+        !seen.has(`${assessment.triggerType}:${assessment.triggerId}`)
+      ) {
+        inherited.push({
+          entityType: assessment.triggerType,
+          entityId: assessment.triggerId,
+          label: null,
+          relation: 'APPLIES_TO',
+        });
+      }
+      for (const l of inherited) {
+        await tx.riskLink.create({
+          data: {
+            riskId: created.id,
+            entityType: l.entityType,
+            entityId: l.entityId,
+            label: l.label,
+            relation: l.relation ?? 'APPLIES_TO',
+            createdById: userId ?? null,
+          },
+        }).catch(() => undefined); // a duplicate link is not a promotion failure
+      }
+
       await tx.riskAssessmentLine.update({ where: { id: lineId }, data: { riskId: created.id } });
       return created;
     });
@@ -1221,6 +1260,9 @@ export const promoteLine = async (lineId: string, body: PromoteLine, userId?: st
     userId,
   );
 
+  // The promoted risk now feeds every entity it inherited a link to.
+  await onRiskChanged(risk.id);
+
   const promoted = await prisma.riskAssessmentLine.findUniqueOrThrow({
     where: { id: lineId },
     include: lineInclude,
@@ -1230,4 +1272,114 @@ export const promoteLine = async (lineId: string, body: PromoteLine, userId?: st
     line: serializeLine(promoted, levels),
     risk: { id: risk.id, risk_number: risk.riskNumber, title: risk.title, status: risk.status },
   };
+};
+
+// ── Links on an assessment ──────────────────────────────────────────────────
+
+/**
+ * Attach an assessment to a record it bears on.
+ *
+ * Two routes lead here and both matter. An assessment raised *from* a change
+ * ticket carries that ticket as its trigger; an assessment authored
+ * independently — a periodic process FMEA, say — has no trigger but may still be
+ * the assessment a change relies on. Without this, the second case could never
+ * satisfy a change-control gate, and teams would be forced to re-do work they
+ * had already done properly.
+ *
+ * Risks promoted from the assessment inherit these links, so attaching an
+ * assessment to a ticket also connects everything the assessment produces.
+ */
+export const addAssessmentLink = async (
+  assessmentId: string,
+  body: LinkUpsert,
+  userId?: string,
+) => {
+  const assessment = await prisma.riskAssessment.findUnique({
+    where: { id: assessmentId },
+    select: { id: true, assessmentNumber: true },
+  });
+  if (!assessment) throw NotFound('Risk assessment not found');
+
+  const entity = linkableEntity(body.entityType);
+  if (!entity) {
+    throw BadRequest(
+      `"${body.entityType}" is not a linkable record type. Known types: ${linkableTypeNames().join(', ')}`,
+    );
+  }
+  const ref = await entity.find(body.entityId);
+  if (!ref) throw BadRequest(`No ${entity.label} exists with id ${body.entityId}`);
+
+  const existing = await prisma.riskLink.findFirst({
+    where: {
+      assessmentId,
+      entityType: body.entityType,
+      entityId: body.entityId,
+      relation: body.relation ?? null,
+    },
+    select: { id: true },
+  });
+  if (existing) throw Conflict('That link already exists on this assessment');
+
+  const created = await prisma.riskLink.create({
+    data: {
+      assessmentId,
+      entityType: body.entityType,
+      entityId: body.entityId,
+      label: body.label?.trim() || `${ref.number} — ${ref.title}`,
+      relation: body.relation ?? null,
+      createdById: userId ?? null,
+    },
+  });
+
+  await writeTrail(
+    {
+      entityType: 'RiskAssessment',
+      entityId: assessmentId,
+      action: 'UPDATE',
+      field: 'links',
+      newValue: `${body.entityType}:${body.entityId}`,
+      reason: `Linked ${entity.label} ${ref.number}`,
+    },
+    userId,
+  );
+
+  return {
+    id: created.id,
+    entity_type: created.entityType,
+    entity_type_label: entity.label,
+    entity_id: created.entityId,
+    label: created.label,
+    entity_route: entity.route ? entity.route(created.entityId) : null,
+    relation: created.relation,
+    created_at: created.createdAt,
+  };
+};
+
+/** Assessments attached to a record — the reverse of `addAssessmentLink`. */
+export const listAssessmentsLinkedTo = async (entityType: string, entityId: string) => {
+  const links = await prisma.riskLink.findMany({
+    where: { entityType, entityId, assessmentId: { not: null } },
+    select: { id: true, relation: true, createdAt: true, assessmentId: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (links.length === 0) return [];
+
+  const rows = await prisma.riskAssessment.findMany({
+    where: { id: { in: links.map((l) => l.assessmentId as string) } },
+    include: assessmentInclude,
+  });
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  return links
+    .map((l) => {
+      const row = byId.get(l.assessmentId as string);
+      if (!row) return null;
+      return {
+        link_id: l.id,
+        relation: l.relation,
+        linked_at: l.createdAt,
+        assessment: serializeAssessment(row),
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 };

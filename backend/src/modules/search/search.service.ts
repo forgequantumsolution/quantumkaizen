@@ -8,7 +8,7 @@
  */
 import { prisma } from '../../lib/prisma';
 
-export type SearchType = 'Sample' | 'CAPA' | 'Document' | 'Ticket' | 'OOS' | 'CoA';
+export type SearchType = 'Sample' | 'CAPA' | 'Document' | 'Ticket' | 'OOS' | 'CoA' | 'Risk' | 'Risk assessment';
 
 export interface SearchHit {
   type: SearchType;
@@ -26,7 +26,7 @@ export async function search(qRaw: string): Promise<SearchHit[]> {
   const q = qRaw.trim();
   if (q.length < 2) return [];
 
-  const [samples, capas, documents, tickets, oos, coas] = await Promise.all([
+  const [samples, capas, documents, tickets, oos, coas, risks, assessments] = await Promise.all([
     prisma.sample.findMany({
       where: { isDeleted: false, OR: [{ sampleNumber: ci(q) }, { barcode: ci(q) }, { batchNo: ci(q) }, { productName: ci(q) }] },
       select: { id: true, sampleNumber: true, productName: true, batchNo: true },
@@ -57,6 +57,18 @@ export async function search(qRaw: string): Promise<SearchHit[]> {
       select: { id: true, coaNumber: true, productName: true, batchNo: true },
       take: TAKE,
     }),
+    // Risk numbers are looked up under exactly the same time pressure as a CAPA
+    // or a deviation, and were the one GMP record type absent from this list.
+    prisma.risk.findMany({
+      where: { OR: [{ riskNumber: ci(q) }, { title: ci(q) }, { hazard: ci(q) }] },
+      select: { id: true, riskNumber: true, title: true },
+      take: TAKE,
+    }),
+    prisma.riskAssessment.findMany({
+      where: { OR: [{ assessmentNumber: ci(q) }, { title: ci(q) }] },
+      select: { id: true, assessmentNumber: true, title: true },
+      take: TAKE,
+    }),
   ]);
 
   return [
@@ -66,5 +78,7 @@ export async function search(qRaw: string): Promise<SearchHit[]> {
     ...tickets.map((t): SearchHit => ({ type: 'Ticket', id: t.id, title: t.uniqueId, subtitle: t.title, path: `/tickets/${t.id}` })),
     ...oos.map((o): SearchHit => ({ type: 'OOS', id: o.id, title: o.code, subtitle: o.title, path: `/lims/oos/${o.id}` })),
     ...coas.map((c): SearchHit => ({ type: 'CoA', id: c.id, title: c.coaNumber, subtitle: join(c.productName, c.batchNo), path: `/lims/coa/${c.id}` })),
+    ...risks.map((r): SearchHit => ({ type: 'Risk', id: r.id, title: r.riskNumber, subtitle: r.title, path: `/risk/risks/${r.id}` })),
+    ...assessments.map((a): SearchHit => ({ type: 'Risk assessment', id: a.id, title: a.assessmentNumber, subtitle: a.title, path: `/risk/assessments/${a.id}` })),
   ];
 }

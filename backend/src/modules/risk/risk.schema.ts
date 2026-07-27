@@ -256,10 +256,51 @@ export type ListRiskQuery = z.infer<typeof ListRiskQuerySchema>;
 export const LinkUpsertSchema = z.object({
   entityType: z.string().min(1).max(64),
   entityId: z.string().min(1).max(64),
+  // Optional: the service captures a label from the entity registry when none
+  // is supplied, so a link is never left rendering a bare UUID.
   label: z.string().max(300).optional().nullable(),
   relation: z.string().max(64).optional().nullable(),
 });
 export type LinkUpsert = z.infer<typeof LinkUpsertSchema>;
+
+/** Reverse lookup: "which risks point at this record?" */
+export const ReverseLinkQuerySchema = z.object({
+  entityType: z.string().min(1).max(64),
+  entityId: z.string().min(1).max(64),
+});
+export type ReverseLinkQuery = z.infer<typeof ReverseLinkQuerySchema>;
+
+/** Typeahead over one linkable record type. */
+export const LinkSearchQuerySchema = z.object({
+  type: z.string().min(1).max(64),
+  q: z.string().min(1).max(200),
+  take: z.coerce.number().int().min(1).max(25).default(10),
+});
+export type LinkSearchQuery = z.infer<typeof LinkSearchQuerySchema>;
+
+// ── Risk profile ────────────────────────────────────────────────────────────
+
+/**
+ * Either one entity (`entityId`) or a page of them (`ids`, comma-separated) —
+ * the batch form is what stops a 200-row list view issuing 200 requests.
+ */
+export const ProfileQuerySchema = z
+  .object({
+    entityType: z.string().min(1).max(64),
+    entityId: z.string().min(1).max(64).optional(),
+    ids: z.string().max(8000).optional(),
+  })
+  .refine((v) => !!v.entityId || !!v.ids, {
+    message: 'Provide entityId for one record, or ids for a batch',
+  });
+export type ProfileQuery = z.infer<typeof ProfileQuerySchema>;
+
+/** "Riskiest N entities of this type" — top-risk panels and phase-6 scheduling. */
+export const ProfileRankQuerySchema = z.object({
+  entityType: z.string().min(1).max(64),
+  take: z.coerce.number().int().min(1).max(100).default(10),
+});
+export type ProfileRankQuery = z.infer<typeof ProfileRankQuerySchema>;
 
 export const HeatmapQuerySchema = z.object({
   registerId: z.string().uuid().optional(),
@@ -268,3 +309,58 @@ export const HeatmapQuerySchema = z.object({
   stage: z.enum(['INITIAL', 'RESIDUAL']).default('RESIDUAL'),
 });
 export type HeatmapQuery = z.infer<typeof HeatmapQuerySchema>;
+
+// ── Risk triggers (§C.4) ────────────────────────────────────────────────────
+
+export const TriggerSchema = z.object({
+  triggerType: z.string().min(1).max(64),
+  triggerId: z.string().min(1).max(64),
+  mode: z.enum(['RISK', 'ASSESSMENT']).optional(),
+  relation: z.string().max(64).optional(),
+  // Matched against the rule's `condition`, e.g. { severity: 'CRITICAL' }.
+  attributes: z.record(z.unknown()).optional(),
+  seed: z.object({
+    title: z.string().min(1).max(300),
+    description: z.string().max(5000).optional().nullable(),
+    hazard: z.string().max(1000).optional().nullable(),
+    cause: z.string().max(2000).optional().nullable(),
+    consequence: z.string().max(2000).optional().nullable(),
+    ownerId: z.string().uuid().optional().nullable(),
+    departmentId: z.string().uuid().optional().nullable(),
+    siteId: z.string().uuid().optional().nullable(),
+  }),
+});
+export type TriggerBody = z.infer<typeof TriggerSchema>;
+
+export const TriggerRuleUpsertSchema = z.object({
+  name: z.string().min(1).max(200),
+  triggerType: z.string().min(1).max(64),
+  condition: z.record(z.unknown()).optional().nullable(),
+  mode: z.enum(['RISK', 'ASSESSMENT']).default('RISK'),
+  registerId: z.string().uuid().optional().nullable(),
+  frameworkId: z.string().uuid().optional().nullable(),
+  categoryId: z.string().uuid().optional().nullable(),
+  autoCreate: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+export type TriggerRuleUpsert = z.infer<typeof TriggerRuleUpsertSchema>;
+
+export const ListTriggerRuleQuerySchema = z.object({
+  triggerType: z.string().max(64).optional(),
+  isActive: z.coerce.boolean().optional(),
+});
+export type ListTriggerRuleQuery = z.infer<typeof ListTriggerRuleQuerySchema>;
+
+// ── Risk appetite (§D.17) ───────────────────────────────────────────────────
+
+export const AppetiteUpsertSchema = z.object({
+  name: z.string().min(1).max(200),
+  organizationId: z.string().uuid().optional().nullable(),
+  siteId: z.string().uuid().optional().nullable(),
+  categoryId: z.string().uuid().optional().nullable(),
+  toleranceRank: z.number().int().min(0).max(100),
+  statement: z.string().max(4000).optional().nullable(),
+  requiresBoardReview: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+});
+export type AppetiteUpsert = z.infer<typeof AppetiteUpsertSchema>;

@@ -13,6 +13,7 @@
  */
 import { prisma } from '../../lib/prisma';
 import { writeTrail } from '../../modules/audit/compliance.service';
+import { onRiskChanged } from '../../modules/risk/risk-profile.service';
 
 export const flagOverdueRiskReviews = async (now = new Date()) => {
   // Risks past their review date that are still live. CLOSED risks keep their
@@ -54,6 +55,12 @@ export const flagOverdueRiskReviews = async (now = new Date()) => {
     where: { reviewedAt: null, overdueAt: null, dueAt: { lt: now } },
     data: { overdueAt: now },
   });
+
+  // A review tipping overdue changes the `overdueReviews` count on every profile
+  // the risk feeds. Nothing else in the system would notice — the risk row is
+  // untouched by this sweep — so the projection has to be refreshed here or the
+  // chips silently under-report until the next unrelated edit.
+  for (const risk of risks) await onRiskChanged(risk.id);
 
   return { risksOverdue: risks.length, reviewsCreated, reviewsFlagged: flagged.count };
 };

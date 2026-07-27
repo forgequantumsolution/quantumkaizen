@@ -17,8 +17,13 @@ import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
 import { recordSignature, writeTrail } from '../audit/compliance.service';
 import { createCapa } from '../audit/capa.service';
+import { onRiskChanged } from './risk-profile.service';
+import { assertTrainingComplete, assignTrainingForControl } from './risk-control-effect.service';
+import { assertApproved, assertWithinAppetite, loadLevelPolicy } from './risk-policy.service';
 import type {
   AcceptRisk,
+  DecideRiskApproval,
+  RequestRiskApproval,
   ControlCreate,
   ControlStatusUpdate,
   ControlUpdate,
@@ -358,6 +363,14 @@ export const createControl = async (riskId: string, body: ControlCreate, userId?
   // Planning a treatment is the point at which a CAPA-requiring level should
   // already have a CAPA behind it. Best-effort; never blocks the response.
   await ensureCapaForRisk(riskId, userId);
+  // A control that names a training course should actually assign that
+  // training — otherwise the link is a note, not a control.
+  await assignTrainingForControl(
+    { id: created.id, controlNumber: created.controlNumber, lmsCourseId: created.lmsCourseId, riskId },
+    userId,
+  );
+  // openControls is part of the profile, so a new control shifts it.
+  await onRiskChanged(riskId);
 
   return serializeControl(created);
 };
@@ -525,6 +538,7 @@ export const updateControlStatus = async (
     await invalidateResidual(existing.riskId, existing.controlNumber, userId);
     await ensureCapaForRisk(existing.riskId, userId);
   }
+  await onRiskChanged(existing.riskId);
 
   return serializeControl(updated);
 };
@@ -541,6 +555,18 @@ export const verifyControl = async (id: string, body: VerifyControl, userId?: st
     throw BadRequest(
       `Only an implemented control can be verified (control is ${existing.status})`,
     );
+  }
+
+  // "We trained everyone" stops being a claim and becomes a number the system
+  // will not let you overstate. Only binds when the risk's level sets
+  // requiresTraining AND the control is an administrative one.
+  if (body.isEffective) {
+    await assertTrainingComplete({
+      controlNumber: existing.controlNumber,
+      hierarchy: existing.hierarchy,
+      lmsCourseId: existing.lmsCourseId,
+      riskId: existing.riskId,
+    });
   }
 
   const status: RiskControlStatus = body.isEffective ? 'VERIFIED' : 'INEFFECTIVE';
@@ -574,6 +600,7 @@ export const verifyControl = async (id: string, body: VerifyControl, userId?: st
     await invalidateResidual(existing.riskId, existing.controlNumber, userId);
     await ensureCapaForRisk(existing.riskId, userId);
   }
+  await onRiskChanged(existing.riskId);
 
   return serializeControl(updated);
 };
@@ -593,6 +620,7 @@ export const deleteControl = async (id: string, userId?: string) => {
     { entityType: 'RiskControl', entityId: id, action: 'DELETE', oldValue: existing.controlNumber },
     userId,
   );
+  await onRiskChanged(existing.riskId);
 };
 
 // ── Residual-risk acceptance ────────────────────────────────────────────────
@@ -636,6 +664,8 @@ export const acceptRisk = async (riskId: string, body: AcceptRisk, userId?: stri
       status: true,
       residualScore: true,
       residualLevelId: true,
+      siteId: true,
+      categoryId: true,
     },
   });
   if (!risk) throw NotFound('Risk not found');
@@ -653,6 +683,23 @@ export const acceptRisk = async (riskId: string, body: AcceptRisk, userId?: stri
   if (level.acceptance === 'UNACCEPTABLE' && !body.benefitRiskRationale?.trim()) {
     throw BadRequest(
       `Residual risk is ${level.label} (UNACCEPTABLE). A benefit-risk rationale is required to accept it (ISO 14971 §8).`,
+    );
+  }
+
+  // Policy gates, evaluated before the signature is taken so a rejected
+  // acceptance never burns a credential or leaves a dangling ESignature row.
+  const policy = await loadLevelPolicy(risk.residualLevelId);
+  if (policy) {
+    // Segregation of duties: someone other than the acceptor must have approved.
+    await assertApproved(riskId, risk.riskNumber, policy, userId);
+    // ISO 31000 §6.3.4 — a risk above the organisation's stated tolerance needs
+    // the review that appetite demands, not just a justification.
+    await assertWithinAppetite(
+      risk.riskNumber,
+      risk.siteId,
+      risk.categoryId,
+      policy.severityRank,
+      !!body.boardReviewReference?.trim(),
     );
   }
 
@@ -700,6 +747,10 @@ export const acceptRisk = async (riskId: string, body: AcceptRisk, userId?: stri
     },
     userId,
   );
+  // Acceptance clears the risk from unacceptableCount — the field the CoA and
+  // batch-release gates key off — so the profile must not lag behind the
+  // signature that authorised it.
+  await onRiskChanged(riskId);
 
   return { ...serializeAcceptance(record), signature };
 };
@@ -712,4 +763,153 @@ export const listAcceptances = async (riskId: string) => {
     orderBy: { acceptedAt: 'desc' },
   });
   return rows.map(serializeAcceptance);
+};
+
+// ── Second-person approval (requiresApproval) ───────────────────────────────
+
+const serializeApproval = (a: {
+  id: string;
+  riskId: string;
+  levelCode: string | null;
+  status: string;
+  requestedById: string | null;
+  requestedAt: Date;
+  decidedById: string | null;
+  decidedAt: Date | null;
+  decision: string | null;
+  comment: string | null;
+  eSignatureId: string | null;
+}) => ({
+  id: a.id,
+  risk_id: a.riskId,
+  level_code: a.levelCode,
+  status: a.status,
+  requested_by_id: a.requestedById,
+  requested_at: a.requestedAt,
+  decided_by_id: a.decidedById,
+  decided_at: a.decidedAt,
+  decision: a.decision,
+  comment: a.comment,
+  e_signature_id: a.eSignatureId,
+});
+
+export const listApprovals = async (riskId: string) => {
+  const risk = await prisma.risk.findUnique({ where: { id: riskId }, select: { id: true } });
+  if (!risk) throw NotFound('Risk not found');
+  const rows = await prisma.riskApproval.findMany({
+    where: { riskId },
+    orderBy: { requestedAt: 'desc' },
+  });
+  return rows.map(serializeApproval);
+};
+
+/**
+ * Open an approval request. Only one may be pending at a time — a second open
+ * request would let two approvers each satisfy the rule independently, which is
+ * exactly the ambiguity segregation of duties exists to remove.
+ */
+export const requestApproval = async (riskId: string, body: RequestRiskApproval, userId?: string) => {
+  const risk = await prisma.risk.findUnique({
+    where: { id: riskId },
+    select: { id: true, riskNumber: true, status: true, residualLevelId: true, initialLevelId: true },
+  });
+  if (!risk) throw NotFound('Risk not found');
+  if (risk.status === 'CLOSED') throw BadRequest('A closed risk does not need approval');
+
+  const pending = await prisma.riskApproval.findFirst({
+    where: { riskId, status: 'PENDING' },
+    select: { id: true },
+  });
+  if (pending) throw Conflict('An approval request is already open on this risk');
+
+  const levelId = risk.residualLevelId ?? risk.initialLevelId;
+  const level = levelId
+    ? await prisma.riskLevelDef.findUnique({ where: { id: levelId }, select: { code: true } })
+    : null;
+
+  const created = await prisma.riskApproval.create({
+    data: {
+      riskId,
+      levelCode: level?.code ?? null,
+      status: 'PENDING',
+      requestedById: userId ?? null,
+      comment: body.comment ?? null,
+    },
+  });
+
+  await writeTrail(
+    {
+      entityType: 'Risk',
+      entityId: riskId,
+      action: 'UPDATE',
+      field: 'approval',
+      newValue: 'PENDING',
+      reason: body.comment ?? `Approval requested for level ${level?.code ?? 'unscored'}`,
+    },
+    userId,
+  );
+  return serializeApproval(created);
+};
+
+/**
+ * Decide an open approval. E-signed, because this is the judgement the
+ * acceptance later leans on — an unsigned approval would weaken the acceptance
+ * signature it is supposed to reinforce.
+ */
+export const decideApproval = async (
+  approvalId: string,
+  body: DecideRiskApproval,
+  userId?: string,
+) => {
+  const existing = await prisma.riskApproval.findUnique({ where: { id: approvalId } });
+  if (!existing) throw NotFound('Approval request not found');
+  if (existing.status !== 'PENDING') {
+    throw Conflict(`This approval has already been ${existing.status.toLowerCase()}`);
+  }
+  if (existing.requestedById && existing.requestedById === userId) {
+    throw BadRequest(
+      'You raised this approval request. A second person must decide it — that is the point of the rule.',
+    );
+  }
+
+  const risk = await prisma.risk.findUnique({
+    where: { id: existing.riskId },
+    select: { riskNumber: true },
+  });
+
+  const signature = await recordSignature(
+    {
+      entity_type: 'Risk',
+      entity_id: existing.riskId,
+      meaning: body.meaning ?? `${body.decision} risk ${risk?.riskNumber ?? existing.riskId}`,
+      credential: body.credential,
+    },
+    userId,
+  );
+
+  const updated = await prisma.riskApproval.update({
+    where: { id: approvalId },
+    data: {
+      status: body.decision,
+      decision: body.decision,
+      decidedById: userId ?? null,
+      decidedAt: new Date(),
+      comment: body.comment ?? existing.comment,
+      eSignatureId: signature.id,
+    },
+  });
+
+  await writeTrail(
+    {
+      entityType: 'Risk',
+      entityId: existing.riskId,
+      action: 'TRANSITION',
+      field: 'approval',
+      oldValue: 'PENDING',
+      newValue: body.decision,
+      reason: body.comment ?? undefined,
+    },
+    userId,
+  );
+  return { ...serializeApproval(updated), signature };
 };

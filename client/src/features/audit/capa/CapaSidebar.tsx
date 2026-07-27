@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { User, Building2, Calendar, Clock, FileText, Link2, ShieldAlert } from 'lucide-react';
 import { Card } from '@/components/ui';
+import RiskLinkPanel from '@/components/risk/RiskLinkPanel';
 import type { Capa } from '@/lib/api/audit';
 
 const fmtDate = (d: string | null | undefined) =>
@@ -64,6 +65,11 @@ export default function CapaSidebar({ capa }: { capa: Capa }) {
           )}
         </div>
       </Card>
+
+      {/* The reverse view of the auto-CAPA path: a CAPA raised because a risk
+          resolved to a CAPA-requiring level had, until now, no way to say so —
+          the link existed only on the risk. Self-hides for standalone CAPAs. */}
+      <RiskLinkPanel entityType="Capa" entityId={capa.id} title="Source risks" />
 
       <Card>
         <h3 className="mb-3 text-sm font-semibold text-gray-900">Key Dates</h3>

@@ -13,6 +13,8 @@ import * as library from './risk-library.service';
 import type {
   AcceptRisk,
   CompleteReview,
+  DecideRiskApproval,
+  RequestRiskApproval,
   ControlCreate,
   ControlLibraryUpsert,
   ControlStatusUpdate,
@@ -180,3 +182,14 @@ export const deleteControlLibraryItem = async (req: Request, res: Response) => {
   await library.deleteControlLibraryItem(req.params.id as string, actor(req));
   return success(res, 'Control library item deleted');
 };
+
+// ── Second-person approval ──────────────────────────────────────────────────
+
+export const listApprovals = async (req: Request, res: Response) =>
+  ok(res, await controls.listApprovals(req.params.id as string));
+
+export const requestApproval = async (req: Request, res: Response) =>
+  success(res, 'Approval requested', await controls.requestApproval(req.params.id as string, req.body as RequestRiskApproval, actor(req)), 201);
+
+export const decideApproval = async (req: Request, res: Response) =>
+  success(res, 'Approval decision recorded', await controls.decideApproval(req.params.id as string, req.body as DecideRiskApproval, actor(req)));

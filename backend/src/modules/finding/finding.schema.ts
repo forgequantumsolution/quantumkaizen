@@ -36,7 +36,7 @@ export const ListFindingQuerySchema = z.object({
 
 // Raise a child ticket (CAPA or Deviation) from a finding.
 export const RaiseChildSchema = z.object({
-  child_type: z.enum(['CAPA', 'DEVIATION']),
+  child_type: z.enum(['CAPA', 'DEVIATION', 'RISK']),
   title: z.string().min(1).max(300).optional(),
   description: z.string().max(4000).optional().nullable(),
   owner_id: z.string().optional().nullable(),

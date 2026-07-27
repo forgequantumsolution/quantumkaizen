@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { NotFound, BadRequest } from '../../lib/httpError';
 import { createCapa } from '../audit/capa.service';
+import { createRiskFromTrigger } from '../risk/risk-trigger.service';
 import { spawnChild } from '../ticket/ticket.service';
 import type {
   FindingUpsertInput,
@@ -186,6 +187,8 @@ export const raiseChild = async (
       findingNumber: true,
       title: true,
       description: true,
+      recommendation: true,
+      severity: true,
       sourceTicketId: true,
     },
   });
@@ -193,6 +196,31 @@ export const raiseChild = async (
 
   const title = input.title?.trim() || `${finding.findingNumber} — ${finding.title}`;
   const description = input.description ?? finding.description;
+
+  if (input.child_type === 'RISK') {
+    // A finding states that a control failed; the risk that control existed to
+    // manage is what survives it. Routing (register, framework, category) comes
+    // from the configured RiskTriggerRule, matched on severity, so different
+    // sites can send a MAJOR somewhere different from a CRITICAL.
+    const result = await createRiskFromTrigger(
+      {
+        triggerType: 'Finding',
+        triggerId: finding.id,
+        attributes: { severity: finding.severity },
+        relation: 'CAUSED_BY',
+        seed: {
+          title,
+          description,
+          cause: finding.description,
+          consequence: finding.recommendation ?? null,
+          ownerId: input.owner_id ?? null,
+          departmentId: input.department_id ?? null,
+        },
+      },
+      userId,
+    );
+    return { child_type: 'RISK', risk: result };
+  }
 
   if (input.child_type === 'CAPA') {
     // Rich path: first-class Capa + its spawned CAPA workflow ticket, nested

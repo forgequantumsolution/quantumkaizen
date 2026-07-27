@@ -76,4 +76,11 @@ export interface PerformActionPayloadWithApproval extends PerformActionPayload {
    */
   approvalDecision?: 'APPROVED' | 'REJECTED';
   approvalComment?: string;
+  /**
+   * Bypass a risk stage-gate that permits overriding (ActionCriteria.config
+   * `allowOverride`). The caller must have verified `risk.override_gate` and
+   * captured an e-signature first — the engine only honours the flag, it does
+   * not authorise it.
+   */
+  riskGateOverride?: boolean;
 }

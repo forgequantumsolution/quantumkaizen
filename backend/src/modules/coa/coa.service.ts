@@ -9,6 +9,7 @@ import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound } from '../../lib/httpError';
 import { writeTrail, recordSignature } from '../audit/compliance.service';
 import type { CoaTemplateUpsertInput, GenerateCoaInput, IssueCoaInput, RevokeCoaInput, ListCoaQuery, ListTemplateQuery } from './coa.schema';
+import { assertReleasable } from '../risk/risk-gate.service';
 
 // ── templates ─────────────────────────────────────────────────────────────────
 const nextTemplateCode = async () => `COAT-${String((await prisma.coaTemplate.count()) + 1).padStart(3, '0')}`;
@@ -105,6 +106,25 @@ export const issueCoa = async (id: string, input: IssueCoaInput, userId?: string
   const c = await prisma.coa.findFirst({ where: { id, isDeleted: false } });
   if (!c) throw NotFound('Certificate not found');
   if (c.status !== 'DRAFT') throw BadRequest('Only draft certificates can be issued');
+
+  // Certifying a batch whose product-quality risk is unresolved is the exact
+  // failure mode ICH Q9 exists to prevent and EU GMP Annex 16 asks the QP to
+  // confirm has not happened. Checked before the signature so a refused
+  // issuance never burns a credential.
+  const sample = c.sampleId
+    ? await prisma.sample.findUnique({ where: { id: c.sampleId }, select: { productId: true, supplierId: true } })
+    : null;
+  await assertReleasable(
+    [
+      { entityType: 'Coa', entityId: id },
+      ...(c.sampleId ? [{ entityType: 'Sample', entityId: c.sampleId }] : []),
+      ...(sample?.productId ? [{ entityType: 'Product', entityId: sample.productId }] : []),
+      ...(sample?.supplierId ? [{ entityType: 'Supplier', entityId: sample.supplierId }] : []),
+    ],
+    { label: `Certificate ${c.coaNumber}`, entityType: 'Coa', entityId: id },
+    { overridden: input.riskGateOverride, overrideReason: input.riskOverrideReason, userId },
+  );
+
   if (input.credential) await recordSignature({ entity_type: 'Coa', entity_id: id, meaning: 'CoA issued', credential: input.credential }, userId);
   const token = randomUUID().replace(/-/g, '');
   const u = await prisma.coa.update({ where: { id }, data: { status: 'ISSUED', verifyToken: token, issuedById: userId ?? null, issuedAt: new Date() } });

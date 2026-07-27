@@ -10,6 +10,7 @@ import { writeTrail, recordSignature } from '../audit/compliance.service';
 import { createCapa } from '../audit/capa.service';
 import { raiseTicket as engineRaiseTicket } from '../workflow/engine/orchestrator';
 import type { OpenInvestigationInput, UpdateInvestigationInput, AdvancePhaseInput, CloseInvestigationInput, CreateCapaFromOosInput, ListInvestigationQuery } from './oos.schema';
+import { maybeAutoTrigger } from '../risk/risk-trigger.service';
 
 const PHASES = ['PHASE_1A', 'PHASE_1B', 'PHASE_2', 'CLOSED'];
 
@@ -264,5 +265,25 @@ export const closeInvestigation = async (id: string, input: CloseInvestigationIn
     data: { status: 'CLOSED', phase: 'CLOSED', classification: input.classification, conclusion: input.conclusion ?? o.conclusion, capaId: input.capa_id ?? o.capaId, closedById: userId ?? null, closedAt: new Date() },
   });
   await writeTrail({ entityType: 'OosInvestigation', entityId: id, action: 'TRANSITION', field: 'classification', newValue: input.classification, reason: input.conclusion ?? undefined }, userId);
+
+  // A confirmed OOS is a product-quality risk by definition — the one inbound
+  // trigger the plan recommends shipping with autoCreate on. Whether it fires
+  // is still a configured RiskTriggerRule, not a hardcoded decision, and it is
+  // best-effort: the closure is the record of truth, the risk is derived.
+  await maybeAutoTrigger(
+    {
+      triggerType: 'OosInvestigation',
+      triggerId: id,
+      attributes: { classification: input.classification },
+      relation: 'CAUSED_BY',
+      seed: {
+        title: `${o.code} — ${o.title}`,
+        description: input.conclusion ?? o.conclusion ?? null,
+        cause: o.hypothesis ?? null,
+        consequence: o.investigationSummary ?? null,
+      },
+    },
+    userId,
+  );
   return serialize(u);
 };

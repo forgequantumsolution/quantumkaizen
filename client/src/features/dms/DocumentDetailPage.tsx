@@ -19,6 +19,8 @@ import {
 } from '@/lib/api/dms';
 import RichTextEditor from './RichTextEditor';
 import EntityAuditTrail from '@/components/shared/EntityAuditTrail';
+import RiskLinkPanel from '@/components/risk/RiskLinkPanel';
+import RiskProfileChip from '@/components/risk/RiskProfileChip';
 import DocFileViewer from './DocFileViewer';
 import DocStatusBadge from './DocStatusBadge';
 import AcknowledgementPanel from './AcknowledgementPanel';
@@ -151,6 +153,8 @@ export default function DocumentDetailPage() {
           <span className="text-gray-300">·</span>
           <span className="font-mono text-sm text-gray-700">{doc.doc_number}</span>
           <DocStatusBadge status={doc.status} />
+          {/* Self-hiding: only documents carrying linked risk show a chip. */}
+          <RiskProfileChip entityType="Document" entityId={doc.id} showCount />
         </div>
         <div className="flex items-center gap-2">
           {view?.content_type === 'EDITOR' && view?.content && (
@@ -243,6 +247,11 @@ export default function DocumentDetailPage() {
 
       {/* Controlled distribution — read & understood (effective docs only) */}
       {doc.status === 'EFFECTIVE' && <AcknowledgementPanel documentId={doc.id} canAssign={canIssue} />}
+
+      {/* Risks this document is linked to. Self-hiding when there are none, so
+          documents outside the risk chain are unaffected. */}
+      <RiskLinkPanel entityType="Document" entityId={doc.id} className="mb-4" />
+
 
       {/* Content viewer */}
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-4">

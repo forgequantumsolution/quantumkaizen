@@ -3,6 +3,7 @@ import type { StageType } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../../lib/httpError';
 import { assertCanPerformAction } from './access.layer';
+import { assertRiskCriteria, isRiskCriteriaKind } from '../../../lib/stage-criteria/risk-criteria';
 import {
   closeStageTracking,
   openStageTracking,
@@ -323,6 +324,8 @@ export const performAction = async (
       where: { id: ticketId },
       select: {
         id: true,
+        // Human reference, so a blocked transition can name the ticket.
+        uniqueId: true,
         isDeleted: true,
         isOnHold: true,
         customFields: true,
@@ -352,6 +355,9 @@ export const performAction = async (
         workflowAction: { select: { behavior: true, name: true } },
         allowedRoles: { select: { id: true } },
         allowedUsers: { select: { id: true } },
+        // Evaluable stage criteria (risk gate). `kind` is null on every
+        // pre-existing criterion, which the evaluator treats as a pass.
+        criteria: { select: { id: true, name: true, kind: true, config: true, isDeleted: true } },
       },
     });
     if (!action || action.isDeleted) throw NotFound('Action not found');
@@ -364,6 +370,22 @@ export const performAction = async (
     }
 
     await assertCanPerformAction(tx, action, actor.id);
+
+    // ── Risk gate ─────────────────────────────────────────────────────────
+    // Evaluated after access and BEFORE the approval intercept: a change that
+    // has not had its risk assessed must not consume an approval decision on
+    // the way to being refused. Only criteria carrying a `kind` block; the
+    // label-only rows every workflow already has are inert.
+    if (action.criteria && !action.criteria.isDeleted && isRiskCriteriaKind(action.criteria.kind)) {
+      await assertRiskCriteria(
+        tx,
+        action.criteria.kind,
+        action.criteria.config,
+        ticket.id,
+        ticket.uniqueId,
+        { overridden: payload.riskGateOverride === true },
+      );
+    }
 
     // ── Phase 3 approval intercept ────────────────────────────────────────
     // If this (stage, action) has a policy, route through approval.layer.
