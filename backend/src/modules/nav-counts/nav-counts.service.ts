@@ -13,12 +13,39 @@ export interface NavCounts {
   oos: number;
   /** open CAPA records (not CLOSED/CANCELLED) */
   capa: number;
+  /**
+   * Risks needing attention: an overdue periodic review, or an unaccepted risk
+   * sitting at an UNACCEPTABLE level. Deliberately not "all open risks" — a
+   * badge showing the size of the register is noise, whereas both of these are
+   * things somebody has to act on.
+   */
+  risk: number;
 }
 
 export async function navCounts(): Promise<NavCounts> {
-  const [oos, capa, flowGroups] = await Promise.all([
+  // Risk level ids are plain scalars on Risk (the module keeps FKs only for
+  // register/framework/category), so the unacceptable bands are resolved first
+  // rather than joined through.
+  const unacceptableLevelIds = (
+    await prisma.riskLevelDef.findMany({ where: { acceptance: 'UNACCEPTABLE' }, select: { id: true } })
+  ).map((l) => l.id);
+
+  const [oos, capa, riskCount, flowGroups] = await Promise.all([
     prisma.oosInvestigation.count({ where: { status: { not: 'CLOSED' } } }),
     prisma.capa.count({ where: { status: { notIn: [CapaStatus.CLOSED, CapaStatus.CANCELLED] } } }),
+    // One query, not two: a risk that is both overdue and unaccepted must count
+    // once, or the badge overstates the work.
+    prisma.risk.count({
+      where: {
+        status: { not: 'CLOSED' },
+        OR: [
+          { nextReviewAt: { lt: new Date() } },
+          ...(unacceptableLevelIds.length
+            ? [{ acceptedAt: null, residualLevelId: { in: unacceptableLevelIds } }]
+            : []),
+        ],
+      },
+    }),
     // Open work lives on TicketFlow (isCompleted = false); the workflow type is
     // two hops away (TicketFlow → Workflow.typeId), so group by workflow then map.
     prisma.ticketFlow.groupBy({
@@ -43,5 +70,5 @@ export async function navCounts(): Promise<NavCounts> {
     if (typeId) workflowTypes[typeId] = (workflowTypes[typeId] ?? 0) + g._count._all;
   }
 
-  return { workflowTypes, oos, capa };
+  return { workflowTypes, oos, capa, risk: riskCount };
 }

@@ -9,6 +9,8 @@ import { BadRequest } from '../../lib/httpError';
 import * as svc from './risk.service';
 import * as cfg from './risk-framework.service';
 import * as profiles from './risk-profile.service';
+import * as triggers from './risk-trigger.service';
+import * as appetite from './risk-appetite.service';
 import type {
   CategoryUpsert,
   FrameworkUpsert,
@@ -19,8 +21,12 @@ import type {
   ListFrameworkQuery,
   ListRegisterQuery,
   ListRiskQuery,
+  AppetiteUpsert,
+  ListTriggerRuleQuery,
   ProfileQuery,
   ProfileRankQuery,
+  TriggerBody,
+  TriggerRuleUpsert,
   RegisterUpsert,
   ReverseLinkQuery,
   RiskCreate,
@@ -166,3 +172,39 @@ export const getHeatmap = async (req: Request, res: Response) =>
 
 export const getSummary = async (req: Request, res: Response) =>
   ok(res, await svc.getSummary(req.query as unknown as HeatmapQuery));
+
+// ── Triggers ────────────────────────────────────────────────────────────────
+
+export const runTrigger = async (req: Request, res: Response) => {
+  const b = req.body as TriggerBody;
+  return success(res, 'Risk work raised', await triggers.createRiskFromTrigger(b, actor(req)), 201);
+};
+
+export const listTriggerRules = async (req: Request, res: Response) =>
+  ok(res, await triggers.listTriggerRules(req.query as unknown as ListTriggerRuleQuery));
+
+export const createTriggerRule = async (req: Request, res: Response) =>
+  success(res, 'Trigger rule created', await triggers.createTriggerRule(req.body as TriggerRuleUpsert, actor(req)), 201);
+
+export const updateTriggerRule = async (req: Request, res: Response) =>
+  success(res, 'Trigger rule updated', await triggers.updateTriggerRule(req.params.id as string, req.body as TriggerRuleUpsert, actor(req)));
+
+export const deleteTriggerRule = async (req: Request, res: Response) => {
+  await triggers.deleteTriggerRule(req.params.id as string, actor(req));
+  return success(res, 'Trigger rule deleted');
+};
+
+// ── Risk appetite ───────────────────────────────────────────────────────────
+
+export const listAppetites = async (_req: Request, res: Response) => ok(res, await appetite.listAppetites());
+
+export const createAppetite = async (req: Request, res: Response) =>
+  success(res, 'Risk appetite created', await appetite.createAppetite(req.body as AppetiteUpsert, actor(req)), 201);
+
+export const updateAppetite = async (req: Request, res: Response) =>
+  success(res, 'Risk appetite updated', await appetite.updateAppetite(req.params.id as string, req.body as AppetiteUpsert, actor(req)));
+
+export const deleteAppetite = async (req: Request, res: Response) => {
+  await appetite.deleteAppetite(req.params.id as string, actor(req));
+  return success(res, 'Risk appetite deleted');
+};

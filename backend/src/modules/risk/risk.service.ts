@@ -23,6 +23,7 @@ import {
 } from '../../lib/risk-entity-registry';
 import { getEffectivePermissionKeys } from '../../middleware/permissions';
 import { onLinkChanged, onRiskChanged } from './risk-profile.service';
+import { assertControlsInPlace, escalateRisk, loadLevelPolicy } from './risk-policy.service';
 import type {
   LinkUpsert,
   LinkSearchQuery,
@@ -227,7 +228,19 @@ type RiskRow = Prisma.RiskGetPayload<{ include: typeof riskInclude }>;
 
 // Level ids are stored on the risk; the labels/colors the UI needs live on the
 // framework. Resolved in one lookup per request rather than per row.
-type LevelLookup = Map<string, { code: string; label: string; color: string; acceptance: string }>;
+type LevelLookup = Map<
+  string,
+  {
+    code: string;
+    label: string;
+    color: string;
+    acceptance: string;
+    requires_approval: boolean;
+    requires_control: boolean;
+    requires_capa: boolean;
+    requires_training: boolean;
+  }
+>;
 
 /**
  * Serialize one link.
@@ -324,9 +337,28 @@ const levelLookupFor = async (rows: RiskRow[]): Promise<LevelLookup> => {
   if (ids.size === 0) return new Map();
   const levels = await prisma.riskLevelDef.findMany({
     where: { id: { in: [...ids] } },
-    select: { id: true, code: true, label: true, color: true, acceptance: true },
+    // The policy flags travel with the level so the client can tell whether a
+    // risk needs approval or training without a second round trip per risk.
+    select: {
+      id: true, code: true, label: true, color: true, acceptance: true,
+      requiresApproval: true, requiresControl: true, requiresCapa: true, requiresTraining: true,
+    },
   });
-  return new Map(levels.map((l) => [l.id, { code: l.code, label: l.label, color: l.color, acceptance: l.acceptance }]));
+  return new Map(
+    levels.map((l) => [
+      l.id,
+      {
+        code: l.code,
+        label: l.label,
+        color: l.color,
+        acceptance: l.acceptance,
+        requires_approval: l.requiresApproval,
+        requires_control: l.requiresControl,
+        requires_capa: l.requiresCapa,
+        requires_training: l.requiresTraining,
+      },
+    ]),
+  );
 };
 
 /**
@@ -431,6 +463,14 @@ export const scoreRisk = async (id: string, body: ScoreRisk, userId?: string) =>
   const { scoring } = await loadScoringFramework(frameworkId);
   const result = computeScore(scoring, body.factors);
 
+  // A residual score asserts "this is the risk AFTER controls". Recording one
+  // against a level that demands controls, when none are in place, states
+  // something untrue — so it is refused, not warned about. Checked before any
+  // write so a rejected score leaves no snapshot behind.
+  if (body.stage === 'RESIDUAL') {
+    await assertControlsInPlace(id, risk.riskNumber, result.level);
+  }
+
   const data: Prisma.RiskUpdateInput = { framework: { connect: { id: frameworkId } } };
   if (body.stage === 'INITIAL') {
     data.initialFactors = result.factors;
@@ -489,6 +529,15 @@ export const scoreRisk = async (id: string, body: ScoreRisk, userId?: string) =>
   // own errors, so a CAPA-side failure can never fail the score write.
   if (result.level.requiresCapa) {
     await ensureCapaForRisk(id, userId);
+  }
+
+  // Tell the level's responsible role it has landed on their desk. Best-effort,
+  // for the same reason auto-CAPA is: a notification must never roll back a
+  // signed score.
+  const policy = await loadLevelPolicy(result.level.id);
+  if (policy?.escalateToRoleId) {
+    const full = await prisma.risk.findUnique({ where: { id }, select: { title: true } });
+    await escalateRisk(id, risk.riskNumber, full?.title ?? risk.riskNumber, policy, userId);
   }
 
   // A new level is the main thing every risk chip in the platform reflects.

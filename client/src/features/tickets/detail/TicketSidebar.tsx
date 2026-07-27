@@ -13,6 +13,8 @@ import { Card } from '@/components/ui';
 import type { TicketDetail } from '@/lib/api/ticket';
 import { useTicketChildren } from '@/lib/api/finding';
 import AssigneeCard from './AssigneeCard';
+import RiskLinkPanel from '@/components/risk/RiskLinkPanel';
+import AssessRiskButton from '@/components/risk/AssessRiskButton';
 
 // Child records (CAPA / Deviation raised from this ticket's findings), nested
 // under the parent. One level deep — click a child to see its own children.
@@ -100,6 +102,25 @@ export default function TicketSidebar({
   return (
     <div className="space-y-4">
       <AssigneeCard ticket={ticket} canUpdate={canUpdate} />
+
+      {/* Risk. Change Control, Deviation and every other workflow type gets the
+          same treatment: the risks bearing on this ticket, and a way to raise
+          one. The panel hides itself when nothing is linked. A workflow whose
+          approval stage carries a risk criterion will refuse to advance until
+          the assessment raised here is approved. */}
+      <RiskLinkPanel entityType="Ticket" entityId={ticket.id} title="Risk" />
+      {canUpdate && (
+        <AssessRiskButton
+          entityType="Ticket"
+          entityId={ticket.id}
+          defaultTitle={`${ticket.uniqueId} — ${ticket.title}`}
+          defaultDescription={ticket.description ?? null}
+          attributes={{ classification: ticket.classification ?? null }}
+          relation="APPLIES_TO"
+          block
+          size="middle"
+        />
+      )}
 
       <Card>
         <h3 className="mb-3 text-sm font-semibold text-gray-900">Metadata</h3>

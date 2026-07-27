@@ -125,8 +125,28 @@ export const AcceptRiskSchema = z.object({
   // signer's enrolled signature PIN, else their account password.
   credential: z.string().min(1, 'Signature credential is required'),
   meaning: z.string().max(200).optional(),
+  // Reference to the board / management review that authorised accepting a risk
+  // above the organisation's stated appetite (ISO 31000 §6.3.4). Only demanded
+  // when an active RiskAppetite marks this risk out of tolerance AND sets
+  // requiresBoardReview.
+  boardReviewReference: z.string().max(300).optional().nullable(),
 });
 export type AcceptRisk = z.infer<typeof AcceptRiskSchema>;
+
+// ── Second-person approval (requiresApproval) ───────────────────────────────
+
+export const RequestRiskApprovalSchema = z.object({
+  comment: z.string().max(2000).optional().nullable(),
+});
+export type RequestRiskApproval = z.infer<typeof RequestRiskApprovalSchema>;
+
+export const DecideRiskApprovalSchema = z.object({
+  decision: z.enum(['APPROVED', 'REJECTED']),
+  comment: z.string().max(2000).optional().nullable(),
+  credential: z.string().min(1, 'Signature credential is required'),
+  meaning: z.string().max(200).optional(),
+});
+export type DecideRiskApproval = z.infer<typeof DecideRiskApprovalSchema>;
 
 // ── Libraries ───────────────────────────────────────────────────────────────
 

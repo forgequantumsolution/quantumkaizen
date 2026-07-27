@@ -277,6 +277,18 @@ export const recomputeProfile = async (entityType: string, entityId: string): Pr
     create: { entityType, entityId, ...data },
     update: data,
   });
+
+  // Suppliers additionally carry a denormalised tier, because incoming
+  // sampling, requalification frequency and the supplier list all want it
+  // without joining through here. Imported lazily to keep this module free of a
+  // cycle (risk-gate reads profiles).
+  if (entityType === 'Supplier') {
+    const { syncSupplierTier } = await import('./risk-gate.service');
+    await syncSupplierTier(entityId).catch((e) =>
+      // eslint-disable-next-line no-console
+      console.error(`[risk-profile] supplier tier sync failed for ${entityId}:`, e instanceof Error ? e.message : e),
+    );
+  }
 };
 
 /**

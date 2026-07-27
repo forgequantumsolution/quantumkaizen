@@ -101,6 +101,7 @@ import {
   type ScoreStage,
 } from '@/lib/api/risk';
 import { ControlStatusBadge, RiskLevelBadge, RiskStatusBadge } from './riskStatusBadge';
+import RiskApprovalPanel from './RiskApprovalPanel';
 
 const RISK_STATUSES = Object.keys(RISK_STATUS_LABELS) as RiskStatus[];
 const CONTROL_TYPES = Object.keys(CONTROL_TYPE_LABELS) as ControlType[];
@@ -338,7 +339,17 @@ export default function RiskDetailPage() {
         </div>
       </Card>
 
-      {tab === 'overview' && <OverviewTab risk={risk} canUpdate={canUpdate} />}
+      {tab === 'overview' && (
+        <div className="space-y-4">
+          <OverviewTab risk={risk} canUpdate={canUpdate} />
+          {/* Segregation of duties. Self-hides unless the level demands approval
+              or one has already been requested. */}
+          <RiskApprovalPanel
+            riskId={risk.id}
+            requiresApproval={!!(risk.residual_level ?? risk.initial_level)?.requires_approval}
+          />
+        </div>
+      )}
       {tab === 'scoring' && (
         <ScoringTab risk={risk} framework={framework} history={history} canUpdate={canUpdate} />
       )}

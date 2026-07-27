@@ -266,13 +266,86 @@ const main = async () => {
     );
   }
 
+  // ── 6. Trigger rules + risk appetite (phases 4 and 12) ───────────────────
+  // Only the confirmed-OOS rule ships with autoCreate on. Everything else
+  // surfaces an "Assess risk" button, so a customer opts in per site rather
+  // than discovering their register filling itself.
+  const defaultRegister = await prisma.riskRegister.findFirst({
+    where: { isActive: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  const RULES = [
+    {
+      name: 'Confirmed OOS → product risk',
+      triggerType: 'OosInvestigation',
+      condition: { classification: ['CONFIRMED_OOS'] },
+      mode: 'RISK',
+      autoCreate: true,
+    },
+    { name: 'Major or critical finding → risk', triggerType: 'Finding',
+      condition: { severity: ['MAJOR', 'CRITICAL'] }, mode: 'RISK', autoCreate: false },
+    { name: 'Change ticket → risk assessment', triggerType: 'Ticket',
+      condition: null, mode: 'ASSESSMENT', autoCreate: false },
+    { name: 'CAPA → risk', triggerType: 'Capa', condition: null, mode: 'RISK', autoCreate: false },
+  ];
+
+  let rulesCreated = 0;
+  for (const r of RULES) {
+    const existing = await prisma.riskTriggerRule.findFirst({
+      where: { name: r.name },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await prisma.riskTriggerRule.create({
+      data: {
+        name: r.name,
+        triggerType: r.triggerType,
+        condition: r.condition ?? undefined,
+        mode: r.mode,
+        registerId: defaultRegister?.id ?? null,
+        autoCreate: r.autoCreate,
+        isActive: true,
+      },
+    });
+    rulesCreated += 1;
+  }
+  console.log(`trigger rules: ${rulesCreated} created, ${RULES.length - rulesCreated} already present`);
+
+  const APPETITE = {
+    name: 'Organisation-wide tolerance',
+    toleranceRank: 55,
+    statement:
+      'Risks in the ALARP band are tolerated where controls are verified and reviewed on cadence. ' +
+      'Anything resolving above that requires management review before it may be accepted.',
+    requiresBoardReview: true,
+  };
+  const hasAppetite = await prisma.riskAppetite.findFirst({
+    where: { name: APPETITE.name },
+    select: { id: true },
+  });
+  if (!hasAppetite) {
+    await prisma.riskAppetite.create({ data: { ...APPETITE, isActive: true } });
+  }
+  console.log(`appetite:      ${hasAppetite ? 'already present' : 'created'} (tolerance rank ${APPETITE.toleranceRank})`);
+
+  const overAppetite = await prisma.riskProfile.count({
+    where: { severityRank: { gt: APPETITE.toleranceRank } },
+  });
+  console.log(`               ${overAppetite} record(s) currently carry risk above that tolerance`);
+
   console.log('\nWhere to see it\n' + '─'.repeat(64));
   console.log('  /dms/…              risk chip in the header + "Linked risks" card');
   console.log('  /audit/capa/…       "Source risks" in the sidebar');
   console.log('  /lims/equipment     new Risk column (one batched request per page)');
   console.log('  /lims/suppliers     three suppliers, two carrying live risk');
   console.log('  /risk/risks/…       Links tab — every link clickable, none a bare UUID');
-  console.log('  GET /api/risk/profile?entityType=Supplier&entityId=…\n');
+  console.log('  /lims/suppliers     tier derived from risk (LOW…CRITICAL)');
+  console.log('  /tickets/…          Risk panel + "Assess risk" on any workflow ticket');
+  console.log('  /lims/oos/…         closing as CONFIRMED_OOS auto-raises a product risk');
+  console.log('  GET /api/risk/profile?entityType=Supplier&entityId=…');
+  console.log('  GET /api/risk/trigger-rules   •   GET /api/risk/appetite\n');
 };
 
 main()

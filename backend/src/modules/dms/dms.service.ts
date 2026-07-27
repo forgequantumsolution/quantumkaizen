@@ -14,6 +14,10 @@ import { BadRequest, NotFound } from '../../lib/httpError';
 import { writeTrail, recordSignature } from '../audit/compliance.service';
 import { completeForDocument } from '../training/training.service';
 import { completeDocAckForDocument } from '../lms/lms-learn.service';
+import {
+  assertDocumentRetirable,
+  openReviewsForDocumentRevision,
+} from '../risk/risk-control-effect.service';
 import type {
   ApproveInput,
   AssignReadersInput,
@@ -279,6 +283,9 @@ export const reviseDocument = async (id: string, input: ReviseInput, userId?: st
     { entityType: 'Document', entityId: id, action: 'UPDATE', field: 'revision', newValue: `${next}.0` },
     userId,
   );
+  // The revised document is not the one the control was verified against, so
+  // every risk it controls goes back into review. Best-effort by design.
+  await openReviewsForDocumentRevision(id, d.docNumber, userId);
   return getDocument(id);
 };
 
@@ -382,6 +389,10 @@ export const rejectDocument = async (id: string, input: RejectInput, userId?: st
 
 export const retireDocument = async (id: string, userId?: string) => {
   const d = await getDocRow(id);
+  // A document that still executes a risk control cannot simply disappear: the
+  // residual score of every risk it serves assumes it exists. Blocks with the
+  // control and risk numbers named.
+  await assertDocumentRetirable(id, d.docNumber);
   await prisma.document.update({ where: { id }, data: { status: 'RETIRED' } });
   await writeTrail(
     { entityType: 'Document', entityId: id, action: 'TRANSITION', field: 'status', oldValue: d.status, newValue: 'RETIRED' },

@@ -15,6 +15,8 @@ import { asyncHandler } from '../../lib/asyncHandler';
 import * as ctrl from './risk-control.controller';
 import {
   AcceptRiskSchema,
+  DecideRiskApprovalSchema,
+  RequestRiskApprovalSchema,
   CompleteReviewSchema,
   ControlCreateSchema,
   ControlIdParamSchema,
@@ -65,6 +67,13 @@ router.post('/reviews/:id/complete', requirePermission('risk_review.update'), va
 
 // ── Residual-risk acceptance ────────────────────────────────────────────────
 router.get('/risks/:id/acceptances', requirePermission('risk.read'), validate(ControlIdParamSchema, 'params'), asyncHandler(ctrl.listAcceptances));
+// ── Second-person approval (requiresApproval) ───────────────────────────────
+router.get('/risks/:id/approvals', requirePermission('risk.read'), validate(ControlIdParamSchema, 'params'), asyncHandler(ctrl.listApprovals));
+router.post('/risks/:id/approvals', requirePermission('risk.update'), validate(ControlIdParamSchema, 'params'), validate(RequestRiskApprovalSchema), asyncHandler(ctrl.requestApproval));
+// Deciding is gated on risk.accept, not risk.update: approving is the same
+// class of authority as accepting, and must not be handed to every editor.
+router.post('/approvals/:id/decide', requirePermission('risk.accept'), validate(ControlIdParamSchema, 'params'), validate(DecideRiskApprovalSchema), asyncHandler(ctrl.decideApproval));
+
 router.post('/risks/:id/accept', requirePermission('risk.accept'), validate(ControlIdParamSchema, 'params'), validate(AcceptRiskSchema), asyncHandler(ctrl.acceptRisk));
 
 export default router;

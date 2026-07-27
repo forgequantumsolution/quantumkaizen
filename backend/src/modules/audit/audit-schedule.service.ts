@@ -8,6 +8,62 @@ import type {
   ListScheduleRuleQuery,
 } from './audit.schema';
 
+/**
+ * Risk-based audit programme planning (ISO 19011 §5.3).
+ *
+ * A fixed annual cadence audits a critical supplier and a dormant one at the
+ * same rate, which is the thing the standard specifically tells you not to do.
+ * When a rule opts in, the base interval is stretched or compressed by the
+ * residual risk the named entity actually carries, clamped to the rule's own
+ * bounds so a risk spike can never produce a nonsensical cadence.
+ *
+ * The multipliers key off `RiskProfile.severityRank`, the normalised 0-100
+ * severity — not a level code — so one table works across every framework.
+ * Returns the base date unchanged when the rule is not risk-weighted, has no
+ * profile, or the entity carries no scored risk: absence of risk data must
+ * never silently change a validated audit schedule.
+ */
+const riskMultiplier = (severityRank: number | null): number => {
+  if (severityRank === null) return 1;
+  if (severityRank >= 80) return 0.5;  // unacceptable band → audit twice as often
+  if (severityRank >= 50) return 0.75; // upper ALARP — same boundary as tier HIGH
+  if (severityRank >= 40) return 1;    // ALARP → base cadence
+  return 1.5;                          // acceptable → stretch, within bounds
+};
+
+export const riskWeightedNextRun = async (
+  rule: {
+    riskWeighted: boolean;
+    riskEntityType: string | null;
+    riskEntityId: string | null;
+    minFrequencyDays: number | null;
+    maxFrequencyDays: number | null;
+  },
+  from: Date,
+  base: Date | null,
+): Promise<Date | null> => {
+  if (!base || !rule.riskWeighted || !rule.riskEntityType || !rule.riskEntityId) return base;
+
+  const profile = await prisma.riskProfile.findUnique({
+    where: {
+      entityType_entityId: { entityType: rule.riskEntityType, entityId: rule.riskEntityId },
+    },
+    select: { severityRank: true },
+  });
+  const multiplier = riskMultiplier(profile?.severityRank ?? null);
+
+  const baseDays = Math.round((base.getTime() - from.getTime()) / 86_400_000);
+  if (baseDays <= 0) return base;
+
+  let days = Math.round(baseDays * multiplier);
+  if (rule.minFrequencyDays !== null) days = Math.max(days, rule.minFrequencyDays);
+  if (rule.maxFrequencyDays !== null) days = Math.min(days, rule.maxFrequencyDays);
+
+  const next = new Date(from);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
 // Advance a date by one period of the given frequency. ONE_TIME returns null
 // (the rule is deactivated after it fires once).
 export const advanceDate = (from: Date, freq: AuditFrequency): Date | null => {
@@ -200,7 +256,10 @@ const spawnFromRule = async (rule: DueScheduleRule, now: Date): Promise<SpawnEnt
         },
       });
 
-      const next = advanceDate(rule.nextRunAt, rule.frequency);
+      const baseNext = advanceDate(rule.nextRunAt, rule.frequency);
+      // Risk-weighted rules stretch or compress the cadence; everything else
+      // keeps the exact interval it has always had.
+      const next = await riskWeightedNextRun(rule, rule.nextRunAt, baseNext);
       await tx.auditScheduleRule.update({
         where: { id: rule.id },
         data: {

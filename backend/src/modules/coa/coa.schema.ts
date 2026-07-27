@@ -25,7 +25,14 @@ export const GenerateCoaSchema = z.object({
   customer_id: z.string().optional().nullable(),
   conclusion: z.string().optional().nullable(),
 });
-export const IssueCoaSchema = z.object({ credential: z.string().optional() });
+export const IssueCoaSchema = z.object({
+  credential: z.string().optional(),
+  // Release despite unresolved unacceptable risk on the batch, its product or
+  // its supplier. Requires `risk.override_gate`; the reason is written to the
+  // trail against the CoA and stays with the record (EU GMP Annex 16).
+  riskGateOverride: z.boolean().optional(),
+  riskOverrideReason: z.string().max(1000).optional().nullable(),
+});
 export const RevokeCoaSchema = z.object({ reason: z.string().optional().nullable(), credential: z.string().optional() });
 
 export type ListTemplateQuery = z.infer<typeof ListTemplateQuerySchema>;

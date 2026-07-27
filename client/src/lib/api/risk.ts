@@ -285,6 +285,12 @@ export interface RiskLevelRef {
   label: string;
   color: string;
   acceptance: RiskAcceptance;
+  /** Policy the level implies — travels with the level so a page can tell
+   *  whether a risk needs approval/controls/training without a second call. */
+  requires_approval: boolean;
+  requires_control: boolean;
+  requires_capa: boolean;
+  requires_training: boolean;
 }
 
 /** Prisma relation blocks passed through the serializer verbatim (camelCase). */
@@ -1867,4 +1873,209 @@ export const HAZARD_TYPE_LABELS: Record<HazardType, string> = {
   CONSEQUENCE: 'Consequence',
   FAILURE_MODE: 'Failure Mode',
   THREAT: 'Threat',
+};
+
+// ── Triggers: raise risk work from another module's record ──────────────────
+
+export interface TriggerResult {
+  created: boolean;
+  reused?: boolean;
+  mode: 'RISK' | 'ASSESSMENT';
+  id: string;
+  number: string;
+}
+
+export interface TriggerBody {
+  triggerType: string;
+  triggerId: string;
+  mode?: 'RISK' | 'ASSESSMENT';
+  relation?: string;
+  attributes?: Record<string, unknown>;
+  seed: {
+    title: string;
+    description?: string | null;
+    hazard?: string | null;
+    cause?: string | null;
+    consequence?: string | null;
+    ownerId?: string | null;
+    departmentId?: string | null;
+    siteId?: string | null;
+  };
+}
+
+export interface TriggerRule {
+  id: string;
+  name: string;
+  trigger_type: string;
+  condition: Record<string, unknown> | null;
+  mode: 'RISK' | 'ASSESSMENT';
+  register_id: string | null;
+  framework_id: string | null;
+  category_id: string | null;
+  auto_create: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TriggerRuleUpsert {
+  name: string;
+  triggerType: string;
+  condition?: Record<string, unknown> | null;
+  mode: 'RISK' | 'ASSESSMENT';
+  registerId?: string | null;
+  frameworkId?: string | null;
+  categoryId?: string | null;
+  autoCreate: boolean;
+  isActive: boolean;
+}
+
+/** Raise a risk (or assessment) from another module's record. */
+export const useRunTrigger = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TriggerBody) => post<TriggerResult>('/risk/triggers', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: riskKeys.all }),
+  });
+};
+
+export const useTriggerRules = (params: { triggerType?: string; isActive?: boolean } = {}) =>
+  useQuery<TriggerRule[]>({
+    queryKey: ['risk', 'trigger-rules', params],
+    queryFn: () => getArray<TriggerRule>('/risk/trigger-rules', params),
+    staleTime: CONFIG_STALE,
+  });
+
+export const useCreateTriggerRule = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TriggerRuleUpsert) => post<TriggerRule>('/risk/trigger-rules', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'trigger-rules'] }),
+  });
+};
+
+export const useUpdateTriggerRule = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TriggerRuleUpsert) => put<TriggerRule>(`/risk/trigger-rules/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'trigger-rules'] }),
+  });
+};
+
+export const useDeleteTriggerRule = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => del(`/risk/trigger-rules/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'trigger-rules'] }),
+  });
+};
+
+// ── Second-person approval (requiresApproval) ───────────────────────────────
+
+export interface RiskApproval {
+  id: string;
+  risk_id: string;
+  level_code: string | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  requested_by_id: string | null;
+  requested_at: string;
+  decided_by_id: string | null;
+  decided_at: string | null;
+  decision: string | null;
+  comment: string | null;
+  e_signature_id: string | null;
+}
+
+export const useRiskApprovals = (riskId: string | undefined) =>
+  useQuery<RiskApproval[]>({
+    queryKey: ['risk', 'approvals', riskId ?? ''],
+    queryFn: () => getArray<RiskApproval>(`/risk/risks/${riskId}/approvals`),
+    enabled: !!riskId,
+  });
+
+export const useRequestRiskApproval = (riskId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { comment?: string | null }) =>
+      post<RiskApproval>(`/risk/risks/${riskId}/approvals`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['risk', 'approvals', riskId] });
+      qc.invalidateQueries({ queryKey: riskKeys.risk(riskId) });
+    },
+  });
+};
+
+export const useDecideRiskApproval = (riskId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ approvalId, ...body }: {
+      approvalId: string;
+      decision: 'APPROVED' | 'REJECTED';
+      comment?: string | null;
+      credential: string;
+      meaning?: string;
+    }) => post<RiskApproval>(`/risk/approvals/${approvalId}/decide`, body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['risk', 'approvals', riskId] });
+      qc.invalidateQueries({ queryKey: riskKeys.risk(riskId) });
+    },
+  });
+};
+
+// ── Risk appetite ───────────────────────────────────────────────────────────
+
+export interface RiskAppetite {
+  id: string;
+  name: string;
+  organization_id: string | null;
+  site_id: string | null;
+  category_id: string | null;
+  tolerance_rank: number;
+  statement: string | null;
+  requires_board_review: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AppetiteUpsert {
+  name: string;
+  organizationId?: string | null;
+  siteId?: string | null;
+  categoryId?: string | null;
+  toleranceRank: number;
+  statement?: string | null;
+  requiresBoardReview: boolean;
+  isActive: boolean;
+}
+
+export const useRiskAppetites = () =>
+  useQuery<RiskAppetite[]>({
+    queryKey: ['risk', 'appetite'],
+    queryFn: () => getArray<RiskAppetite>('/risk/appetite'),
+    staleTime: CONFIG_STALE,
+  });
+
+export const useCreateAppetite = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AppetiteUpsert) => post<RiskAppetite>('/risk/appetite', body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'appetite'] }),
+  });
+};
+
+export const useUpdateAppetite = (id: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: AppetiteUpsert) => put<RiskAppetite>(`/risk/appetite/${id}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'appetite'] }),
+  });
+};
+
+export const useDeleteAppetite = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => del(`/risk/appetite/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'appetite'] }),
+  });
 };

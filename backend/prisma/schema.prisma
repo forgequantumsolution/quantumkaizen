@@ -349,10 +349,21 @@ model ActionCriteria {
   name      String
   isDeleted Boolean @default(false)
 
+  /// Evaluable predicate. Null = a label-only criterion, which is what every
+  /// existing row is, and those never block anything. A value names a guard the
+  /// transition engine runs before the stage advances — see
+  /// src/lib/stage-criteria/. Kinds: RISK_ASSESSMENT_APPROVED,
+  /// NO_BLOCKING_RISK, RISK_CONTROLS_VERIFIED.
+  kind   String?
+  /// Per-kind options, e.g. { "minSeverityRank": 80, "allowOverride": true }.
+  config Json?
+
   stageActions WorkflowStageAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([kind])
 }
 
 model Priority {
@@ -1064,6 +1075,18 @@ model FormField {
   parentFieldId String?
   parentField   FormField?  @relation("FormFieldChildren", fields: [parentFieldId], references: [id], onDelete: Cascade)
   children      FormField[] @relation("FormFieldChildren")
+
+  /// Risk-scored checklist fields (§D.11). `riskFactorKey` names a framework
+  /// factor ('S', 'O', 'D', …) and `riskRankMap` maps this field's answers onto
+  /// that factor's ranks, e.g. { "Yes": 1, "Partial": 3, "No": 5 }. On
+  /// submission the collected ranks go through the real scoring engine, so an
+  /// audit checklist produces a framework-validated score rather than a bespoke
+  /// number invented by the form.
+  riskFactorKey String?
+  riskRankMap   Json?
+  /// An adverse answer on this field raises risk work via a RiskTriggerRule.
+  raisesRisk    Boolean @default(false)
+  riskSeverity  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1800,6 +1823,16 @@ model AuditScheduleRule {
   isActive         Boolean        @default(true)
   lastSpawnedAt    DateTime?
   nextRunAt        DateTime
+
+  /// Risk-based audit programme planning (ISO 19011 §5.3). When enabled, the
+  /// spawn sweep shortens or lengthens the interval according to the residual
+  /// risk carried by the named entity, clamped to the min/max bounds. Off by
+  /// default, so existing schedules keep their fixed cadence exactly.
+  riskWeighted     Boolean @default(false)
+  riskEntityType   String?
+  riskEntityId     String?
+  minFrequencyDays Int?
+  maxFrequencyDays Int?
   createdById      String?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -2908,6 +2941,12 @@ model Supplier {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  /// Derived from the supplier's RiskProfile, not entered by hand — drives
+  /// requalification audit frequency and incoming sampling level (EU GMP Ch.5).
+  /// Recomputed whenever a linked risk changes; null until one exists.
+  riskTier          String?
+  riskTierUpdatedAt DateTime?
+
   samples Sample[]
 }
 
@@ -3958,6 +3997,12 @@ model RiskLevelDef {
   requiresCapa     Boolean             @default(false)
   requiresApproval Boolean             @default(false)
   requiresControl  Boolean             @default(false)
+  /// An ADMINISTRATIVE control on a risk at this level must name a training
+  /// course, and cannot be verified until the assigned training completes.
+  requiresTraining Boolean             @default(false)
+  /// A workflow ticket linked to an open risk at this level cannot pass a stage
+  /// action guarded by the NO_BLOCKING_RISK criterion (change control, §D.1).
+  blocksChangeApproval Boolean         @default(false)
   reviewMonths     Int?
   escalateToRoleId String?
 
@@ -4078,6 +4123,7 @@ model Risk {
   reviews           RiskReview[]
   acceptanceRecords RiskAcceptanceRecord[]
   assessmentLines   RiskAssessmentLine[]
+  approvals         RiskApproval[]
 
   @@index([registerId, status])
   @@index([ownerId])
@@ -4312,6 +4358,97 @@ model RiskAcceptanceRecord {
   risk Risk @relation(fields: [riskId], references: [id], onDelete: Cascade)
 
   @@index([riskId])
+}
+
+/// Second-person approval of a risk, required when its level sets
+/// `requiresApproval`.
+///
+/// Deliberately NOT the workflow `ApprovalInstance`: that model is anchored to a
+/// ticket and requires an `ApprovalPolicy` bound to a workflow stage and action,
+/// none of which a risk has. Forcing a risk through it would have meant
+/// inventing a fake stage. What `requiresApproval` actually needs is a
+/// segregation-of-duties rule — someone other than the person accepting the
+/// risk must sign off first — and that is exactly what this records.
+model RiskApproval {
+  id       String @id @default(uuid())
+  riskId   String
+  /// The level code that demanded the approval, captured at request time so the
+  /// record still explains itself after the framework is re-banded.
+  levelCode String?
+  /// PENDING | APPROVED | REJECTED
+  status   String @default("PENDING")
+
+  requestedById String?
+  requestedAt   DateTime @default(now())
+  decidedById   String?
+  decidedAt     DateTime?
+  decision      String?
+  comment       String?
+  /// 21 CFR Part 11 signature captured on the decision.
+  eSignatureId  String?
+
+  risk Risk @relation(fields: [riskId], references: [id], onDelete: Cascade)
+
+  @@index([riskId, status])
+  @@index([status])
+}
+
+/// Admin-configurable routing for "raise risk work from another record".
+///
+/// Without this, every inbound integration (finding → risk, confirmed OOS →
+/// product risk, spec change → assessment) would hardcode which register and
+/// framework to use. `autoCreate=false` surfaces a button; `true` fires on the
+/// source module's own event.
+model RiskTriggerRule {
+  id          String  @id @default(uuid())
+  name        String
+  /// Source record type — 'Finding', 'OosInvestigation', 'Capa', 'Ticket', …
+  triggerType String
+  /// Optional match on the source, e.g. { "severity": ["MAJOR","CRITICAL"] }
+  /// or { "classification": ["CONFIRMED_OOS"] }. Null = always matches.
+  condition   Json?
+  /// RISK (one risk in a register) | ASSESSMENT (a full worksheet).
+  mode        String  @default("RISK")
+  registerId  String?
+  frameworkId String?
+  categoryId  String?
+  /// false = the module shows an "Assess risk" button; true = it fires itself.
+  autoCreate  Boolean @default(false)
+  isActive    Boolean @default(true)
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([triggerType, isActive])
+}
+
+/// How much risk the organisation is prepared to carry (ISO 31000 §6.3.4).
+///
+/// Most specific match wins: category+site → site → org-wide. A risk resolving
+/// above tolerance is flagged out-of-appetite everywhere it appears and cannot
+/// be accepted without the extra sign-off the tolerance demands.
+model RiskAppetite {
+  id             String  @id @default(uuid())
+  name           String
+  organizationId String?
+  siteId         String?
+  categoryId     String?
+  /// The highest level still tolerated, as a normalised RiskProfile severity
+  /// rank (0-100). Stored as a rank rather than a level id so one statement can
+  /// span frameworks — the whole point of an org-level appetite.
+  toleranceRank  Int
+  statement      String?
+  /// Acceptance above tolerance needs a named second approver, not just a
+  /// justification.
+  requiresBoardReview Boolean @default(false)
+  isActive       Boolean @default(true)
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive, siteId, categoryId])
 }
 
 /// Materialised answer to "how risky is this record?", keyed by any entity a
