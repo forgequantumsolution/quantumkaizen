@@ -2079,3 +2079,29 @@ export const useDeleteAppetite = () => {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['risk', 'appetite'] }),
   });
 };
+
+// ── Assessment links (attach an assessment to the record it bears on) ───────
+
+export interface LinkedAssessment {
+  link_id: string;
+  relation: string | null;
+  linked_at: string;
+  assessment: RiskAssessment;
+}
+
+/** Assessments attached to a record — e.g. the change ticket they evaluate. */
+export const useAssessmentsLinkedTo = (entityType: string | undefined, entityId: string | undefined) =>
+  useQuery<LinkedAssessment[]>({
+    queryKey: ['risk', 'linked-assessments', entityType ?? '', entityId ?? ''],
+    queryFn: () => getArray<LinkedAssessment>('/risk/assessment-links', { entityType, entityId }),
+    enabled: !!entityType && !!entityId,
+  });
+
+/** Attach an existing assessment to a record. */
+export const useAddAssessmentLink = (assessmentId: string) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RiskLinkUpsert) => post<RiskLink>(`/risk/assessments/${assessmentId}/links`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: riskKeys.all }),
+  });
+};

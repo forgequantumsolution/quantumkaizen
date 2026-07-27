@@ -14,7 +14,7 @@ import { requirePermission } from '../../middleware/permissions';
 import { validate } from '../../middleware/validate';
 import { asyncHandler } from '../../lib/asyncHandler';
 import * as ctrl from './risk-assessment.controller';
-import { IdParamSchema } from './risk.schema';
+import { IdParamSchema, LinkUpsertSchema, ReverseLinkQuerySchema } from './risk.schema';
 import {
   ApproveAssessmentSchema,
   AssessmentCreateSchema,
@@ -56,5 +56,11 @@ router.delete('/lines/:id', requirePermission('risk_assessment.update'), validat
 
 // Promotion writes into the risk register, so it carries the register's key.
 router.post('/lines/:id/promote', requirePermission('risk.create'), validate(IdParamSchema, 'params'), validate(PromoteLineSchema), asyncHandler(ctrl.promoteLine));
+
+// Links on an assessment — an assessment authored independently can still be
+// attached to the change (or audit, or document) it bears on, which is what
+// lets an existing, already-approved assessment satisfy a stage gate.
+router.get('/assessment-links', requirePermission('risk_assessment.read'), validate(ReverseLinkQuerySchema, 'query'), asyncHandler(ctrl.listAssessmentsLinkedTo));
+router.post('/assessments/:id/links', requirePermission('risk_assessment.update'), validate(IdParamSchema, 'params'), validate(LinkUpsertSchema), asyncHandler(ctrl.addAssessmentLink));
 
 export default router;

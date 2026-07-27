@@ -60,10 +60,26 @@ const readConfig = (raw: unknown): CriteriaConfig =>
  */
 const linkedRiskIds = async (tx: Tx, ticketId: string): Promise<string[]> => {
   const links = await tx.riskLink.findMany({
-    where: { entityType: 'Ticket', entityId: ticketId, riskId: { not: null } },
-    select: { riskId: true },
+    where: { entityType: 'Ticket', entityId: ticketId },
+    select: { riskId: true, assessmentId: true },
   });
-  return [...new Set(links.map((l) => l.riskId as string))];
+  const direct = links.map((l) => l.riskId).filter((id): id is string => !!id);
+
+  // Risks reached *through* an attached assessment count too. A change whose
+  // risks were all promoted from its assessment would otherwise look risk-free
+  // to NO_BLOCKING_RISK, and the gate would wave through the very change it
+  // exists to stop.
+  const assessmentIds = links.map((l) => l.assessmentId).filter((id): id is string => !!id);
+  const viaAssessment = assessmentIds.length
+    ? (
+        await tx.riskAssessmentLine.findMany({
+          where: { assessmentId: { in: assessmentIds }, riskId: { not: null } },
+          select: { riskId: true },
+        })
+      ).map((l) => l.riskId as string)
+    : [];
+
+  return [...new Set([...direct, ...viaAssessment])];
 };
 
 /**
@@ -87,20 +103,35 @@ export const assertRiskCriteria = async (
   if (opts.overridden && cfg.allowOverride) return;
 
   if (kind === 'RISK_ASSESSMENT_APPROVED') {
-    const approved = await tx.riskAssessment.count({
-      where: { triggerType: 'Ticket', triggerId: ticketId, status: 'APPROVED' },
+    // An assessment counts if it was raised FROM this ticket, or was authored
+    // independently and later attached to it. Accepting only the first would
+    // force a team to redo a periodic FMEA they had already done properly, and
+    // the standard asks for evidence the change was risk-evaluated — not for
+    // the evidence to have been created in a particular order.
+    const linked = await tx.riskLink.findMany({
+      where: { entityType: 'Ticket', entityId: ticketId, assessmentId: { not: null } },
+      select: { assessmentId: true },
     });
+    const linkedIds = linked.map((l) => l.assessmentId as string);
+    const where = {
+      OR: [
+        { triggerType: 'Ticket', triggerId: ticketId },
+        ...(linkedIds.length ? [{ id: { in: linkedIds } }] : []),
+      ],
+    };
+
+    const approved = await tx.riskAssessment.count({ where: { ...where, status: 'APPROVED' } });
     if (approved > 0) return;
 
     const inFlight = await tx.riskAssessment.findMany({
-      where: { triggerType: 'Ticket', triggerId: ticketId },
+      where,
       select: { assessmentNumber: true, status: true },
       take: 5,
     });
     throw Conflict(
       inFlight.length === 0
         ? `${ticketRef} cannot pass this stage until a risk assessment has been raised and approved for it. ` +
-            'Use "Assess risk" on the ticket to raise one.'
+            'Use "Assess risk" on the ticket, or attach an existing approved assessment.'
         : `${ticketRef} has a risk assessment that is not yet approved: ` +
             `${inFlight.map((a) => `${a.assessmentNumber} (${a.status})`).join(', ')}.`,
     );

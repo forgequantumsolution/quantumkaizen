@@ -14,6 +14,7 @@ import type { TicketDetail } from '@/lib/api/ticket';
 import { useTicketChildren } from '@/lib/api/finding';
 import AssigneeCard from './AssigneeCard';
 import RiskLinkPanel from '@/components/risk/RiskLinkPanel';
+import AssessmentLinkPanel from '@/components/risk/AssessmentLinkPanel';
 import AssessRiskButton from '@/components/risk/AssessRiskButton';
 
 // Child records (CAPA / Deviation raised from this ticket's findings), nested
@@ -109,6 +110,10 @@ export default function TicketSidebar({
           approval stage carries a risk criterion will refuse to advance until
           the assessment raised here is approved. */}
       <RiskLinkPanel entityType="Ticket" entityId={ticket.id} title="Risk" />
+      {/* The assessment a risk criterion on an approval stage checks for. Shows
+          plainly when one exists but is not yet approved, which is the single
+          most common reason a change refuses to advance. */}
+      <AssessmentLinkPanel entityType="Ticket" entityId={ticket.id} />
       {canUpdate && (
         <AssessRiskButton
           entityType="Ticket"

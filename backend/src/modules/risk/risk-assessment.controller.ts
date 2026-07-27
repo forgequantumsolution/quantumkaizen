@@ -6,6 +6,7 @@
 import type { Request, Response } from 'express';
 import { ok, success } from '../dynamic-form/dynamic-form.response';
 import * as svc from './risk-assessment.service';
+import type { LinkUpsert } from './risk.schema';
 import type {
   ApproveAssessment,
   AssessmentCreate,
@@ -74,3 +75,11 @@ export const deleteLine = async (req: Request, res: Response) => {
 
 export const promoteLine = async (req: Request, res: Response) =>
   success(res, 'Worksheet line promoted to a tracked risk', await svc.promoteLine(req.params.id as string, req.body as PromoteLine, actor(req)), 201);
+
+export const addAssessmentLink = async (req: Request, res: Response) =>
+  success(res, 'Link added', await svc.addAssessmentLink(req.params.id as string, req.body as LinkUpsert, actor(req)), 201);
+
+export const listAssessmentsLinkedTo = async (req: Request, res: Response) => {
+  const q = req.query as unknown as { entityType: string; entityId: string };
+  return ok(res, await svc.listAssessmentsLinkedTo(q.entityType, q.entityId));
+};
