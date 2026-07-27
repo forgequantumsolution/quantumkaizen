@@ -41,7 +41,7 @@ function cellText(col: FormFieldDef, v: unknown): string {
 }
 
 const Text = ({ children }: { children: React.ReactNode }) => (
-  <span className="text-sm text-gray-800 break-words">{children}</span>
+  <span className="text-sm font-medium text-gray-900 break-words">{children}</span>
 );
 
 const Chip = ({ children }: { children: React.ReactNode }) => (
@@ -104,7 +104,7 @@ export default function FieldValueText({
     case 'textarea':
     case 'richtext':
       return (
-        <p className="whitespace-pre-wrap break-words text-sm text-gray-800">
+        <p className="whitespace-pre-wrap break-words text-sm font-medium text-gray-900">
           {String(value)}
         </p>
       );
@@ -138,7 +138,7 @@ export default function FieldValueText({
     case 'compliance': {
       const o = COMPLIANCE_OPTIONS.find((x) => x.value === value);
       return o ? (
-        <span className="inline-flex items-center gap-1.5 text-sm text-gray-800">
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-900">
           <span
             className="inline-block h-2.5 w-2.5 rounded-full"
             style={{ backgroundColor: o.color }}
@@ -170,7 +170,7 @@ export default function FieldValueText({
 
     case 'color':
       return (
-        <span className="inline-flex items-center gap-1.5 text-sm text-gray-800">
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-900">
           <span
             className="inline-block h-4 w-4 rounded border border-gray-300"
             style={{ backgroundColor: String(value) }}
@@ -183,7 +183,7 @@ export default function FieldValueText({
     case 'image': {
       const f = value as { name?: string } | null;
       return f?.name ? (
-        <span className="inline-flex items-center gap-1.5 text-sm text-gray-800">
+        <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-900">
           <FileText size={13} className="shrink-0 text-gray-400" />
           {f.name}
         </span>

@@ -272,7 +272,7 @@ export default function FormFillEmbed({
                 <p className="text-sm text-slate-500 mt-1.5">{description}</p>
               )}
             </header>
-            <div className="grid grid-cols-12 gap-x-5 gap-y-4">
+            <div className={readOnly ? 'grid grid-cols-12 gap-3' : 'grid grid-cols-12 gap-x-5 gap-y-4'}>
               {sec.fields.map((f) => {
                 if (!evaluateVisibility(f.dependency, lookup)) return null;
                 const span = widthToCols(f.width);
@@ -285,8 +285,21 @@ export default function FormFillEmbed({
                   value !== '' &&
                   !(Array.isArray(value) && value.length === 0);
                 return (
-                  <div key={f.field_id ?? f.name} className={`col-span-12 ${span} min-w-0`}>
-                    <label className="block text-[13px] font-medium text-slate-700 mb-1.5 leading-tight">
+                  <div
+                    key={f.field_id ?? f.name}
+                    className={
+                      readOnly
+                        ? `col-span-12 ${span} min-w-0 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5`
+                        : `col-span-12 ${span} min-w-0`
+                    }
+                  >
+                    <label
+                      className={
+                        readOnly
+                          ? 'block text-[11px] font-semibold uppercase tracking-wide text-slate-500 mb-1.5 leading-tight'
+                          : 'block text-[13px] font-medium text-slate-700 mb-1.5 leading-tight'
+                      }
+                    >
                       {f.label}
                       {f.required && <span className="text-rose-500 ml-0.5">*</span>}
                     </label>
