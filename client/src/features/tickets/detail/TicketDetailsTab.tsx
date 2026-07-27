@@ -72,7 +72,7 @@ export default function TicketDetailsTab({
       <div className="mt-3 border-t border-gray-100 pt-3">
         <div className="mb-1 text-[11px] uppercase tracking-wide text-gray-500">Description</div>
         {ticket.description ? (
-          <p className="whitespace-pre-wrap text-sm text-gray-800 gmp-narrative">
+          <p className="whitespace-pre-wrap text-sm text-gray-800">
             {ticket.description}
           </p>
         ) : (

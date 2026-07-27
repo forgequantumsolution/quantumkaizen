@@ -1,5 +1,41 @@
 # Changes Log
 
+## Ticket description no longer capped to 70ch measure — 2026-07-27
+
+`src/features/tickets/detail/TicketDetailsTab.tsx` — removed `.gmp-narrative`
+from the ticket description field. That class caps text at a 70-character
+line measure (`client/src/index.css:407`, added for the FQS-QK-UIUX-002 §8
+narrative-readability rule and applied to CAPA/OOS/audit narratives). On the
+ticket Details card it made the description wrap narrowly with a lot of
+unused card width to its right — reported against
+`/tickets/1c57e056-6b67-42e9-b536-959606ffd682`. User chose to drop the cap
+for this field specifically rather than keep it consistent with
+CAPA/OOS/audit; those narrative fields are untouched and still capped.
+
+## Module list table — ID column alignment + URL-based tab routing — 2026-07-27
+
+`src/features/modules/ModulePage.tsx` — the shared table behind every module's
+Overview/My Tasks/Findings list (Inspection, CAPA, Deviations, etc.). Not
+committed.
+
+- **ID column alignment** — the `ID` header sat flush-left while each cell was
+  pushed right by the child-ticket expand chevron (or its 18px spacer), so the
+  header and values never lined up. Centered both, and gave the column
+  `w-px whitespace-nowrap` so the table's auto-layout shrinks it to content
+  width instead of stretching it with the row's leftover space (which also
+  fixed IDs wrapping once centering was added). Reduced side padding
+  (`px-4` → `px-2`) and added `shrink-0` to the chevron/spacer/id-text flex
+  children so the column stays tight without wrapping.
+- **Tab state moved to the URL** — Overview/My Tasks/Findings was local
+  `useState`, so a refresh always bounced back to Overview. `tab` is now
+  derived from the `?tab=` search param (`workspace`/`findings`/absent→
+  `dashboard`), and `setTab` writes it via `setSearchParams(..., { replace:
+  true })` (same pattern as `features/forms/FormListPage.tsx`). The
+  module-switch reset effect no longer resets `tab` or depends on
+  `searchParams` — it only clears filters on `typeId` change now, so it can't
+  loop back and wipe `activeKpi`/`statusView` right after a KPI drill-through
+  sets them via its own `setTab` call.
+
 ## Ticket escalation matrix UI — 2026-07-26
 
 Front end for the escalation matrix (backend in `backend/changes.md`; design in
