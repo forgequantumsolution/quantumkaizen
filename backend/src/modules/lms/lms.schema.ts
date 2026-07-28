@@ -239,6 +239,9 @@ export const CreateMatrixRuleSchema = z.object({
   due_within_days: z.number().int().min(1).max(365).optional().nullable(),
   recurring: z.boolean().optional(),
   is_active: z.boolean().optional(),
+  // Fire on join (user created into / moved into the target) instead of waiting
+  // for a manual matrix sync. Opt-in — see the column comment in schema.prisma.
+  auto_assign_on_join: z.boolean().optional(),
 });
 export const UpdateMatrixRuleSchema = CreateMatrixRuleSchema.partial();
 

@@ -4,6 +4,66 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+## Training matrix: auto-assign on join — 2026-07-28
+
+The Qualification Matrix (`LmsTrainingMatrixRule`) already mapped role /
+department / site / job-function → course or curriculum, but `syncMatrix()` only
+ever ran from the **Run sync** button — nothing called it on a schedule or from
+the user lifecycle. A user created into a role with mandatory training therefore
+had zero enrollments until an admin remembered to press it. This closes the P5
+acceptance criterion already written in `docs/LMS-implementation-plan.md` ("adding
+a user to Dept Y auto-enrols them in Dept Y's required courses").
+
+- `prisma/schema.prisma` + migration `20260728100000_lms_matrix_auto_assign_on_join`
+  — new `LmsTrainingMatrixRule.autoAssignOnJoin`. **Defaults to `false` on
+  purpose:** enrollments are append-only through the API (there is no unassign,
+  delete-enrollment or waive endpoint — `LmsEnrollment.waivedById`/`waiverReason`
+  are dead columns), so arming a rule is effectively one-way and must be a
+  deliberate act. Defaulting true would have silently armed every existing rule
+  at migration time.
+- `modules/lms/lms-assign.service.ts` — new `syncMatrixForUser()`, the per-user
+  counterpart of `syncMatrix()`: matches the user's role/department/site/
+  designation against *armed* rules only and enrols via the existing
+  `enrollIfAbsent()`. Deliberately does not handle the recurring/recert re-open
+  path (that keys off elapsed validity, not joining). Also hardened
+  `enrollIfAbsent()` to treat a `P2002` as already-enrolled — it is
+  findUnique-then-create, and this path now runs on every user save rather than
+  from one admin button, so the race is actually reachable.
+- `modules/user/user.service.ts` — `create()` and `update()` call it via a local
+  `applyTrainingMatrix()` wrapper. `update()` fires only when role, department,
+  site or designation actually changed, or on a false→true reactivation;
+  the comparison is against the **returned row**, not `input`, since every one of
+  those fields is optional and Prisma reads `undefined` as "unchanged".
+- `modules/auth/auth.service.ts` — `registerUser()` gets the same hook. Easy to
+  miss: `POST /auth/register` is a second user-creation path that also accepts
+  `roleId`.
+- All call sites are wrapped in try/catch — a matrix misconfiguration must never
+  block user creation, registration or editing. `assignedById` is left unset so
+  the enrollment reads as system-assigned.
+- `modules/lms/lms.schema.ts` — `auto_assign_on_join` on the create/update
+  matrix-rule schemas. No new routes or permissions; `PATCH /lms/matrix/:id` and
+  `lms_matrix.write` already cover it.
+
+**Known cost / follow-up:** `syncMatrixForUser` inherits `syncMatrix`'s N+1 shape
+(a query per course per rule) and runs inline on the write path. Tolerable only
+because armed rules are opt-in and few — if on-join is switched on broadly it
+should move to `src/jobs/`. The real gap is the missing waive/unassign endpoint;
+the `false` default works around it rather than solving it.
+
+**Verified** with `tests/e2e/lms-auto-assign-on-join.spec.ts` — 8/8 green against
+`kaizen_qms2`: migration armed none of the 14 pre-existing rules; created-into-role,
+transfer, reactivation and `/auth/register` all enrol with `source=MATRIX` and a
+~30-day due date; an unrelated re-save creates no duplicate; a disarmed rule stops
+firing on join but still enrols via **Run sync**; an unpublished-course rule is
+skipped without breaking user creation; and the UI toggle round-trips. The spec
+tears down its own role, rules and course (the course delete cascades its
+enrollments); test users are left deactivated, since `DELETE /users/:id` is a soft
+deactivate by design.
+
+Frontend logged in `client/changes.md`. Not committed.
+
+---
+
 ## Supplier risk tier not exposed via API — 2026-07-28
 
 `src/modules/lims-master/supplier.service.ts` — `Supplier.riskTier`/

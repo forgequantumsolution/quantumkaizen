@@ -3748,6 +3748,11 @@ model LmsTrainingMatrixRule {
   dueWithinDays Int? // due N days after assignment
   recurring     Boolean               @default(false) // re-assign on validity expiry
   isActive      Boolean               @default(true)
+  // Fire the rule the moment a user lands in the target — created into it, moved
+  // into it, or reactivated — instead of waiting for a manual matrix sync. See
+  // syncMatrixForUser() in lms-assign.service.ts. Opt-in: enrollments have no
+  // unassign/waive path yet, so arming a rule is effectively one-way.
+  autoAssignOnJoin Boolean            @default(false)
 
   isDeleted   Boolean  @default(false)
   createdById String?

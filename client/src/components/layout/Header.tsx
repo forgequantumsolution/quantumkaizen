@@ -158,7 +158,7 @@ export default function Header() {
   const navigate  = useNavigate();
   const { user, logout } = useAuthStore();
   const { setSidebarOpen } = useUIStore();
-  const { notifications, isOpen, togglePanel, openPanel, setNotifications } = useNotificationStore();
+  const { notifications, isOpen, openPanel, setNotifications } = useNotificationStore();
   const { year: fyYear, setYear: setFyYear } = useFiscalYearStore();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
@@ -325,7 +325,7 @@ export default function Header() {
           {/* Notifications */}
           <div className="relative">
             <button
-              onClick={() => { togglePanel(); setShowNotifDropdown(!showNotifDropdown); }}
+              onClick={() => setShowNotifDropdown(!showNotifDropdown)}
               className="relative flex items-center justify-center w-8 h-8 rounded text-ink-tertiary hover:bg-surface-hover hover:text-ink transition-colors"
               aria-label={`Notifications${unread.length > 0 ? `, ${unread.length} unread` : ''}`}
             >

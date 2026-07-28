@@ -6,6 +6,7 @@ import { signToken } from '../../lib/jwt';
 import { Conflict, Unauthorized } from '../../lib/httpError';
 import { computeEffectivePermissions } from '../../lib/effective-permissions';
 import { recordAudit } from '../../lib/audit';
+import { syncMatrixForUser } from '../lms/lms-assign.service';
 import type { LoginInput, RegisterInput } from './auth.schema';
 
 const publicUserSelect = {
@@ -82,6 +83,14 @@ export const registerUser = async (input: RegisterInput) => {
     },
     select: publicUserSelect,
   });
+
+  // Self-registration is a join too — same treatment as an admin-created user
+  // (see applyTrainingMatrix in user.service.ts). Never allowed to fail signup.
+  try {
+    await syncMatrixForUser(user.id);
+  } catch {
+    // Swallowed by design: a matrix misconfiguration must not block registration.
+  }
 
   const token = signToken({
     userId: user.id,

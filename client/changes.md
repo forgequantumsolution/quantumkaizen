@@ -1,3 +1,44 @@
+## Notification bell opened two things at once — 2026-07-28
+
+Reported: clicking the bell in the navbar opened both the compact dropdown and
+the full-height notification drawer simultaneously. Not committed.
+
+- **`src/components/layout/Header.tsx`** — the bell's `onClick` called both
+  `togglePanel()` (the store flag that renders `NotificationPanel`, the slide-in
+  drawer) and `setShowNotifDropdown(...)` (the inline dropdown), so a single
+  click fired both surfaces. Dropped `togglePanel()` from the handler; the bell
+  now toggles only the dropdown, and the drawer opens solely from its
+  "View all notifications →" footer link (`openPanel()`), which was already
+  wired that way. `togglePanel` removed from the store destructure — it now has
+  no callers anywhere in the app, though it remains on `notificationStore` as
+  available API.
+
+---
+
+## Training matrix: auto-assign on join — 2026-07-28
+
+UI for the new per-rule `autoAssignOnJoin` flag (backend rationale in
+`backend/changes.md`). A matrix rule can now fire the moment a user lands in its
+target rather than only on **Run sync**.
+
+- `lib/api/lms.ts` — `auto_assign_on_join` on the `MatrixRule` type, plus a new
+  `useUpdateMatrixRule()` hook so the flag can be flipped in place instead of
+  deleting and re-adding a rule (`PATCH /lms/matrix/:id` already existed but was
+  unused by the client).
+- `features/lms/TrainingMatrixPage.tsx` — **Auto-assign on join** switch in the
+  Add-rule modal, defaulting to **on** (the DB column defaults to `false`, so
+  pre-existing rules stay sync-only until deliberately armed; new rules get the
+  behaviour without extra thought). Plus an **On join** column with an inline
+  switch, gated on `lms_matrix.write` — read-only users see a tag.
+- `features/lms/AssignmentsPage.tsx` — one-line pointer to the Qualification
+  Matrix. Assignments is where an admin looks for this, but it only does
+  point-in-time assignment; the standing rules live under Configuration and were
+  easy to miss from there.
+
+Not committed.
+
+---
+
 ## CAPA/Market/Change Control/Risk tracker — frontend-only fixes — 2026-07-28
 
 Batch of frontend-only items from the KRZ tracker (see

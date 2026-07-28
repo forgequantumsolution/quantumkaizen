@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { App, Button, DatePicker, Empty, Input, Segmented, Select, Table, Tag } from 'antd';
 import { UserPlus, Search, Users as UsersIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import dayjs, { type Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
 import { useCourses, useCurricula, useAssignCourse, useAssignCurriculum, type AssignBody } from '@/lib/api/lms';
@@ -83,6 +84,14 @@ export default function AssignmentsPage() {
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <UserPlus size={22} className="text-gray-500" /> Assign Training
         </h1>
+        {/* This page is one-off assignment. Standing "everyone in role X needs
+            course Y" rules — including auto-assigning new joiners — live on the
+            Qualification Matrix, which is easy to miss from here. */}
+        <p className="text-[13px] text-gray-500 mt-1">
+          Assigns to whoever matches <em>right now</em>. To keep a role permanently covered — including people who join it
+          later — set up a rule on the{' '}
+          <Link to="/lms/admin/matrix" className="text-blue-600 hover:underline">Qualification Matrix</Link>.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
