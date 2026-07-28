@@ -686,24 +686,24 @@ export default function Sidebar() {
       <div
         style={{ borderBottom: "1px solid " + DIVIDER }}
         className={cn(
-          "flex items-center justify-center h-14 shrink-0",
-          sidebarCollapsed ? "px-3" : "gap-3 px-4"
+          "flex items-center justify-center h-[72px] shrink-0",
+          sidebarCollapsed ? "px-3" : "gap-3.5 px-5"
         )}
       >
         <div
           style={{ backgroundColor: ACCENT }}
-          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
         >
           <span
             style={{ color: "#0D0E17" }}
-            className="font-black text-sm tracking-tight"
+            className="font-black text-lg tracking-tight"
           >
             Q
           </span>
         </div>
         {!sidebarCollapsed && (
           <div className="overflow-hidden">
-            <p className="text-white text-base leading-none tracking-tight">
+            <p className="text-white text-xl leading-none tracking-[0.01em]">
               Quantum <span style={{ color: ACCENT }}>Kairoz</span>
             </p>
           </div>
@@ -717,8 +717,8 @@ export default function Sidebar() {
           <div
             style={{
               background:
-                "linear-gradient(160deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.03) 55%, rgba(255,255,255,0.015) 100%)",
-              border: "1px solid rgba(201,168,76,0.22)",
+                "linear-gradient(160deg, rgba(201,168,76,0.16) 0%, rgba(201,168,76,0.06) 55%, rgba(201,168,76,0.02) 100%)",
+              border: "1px solid rgba(201,168,76,0.30)",
               boxShadow:
                 "0 6px 18px -6px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.07)",
             }}

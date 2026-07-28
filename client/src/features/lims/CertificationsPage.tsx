@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { App, Button, DatePicker, Drawer, Input, Select, Space, Switch, Table } from 'antd';
+import { App, AutoComplete, Button, DatePicker, Drawer, Input, Select, Space, Switch, Table } from 'antd';
 import { BadgeCheck, Plus, Search, Edit3, Trash2 } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
 import PageContainer from '@/components/layout/PageContainer';
@@ -9,7 +9,10 @@ import {
   type Certification, type CertUpsert, type ExpiryState,
 } from '@/lib/api/lims';
 
-const TYPE_SUGGESTIONS = ['GMP', 'NABL', 'ISO 17025', 'ISO 9001', 'USFDA', 'WHO-GMP', 'OTHER'];
+const TYPE_SUGGESTIONS = [
+  'GMP', 'NABL', 'ISO 17025', 'ISO 9001', 'USFDA', 'WHO-GMP',
+  '21 CFR Part 11', 'ICH Q10', 'CDSCO', 'EMA', 'Health Canada', 'OTHER',
+];
 const STATE_BADGE: Record<ExpiryState, { cls: string; label: string }> = {
   valid: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Valid' },
   expiring: { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Expiring' },
@@ -126,7 +129,18 @@ function CertDrawer({ open, onClose, cert }: { open: boolean; onClose: () => voi
     <Drawer title={cert ? `Edit ${cert.code}` : 'New Certification'} open={open} onClose={onClose} width={440} destroyOnClose
       footer={<Space className="flex justify-end"><Button onClick={onClose}>Cancel</Button><Button type="primary" onClick={submit} loading={createMut.isPending || updateMut.isPending}>{cert ? 'Save' : 'Add'}</Button></Space>}>
       <div className="space-y-3">
-        <F label="Type *"><Select value={type} onChange={setType} className="w-full" showSearch options={TYPE_SUGGESTIONS.map((t) => ({ value: t, label: t }))} /></F>
+        <F label="Type *">
+          <AutoComplete
+            value={type}
+            onChange={setType}
+            className="w-full"
+            options={TYPE_SUGGESTIONS.map((t) => ({ value: t, label: t }))}
+            filterOption={(input, option) =>
+              (option?.value ?? '').toLowerCase().includes(input.toLowerCase())
+            }
+            placeholder="Pick a type or type a new one"
+          />
+        </F>
         <F label="Certificate Number"><Input value={number} onChange={(e) => setNumber(e.target.value)} /></F>
         <F label="Lab"><Select value={labId} onChange={setLabId} allowClear showSearch optionFilterProp="label" placeholder="Optional" className="w-full" options={labs.map((l) => ({ value: l.id, label: `${l.code} — ${l.name}` }))} /></F>
         <F label="Issued By"><Input value={issuedBy} onChange={(e) => setIssuedBy(e.target.value)} placeholder="Accreditation body" /></F>

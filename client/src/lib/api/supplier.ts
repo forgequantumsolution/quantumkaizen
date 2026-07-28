@@ -12,6 +12,8 @@ export interface Supplier {
   email: string | null;
   country: string | null;
   is_active: boolean;
+  risk_tier: string | null;
+  risk_tier_updated_at: string | null;
   created_at: string;
   updated_at: string;
 }

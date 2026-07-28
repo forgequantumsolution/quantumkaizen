@@ -1,3 +1,52 @@
+# Changes — KPI card icon sizing across all dashboards
+
+Reported: KPI tile icons "not the correct size or aligned properly in all the
+dashboards" (raised against the LIMS Overview *Key Metrics* strip, but the same
+tiles appear on every dashboard).
+
+> Status: **Implemented + verified with Playwright.** Working tree only, not
+> committed. One file changed.
+
+## Diagnosis (Playwright)
+
+Screenshotted every dashboard — Quality Command Center, DMS, LIMS, Audit, Risk,
+Risk Controls/Reviews, Tickets and all 12 `/modules/:id` pages — at 1600px and
+900px, then measured the DOM boxes rather than eyeballing.
+
+Two findings, only the second of which was the real bug:
+
+- **Alignment was never broken.** Every chip measured 36×36 with the icon
+  centred to the pixel (9px on all sides), identical on every dashboard, because
+  they all render the one shared `KpiCard`. Nothing was misaligned.
+- **The icons looked undersized because they were.** Lucide glyphs carry their
+  own whitespace inside a fixed 24×24 grid, and the fill varies a lot per glyph
+  — measured via `getBBox()`: `Percent` filled ~44% of its box, `AlertTriangle`
+  ~63%, `FlaskConical` 83% tall but only 61% wide. At an 18px render inside a
+  36px chip, the sparse glyphs read as floating in empty space next to the
+  denser ones, which is what made the row look inconsistent.
+
+## Fix
+
+`client/src/components/ui/KpiCard.tsx` — the icon chip: **36×36 → 44×44**, icon
+**18px → 24px** (`strokeWidth` unchanged at 2).
+
+Note the chip grew too. Scaling only the icon scales the glyph's built-in
+whitespace along with it, so it never actually closes the gap; and pushing the
+icon to the chip's own size makes the glyph visually spill past the tinted
+background instead. Growing both lands the icon at a substantial size *and*
+keeps an even 10px of tint around it.
+
+Single shared component, so every dashboard picked this up — no per-page edits.
+
+## Verification
+
+Re-screenshotted at 4× device scale and re-measured: chip 44×44, icon 24×24,
+10px margin on all four sides. Checked both card variants (plain, and with the
+footer/subtitle row as on Risk Controls) plus Tickets — no clipping against the
+rounded corners in any of them.
+
+---
+
 # Changes — Per-module ticket master (retire the global switch)
 
 Follow-on to *Per-Workflow-Type Access Control* (below). Goal: retire the single

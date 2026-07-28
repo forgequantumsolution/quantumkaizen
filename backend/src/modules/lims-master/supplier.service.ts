@@ -18,6 +18,8 @@ const serialize = (s: Prisma.SupplierGetPayload<object>) => ({
   email: s.email,
   country: s.country,
   is_active: s.isActive,
+  risk_tier: s.riskTier,
+  risk_tier_updated_at: s.riskTierUpdatedAt,
   created_at: s.createdAt,
   updated_at: s.updatedAt,
 });

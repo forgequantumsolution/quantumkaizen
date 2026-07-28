@@ -26,6 +26,7 @@ import {
   useTicketStageForms,
   type TicketStageFormBinding,
 } from '@/lib/api/stageForm';
+import { formatDateTime } from '@/lib/utils';
 import InlineSubmissionViewer from './InlineSubmissionViewer';
 
 interface Props {
@@ -146,7 +147,7 @@ export default function RequiredFormsCard({ ticketId }: Props) {
                         {b.eachProgress.submittedCount} of {b.eachProgress.expectedCount} submitted
                       </span>
                     ) : b.latestSubmission?.submittedAt ? (
-                      `Submitted ${new Date(b.latestSubmission.submittedAt).toLocaleString()}`
+                      `Submitted ${formatDateTime(b.latestSubmission.submittedAt)}`
                     ) : (
                       'No submission yet'
                     )}

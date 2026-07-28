@@ -18,6 +18,7 @@ import {
 import { Button, Card } from '@/components/ui';
 import { useSubmissions } from '@/features/forms/hooks';
 import type { SubmissionListItem } from '@/features/forms/types';
+import { formatDateTime } from '@/lib/utils';
 import InlineSubmissionViewer from './InlineSubmissionViewer';
 
 interface Props {
@@ -123,7 +124,7 @@ export default function SubmittedFormsCard({ ticketId }: Props) {
                     {s.submittedBy && <span>by {s.submittedBy.name}</span>}
                     {s.submittedAt && (
                       <span className="text-gray-400">
-                        · {new Date(s.submittedAt).toLocaleString()}
+                        · {formatDateTime(s.submittedAt)}
                       </span>
                     )}
                   </div>

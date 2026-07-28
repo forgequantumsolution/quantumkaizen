@@ -1,3 +1,136 @@
+## CAPA/Market/Change Control/Risk tracker — frontend-only fixes — 2026-07-28
+
+Batch of frontend-only items from the KRZ tracker (see
+`docs/CAPA-open-items-status-and-scoping.md`,
+`docs/Market-Platform-open-items-status-and-scoping.md`,
+`docs/Change-Control-open-items-status-and-scoping.md`,
+`docs/Risk-Management-open-items-status-and-scoping.md`), each verified against
+current source (and, where the tracker's premise needed confirming, the live
+`kaizen_qms2` DB) before implementing. Not committed. Two items from this batch
+(KRZ-CC-018, KRZ-RISK-022) were investigated and explicitly **not** built —
+both need a backend aggregate/endpoint and would otherwise fight the
+"everything derived client-side from already-loaded data, nothing fetched"
+design rule those two analytics panels are built on; noted inline below.
+
+- **`src/features/tickets/shared/RaiseTicketDrawer.tsx`** (KRZ-CAPA-005,
+  KRZ-CAPA-018, KRZ-RISK-007, KRZ-RISK-018) — added `drawerTitle`/`submitLabel`
+  overrides, a `titlePlaceholder`/`titleHelp` override, a `priorityHint`
+  tooltip slot next to Priority, and `requireSeverity`/`requireClassification`
+  flags (with a non-blocking "title looks very short" warning on the Title
+  field). Wired per-module in `ModulePage.tsx`: CAPA gets a product/batch
+  title placeholder + a Priority→severity-tier mapping tooltip; Risk gets
+  "Initiate risk assessment" copy and required Severity/Classification.
+- **`src/features/tickets/detail/StageFormSection.tsx`** (KRZ-CAPA-022) — after
+  the CAPA Initiation form is submitted, cross-checks its
+  `risk_to_patient_product`/`regulatory_reportable` answers (confirmed live in
+  the DB, section "Impact") against the ticket's Priority (passed in from
+  `TicketDetailPage.tsx`) and shows an amber banner when Priority is Low/unset
+  but the form says otherwise. Informational only — the generic form runtime
+  has no pre-submit cross-field validation hook to block on.
+- **`src/features/lims/SuppliersPage.tsx`** + **`src/lib/api/supplier.ts`**
+  (KRZ-MKT-007) — added a Risk Tier column/badge. The tier was already
+  computed and stored server-side (`risk-gate.service.ts`) but never left the
+  backend; see the matching `backend/changes.md` entry.
+- **`src/features/lims/CertificationsPage.tsx`** (KRZ-MKT-014, KRZ-MKT-016) —
+  added EMA/Health Canada/21 CFR Part 11/ICH Q10/CDSCO to the certificate-type
+  suggestions, and switched the Type field from a closed `Select` to an
+  `AutoComplete` so a new type can be typed in directly (the backend field was
+  already free text — only the UI was rigid).
+- **`src/components/shared/ChatBot.tsx`** (KRZ-CC-019) — floating launcher
+  dropped from `zIndex: 9999` to `40` (was rendering above open
+  modals/drawers, worse than the reported "covers the toolbar button" bug) and
+  nudged further from the corner (52px→46px, 24px→28px offset).
+- **`src/features/modules/ModuleDashboard.tsx`** (KRZ-CC-021) — added a
+  `STAGE_PALETTE` cycling color set + `HColorBarOrEmpty`; the Stage Workload
+  chart now colors each stage distinctly instead of one flat module-accent
+  color (module-accent charts elsewhere are untouched — that's a deliberate,
+  separate convention).
+- **`src/components/analytics/metrics.ts`** — added `agingByCreationFine()`
+  (finer 5-bucket aging with SLA-threshold red coloring, KRZ-RISK-020), kept
+  separate from the existing `agingByCreation()` so other modules' charts are
+  unaffected. Wired into `src/features/modules/analytics/RiskAnalytics.tsx`.
+- **`src/features/modules/analytics/ChangeControlAnalytics.tsx`** (KRZ-CC-022)
+  — "Open Change Aging" swapped from `agingByCreation` (age-since-creation) to
+  the already-existing `dueDatePosture()` (on-time/due-soon/overdue against
+  each change's due date), retitled "SLA Posture — Open Changes" to match.
+- **`src/features/tickets/detail/TicketDetailsTab.tsx`** (KRZ-CC-024) —
+  replaced a local, option-less `fmtDate` (browser-default format, e.g.
+  `7/28/2026`) with the shared `formatDate` from `lib/utils.ts`
+  (`28 Jul 2026`) already used everywhere else on the same page.
+- **`src/components/shared/EntityAuditTrail.tsx`** (KRZ-CC-011) — added an
+  `extraRefs` prop; folds in audit-trail rows for extra entities (e.g. a
+  ticket's `FormSubmission`s) via `useQueries` against the existing generic
+  `/audit-trail/:entityType/:entityId` endpoint (no backend change — the route
+  and the underlying Prisma audit-diff extension were already fully generic),
+  merged and sorted with the primary entity's rows.
+  `src/features/tickets/TicketDetailPage.tsx` now passes the ticket's
+  submission ids (from `useTicketFormHistory`) as `extraRefs`, so the History
+  tab shows who changed a stage-form field ("Verified By", etc.), not just
+  ticket-column edits.
+- **`src/components/shared/StageProgressDots.tsx`** (new, KRZ-RISK-023) — dot
+  row showing lifecycle position ("stage 3 of 6"), derived from the
+  workflow's real `flow_json.nodes` graph (fork/join/decision nodes excluded,
+  linear read). Wired into `src/features/modules/ModulePage.tsx`'s
+  `TicketTable`, fetched once per distinct workflow id on the page via
+  `useQueries` — not per row. Falls back to no dots (existing stage-name
+  badge only) when the sequence can't be resolved, rather than guessing.
+  Benefits every module's list view, not just Risk.
+- **`src/features/risk/RiskFrameworkPage.tsx`** (KRZ-RISK-027) — added a Site
+  selector to the framework editor (`RiskFramework.siteId` already existed
+  end-to-end in the API types; the editor just never exposed it).
+
+### Verification pass (Playwright, same day)
+
+`tests/e2e/krz-frontend-fixes.spec.ts` **(new)** — 15 specs driving the real
+app on :5173, one per tracker id plus explicit side-effect specs asserting the
+shared components (RaiseTicketDrawer / ModuleDashboard / metrics.ts) did *not*
+change behaviour for modules that didn't opt in, and that no page raises a
+React hook/dependency error. All 15 green. Four defects were found by that pass
+and fixed:
+
+1. **Hooks-order violation (introduced by this batch)** —
+   `EntityAuditTrail.tsx` called `useMemo` *after* the `if (!canRead) return`
+   early return, and used a spread (`[data, ...queries.map(...)]`) as its dep
+   array. The first crashes as soon as `canRead` flips when permissions resolve;
+   the second changes the deps array's length between renders (`extraRefs`
+   starts `[]`). Hooks moved above the early return and the fingerprint joined
+   into one dep.
+2. **CC-024 was only half-fixed** — the ticket detail page still rendered
+   `7/28/2026` on the Stage Forms tab. Four more components had their own
+   `new Date(...).toLocaleString()`: `StageFormSection`, `TicketFormHistory`,
+   `SubmittedFormsCard`, `RequiredFormsCard` — all now use the shared
+   `formatDateTime`. (`SlaPanel` deliberately left alone: it is timezone-aware
+   and uses `dateStyle: 'medium'`, which never produces the ambiguous
+   all-numeric form.)
+3. **CC-011 missed the current stage** — `extraRefs` was derived only from
+   `/tickets/:id/form-submissions`, which *deliberately* excludes the current
+   stage ("StageFormSection renders those"), so the form being actively edited
+   contributed nothing. Now merged with `useTicketStageForms`' per-binding
+   `latestSubmission`.
+4. **Merged audit rows were unattributable** — a folded-in form row rendered as
+   a bare `CREATE  —` with nothing marking it as form-level. `buildTrailColumns`
+   gained an opt-in `showSource` column (off everywhere except this merged
+   view, so the global viewer is untouched), rendering `FormSubmission` as
+   "Stage form".
+
+Caveats worth knowing, both **pre-existing and unrelated to this batch** (each
+proven so, and pinned by a spec so they can't be mistaken for a regression):
+
+- **KRZ-MKT-007 cannot function until a migration runs.** `Supplier.riskTier`
+  exists in `schema.prisma` but was never migrated into `kaizen_qms2`, so a bare
+  `prisma.supplier.findMany()` — no `serialize()` involved — already fails with
+  *"The column `Supplier.riskTier` does not exist"*. Every supplier query 500s;
+  the new column renders but can never populate.
+- **The ticket-id allocator can deadlock a prefix.** `generateUniqueTicketId`
+  finds the highest id excluding child tickets but checks uniqueness *including*
+  them, and retries only 5 times — so a run of ≥5 child tickets (CAPA-FQS-080…084
+  today) permanently blocks new tickets on that prefix. New CAPA tickets cannot
+  currently be raised at all.
+- Form re-submission writes a **new** `FormSubmission` rather than mutating one,
+  so the audit trail shows successive `CREATE` rows per submit rather than
+  old→new field diffs. CC-011 surfaces *that a stage form was submitted, by whom
+  and when*; true field-level diffs would need the backend to update in place.
+
 ## Submitted stage form labels/values hard to tell apart — 2026-07-27
 
 `src/features/forms/FormFillEmbed.tsx` + `src/features/forms/FieldValueText.tsx`

@@ -6,9 +6,7 @@ import { Card, Button } from '@/components/ui';
 import { useUpdateTicket, type TicketDetail } from '@/lib/api/ticket';
 import { usePriorities } from '@/lib/api/workflowLookups';
 import { useDepartments } from '@/features/admin/departments/hooks';
-
-const fmtDate = (d: string | null | undefined) =>
-  d ? new Date(d).toLocaleDateString() : '—';
+import { formatDate as fmtDate } from '@/lib/utils';
 
 function Info({ label, value }: { label: string; value: React.ReactNode }) {
   return (

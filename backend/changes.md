@@ -4,6 +4,18 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+## Supplier risk tier not exposed via API — 2026-07-28
+
+`src/modules/lims-master/supplier.service.ts` — `Supplier.riskTier`/
+`riskTierUpdatedAt` were already computed and stored (derived from the linked
+`RiskProfile` in `risk-gate.service.ts`) but `serialize()` never included them
+in the API response, so the tier was invisible end-to-end despite being real
+data. Added `risk_tier`/`risk_tier_updated_at` to `serialize()`. Frontend
+change (new column on the Suppliers list) logged in `client/changes.md` under
+the KRZ-MKT-007 entry. Not committed.
+
+---
+
 # Ticket escalation matrix — 2026-07-26
 
 Auto-reassign a ticket to someone else in its department when it crosses its SLA
