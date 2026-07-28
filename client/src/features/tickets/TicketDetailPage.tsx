@@ -264,7 +264,7 @@ export default function TicketDetailPage() {
                     isCompleted={isCompleted}
                   />
                 ) : (
-                  <StageFormSection ticketId={ticket.id} ticketPriorityName={ticket.priority?.name} />
+                  <StageFormSection ticketId={ticket.id} />
                 )}
                 {typeof ticket.customFields?.audit_register_id === 'string' && (
                   <>
