@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => ({
         // Point the dev proxy at the remote backend so the SPA talks to it
         // through same-origin /api (no CORS). Swap back to a local target
         // (e.g. http://127.0.0.1:4000) when running the backend locally.
-        target: 'http://68.178.164.38:8080',
+        target: 'http://localhost:4000',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (_err, _req, res) => {

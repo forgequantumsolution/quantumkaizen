@@ -17,6 +17,7 @@ import {
   type SubmittedFormHistoryItem,
 } from '@/lib/api/stageForm';
 import FormFillEmbed from '@/features/forms/FormFillEmbed';
+import { formatDateTime } from '@/lib/utils';
 
 interface Props {
   ticketId: string;
@@ -159,7 +160,7 @@ export default function TicketFormHistory({
           )}
           {active.submittedAt && (
             <span className="text-gray-400">
-              · {new Date(active.submittedAt).toLocaleString()}
+              · {formatDateTime(active.submittedAt)}
             </span>
           )}
         </div>

@@ -1,17 +1,60 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ClipboardList, Lock } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardList, Lock } from 'lucide-react';
 import { Card } from '@/components/ui';
 import {
   useTicketStageForms,
   type TicketStageFormBinding,
 } from '@/lib/api/stageForm';
+import { useSubmission } from '@/features/forms/hooks';
 import FormFillEmbed from '@/features/forms/FormFillEmbed';
+import { formatDateTime } from '@/lib/utils';
 
 interface Props {
   ticketId: string;
+  /** The ticket's own Priority name (e.g. "Low"/"Critical") — used only to flag
+   *  a contradiction against this stage's Risk/Regulatory answers, if present. */
+  ticketPriorityName?: string | null;
 }
 
-export default function StageFormSection({ ticketId }: Props) {
+/**
+ * Cross-checks a submitted form's "Risk to Patient/Product" and "Regulatory
+ * Reportable" answers (present on the CAPA Initiation form, and reused on a
+ * couple of others) against the ticket's Priority, so a "Low" priority sitting
+ * next to a regulatory-reportable or high-risk answer gets a second look
+ * instead of sailing through unnoticed.
+ */
+function usePriorityContradiction(
+  responses: Record<string, Record<string, unknown>> | undefined,
+  priorityName: string | null | undefined,
+) {
+  return useMemo(() => {
+    if (!responses) return null;
+    const flat: Record<string, unknown> = {};
+    for (const section of Object.values(responses)) {
+      Object.assign(flat, section);
+    }
+    const hasRisk = 'risk_to_patient_product' in flat || 'regulatory_reportable' in flat;
+    if (!hasRisk) return null;
+
+    const regulatoryReportable = flat.regulatory_reportable === 'yes';
+    const highPatientRisk = flat.risk_to_patient_product === 'high';
+    const priority = (priorityName ?? '').toLowerCase();
+    const lowOrUnset = !priority || priority === 'low';
+
+    if (lowOrUnset && (regulatoryReportable || highPatientRisk)) {
+      const reasons = [
+        regulatoryReportable && 'marked Regulatory Reportable',
+        highPatientRisk && 'Risk to Patient/Product is High',
+      ].filter(Boolean);
+      return `This record is ${reasons.join(' and ')}, but Priority is ${
+        priority ? `set to "${priorityName}"` : 'not set'
+      }. Worth a second look before this moves on.`;
+    }
+    return null;
+  }, [responses, priorityName]);
+}
+
+export default function StageFormSection({ ticketId, ticketPriorityName }: Props) {
   const { data, isLoading } = useTicketStageForms(ticketId);
   // Only forms the current user may READ are surfaced with content. Forms they're
   // not in the fill/view group for are shown as a locked notice (no title, no
@@ -38,6 +81,17 @@ export default function StageFormSection({ ticketId }: Props) {
     );
     setActiveBindingId((firstPending ?? bindings[0])!.id);
   }, [bindings, activeBindingId]);
+
+  const activeForContradictionCheck = bindings.find((b) => b.id === activeBindingId) ?? bindings[0];
+  const activeSubmissionId =
+    activeForContradictionCheck?.latestSubmission?.status === 'SUBMITTED'
+      ? activeForContradictionCheck.latestSubmission.id
+      : undefined;
+  const { data: activeSubmissionDetail } = useSubmission(activeSubmissionId);
+  const priorityContradiction = usePriorityContradiction(
+    activeSubmissionDetail?.responses,
+    ticketPriorityName,
+  );
 
   if (isLoading) {
     return (
@@ -125,9 +179,19 @@ export default function StageFormSection({ ticketId }: Props) {
           </span>
           {isActiveSubmitted && active.latestSubmission?.submittedAt && (
             <span className="text-gray-400">
-              · {new Date(active.latestSubmission.submittedAt).toLocaleString()}
+              · {formatDateTime(active.latestSubmission.submittedAt)}
             </span>
           )}
+        </div>
+      )}
+
+      {/* Priority vs. Risk/Regulatory contradiction — informational, not a
+          submit gate; the generic form runtime has no cross-field hook to
+          block on, so this surfaces alongside the submitted answers instead. */}
+      {isActiveSubmitted && priorityContradiction && (
+        <div className="px-3 py-2 bg-amber-50 text-[12px] text-amber-800 flex items-start gap-2 border-b border-amber-100">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-500" />
+          <span>{priorityContradiction}</span>
         </div>
       )}
 

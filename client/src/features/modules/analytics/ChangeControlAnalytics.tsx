@@ -32,7 +32,7 @@ import {
   stageCounts,
   closureRate,
   avgCycleDays,
-  agingByCreation,
+  dueDatePosture,
 } from '@/components/analytics';
 import { KpiCard } from '@/components/ui';
 import type { ModuleAnalyticsProps } from './types';
@@ -54,7 +54,7 @@ export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnaly
       onHold,
       avgCycle: avgCycleDays(filtered),
       trend: openClosedTrend(filtered),
-      openAging: agingByCreation(open),
+      openAging: dueDatePosture(open),
       typeSplit: countBy(filtered, (t) => t.priority?.name),
       categorySplit: countBy(filtered, (t) => t.classification),
       approvalStages: stageCounts(open),
@@ -84,7 +84,7 @@ export default function ChangeControlAnalytics({ tickets, onDrill }: ModuleAnaly
           />
         </ChartCard>
 
-        <ChartCard title="Open Change Aging" subtitle="How long open changes have been in the system, by age bucket">
+        <ChartCard title="SLA Posture — Open Changes" subtitle="On-time vs. due-soon vs. overdue against each change's due date">
           <AgingBucketChart data={m.openAging} emptyLabel="No open changes" />
         </ChartCard>
 

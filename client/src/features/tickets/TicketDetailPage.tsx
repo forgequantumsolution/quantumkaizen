@@ -7,6 +7,7 @@ import { Button, Card, Spinner, Tabs } from '@/components/ui';
 import PageContainer from '@/components/layout/PageContainer';
 import { useAuthStore } from '@/stores/authStore';
 import { useDeleteTicket, useTicket, useTicketTrack } from '@/lib/api/ticket';
+import { useTicketFormHistory, useTicketStageForms } from '@/lib/api/stageForm';
 import { useWorkflowTypes } from '@/lib/api/workflowLookups';
 import { findingTypeReadKey, findingTypeCreateKey } from '@/lib/navAccess';
 import FindingsTab from './detail/FindingsTab';
@@ -55,6 +56,30 @@ export default function TicketDetailPage() {
 
   const { data: ticket, isLoading, error } = useTicket(id);
   const { data: trackRows } = useTicketTrack(id);
+
+  // Field-level edits to stage-form answers live on the FormSubmission rows,
+  // not the Ticket row — fold their audit history into the ticket's so the
+  // History tab shows who changed "Verified By" etc., not just ticket-level
+  // fields like title/priority.
+  //
+  // Both sources are needed: /form-submissions deliberately omits the CURRENT
+  // stage (StageFormSection owns that view), and the current stage's form is
+  // precisely the one being actively edited — so on its own it would miss the
+  // edits that matter most.
+  const { data: formHistoryData } = useTicketFormHistory(ticket?.id);
+  const { data: stageFormsData } = useTicketStageForms(ticket?.id);
+  const formSubmissionRefs = useMemo(() => {
+    const ids = [
+      ...(formHistoryData?.submissions ?? []).map((s) => s.id),
+      ...(stageFormsData?.bindings ?? [])
+        .map((b) => b.latestSubmission?.id)
+        .filter((id): id is string => !!id),
+    ];
+    return Array.from(new Set(ids)).map((submissionId) => ({
+      entityType: 'FormSubmission',
+      entityId: submissionId,
+    }));
+  }, [formHistoryData, stageFormsData]);
 
   // Which stages the ticket actually entered, and — when it was rejected —
   // which it was parked on at the time. A rejected flow is also `isCompleted`,
@@ -265,10 +290,16 @@ export default function TicketDetailPage() {
                   <div className="px-4 pt-3 pb-2">
                     <h3 className="text-sm font-semibold text-gray-900">Audit Trail</h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Every recorded change to this ticket and who made it.
+                      Every recorded change to this ticket and its stage-form answers, and who
+                      made it.
                     </p>
                   </div>
-                  <EntityAuditTrail entityType="Ticket" entityId={ticket.id} compact />
+                  <EntityAuditTrail
+                    entityType="Ticket"
+                    entityId={ticket.id}
+                    extraRefs={formSubmissionRefs}
+                    compact
+                  />
                 </Card>
               </div>
             )}

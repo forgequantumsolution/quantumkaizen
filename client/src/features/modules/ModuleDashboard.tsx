@@ -469,7 +469,7 @@ function ChartSlot({ chart, m, moduleName, accent }: ChartSlotProps) {
     case 'stage':
       return (
         <ChartCard title="Stage workload" subtitle="Records currently parked at each stage">
-          <HBarOrEmpty data={m.stage} color={PALETTE.purple} width={120} />
+          <HColorBarOrEmpty data={m.stage} width={120} />
         </ChartCard>
       );
     case 'priority':
@@ -552,6 +552,33 @@ function VBarOrEmpty({ data, color }: { data: Slice[]; color: string }) {
         <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#64748B' }} />
         <Tooltip contentStyle={TT_STYLE} />
         <Bar dataKey="value" name="Records" fill={color} radius={[6, 6, 0, 0]} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// One shared cycling palette for charts that need to tell several *individual*
+// categories apart at a glance (e.g. each workflow stage) — distinct from
+// PALETTE.<accent>, which intentionally paints an entire module's single-series
+// charts one consistent brand color.
+const STAGE_PALETTE = [
+  '#8B5CF6', '#06B6D4', '#F59E0B', '#10B981', '#F43F5E', '#6366F1', '#EC4899', '#0EA5E9',
+];
+
+function HColorBarOrEmpty({ data, width }: { data: Slice[]; width: number }) {
+  if (data.length === 0) return <EmptyChart />;
+  return (
+    <ResponsiveContainer width="100%" height={240}>
+      <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 5, bottom: 5 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#64748B' }} />
+        <YAxis dataKey="name" type="category" tick={{ fontSize: 11, fill: '#64748B' }} width={width} />
+        <Tooltip contentStyle={TT_STYLE} />
+        <Bar dataKey="value" name="Records" radius={[0, 6, 6, 0]}>
+          {data.map((entry, i) => (
+            <Cell key={entry.name} fill={entry.color ?? STAGE_PALETTE[i % STAGE_PALETTE.length]} />
+          ))}
+        </Bar>
       </BarChart>
     </ResponsiveContainer>
   );

@@ -37,6 +37,7 @@ import FilterBar, { FilterField } from '@/components/shared/FilterBar';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
 import { useConfirmDelete } from '@/components/shared/useConfirmDelete';
 import { useHasPermission } from '@/stores/authStore';
+import { useSites } from '@/lib/api/sites';
 import {
   riskKeys,
   useCloneFramework,
@@ -84,6 +85,7 @@ interface FrameworkFormValues {
   formula: RiskFormula;
   isActive: boolean;
   isDefault: boolean;
+  siteId?: string | null;
 }
 
 const extractErr = (err: unknown): string =>
@@ -779,6 +781,8 @@ function FrameworkDrawer({
 
   const createMut = useCreateFramework();
   const updateMut = useUpdateFramework(framework?.id ?? '');
+  const { data: sitesData } = useSites({ isActive: 'true', pageSize: 200 });
+  const sites = sitesData?.items ?? [];
 
   const inUse = !!framework && (framework.risk_count > 0 || framework.register_count > 0);
 
@@ -795,6 +799,7 @@ function FrameworkDrawer({
         formula: framework.formula,
         isActive: framework.is_active,
         isDefault: framework.is_default,
+        siteId: framework.site_id ?? undefined,
       });
       setFactors(
         [...framework.factors]
@@ -845,6 +850,7 @@ function FrameworkDrawer({
         formula: 'PRODUCT',
         isActive: true,
         isDefault: false,
+        siteId: undefined,
       });
       setFactors([]);
       setBands([]);
@@ -931,6 +937,7 @@ function FrameworkDrawer({
       formula: values.formula,
       isActive: values.isActive,
       isDefault: values.isDefault,
+      siteId: values.siteId ?? null,
       factors: factors.map((f, i) => ({
         ...f,
         key: f.key.trim(),
@@ -1047,6 +1054,19 @@ function FrameworkDrawer({
             <AntSelect options={FORMULAS.map((f) => ({ value: f, label: FORMULA_LABELS[f] }))} />
           </Form.Item>
         </div>
+        <Form.Item
+          name="siteId"
+          label="Site"
+          extra="Leave unset for an organisation-wide framework available to every site."
+        >
+          <AntSelect
+            allowClear
+            showSearch
+            optionFilterProp="label"
+            placeholder="Organisation-wide (all sites)"
+            options={sites.map((s) => ({ value: s.id, label: `${s.code} · ${s.name}` }))}
+          />
+        </Form.Item>
         <div className="flex items-center gap-8">
           <Form.Item name="isActive" label="Active" valuePropName="checked">
             <Switch />

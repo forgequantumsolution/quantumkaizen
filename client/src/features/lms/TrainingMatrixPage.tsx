@@ -4,7 +4,7 @@ import { Grid3x3, Plus, Trash2, RefreshCw } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
 import {
-  useMatrixRules, useCreateMatrixRule, useDeleteMatrixRule, useSyncMatrix,
+  useMatrixRules, useCreateMatrixRule, useUpdateMatrixRule, useDeleteMatrixRule, useSyncMatrix,
   useCourses, useCurricula,
   type MatrixRule, type MatrixTargetType, type MatrixRequiresType,
 } from '@/lib/api/lms';
@@ -17,6 +17,7 @@ export default function TrainingMatrixPage() {
   const canWrite = useHasPermission('lms_matrix.write');
   const { data: rules, isLoading } = useMatrixRules();
   const create = useCreateMatrixRule();
+  const update = useUpdateMatrixRule();
   const del = useDeleteMatrixRule();
   const sync = useSyncMatrix();
 
@@ -34,8 +35,11 @@ export default function TrainingMatrixPage() {
   const [requiresId, setRequiresId] = useState<string>('');
   const [dueDays, setDueDays] = useState<number | null>(30);
   const [recurring, setRecurring] = useState(false);
+  // New rules default to firing on join; the DB column defaults to false so that
+  // rules created before this feature stay sync-only until deliberately armed.
+  const [autoAssign, setAutoAssign] = useState(true);
 
-  const reset = () => { setTargetType('ROLE'); setTargetId(''); setRequiresType('COURSE'); setRequiresId(''); setDueDays(30); setRecurring(false); };
+  const reset = () => { setTargetType('ROLE'); setTargetId(''); setRequiresType('COURSE'); setRequiresId(''); setDueDays(30); setRecurring(false); setAutoAssign(true); };
 
   const nameLookup = (type: MatrixTargetType, id: string): string => {
     if (type === 'ROLE') return rolesResp?.items.find((r) => r.id === id)?.name ?? id;
@@ -56,6 +60,7 @@ export default function TrainingMatrixPage() {
         target_type: targetType, target_id: targetId.trim(),
         requires_type: requiresType, requires_id: requiresId,
         due_within_days: dueDays, recurring, is_active: true,
+        auto_assign_on_join: autoAssign,
       });
       message.success('Rule added');
       setOpen(false); reset();
@@ -80,6 +85,23 @@ export default function TrainingMatrixPage() {
     ) },
     { title: 'Due', dataIndex: 'due_within_days', width: 110, render: (d: number | null) => (d ? `${d} days` : '—') },
     { title: 'Recurring', dataIndex: 'recurring', width: 100, render: (v: boolean) => (v ? <Tag color="gold">Recurring</Tag> : '—') },
+    {
+      title: 'On join', dataIndex: 'auto_assign_on_join', width: 110,
+      render: (v: boolean, r: MatrixRule) => (canWrite ? (
+        <Switch
+          size="small"
+          checked={v}
+          loading={update.isPending && update.variables?.id === r.id}
+          onChange={(checked) => update.mutate(
+            { id: r.id, body: { auto_assign_on_join: checked } },
+            {
+              onSuccess: () => message.success(checked ? 'Rule now fires on join' : 'Rule is sync-only again'),
+              onError: () => message.error('Could not update rule'),
+            },
+          )}
+        />
+      ) : v ? <Tag color="green">On join</Tag> : '—'),
+    },
     ...(canWrite ? [{
       title: '', width: 60,
       render: (_: unknown, r: MatrixRule) => (
@@ -176,8 +198,13 @@ export default function TrainingMatrixPage() {
               <label className="text-xs font-medium text-gray-600 block mb-1">Recurring (recert)</label>
               <Switch checked={recurring} onChange={setRecurring} />
             </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Auto-assign on join</label>
+              <Switch checked={autoAssign} onChange={setAutoAssign} />
+            </div>
           </div>
           <p className="text-[11px] text-gray-400">Recurring rules re-open a completed course for retraining once its validity period lapses (on the next sync).</p>
+          <p className="text-[11px] text-gray-400">Auto-assign on join enrols a person the moment they land in this target — a new user created into it, someone moved into it, or a reactivated employee — without waiting for a sync. Leave it off to keep the rule sync-only.</p>
         </div>
       </Modal>
     </PageContainer>

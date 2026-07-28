@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQueries } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { App, Drawer } from 'antd';
 import {
@@ -47,6 +48,7 @@ import PageContainer from '@/components/layout/PageContainer';
 import { cn, formatDate, displayWorkflowName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useBookmarkStore } from '@/stores/bookmarkStore';
+import { api } from '@/lib/api';
 import {
   useDeleteTicket,
   useTickets,
@@ -56,12 +58,13 @@ import {
   type TicketSummary,
 } from '@/lib/api/ticket';
 import { useTicketChildren } from '@/lib/api/finding';
-import { useWorkflowDirectory } from '@/lib/api/workflow';
+import { useWorkflowDirectory, workflowKeys, type WorkflowDetailResponse } from '@/lib/api/workflow';
 import {
   usePriorities,
   useWorkflowTypes,
 } from '@/lib/api/workflowLookups';
 import RaiseTicketDrawer from '@/features/tickets/shared/RaiseTicketDrawer';
+import StageProgressDots from '@/components/shared/StageProgressDots';
 import { downloadTicketReport } from '@/features/tickets/report/downloadTicketReport';
 import ModuleAnalytics from './analytics';
 import ModuleFindingsRegister from './ModuleFindingsRegister';
@@ -421,6 +424,31 @@ export default function ModulePage({
   const moduleName = workflowType?.name ?? 'Module';
   const codePrefix = workflowType?.codePrefix;
   const hasFilter = !!priorityId || !!workflowFilterId;
+
+  // Per-module copy/validation for the raise-ticket drawer. Falls back to the
+  // generic "Raise a new ticket" wording for every module without an override.
+  const isRisk = moduleName === 'Risk Management';
+  const isCapa = moduleName === 'CAPA';
+  const raiseDrawerProps = isRisk
+    ? {
+        drawerTitle: 'Initiate risk assessment',
+        submitLabel: 'Initiate assessment',
+        requireSeverity: true,
+        requireClassification: true,
+      }
+    : isCapa
+      ? {
+          titlePlaceholder: 'e.g. OOS Result – Paracetamol 500mg – Batch BLX-04-2026-353',
+          titleHelp: 'Include the product, batch/lot, and test parameter where applicable.',
+          priorityHint: (
+            <div className="text-xs leading-relaxed">
+              Priority maps to the CAPA severity/closure tiers used elsewhere in this module:
+              <br />
+              Critical → Critical · High → Major · Medium → Minor · Low → Observation
+            </div>
+          ),
+        }
+      : {};
 
   const showCreate = canCreate;
 
@@ -811,6 +839,7 @@ export default function ModulePage({
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
         workflowTypeId={typeId}
+        {...raiseDrawerProps}
       />
     </>
   );
@@ -951,6 +980,37 @@ function TicketTable({
       return next;
     });
 
+  // Lifecycle-position dots for the Stage column: fetched once per distinct
+  // workflow on this page (usually just one), not per row. A stage sequence
+  // that can't be resolved (still loading, or the workflow uses forks/joins
+  // this linear read doesn't attempt to order) simply renders no dots — the
+  // existing stage-name badge is the fallback either way.
+  const workflowIds = useMemo(
+    () => Array.from(new Set(tickets.map((t) => t.flows[0]?.workflowId).filter((v): v is string => !!v))),
+    [tickets],
+  );
+  const workflowQueries = useQueries({
+    queries: workflowIds.map((wfId) => ({
+      queryKey: workflowKeys.detail(wfId),
+      queryFn: () => api.get(`/workflows/${wfId}`).then((r) => r.data as WorkflowDetailResponse),
+      staleTime: 5 * 60 * 1000,
+    })),
+  });
+  const stageOrderByWorkflow = useMemo(() => {
+    const map = new Map<string, string[]>();
+    workflowIds.forEach((wfId, i) => {
+      const nodes = workflowQueries[i]?.data?.flow_json.nodes;
+      if (!nodes) return;
+      const ids = nodes
+        .filter((n) => n.data?.nodeType !== 'fork' && n.data?.nodeType !== 'join' && n.data?.nodeType !== 'decision')
+        .map((n) => n.data?.persistedStageId)
+        .filter((v): v is string => !!v);
+      map.set(wfId, ids);
+    });
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflowIds, workflowQueries.map((q) => q.dataUpdatedAt).join(',')]);
+
   // Ticket id currently being rendered to a PDF report (drives the row spinner
   // and prevents double-clicks).
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -992,6 +1052,9 @@ function TicketTable({
               const completed = isCompletedSuccessfully(t);
               const rejected = ticketOutcome(t) === 'rejected';
               const stageName = flow?.currentStages[0]?.name;
+              const stageOrder = flow?.workflowId ? stageOrderByWorkflow.get(flow.workflowId) : undefined;
+              const currentStageId = flow?.currentStages[0]?.id;
+              const stageIndex = stageOrder && currentStageId ? stageOrder.indexOf(currentStageId) : -1;
               const bookmarked = isBookmarked(t.id);
               const hasChildren = (t.childCount ?? 0) > 0;
               const isExpanded = expanded.has(t.id);
@@ -1081,9 +1144,14 @@ function TicketTable({
                           Completed
                         </span>
                       ) : stageName ? (
-                        <span className="inline-flex items-center text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
-                          {stageName}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-flex items-center text-[11px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md w-fit">
+                            {stageName}
+                          </span>
+                          {stageIndex >= 0 && stageOrder && (
+                            <StageProgressDots stageIndex={stageIndex} totalStages={stageOrder.length} />
+                          )}
+                        </div>
                       ) : (
                         <span className="text-xs text-gray-400">—</span>
                       )}

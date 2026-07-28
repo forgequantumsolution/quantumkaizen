@@ -32,7 +32,7 @@ import {
   daysUntil,
   countBy,
   openClosedTrend,
-  agingByCreation,
+  agingByCreationFine,
   avgOpenAge,
 } from '@/components/analytics';
 import { KpiCard } from '@/components/ui';
@@ -121,7 +121,7 @@ export default function RiskAnalytics({ tickets, onDrill }: ModuleAnalyticsProps
       rpn: countBy(filtered, (t) => t.severity?.name ?? t.title),
       trend: openClosedTrend(filtered),
       category: countBy(filtered, (t) => t.classification),
-      aging: agingByCreation(open),
+      aging: agingByCreationFine(open),
       reassess,
     };
   }, [filtered]);

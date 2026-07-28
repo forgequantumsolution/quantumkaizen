@@ -50,6 +50,7 @@ export default function SuppliersPage() {
           { title: 'Name', dataIndex: 'name', width: 240, ellipsis: true },
           { title: 'Contact', dataIndex: 'contact_name', width: 160, render: (v: string | null) => v ?? '—' },
           { title: 'Country', dataIndex: 'country', width: 120, render: (v: string | null) => v ?? '—' },
+          { title: 'Risk Tier', dataIndex: 'risk_tier', width: 110, render: (v: string | null) => <RiskTierBadge tier={v} /> },
           { title: 'Active', dataIndex: 'is_active', width: 90, render: (v: boolean) => <ActiveBadge active={v} /> },
           {
             title: '', width: 90,
@@ -109,4 +110,21 @@ function SupplierDrawer({ open, onClose, supplier }: { open: boolean; onClose: (
 
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><label className="block text-[11px] font-medium text-gray-600 mb-1">{label}</label>{children}</div>;
+}
+
+const RISK_TIER_STYLE: Record<string, string> = {
+  CRITICAL: 'bg-rose-50 text-rose-700 border-rose-200',
+  HIGH: 'bg-amber-50 text-amber-700 border-amber-200',
+  MEDIUM: 'bg-blue-50 text-blue-700 border-blue-200',
+  LOW: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+};
+
+function RiskTierBadge({ tier }: { tier: string | null }) {
+  if (!tier) return <span className="text-gray-400 text-xs">—</span>;
+  const cls = RISK_TIER_STYLE[tier.toUpperCase()] ?? 'bg-gray-50 text-gray-600 border-gray-200';
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border ${cls}`}>
+      {tier}
+    </span>
+  );
 }

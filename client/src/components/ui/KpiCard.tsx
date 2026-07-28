@@ -193,8 +193,8 @@ export function KpiCard({
         </div>
 
         {Icon && (
-          <span className={cn('flex h-9 w-9 items-center justify-center rounded-xl shrink-0', a.chip)}>
-            <Icon className="h-[18px] w-[18px]" strokeWidth={2} />
+          <span className={cn('flex h-11 w-11 items-center justify-center rounded-xl shrink-0', a.chip)}>
+            <Icon className="h-6 w-6" strokeWidth={2} />
           </span>
         )}
       </div>

@@ -203,6 +203,30 @@ export function agingByCreation(tickets: TicketSummary[]): Slice[] {
   return b;
 }
 
+/**
+ * Finer-grained aging of open records by days since creation, with buckets past
+ * `slaDays` shown in red rather than only the oldest bucket — for panels where
+ * the coarse 4-bucket `agingByCreation` hides how much sits just past SLA.
+ * Kept separate from `agingByCreation` so existing callers are unaffected.
+ */
+export function agingByCreationFine(tickets: TicketSummary[], slaDays = 30): Slice[] {
+  const b = [
+    { name: '0-7 days', value: 0, color: '#22C55E' },
+    { name: '8-15 days', value: 0, color: '#84CC16' },
+    { name: '16-30 days', value: 0, color: '#F59E0B' },
+    { name: '31-60 days', value: 0, color: '#F97316' },
+    { name: '60+ days', value: 0, color: '#EF4444' },
+  ];
+  for (const t of tickets) {
+    if (isClosed(t)) continue;
+    const d = daysSince(t.createdAt);
+    const idx = d <= 7 ? 0 : d <= 15 ? 1 : d <= 30 ? 2 : d <= 60 ? 3 : 4;
+    b[idx]!.value++;
+    if (d > slaDays) b[idx]!.color = '#EF4444';
+  }
+  return b;
+}
+
 /** On-time / due-soon / overdue posture for open records (spec §6). */
 export function dueDatePosture(tickets: TicketSummary[]): Slice[] {
   let overdue = 0, dueSoon = 0, onTrack = 0, noDue = 0;

@@ -8,6 +8,7 @@ import { writeTrail } from '../audit/compliance.service';
 import { recordAudit } from '../../lib/audit';
 import { resolveCoverFor } from '../escalation/resolveTarget';
 import { notify } from '../escalation/notify';
+import { syncMatrixForUser } from '../lms/lms-assign.service';
 import type {
   CreateAvailabilityInput,
   CreateUserInput,
@@ -264,6 +265,24 @@ const reassignOpenTicketsAway = async (userId: string, at: Date): Promise<number
   return moved;
 };
 
+/**
+ * Enrol a user against any armed training-matrix rules that now target them
+ * (see syncMatrixForUser). Runs on join: creation, or a move into a new role /
+ * department / site / designation.
+ *
+ * Never allowed to fail the user write that triggered it — training assignment
+ * is a downstream consequence, not part of the user record. assignedById is left
+ * unset so the enrollment reads as system-assigned rather than attributed to
+ * whichever admin happened to save the user.
+ */
+const applyTrainingMatrix = async (userId: string) => {
+  try {
+    await syncMatrixForUser(userId);
+  } catch {
+    // Swallowed by design: a matrix misconfiguration must not block user admin.
+  }
+};
+
 export const create = async (input: CreateUserInput) => {
   const conflictCheck: Prisma.UserWhereInput[] = [{ email: input.email }];
   if (input.employeeId) conflictCheck.push({ employeeId: input.employeeId });
@@ -282,7 +301,7 @@ export const create = async (input: CreateUserInput) => {
   const passwordHash = await hashPassword(input.password);
   const name = computeName(input);
 
-  return prisma.user.create({
+  const created = await prisma.user.create({
     data: {
       email: input.email,
       passwordHash,
@@ -304,12 +323,20 @@ export const create = async (input: CreateUserInput) => {
     },
     select: publicSelect,
   });
+
+  await applyTrainingMatrix(created.id);
+  return created;
 };
 
 export const update = async (id: string, input: UpdateUserInput) => {
   const current = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, email: true, employeeId: true, firstName: true, lastName: true, name: true },
+    // roleId/departmentId/siteId/designation/isActive are read for the training-
+    // matrix comparison below, not for the update itself.
+    select: {
+      id: true, email: true, employeeId: true, firstName: true, lastName: true, name: true,
+      roleId: true, departmentId: true, siteId: true, designation: true, isActive: true,
+    },
   });
   if (!current) throw NotFound('User not found');
 
@@ -355,6 +382,20 @@ export const update = async (id: string, input: UpdateUserInput) => {
     select: publicSelect,
   });
   if (input.roleId !== undefined) invalidatePermissionCache(id);
+
+  // Compare against the RETURNED row, not `input` — every one of these fields is
+  // optional, and Prisma reads `undefined` as "leave unchanged", so comparing
+  // against input would flag a change on any save that simply omits the field.
+  // A reactivation counts as a join too: syncMatrixForUser skips inactive users,
+  // so a returning employee would otherwise never be caught up.
+  const joinedNewTarget =
+    updated.roleId !== current.roleId ||
+    updated.departmentId !== current.departmentId ||
+    updated.siteId !== current.siteId ||
+    updated.designation !== current.designation ||
+    (updated.isActive && !current.isActive);
+  if (joinedNewTarget) await applyTrainingMatrix(id);
+
   return updated;
 };
 

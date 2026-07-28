@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useQueries } from '@tanstack/react-query';
 import { Empty, Table, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { ArrowRight, ShieldCheck } from 'lucide-react';
 import { useHasPermission } from '@/stores/authStore';
+import { api } from '@/lib/api';
 import { useEntityHistory, type TrailRow } from '@/lib/api/auditTrail';
 import AuditEntryDrawer from './AuditEntryDrawer';
 
@@ -120,7 +122,16 @@ const Details = ({ r, showRecord }: { r: TrailRow; showRecord: boolean }) => {
   return reason ?? <span className="text-gray-300">—</span>;
 };
 
-export const buildTrailColumns = (opts: { showRecord: boolean }): ColumnsType<TrailRow> => {
+export const buildTrailColumns = (opts: {
+  showRecord: boolean;
+  /**
+   * Adds a narrow "Source" column naming the entity each row came from. Set
+   * only when a view merges more than one entity's history (e.g. a ticket plus
+   * its form submissions) — without it a form-level event is indistinguishable
+   * from a ticket-level one, which on a Part 11 trail is worse than useless.
+   */
+  showSource?: boolean;
+}): ColumnsType<TrailRow> => {
   const cols: ColumnsType<TrailRow> = [
     {
       title: 'When',
@@ -223,6 +234,19 @@ export const buildTrailColumns = (opts: { showRecord: boolean }): ColumnsType<Tr
     });
   }
 
+  if (opts.showSource) {
+    cols.push({
+      title: 'Source',
+      dataIndex: 'entity_type',
+      width: 120,
+      render: (v: string) => (
+        <span className="text-xs font-medium text-gray-600">
+          {v === 'FormSubmission' ? 'Stage form' : v}
+        </span>
+      ),
+    });
+  }
+
   cols.push({
     title: 'Details',
     key: 'details',
@@ -257,13 +281,49 @@ interface Props {
   entityType: string;
   entityId: string | undefined;
   compact?: boolean;
+  /**
+   * Extra records whose history should be folded into this view — e.g. a
+   * ticket's own audit trail only covers Ticket-column edits, not the
+   * FormSubmission rows holding its stage-form answers. Pass those submission
+   * ids here so field-level edits to "Verified By", "Implementation Verified",
+   * etc. show up alongside the ticket-level events instead of being invisible.
+   */
+  extraRefs?: Array<{ entityType: string; entityId: string }>;
 }
 
-export default function EntityAuditTrail({ entityType, entityId, compact }: Props) {
+export default function EntityAuditTrail({ entityType, entityId, compact, extraRefs = [] }: Props) {
   const canRead = useHasPermission('audit_trail.read');
   const { data, isLoading } = useEntityHistory(entityType, entityId, canRead);
+
+  const extraQueries = useQueries({
+    queries: extraRefs.map((ref) => ({
+      queryKey: ['audit-trail', 'history', ref.entityType, ref.entityId],
+      queryFn: () =>
+        api.get(`/audit-trail/${ref.entityType}/${ref.entityId}`).then((r) => r.data as { data: TrailRow[] }),
+      enabled: canRead,
+    })),
+  });
+
   const [selected, setSelected] = useState<TrailRow | null>(null);
 
+  const extraLoading = extraQueries.some((q) => q.isLoading);
+  // `extraRefs` grows from [] once the caller's own query resolves, so the
+  // fingerprint is joined into ONE dep rather than spread — a spread would
+  // change the deps array's length between renders, which React rejects.
+  const extraFingerprint = extraQueries.map((q) => q.dataUpdatedAt).join(',');
+  const rows = useMemo(() => {
+    const merged: TrailRow[] = [...(data?.data ?? [])];
+    for (const q of extraQueries) {
+      if (q.data?.data) merged.push(...q.data.data);
+    }
+    return merged.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, extraFingerprint]);
+
+  // Kept below every hook: an early return above them would change the hook
+  // order as soon as `canRead` resolves from the auth store.
   if (!canRead) {
     return (
       <div className="py-10 text-center text-sm text-gray-500">
@@ -272,16 +332,14 @@ export default function EntityAuditTrail({ entityType, entityId, compact }: Prop
     );
   }
 
-  const rows = data?.data ?? [];
-
   return (
     <>
       <Table<TrailRow>
         rowKey="id"
         size="small"
-        loading={isLoading}
+        loading={isLoading || extraLoading}
         dataSource={rows}
-        columns={buildTrailColumns({ showRecord: false })}
+        columns={buildTrailColumns({ showRecord: false, showSource: extraRefs.length > 0 })}
         onRow={(record) => ({
           onClick: () => setSelected(record),
           className: 'cursor-pointer',

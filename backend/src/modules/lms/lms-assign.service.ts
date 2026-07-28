@@ -9,6 +9,7 @@
  *
  * Assignments always target the LATEST PUBLISHED version of a course.
  */
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
 import { writeTrail } from '../audit/compliance.service';
@@ -65,18 +66,27 @@ const enrollIfAbsent = async (
     where: { courseId_userId_courseVersion: { courseId: course.id, userId, courseVersion: course.version } },
   });
   if (existing) return false;
-  await prisma.lmsEnrollment.create({
-    data: {
-      courseId: course.id,
-      courseVersion: course.version,
-      userId,
-      status: 'ASSIGNED',
-      source: source as never,
-      sourceRef: opts.sourceRef ?? null,
-      dueDate: opts.dueDate ?? null,
-      assignedById: opts.assignedById ?? null,
-    },
-  });
+  try {
+    await prisma.lmsEnrollment.create({
+      data: {
+        courseId: course.id,
+        courseVersion: course.version,
+        userId,
+        status: 'ASSIGNED',
+        source: source as never,
+        sourceRef: opts.sourceRef ?? null,
+        dueDate: opts.dueDate ?? null,
+        assignedById: opts.assignedById ?? null,
+      },
+    });
+  } catch (e) {
+    // findUnique-then-create is not atomic. The on-join path (syncMatrixForUser)
+    // runs on every user save, so two concurrent saves can both pass the check —
+    // the unique index is the real guard, and losing that race just means the
+    // enrollment already exists.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') return false;
+    throw e;
+  }
   return true;
 };
 
@@ -224,6 +234,7 @@ const serializeRule = (r: Awaited<ReturnType<typeof prisma.lmsTrainingMatrixRule
   due_within_days: r.dueWithinDays,
   recurring: r.recurring,
   is_active: r.isActive,
+  auto_assign_on_join: r.autoAssignOnJoin,
 });
 
 export const listMatrixRules = async () => {
@@ -244,6 +255,7 @@ export const createMatrixRule = async (input: CreateMatrixRuleInput, userId?: st
       dueWithinDays: input.due_within_days ?? null,
       recurring: input.recurring ?? false,
       isActive: input.is_active ?? true,
+      autoAssignOnJoin: input.auto_assign_on_join ?? false,
       createdById: userId ?? null,
     },
   });
@@ -264,6 +276,7 @@ export const updateMatrixRule = async (id: string, input: UpdateMatrixRuleInput,
       dueWithinDays: input.due_within_days === undefined ? undefined : input.due_within_days,
       recurring: input.recurring ?? undefined,
       isActive: input.is_active ?? undefined,
+      autoAssignOnJoin: input.auto_assign_on_join ?? undefined,
     },
   });
   await writeTrail({ entityType: 'LmsTrainingMatrixRule', entityId: id, action: 'UPDATE' }, userId);
@@ -354,4 +367,67 @@ export const syncMatrix = async (userId?: string) => {
   }
   await writeTrail({ entityType: 'LmsTrainingMatrixRule', entityId: 'sync', action: 'UPDATE', field: 'sync', newValue: `created ${created}, reopened ${reopened}` }, userId);
   return { rules: rules.length, created, reopened };
+};
+
+/**
+ * On-join counterpart of syncMatrix(): enrol ONE user against the matrix rules
+ * that (a) target them and (b) are armed with autoAssignOnJoin.
+ *
+ * Called from the user lifecycle — creation, self-registration, and any change
+ * of role / department / site / designation or a reactivation — so a joiner is
+ * compliant without waiting for someone to press "Run sync".
+ *
+ * Deliberately does NOT handle the recurring/recert re-open path: that keys off
+ * elapsed validity rather than joining, and stays with syncMatrix().
+ *
+ * Cost note: this inherits syncMatrix()'s N+1 shape (a query per course per
+ * rule) and runs inline on the request. That is only tolerable because armed
+ * rules are opt-in and few. If on-join is ever switched on broadly, move this to
+ * the job runner in src/jobs/ rather than leaving it on the write path.
+ */
+export const syncMatrixForUser = async (targetUserId: string, actorId?: string) => {
+  const user = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, isActive: true, roleId: true, departmentId: true, siteId: true, designation: true },
+  });
+  if (!user || !user.isActive) return { rules: 0, created: 0 };
+
+  // JOB_FUNCTION targets match user.designation, as in syncMatrix() above.
+  const targets = [
+    user.roleId && { targetType: 'ROLE' as const, targetId: user.roleId },
+    user.departmentId && { targetType: 'DEPARTMENT' as const, targetId: user.departmentId },
+    user.siteId && { targetType: 'SITE' as const, targetId: user.siteId },
+    user.designation && { targetType: 'JOB_FUNCTION' as const, targetId: user.designation },
+  ].filter(Boolean) as { targetType: 'ROLE' | 'DEPARTMENT' | 'SITE' | 'JOB_FUNCTION'; targetId: string }[];
+  // A user with no role, department, site or designation matches nothing. Bail
+  // rather than querying with `OR: []`, which Prisma treats as "match nothing"
+  // but is easy to misread.
+  if (!targets.length) return { rules: 0, created: 0 };
+
+  const rules = await prisma.lmsTrainingMatrixRule.findMany({
+    where: { isDeleted: false, isActive: true, autoAssignOnJoin: true, OR: targets },
+  });
+  if (!rules.length) return { rules: 0, created: 0 };
+
+  const now = Date.now();
+  let created = 0;
+  for (const rule of rules) {
+    const courses = await requiredCourses(rule);
+    const due = rule.dueWithinDays ? new Date(now + rule.dueWithinDays * DAY) : null;
+    for (const course of courses) {
+      if (await enrollIfAbsent(course, user.id, 'MATRIX', { sourceRef: rule.id, dueDate: due, assignedById: actorId })) {
+        created++;
+      }
+    }
+  }
+
+  // Only trail an actual enrolment — every user save hits this path, and a
+  // no-op join is not an event worth recording.
+  if (created) {
+    await writeTrail(
+      { entityType: 'LmsTrainingMatrixRule', entityId: 'on-join', action: 'UPDATE', field: 'auto_assign', newValue: `user ${user.id}: created ${created}` },
+      actorId,
+    );
+  }
+  return { rules: rules.length, created };
 };

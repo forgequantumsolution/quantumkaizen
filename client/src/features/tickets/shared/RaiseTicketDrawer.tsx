@@ -23,6 +23,7 @@ import {
   Tag as TagIcon,
   Building2,
   MapPin,
+  Info,
 } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
 import {
@@ -54,6 +55,20 @@ interface Props {
    * If exactly one matches, it is auto-selected.
    */
   workflowTypeId?: string;
+  /** Header copy — defaults to the generic "Raise a new ticket". */
+  drawerTitle?: string;
+  /** Submit-button copy — defaults to the generic "Raise ticket". */
+  submitLabel?: string;
+  /** Overrides the Title field's placeholder text. */
+  titlePlaceholder?: string;
+  /** Overrides the Title field's helper caption. */
+  titleHelp?: string;
+  /** When true, Severity must be set before the ticket can be submitted. */
+  requireSeverity?: boolean;
+  /** When true, Classification must be set before the ticket can be submitted. */
+  requireClassification?: boolean;
+  /** Optional tooltip content shown next to the Priority label, e.g. mapping priority tiers to severity/SLA terms used elsewhere in the module. */
+  priorityHint?: React.ReactNode;
 }
 
 const PRIORITY_TONE: Record<string, string> = {
@@ -63,7 +78,18 @@ const PRIORITY_TONE: Record<string, string> = {
   low: '#94A3B8',
 };
 
-export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: Props) {
+export default function RaiseTicketDrawer({
+  isOpen,
+  onClose,
+  workflowTypeId,
+  drawerTitle = 'Raise a new ticket',
+  submitLabel = 'Raise ticket',
+  titlePlaceholder = 'e.g. Q3 supplier audit',
+  titleHelp,
+  requireSeverity = false,
+  requireClassification = false,
+  priorityHint,
+}: Props) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [workflowId, setWorkflowId] = useState<string | undefined>(undefined);
@@ -130,11 +156,20 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
   };
 
   const canAdvance = !!workflowId;
-  const canSubmit = !!workflowId && title.trim().length > 0;
+  const canSubmit =
+    !!workflowId &&
+    title.trim().length > 0 &&
+    (!requireSeverity || !!severityId) &&
+    (!requireClassification || !!classification);
+
+  const trimmedTitle = title.trim();
+  const titleTooShort = trimmedTitle.length > 0 && trimmedTitle.length < 8;
 
   const handleSubmit = async () => {
     if (!workflowId) return toast.error('Pick a workflow');
     if (!title.trim()) return toast.error('Title is required');
+    if (requireSeverity && !severityId) return toast.error('Severity is required');
+    if (requireClassification && !classification) return toast.error('Classification is required');
     try {
       const result = await raise.mutateAsync({
         workflowId,
@@ -163,7 +198,7 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
     <Drawer
       title={
         <div className="flex items-center gap-2">
-          <span className="text-base font-semibold">Raise a new ticket</span>
+          <span className="text-base font-semibold">{drawerTitle}</span>
           <Tag color="gold" style={{ marginInlineEnd: 0 }}>
             Step {step + 1} / 2
           </Tag>
@@ -207,7 +242,7 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
                 disabled={!canSubmit}
                 icon={<CheckCircle2 size={14} />}
               >
-                Raise ticket
+                {submitLabel}
               </AntButton>
             )}
           </Space>
@@ -254,6 +289,11 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
                 <span className="flex items-center gap-1.5">
                   <Flag size={12} className="text-gray-400" />
                   Priority <span className="text-gray-400 font-normal">(optional)</span>
+                  {priorityHint && (
+                    <Tooltip title={priorityHint}>
+                      <Info size={12} className="text-gray-400 cursor-help" />
+                    </Tooltip>
+                  )}
                 </span>
               }
             >
@@ -286,14 +326,19 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
               label={
                 <span className="flex items-center gap-1.5">
                   <AlertOctagon size={12} className="text-gray-400" />
-                  Severity <span className="text-gray-400 font-normal">(optional)</span>
+                  Severity{' '}
+                  {requireSeverity ? (
+                    <span className="text-rose-500">*</span>
+                  ) : (
+                    <span className="text-gray-400 font-normal">(optional)</span>
+                  )}
                 </span>
               }
             >
               <AntSelect
                 value={severityId}
                 onChange={(v) => setSeverityId(v)}
-                allowClear
+                allowClear={!requireSeverity}
                 placeholder="No severity"
                 size="large"
                 style={{ width: '100%' }}
@@ -366,16 +411,23 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
 
       {step === 1 && (
         <div className="mt-6 space-y-5">
-          <Field label="Title" required>
+          <Field label="Title" required help={titleHelp}>
             <AntInput
               size="large"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={250}
-              placeholder="e.g. Q3 supplier audit"
+              placeholder={titlePlaceholder}
               autoFocus
               showCount
+              status={titleTooShort ? 'warning' : undefined}
             />
+            {titleTooShort && (
+              <p className="mt-1 text-[11px] text-amber-600">
+                This title looks very short — consider naming the specific product, batch, or
+                parameter involved so it's identifiable in lists and search.
+              </p>
+            )}
           </Field>
 
           <Field
@@ -419,14 +471,19 @@ export default function RaiseTicketDrawer({ isOpen, onClose, workflowTypeId }: P
               label={
                 <span className="flex items-center gap-1.5">
                   <TagIcon size={12} className="text-gray-400" />
-                  Classification <span className="text-gray-400 font-normal">(optional)</span>
+                  Classification{' '}
+                  {requireClassification ? (
+                    <span className="text-rose-500">*</span>
+                  ) : (
+                    <span className="text-gray-400 font-normal">(optional)</span>
+                  )}
                 </span>
               }
             >
               <AntSelect
                 value={classification}
                 onChange={(v) => setClassification(v)}
-                allowClear
+                allowClear={!requireClassification}
                 placeholder="Uncategorised"
                 size="large"
                 style={{ width: '100%' }}

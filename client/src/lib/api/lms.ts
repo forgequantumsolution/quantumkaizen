@@ -632,6 +632,8 @@ export interface MatrixRule {
   due_within_days: number | null;
   recurring: boolean;
   is_active: boolean;
+  /** Fire on join (user created into / moved into the target) rather than only on a manual sync. */
+  auto_assign_on_join: boolean;
 }
 
 const assignKeys = {
@@ -689,6 +691,14 @@ export const useCreateMatrixRule = () => {
   const qc = useQueryClient();
   return useMutation<MatrixRule, unknown, Omit<MatrixRule, 'id'>>({
     mutationFn: (body) => api.post('/lms/matrix', body).then((r) => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: assignKeys.matrix }),
+  });
+};
+
+export const useUpdateMatrixRule = () => {
+  const qc = useQueryClient();
+  return useMutation<MatrixRule, unknown, { id: string; body: Partial<Omit<MatrixRule, 'id'>> }>({
+    mutationFn: ({ id, body }) => api.patch(`/lms/matrix/${id}`, body).then((r) => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: assignKeys.matrix }),
   });
 };

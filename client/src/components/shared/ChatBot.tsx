@@ -169,14 +169,18 @@ export default function ChatBot() {
 
   return (
     <>
-      {/* Floating button */}
+      {/* Floating button. Deliberately docked further from the corner than a bare
+          24px/24px offset, and kept below Ant Design's overlay z-index range
+          (modals/drawers/popovers sit at 1000+), so it never renders on top of an
+          open dialog or a page's own bottom-right toolbar controls. */}
       <button
         onClick={() => setOpen(o => !o)}
         title={open ? 'Close assistant' : 'Open QMS Assistant'}
+        aria-label={open ? 'Close QMS Assistant' : 'Open QMS Assistant'}
         style={{
-          position: 'fixed', bottom: '24px', right: '24px',
-          zIndex: 9999,
-          width: '52px', height: '52px', borderRadius: '50%',
+          position: 'fixed', bottom: '28px', right: '28px',
+          zIndex: 40,
+          width: '46px', height: '46px', borderRadius: '50%',
           background: open ? '#EF4444' : '#0D0E17',
           border: '2px solid #F59E0B',
           boxShadow: '0 4px 24px rgba(0,0,0,0.35)',
@@ -186,15 +190,15 @@ export default function ChatBot() {
         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1.08)'; }}
         onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = 'scale(1)'; }}
       >
-        {open ? <X size={18} color="#fff" /> : <MessageCircle size={21} color="#F59E0B" />}
+        {open ? <X size={16} color="#fff" /> : <MessageCircle size={19} color="#F59E0B" />}
       </button>
 
       {/* Panel */}
       {open && (
         <div
           style={{
-            position: 'fixed', bottom: '88px', right: '24px',
-            zIndex: 9999, width: '340px', height: '480px',
+            position: 'fixed', bottom: '84px', right: '28px',
+            zIndex: 40, width: '340px', height: '480px',
             borderRadius: '16px', border: '1px solid #E2E8F0',
             background: '#fff', boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
