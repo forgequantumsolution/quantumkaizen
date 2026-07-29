@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   Save, Check, Plus,
   Building2, Users as UsersIcon, Layers, KeyRound, Lock,
-  Workflow, Bell, Shield, MapPin, AlertOctagon, ArrowUpNarrowWide,
+  Workflow, Bell, Shield, MapPin, AlertOctagon, ArrowUpNarrowWide, PanelLeft,
 } from "lucide-react";
 // Note: when section === "forms", FormListPage renders its own ListPageHeader
 // (title + search + view toggle + create button), so we skip PageHeader here.
@@ -22,10 +22,11 @@ import WorkflowTypesTab from "@/features/admin/workflow-types/WorkflowTypesTab";
 import SitesTab from "@/features/admin/sites/SitesTab";
 import SeveritiesTab from "@/features/admin/severities/SeveritiesTab";
 import EscalationMatrixTab from "@/features/admin/escalation/EscalationMatrixTab";
+import NavGroupsTab from "@/features/admin/nav-groups/NavGroupsTab";
 import WorkflowsPage from "@/features/workflows/WorkflowsPage";
 import FormListPage from "@/features/forms/FormListPage";
 
-type Section = "master-data" | "workflows" | "forms";
+type Section = "master-data" | "workflows" | "forms" | "nav-groups";
 
 // Tabs that appear *inside* the Master Data section. `permission` gates each tab
 // (see lib/navAccess.ts + Access Control → Menu Access); undefined = always shown.
@@ -52,6 +53,16 @@ const SECTION_TITLES: Record<Section, string> = {
   "master-data": "Master Data",
   workflows: "Workflows",
   forms: "Forms",
+  "nav-groups": "Navigation Groups",
+};
+
+const SECTION_DESCRIPTIONS: Record<Section, string> = {
+  "master-data":
+    "Centralized configuration for your organization — profile, users, roles, access policies, workflow categories, and compliance settings.",
+  workflows: "Browse and configure workflow definitions.",
+  forms: "Browse and configure forms.",
+  "nav-groups":
+    "Organize the sidebar into collapsible groups and choose which modules sit in each. Layout only — a module still appears only for users who have access to it.",
 };
 
 // Master Data tabs whose content has its own toolbar — hide the global Save.
@@ -66,7 +77,9 @@ export default function SettingsPage() {
   const tabParam = searchParams.get("tab");
 
   const section: Section =
-    sectionParam === "workflows" || sectionParam === "forms"
+    sectionParam === "workflows" ||
+    sectionParam === "forms" ||
+    sectionParam === "nav-groups"
       ? sectionParam
       : "master-data";
   const activeTab: MdTab = VALID_MD_TABS.has(tabParam as MdTab)
@@ -138,11 +151,7 @@ export default function SettingsPage() {
       {section !== "forms" && section !== "workflows" && (
         <PageHeader
           title={SECTION_TITLES[section]}
-          description={
-            section === "master-data"
-              ? "Centralized configuration for your organization — profile, users, roles, access policies, workflow categories, and compliance settings."
-              : "Browse and configure workflow definitions."
-          }
+          description={SECTION_DESCRIPTIONS[section]}
           actions={headerActions}
         />
       )}
@@ -160,6 +169,12 @@ export default function SettingsPage() {
 
       {/* ── FORMS section ───────────────────────────────── */}
       {section === "forms" && <FormListPage />}
+
+      {/* ── NAVIGATION GROUPS section ───────────────────── */}
+      {/* Its own section rather than a Master Data tab: this configures the
+          sidebar itself, not organizational master data. Carries its own Save,
+          so no global header action. */}
+      {section === "nav-groups" && <NavGroupsTab />}
 
       {/* ── MASTER DATA section — internal tab strip ───── */}
       {section === "master-data" && (

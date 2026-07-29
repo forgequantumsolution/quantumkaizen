@@ -3,6 +3,7 @@ import { buildApp } from './app';
 import { prisma } from './lib/prisma';
 import { ensureRbacCatalog } from './lib/rbac-sync';
 import { ensureDefaultSiteAndBackfill } from './lib/site-defaults';
+import { ensureNavGroups } from './lib/nav-group-defaults';
 import { sealPendingEntries } from './lib/audit-seal';
 
 const app = buildApp();
@@ -19,6 +20,12 @@ const server = app.listen(env.PORT, () => {
   ensureDefaultSiteAndBackfill()
     .then(() => console.log('Default site ensured + backfilled'))
     .catch((err) => console.error('Default-site backfill failed:', err));
+  // Sidebar navigation groups: write the default layout on a fresh deploy and
+  // repair a missing fallback group. Non-fatal — a bootstrap failure degrades
+  // the sidebar to its compiled-in defaults, it must not take the API down.
+  ensureNavGroups()
+    .then(() => console.log('Navigation groups ensured'))
+    .catch((err) => console.error('Navigation-group bootstrap failed:', err));
 });
 
 /**

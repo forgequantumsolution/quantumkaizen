@@ -1,3 +1,106 @@
+## Sidebar navigation groups: admin-configurable grouping + accordion — 2026-07-29
+
+Sidebar group membership was hardcoded in `Sidebar.tsx` (a `MODULE_GROUP` map for
+workflow types plus a hand-written `sections` array), the group headers were
+static labels with dormant collapse plumbing that nothing ever enabled, and the
+hand-editing had drifted — Configuration sat under a section titled "LMS". The
+layout now comes from the DB and is edited under **Configuration → Navigation
+Groups**. Backend rationale in `backend/changes.md`; full design and the gaps
+found while reviewing it in `docs/sidebar-module-grouping-plan.md`.
+
+- `config/navModules.ts` (new) — the registry of groupable modules: static key →
+  label, plus the `wf:<id>` helpers and the compiled-in fallback layout.
+  **Deliberately separate from `lib/navAccess.ts`**, which describes Module → Tab
+  for the Access Control matrix and does *not* line up 1:1 with sidebar entries:
+  it has no `audit-trail` module, `audit-master` is a child of Audit, `risk-config`
+  has no sidebar entry at all, and its `training` row gates on `training.read`
+  while the sidebar's Training entry uses `lms_my.read`. Bending either one to fit
+  the other would have broken the access matrix.
+  - `WF_DISPLAY_NAME` / `wfDisplayName()` moved here from `Sidebar.tsx` so the
+    editor arranges the same labels the user sees — showing "Complaints" in one
+    place and "Product Complaints" in the other reads as two different modules.
+- `lib/api/navGroups.ts` (new) — `useNavGroups()` / `useSaveNavGroups()` with the
+  same localStorage-cache pattern as `useWorkflowTypes` (the sidebar's whole shape
+  depends on this query, so a cold load would otherwise flash ungrouped), plus
+  `toNavGroupConfigs()` which falls back to the compiled-in layout when the API is
+  unreachable — navigation must never disappear on a network blip.
+- `components/layout/Sidebar.tsx` — `MODULE_GROUP`, `groupForModule` and the
+  `sections` literal deleted; sections are now assembled by walking the stored
+  groups and mapping `moduleKeys` through an `itemsByKey` lookup. `gate()` and
+  the empty-section filter run afterwards **unchanged**, so access behaviour is
+  untouched. Modules the stored config has never heard of (a workflow type seeded
+  after the last save) join the fallback group rather than disappearing.
+  - **Accordion enabled.** Group open state is keyed by `section.key`, never the
+    title (titles are admin-editable). Collapsed groups get `visibility: hidden`
+    on top of the `max-height` clip — clipping alone leaves the links with their
+    own layout boxes, so they stayed tabbable and screen-reader visible. The group
+    holding the active route is force-opened on navigation, so deep-linking never
+    lands you inside a shut group. Multi-open, not strict accordion: real usage
+    crosses groups.
+  - React key changed from `section.title || untitled-<index>` to `section.key`,
+    which is no longer safe as identity once titles can be renamed.
+  - **Collapsed rail keeps the groups.** Previously the 56px rail flattened every
+    module into one undifferentiated icon strip, so the configured layout was
+    invisible the moment you collapsed. Each group now renders as a single tile
+    (borrowing its first module's icon — Lab Operations shows the LIMS flask), and
+    hover or keyboard focus opens a panel listing its modules. The panel is
+    `position: fixed` because the scrolling `<nav>` would clip an absolutely
+    positioned one, anchored to the tile's viewport `y` and clamped so a tile near
+    the bottom doesn't push it off-screen, with a 140ms close delay so the pointer
+    can cross the gap. Nested items (Audit, Configuration) contribute a caption
+    plus their children so nothing becomes unreachable at 56px.
+  - New **Navigation Groups** child under `Configuration`, gated on
+    `nav.groups.read`, with that key added to the `Configuration` parent's
+    `anyPermission` union — otherwise a user holding only this key would own a
+    link inside a group that never renders.
+- `stores/uiStore.ts` — `navGroupsOpen` keyed by group key, persisted to
+  localStorage. The DB carries each group's `defaultOpen` as the *starting* state
+  for everyone; whatever a user toggles afterwards is theirs and wins on reload,
+  so an admin's default never fights a personal choice.
+- `features/admin/nav-groups/NavGroupsTab.tsx` (new) — antd `<Tree draggable>`
+  editor (antd 5 was already a dependency; no dnd library added). Groups are
+  branches, modules are leaves, drag moves them, and selecting a group loads it
+  into a single settings panel — an earlier pass had the tree *and* a card per
+  group, which was two parallel lists of the same thing.
+  - Expansion is **controlled**, not `defaultExpandAll`: on the first paint the
+    draft is still empty, so the uncontrolled default latched onto an empty tree
+    and every group rendered collapsed once the data arrived.
+  - The assignable-module list is built from the registry, **not** from the
+    admin's own gated sidebar — otherwise an admin without LIMS access would
+    silently drop LIMS from everyone's layout on save. Document Review is excluded
+    (it is a tab inside `/dms`, never a sidebar module).
+  - Group deletion goes through the shared `useConfirmDelete` modal and names
+    where the orphaned modules will land.
+  - antd's stock tree rhythm (24px content wrapper + 4px node padding + 4px node
+    margin, and leaf rows measuring 28.5px against 24px group rows) made the tree
+    read about twice as tall as the sidebar it describes, unevenly. Rows are
+    pinned to a uniform 26px via scoped `[&_…]` overrides — `!` because antd v5
+    injects its CSS-in-JS after the stylesheet and wins on source order at equal
+    specificity. Scoped to this wrapper so no other `Tree` in the app shifts.
+- `pages/SettingsPage.tsx` — **its own section** (`?section=nav-groups`) beside
+  Workflows / Forms / Master Data, not a Master Data tab: it configures the
+  sidebar rather than organizational master data, and it carries its own Save, so
+  it does not belong in the tab strip that shares one global Save button. Section
+  descriptions moved from an inline two-branch ternary into `SECTION_DESCRIPTIONS`
+  — the ternary would have labelled the new section "Browse and configure workflow
+  definitions."
+- `lib/navAccess.ts` — `config.navGroups` row so the screen is role-configurable
+  in Access Control → Menu Access, following the `config.workflowTypes` precedent.
+- `tests/ui/nav-group-accordion.spec.ts` + `.config.ts` (new, 10 specs) — stored
+  layout drives the sidebar, collapse/expand with reload persistence, group
+  independence, deep-link auto-open, the collapsed rail's tiles + hover panel,
+  reachability from Configuration, editor contents, select-to-edit, and a rename
+  round-trip that saves and watches the sidebar header change without a reload.
+- `tests/ui/nav-groups.spec.ts` — two specs there were **already failing before
+  this work** (confirmed against `git show HEAD`): one expected a group titled
+  "Admin" that never existed, and `getByText('DMS', { exact: true })` hit a strict
+  mode violation because the title and the module label are identical. Updated to
+  the current layout rather than left knowingly stale.
+
+Not committed.
+
+---
+
 ## Submitted stage form labels/values hard to tell apart — 2026-07-27
 
 `src/features/forms/FormFillEmbed.tsx` + `src/features/forms/FieldValueText.tsx`

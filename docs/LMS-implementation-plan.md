@@ -81,7 +81,7 @@ TrainingMatrixRule ─ targets Role|Department|Site|JobFunction → requires Cou
 | `Certificate` | `enrollmentId`, `userId`, `courseId`, `serial`, `issuedAt`, `expiresAt`, `pdfKey` | Auto-issued on pass; QR-verifiable (reuse CoA verify pattern). |
 | `Curriculum` | `code`, `title`, `description`, `category` | Learning path / job-role bundle. |
 | `CurriculumCourse` | `curriculumId`, `courseId`, `order`, `isMandatory` | Ordered courses in a curriculum. |
-| `TrainingMatrixRule` | `targetType` (ROLE \| DEPARTMENT \| SITE \| JOB_FUNCTION), `targetId`, `requiresType` (COURSE \| CURRICULUM), `requiresId`, `dueWithinDays`, `recurring` | The engine that auto-assigns by org structure. |
+| `TrainingMatrixRule` | `targetType` (ROLE \| DEPARTMENT \| SITE \| JOB_FUNCTION), `targetId`, `requiresType` (COURSE \| CURRICULUM), `requiresId`, `dueWithinDays`, `recurring`, `autoAssignOnJoin` | The engine that auto-assigns by org structure. `autoAssignOnJoin` (added 2026-07-28, defaults **false**) fires the rule the moment a user lands in the target instead of only on a manual sync — see `syncMatrixForUser()` in `lms-assign.service.ts`. |
 
 > **Migration note:** keep `TrainingItem`/`TrainingAssignment` during transition. Phase 1
 > creates the new models; a data migration maps each `TrainingItem` → a `DOC_ACK` `Course`

@@ -160,6 +160,9 @@ export const NAV_ACCESS: NavModuleAccess[] = [
       { key: 'config.departments',   label: 'Departments',    permission: 'department.read',       entity: 'department' },
       { key: 'config.sites',         label: 'Facilities',     permission: 'site.read',             entity: 'site' },
       { key: 'config.workflowTypes', label: 'Workflow Types', permission: 'workflow.lookups.read', entity: 'workflow.lookups' },
+      // Sidebar accordion grouping. Layout only — it grants no module access;
+      // what a role can see is decided by the other rows in this registry.
+      { key: 'config.navGroups',     label: 'Navigation Groups', permission: 'nav.groups.read', entity: 'nav.groups' },
     ],
   },
   // The global `ticket.*` "All Workflow Types" master was retired — ticket

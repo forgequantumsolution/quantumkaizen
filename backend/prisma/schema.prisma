@@ -252,6 +252,59 @@ model Organization {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Sidebar navigation groups (docs/sidebar-module-grouping-plan.md)
+//
+// Presentation only — which accordion group each top-level sidebar module sits
+// in, and in what order. Grouping NEVER grants access: visibility keeps flowing
+// from the permission keys, so a module the user can't reach stays hidden no
+// matter which group it is assigned to.
+// ─────────────────────────────────────────────────────────────────────────────
+
+model NavGroup {
+  id    String @id @default(uuid())
+  // Stable slug. Separate from `title` so renaming a group in the admin UI
+  // doesn't reset every user's expand/collapse state (which is keyed on this).
+  key   String @unique
+  // "" is legal — the ungrouped Dashboard row renders with no header.
+  title String
+
+  icon        String?
+  sortOrder   Int
+  collapsible Boolean @default(true)
+  defaultOpen Boolean @default(false)
+  // Catches modules not assigned to any group (e.g. a workflow type seeded
+  // after the config was last saved) so they can never vanish from the sidebar.
+  // A partial unique index enforces at most one; ensureNavGroups() repairs zero.
+  isFallback  Boolean @default(false)
+  // Undeletable, unmovable (the Dashboard row).
+  isSystem    Boolean @default(false)
+
+  members NavGroupModule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model NavGroupModule {
+  id         String   @id @default(uuid())
+  navGroupId String
+  navGroup   NavGroup @relation(fields: [navGroupId], references: [id], onDelete: Cascade)
+
+  // Static registry key ('lims', 'dms', …) or 'wf:<workflowTypeId>' for a
+  // workflow-type-driven module. Keyed by id, not name, because type names are
+  // editable and a rename must not orphan the assignment.
+  // @unique — a module lives in exactly one group, so the editor structurally
+  // cannot produce duplicates.
+  moduleKey String @unique
+  sortOrder Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([navGroupId, sortOrder])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Workflow domain (Phase 1 — builder layer only; engine/SLA/forms in later phases)
 // ─────────────────────────────────────────────────────────────────────────────
 

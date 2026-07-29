@@ -29,6 +29,12 @@ export const PERMISSIONS: PermissionDef[] = [
   { key: 'department.delete', module: 'DEPARTMENT', action: 'DELETE', description: 'Delete departments' },
   { key: 'org.read',          module: 'ORG',        action: 'READ',   description: 'View organization settings' },
   { key: 'org.update',        module: 'ORG',        action: 'UPDATE', description: 'Edit organization settings' },
+  // Sidebar navigation groups (docs/sidebar-module-grouping-plan.md). `read`
+  // gates the Master Data → Navigation Groups tab; `manage` gates the save.
+  // The GET route itself is open to any authenticated user — every user needs
+  // it to render their own sidebar (same reasoning as /workflow-lookups/types).
+  { key: 'nav.groups.read',   module: 'ORG',        action: 'READ',   description: 'View sidebar navigation groups' },
+  { key: 'nav.groups.manage', module: 'ORG',        action: 'MANAGE', description: 'Configure sidebar navigation groups' },
   // Site / Facility master data (Configuration → Facilities). CRUD gates the
   // admin management surface; the list stays readable via `org.read` too so
   // operational pickers (ticket site selector, LMS targeting) keep working.

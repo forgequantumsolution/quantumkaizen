@@ -13,6 +13,7 @@ import '../modules/permission/permission.openapi';
 import '../modules/organization/organization.openapi';
 import '../modules/workflow/workflow.openapi';
 import '../modules/workflow/lookups/lookups.openapi';
+import '../modules/nav-group/nav-group.openapi';
 import '../modules/ticket/ticket.openapi';
 import '../modules/approval/approval.openapi';
 import '../modules/sla/sla.openapi';
