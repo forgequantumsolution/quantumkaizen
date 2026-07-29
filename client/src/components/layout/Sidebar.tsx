@@ -37,6 +37,7 @@ import {
   MessageSquareWarning,
   RefreshCw,
   Plug,
+  PanelLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/stores/uiStore";
@@ -45,7 +46,9 @@ import { useAuthStore } from "@/stores/authStore";
 import { useWorkflowTypes } from "@/lib/api/workflowLookups";
 import { wfTypeReadKey } from "@/lib/navAccess";
 import { useNavCounts } from "@/lib/api/navCounts";
-import { useMemo, useState } from "react";
+import { useNavGroups, toNavGroupConfigs } from "@/lib/api/navGroups";
+import { isDocReviewName, wfDisplayName, wfModuleKey } from "@/config/navModules";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 interface NavItem {
   label: string;
@@ -69,9 +72,14 @@ interface NavItem {
   count?: number;
 }
 interface NavSection {
+  /** Stable group key — identity for React and for the persisted open state.
+   * Never the title: titles are admin-editable (Master Data → Navigation Groups). */
+  key: string;
   title: string;
   items: NavItem[];
-  collapsible?: boolean;
+  collapsible: boolean;
+  /** Admin-set initial state; the user's own toggle overrides it (uiStore). */
+  defaultOpen: boolean;
 }
 
 // Best-effort mapping from a workflow type's stored iconName (e.g. "file-text")
@@ -134,36 +142,13 @@ const pickIcon = (
   return ICON_BY_KEY[k] ?? Layers;
 };
 
-// GMP terminology overrides (FQS-QK-UIUX-002 §6) for DB-driven workflow-type
-// modules. The workflow type's stored `name` is the internal key (used by seeds
-// / lookups / permissions) and is left untouched — only its sidebar display
-// label is remapped here. Unmatched names fall through to `t.name`.
-const WF_DISPLAY_NAME: Record<string, string> = {
-  CAPA: "CAPA Management",
-  Deviation: "Deviations",
-  Complaints: "Product Complaints",
-};
+// GMP display-name overrides live in config/navModules.ts (`wfDisplayName`), so
+// the Navigation Groups editor arranges the same labels shown here.
 
-// Which sidebar group each DB-driven workflow module belongs to
-// (FQS-QK-UIUX-003 §2/§4). Matched on the normalised workflow-type name;
-// unknown types default to "Quality System".
-type ModuleGroup = "Quality System" | "Compliance";
-const MODULE_GROUP: Record<string, ModuleGroup> = {
-  capa: "Quality System",
-  deviation: "Quality System",
-  deviations: "Quality System",
-  complaints: "Quality System",
-  productcomplaints: "Quality System",
-  change: "Quality System",
-  changecontrol: "Quality System",
-  risk: "Quality System",
-  riskmanagement: "Quality System",
-  audit: "Compliance",
-  calibration: "Compliance",
-};
-const groupForModule = (name: string): ModuleGroup =>
-  MODULE_GROUP[name.toLowerCase().replace(/[^a-z0-9]/g, "")] ??
-  "Quality System";
+// Which group each module belongs to is no longer hardcoded here — it is stored
+// per-installation and edited in Master Data → Navigation Groups
+// (docs/sidebar-module-grouping-plan.md). Grouping is presentation only: what a
+// user can actually see is still decided entirely by the permission gates below.
 
 // Design tokens — pulled from CSS custom properties (set by AppearanceProvider)
 // so the sidebar tracks the user's color preset. Section/inactive/hover stay
@@ -186,6 +171,12 @@ export default function Sidebar() {
   const hasPermission = useAuthStore((s) => s.hasPermission);
   const { data: workflowTypes } = useWorkflowTypes();
   const { data: navCounts } = useNavCounts();
+  const { data: navGroups } = useNavGroups();
+  const navGroupsOpen = useUIStore((s) => s.navGroupsOpen);
+  const toggleNavGroup = useUIStore((s) => s.toggleNavGroup);
+  const setNavGroupOpen = useUIStore((s) => s.setNavGroupOpen);
+  // Falls back to the compiled-in layout when the API is unreachable.
+  const groupConfigs = useMemo(() => toNavGroupConfigs(navGroups), [navGroups]);
 
   const navigation = useMemo<NavSection[]>(() => {
     // Audit child pages — attached under the dynamic "Audit" workflow type when
@@ -217,11 +208,10 @@ export default function Sidebar() {
     // module — it's grouped under the "Document Management System" entry next to
     // the DMS document library, since both concern documents. Pull it out here so
     // it can be nested below, and keep it out of the generic module list.
-    const isDocReview = (name: string) =>
-      /^document\s*review$/i.test(name.trim());
+    const isDocReview = isDocReviewName;
 
-    // DB-driven workflow modules, each tagged with its GMP sidebar group so the
-    // sections below can distribute them (FQS-QK-UIUX-003 §2).
+    // DB-driven workflow modules, keyed by `wf:<id>` so the stored grouping can
+    // reference them by a name-change-proof identifier.
     const moduleEntries = (workflowTypes ?? [])
       .filter((t) => !t.isDeleted && !isDocReview(t.name))
       .map((t) => {
@@ -231,7 +221,7 @@ export default function Sidebar() {
         // sidebar entry there instead of the generic /modules ticket workspace.
         const isRisk = /^risk(\s*management)?$/i.test(t.name);
         const item: NavItem = {
-          label: WF_DISPLAY_NAME[t.name] ?? t.name,
+          label: wfDisplayName(t.name),
           // For Audit, omit the leaf path so the parent acts purely as an expandable
           // group; first child becomes the navigation target in collapsed mode.
           path: isAudit ? undefined : isRisk ? "/risk/dashboard" : `/modules/${t.id}`,
@@ -245,14 +235,8 @@ export default function Sidebar() {
           activeForPrefixes: isRisk ? ["/risk"] : undefined,
           count: navCounts?.workflowTypes?.[t.id],
         };
-        return { item, group: groupForModule(t.name) };
+        return { key: wfModuleKey(t.id), item };
       });
-    const qualityItems = moduleEntries
-      .filter((e) => e.group === "Quality System")
-      .map((e) => e.item);
-    const complianceItems = moduleEntries
-      .filter((e) => e.group === "Compliance")
-      .map((e) => e.item);
 
     // The "Document Review" workflow type, if seeded. It is no longer a sidebar
     // entry of its own — /dms hosts it as a tab — but it still decides whether a
@@ -367,6 +351,7 @@ export default function Sidebar() {
         "department.read",
         "site.read",
         "workflow.lookups.read",
+        "nav.groups.read",
       ],
       children: [
         {
@@ -402,22 +387,57 @@ export default function Sidebar() {
             "workflow.lookups.read",
           ],
         },
+        // Configures the sidebar itself (which accordion group each module sits
+        // in), so it sits beside the other configuration surfaces rather than
+        // inside Master Data.
+        {
+          label: "Navigation Groups",
+          path: "/settings?section=nav-groups",
+          icon: PanelLeft,
+          permission: "nav.groups.read",
+        },
         { label: "Integrations", path: "/integrations", icon: Plug },
         { label: "Appearance", path: "/appearance", icon: Palette },
       ],
     };
 
-    // Four GMP-aligned groups (FQS-QK-UIUX-003 §2/§4). Dashboard stays ungrouped
-    // at the top. Empty groups (e.g. no seeded workflow types) are dropped by the
-    // `items.length > 0` filter at the end of this memo.
-    const sections: NavSection[] = [
-      { title: "", items: [dashboardItem] },
-      { title: "Lab Operations", items: [limsItem, limsConfigItem] },
-      { title: "DMS", items: [dmsItem] },
-      { title: "Quality System", items: qualityItems },
-      { title: "Compliance", items: [...complianceItems, auditTrailItem] },
-      { title: "LMS", items: [trainingItem, configItem] },
-    ];
+    // ── Assemble sections from the stored grouping ──────────────────────────
+    // Every groupable module, keyed the same way the DB stores it. Static keys
+    // must match config/navModules.ts (and the backend's STATIC_MODULE_KEYS) —
+    // they are permanent identifiers, so renaming one orphans its stored row.
+    const itemsByKey = new Map<string, NavItem>([
+      ["dashboard", dashboardItem],
+      ["lims", limsItem],
+      ["lims-config", limsConfigItem],
+      ["dms", dmsItem],
+      ["training", trainingItem],
+      ["audit-trail", auditTrailItem],
+      ["configuration", configItem],
+      ...moduleEntries.map((e) => [e.key, e.item] as const),
+    ]);
+
+    const configuredKeys = new Set(groupConfigs.flatMap((g) => g.moduleKeys));
+    const sections: NavSection[] = groupConfigs.map((g) => ({
+      key: g.key,
+      title: g.title,
+      collapsible: g.collapsible,
+      defaultOpen: g.defaultOpen,
+      items: g.moduleKeys
+        .map((k) => itemsByKey.get(k))
+        .filter((it): it is NavItem => !!it),
+    }));
+
+    // A module the stored config has never heard of — a workflow type seeded
+    // after the layout was last saved — joins the fallback group rather than
+    // disappearing. Insertion order of `itemsByKey` keeps this stable.
+    const unassigned = [...itemsByKey.entries()]
+      .filter(([k]) => !configuredKeys.has(k))
+      .map(([, item]) => item);
+    if (unassigned.length) {
+      const fallbackIdx = groupConfigs.findIndex((g) => g.isFallback);
+      const target = sections[fallbackIdx >= 0 ? fallbackIdx : sections.length - 1];
+      if (target) target.items = [...target.items, ...unassigned];
+    }
 
     // Gate by permission: drop items the user can't access, and any parent whose
     // children all got dropped. SUPER_ADMIN holds every key, so it's unaffected.
@@ -445,13 +465,7 @@ export default function Sidebar() {
     // stable Zustand reference — without it the gate wouldn't re-run when an
     // access-control change refreshes the current user's permissions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workflowTypes, hasPermission, navCounts, user]);
-
-  const [sectionsCollapsed, setSectionsCollapsed] = useState<
-    Record<string, boolean>
-  >({});
-  const toggleSection = (title: string) =>
-    setSectionsCollapsed((prev) => ({ ...prev, [title]: !prev[title] }));
+  }, [workflowTypes, hasPermission, navCounts, user, groupConfigs]);
 
   // Per-item expand state, keyed by label since parents may have no path.
   // All parents start collapsed; user opens what they need.
@@ -482,6 +496,58 @@ export default function Sidebar() {
     return !!item.children?.some(isItemActive);
   };
 
+  // A group is open if the user has toggled it; otherwise the admin's default.
+  const isSectionOpen = (section: NavSection): boolean =>
+    !section.collapsible || (navGroupsOpen[section.key] ?? section.defaultOpen);
+
+  // ─── Collapsed-rail flyout ───────────────────────────────────────────────
+  // In the 56px rail a group is one tile; hovering it reveals its modules in a
+  // panel to the right. Without this the groups would dissolve into a flat strip
+  // of icons and the layout an admin configured would be invisible when collapsed.
+  const [flyout, setFlyout] = useState<{ key: string; top: number } | null>(null);
+  const flyoutTimer = useRef<number | null>(null);
+
+  const cancelFlyoutClose = () => {
+    if (flyoutTimer.current !== null) {
+      window.clearTimeout(flyoutTimer.current);
+      flyoutTimer.current = null;
+    }
+  };
+  const openFlyout = (key: string, el: HTMLElement) => {
+    cancelFlyoutClose();
+    const rect = el.getBoundingClientRect();
+    // Keep the panel on screen: nudge it up when the tile sits near the bottom.
+    const top = Math.max(8, Math.min(rect.top, window.innerHeight - 140));
+    setFlyout({ key, top });
+  };
+  // Small grace period so the pointer can travel from tile to panel without the
+  // panel vanishing under it.
+  const scheduleFlyoutClose = () => {
+    cancelFlyoutClose();
+    flyoutTimer.current = window.setTimeout(() => setFlyout(null), 140);
+  };
+
+  // Expanding the sidebar or navigating away must not leave a panel stranded.
+  useEffect(() => {
+    setFlyout(null);
+    cancelFlyoutClose();
+  }, [sidebarCollapsed, location.pathname, location.search]);
+  useEffect(() => cancelFlyoutClose, []);
+
+  // Deep-linking into a module must never land inside a collapsed group, so the
+  // group holding the active route is forced open on navigation. Runs only when
+  // it is actually shut, so it never fights a user closing a different group.
+  useEffect(() => {
+    for (const section of navigation) {
+      if (!section.collapsible) continue;
+      if (!section.items.some(isItemActive)) continue;
+      if (navGroupsOpen[section.key] === false) {
+        setNavGroupOpen(section.key, true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search, navigation]);
+
   const initials =
     user?.name
       ?.split(" ")
@@ -489,6 +555,114 @@ export default function Sidebar() {
       .join("")
       .toUpperCase()
       .slice(0, 2) ?? "QK";
+
+  // ─── Collapsed rail: one tile per group ───────────────────────────────────
+  // The tile borrows the first module's icon, which reads better than a generic
+  // folder glyph — "Lab Operations" shows the LIMS flask, so the rail stays
+  // recognisable at a glance.
+  const renderCollapsedGroup = (section: NavSection): React.ReactNode => {
+    const Icon = section.items[0]?.icon ?? Layers;
+    const isActive = section.items.some(isItemActive);
+    const open = flyout?.key === section.key;
+    const firstLeaf = section.items.map(findFirstLeaf).find(Boolean);
+
+    return (
+      <button
+        key={section.key}
+        type="button"
+        aria-label={section.title}
+        aria-expanded={open}
+        onMouseEnter={(e) => openFlyout(section.key, e.currentTarget)}
+        onMouseLeave={scheduleFlyoutClose}
+        onFocus={(e) => openFlyout(section.key, e.currentTarget)}
+        onBlur={scheduleFlyoutClose}
+        onClick={() => firstLeaf?.path && navigate(firstLeaf.path)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "36px",
+          height: "36px",
+          marginLeft: "auto",
+          marginRight: "auto",
+          borderRadius: "6px",
+          backgroundColor: isActive || open ? ACTIVE_BG : "transparent",
+          color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
+          border: "none",
+          cursor: "pointer",
+          transition: "background-color 100ms, color 100ms",
+        }}
+      >
+        <Icon
+          size={17}
+          strokeWidth={isActive ? 2 : 1.5}
+          style={{ color: isActive ? ACCENT : "inherit" }}
+        />
+      </button>
+    );
+  };
+
+  // Flyout rows — leaves become links; a parent contributes a muted caption and
+  // its children, so nothing is unreachable from the rail.
+  const renderFlyoutItem = (item: NavItem, depth: number): React.ReactNode => {
+    const Icon = item.icon;
+    const isActive = isItemActive(item);
+
+    if (item.children?.length && !item.path) {
+      return (
+        <div key={item.label}>
+          <p
+            style={{ color: SECTION_CLR }}
+            className="flex items-center gap-2 px-2.5 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider"
+          >
+            <Icon size={12} /> {item.label}
+          </p>
+          {item.children.map((child) => renderFlyoutItem(child, depth + 1))}
+        </div>
+      );
+    }
+    if (!item.path) return null;
+
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        onClick={() => setFlyout(null)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "9px",
+          padding: "7px 10px",
+          paddingLeft: `${10 + depth * 10}px`,
+          borderRadius: "6px",
+          backgroundColor: isActive ? ACTIVE_BG : "transparent",
+          color: isActive ? ACTIVE_CLR : INACTIVE_CLR,
+          textDecoration: "none",
+          whiteSpace: "nowrap",
+          transition: "background-color 100ms, color 100ms",
+        }}
+        onMouseEnter={(e) => {
+          if (!isActive) {
+            (e.currentTarget as HTMLElement).style.backgroundColor = HOVER_BG;
+            (e.currentTarget as HTMLElement).style.color = ACTIVE_CLR;
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!isActive) {
+            (e.currentTarget as HTMLElement).style.backgroundColor = "transparent";
+            (e.currentTarget as HTMLElement).style.color = INACTIVE_CLR;
+          }
+        }}
+      >
+        <Icon
+          size={15}
+          strokeWidth={isActive ? 2 : 1.5}
+          style={{ color: isActive ? ACCENT : "inherit", flexShrink: 0 }}
+        />
+        <span className="text-sm leading-tight">{item.label}</span>
+      </NavLink>
+    );
+  };
 
   // ─── Recursive item renderer (handles leaf links + expandable parents) ───
   const renderNavItem = (item: NavItem, depth: number): React.ReactNode => {
@@ -775,22 +949,45 @@ export default function Sidebar() {
         className="flex-1 overflow-y-auto py-3 scrollbar-none"
         style={{ scrollbarWidth: "none" }}
       >
-        {navigation.map((section) => {
-          const isCollapsed = !!(
-            section.collapsible && sectionsCollapsed[section.title]
-          );
+        {navigation.map((section, sectionIdx) => {
+          // Group collapse only applies when the sidebar itself is expanded —
+          // the 56px rail has no headers to click.
+          const isOpen = sidebarCollapsed || isSectionOpen(section);
           const hasActive = section.items.some(isItemActive);
-
           const hasHeader = !!section.title;
+
+          // Collapsed rail: the configured groups survive as one tile each, with
+          // their modules reachable through the hover panel. The headerless
+          // system row (Dashboard) has no group to stand for, so its items are
+          // rendered directly.
+          if (sidebarCollapsed) {
+            return (
+              <div key={section.key} className="mb-1">
+                {sectionIdx > 0 && (
+                  <div
+                    style={{ background: DIVIDER }}
+                    className="mx-3 my-1.5 h-px"
+                  />
+                )}
+                <div className="space-y-px px-1.5">
+                  {hasHeader
+                    ? renderCollapsedGroup(section)
+                    : section.items.map((item) => renderNavItem(item, 0))}
+                </div>
+              </div>
+            );
+          }
+
           return (
-            <div
-              key={section.title || `untitled-${navigation.indexOf(section)}`}
-              className="mb-1"
-            >
+            <div key={section.key} className="mb-1">
               {!sidebarCollapsed && hasHeader && (
                 <button
+                  type="button"
+                  aria-expanded={section.collapsible ? isOpen : undefined}
+                  aria-controls={`nav-group-${section.key}`}
                   onClick={() =>
-                    section.collapsible && toggleSection(section.title)
+                    section.collapsible &&
+                    toggleNavGroup(section.key, section.defaultOpen)
                   }
                   className={cn(
                     "w-full flex items-center justify-between px-4 py-1 mb-0.5 rounded",
@@ -822,21 +1019,37 @@ export default function Sidebar() {
                       style={{ color: SECTION_CLR }}
                       className={cn(
                         "transition-transform duration-150",
-                        isCollapsed ? "-rotate-90" : "rotate-0"
+                        isOpen ? "rotate-0" : "-rotate-90"
                       )}
                     />
                   )}
                 </button>
               )}
 
-              {sidebarCollapsed && navigation.indexOf(section) > 0 && (
+              {sidebarCollapsed && sectionIdx > 0 && (
                 <div
                   style={{ background: DIVIDER }}
                   className="mx-3 my-1.5 h-px"
                 />
               )}
 
-              {!isCollapsed && (
+              <div
+                id={`nav-group-${section.key}`}
+                className={cn(
+                  "overflow-hidden transition-[max-height,opacity] duration-150 ease-in-out",
+                  isOpen ? "opacity-100" : "max-h-0 opacity-0"
+                )}
+                style={{
+                  // Generous ceiling: max-height must exceed the tallest group
+                  // or the tail of a long list would be clipped while open.
+                  maxHeight: isOpen ? "1000px" : 0,
+                  // Clipping alone only hides the links visually — they keep
+                  // their own layout boxes, so they stay tabbable and are still
+                  // announced by screen readers. `visibility` takes them out of
+                  // the a11y tree and the tab order for real.
+                  visibility: isOpen ? "visible" : "hidden",
+                }}
+              >
                 <div
                   className={cn(
                     "space-y-px",
@@ -845,7 +1058,7 @@ export default function Sidebar() {
                 >
                   {section.items.map((item) => renderNavItem(item, 0))}
                 </div>
-              )}
+              </div>
             </div>
           );
         })}
@@ -938,6 +1151,47 @@ export default function Sidebar() {
           </span>
         </div>
       )}
+
+      {/* Collapsed-rail group panel. Fixed rather than absolute so the scrolling
+          <nav> can't clip it, and anchored to the hovered tile's viewport y. */}
+      {sidebarCollapsed &&
+        (() => {
+          const section = navigation.find((s) => s.key === flyout?.key);
+          if (!section || !flyout) return null;
+          return (
+            <div
+              role="group"
+              aria-label={section.title}
+              onMouseEnter={cancelFlyoutClose}
+              onMouseLeave={scheduleFlyoutClose}
+              style={{
+                position: "fixed",
+                left: "60px",
+                top: `${flyout.top}px`,
+                zIndex: 50,
+                minWidth: "208px",
+                maxHeight: "calc(100vh - 16px)",
+                overflowY: "auto",
+                backgroundColor: BG,
+                border: "1px solid rgba(255,255,255,0.10)",
+                borderRadius: "10px",
+                boxShadow: "0 18px 40px -12px rgba(0,0,0,0.75)",
+                padding: "6px",
+              }}
+              className="scrollbar-none"
+            >
+              <p
+                style={{ color: ACCENT, borderBottom: "1px solid " + DIVIDER }}
+                className="px-2.5 pb-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.14em]"
+              >
+                {section.title}
+              </p>
+              <div className="space-y-px">
+                {section.items.map((item) => renderFlyoutItem(item, 0))}
+              </div>
+            </div>
+          );
+        })()}
 
       {/* Collapse toggle */}
       <div style={{ borderTop: "1px solid " + DIVIDER }} className="shrink-0">

@@ -4,6 +4,93 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+## Sidebar navigation groups: admin-configurable module grouping — 2026-07-29
+
+Which sidebar group each module sat in was hardcoded in two places in
+`Sidebar.tsx` — a `MODULE_GROUP` name→group map covering only workflow types, and
+a hand-written `sections` array for everything else. Changing it meant a deploy,
+and the hand-editing had already drifted (Configuration was nested under a
+section titled "LMS"). The layout is now stored per-installation and edited in
+the UI. Full design + the gaps found while reviewing it: `docs/sidebar-module-grouping-plan.md`.
+
+Grouping is **presentation only** — it grants no access. What a user can see is
+still decided entirely by the permission keys, so the same stored layout renders
+differently per user and a group whose modules are all restricted disappears.
+
+- `prisma/schema.prisma` + migration `20260729090000_sidebar_nav_groups` — new
+  `NavGroup` and `NavGroupModule`. Workflow-driven modules are keyed by **id**
+  (`wf:<uuid>`), not name, because type names are editable and a rename would
+  orphan the assignment. `NavGroupModule.moduleKey` is `@unique`, so a module
+  structurally cannot land in two groups.
+  - **No `isDeleted` on `NavGroup`, deliberately.** Soft-delete plus the unique
+    `moduleKey` deadlock each other: a soft-deleted group keeps its members'
+    keys reserved, so those modules could never be reassigned *and* would vanish
+    from the sidebar. Groups are hard-deleted and their members move to the
+    fallback group instead. Nothing is lost — the audit interceptor stores the
+    whole destroyed row in `diff`.
+  - The migration is hand-written because it carries a partial unique index
+    (`NavGroup_single_fallback`, `WHERE "isFallback"`) that Prisma cannot express
+    declaratively. It enforces *at most* one fallback, not at least one — see the
+    repair branch below.
+- `lib/nav-group-defaults.ts` (new) — `STATIC_MODULE_KEYS`, the default layout,
+  and an idempotent `ensureNavGroups()`. **Not seeded via `prisma/seed.ts`**: the
+  seed runs in development only, so a deployed environment would boot with an
+  empty table — no groups, and every module falling through to a fallback group
+  that also does not exist. Two branches: write the default layout when the table
+  is empty, and re-flag the last group when no `isFallback` row exists (an
+  out-of-band edit could otherwise make every unassigned module silently
+  disappear).
+- `index.ts` — calls it alongside `ensureRbacCatalog()` / `ensureDefaultSiteAndBackfill()`,
+  same non-fatal `.then/.catch`: a bootstrap failure degrades the sidebar to its
+  compiled-in defaults, it must not take the API down.
+- `modules/nav-group/` (new — controller, routes, schema, service, openapi),
+  registered in `app.ts` next to `nav-counts`.
+  - `GET /nav-groups` is open to **any authenticated user**, following the
+    explicit precedent on `/workflow-lookups/types`: every user needs it to draw
+    their own sidebar, and gating it behind the admin key would leave non-admins
+    with an ungrouped nav. `PUT` is gated on `nav.groups.manage`.
+  - The save is a **full document, applied as a diff** — `upsert` changed rows,
+    singular `create` for new ones, `delete` for removed. Never
+    `deleteMany` + `createMany`: the audit interceptor wraps `create`/`update`/
+    `delete`/`updateMany`/`deleteMany` but **not `createMany`**, so a bulk
+    replace would log every removal and silently lose every addition. A one-sided
+    trail on a GxP config surface is worse than none. Diffing also keeps the
+    trail readable ("moved CAPA to Compliance") instead of full churn per save.
+  - Validation is deliberately **asymmetric**: unknown *static* module keys and
+    duplicates are rejected, but a `wf:<id>` whose workflow type was soft-deleted
+    is silently **pruned**. The editor echoes back whatever it was given, so
+    rejecting would make the layout permanently unsaveable for a reason the admin
+    can neither see nor fix.
+  - Optimistic concurrency on `baseUpdatedAt` → `409`. A full-document PUT is
+    otherwise last-write-wins and two admins editing at once would clobber each
+    other silently. The check reads **inside** the transaction so it sees the same
+    snapshot the writes apply to.
+  - Any module the payload does not mention (stale client, or one whose group was
+    deleted) is swept into the fallback group rather than dropped.
+  - `deleteNavGroup()` moves members to fallback **before** deleting — the FK
+    cascade would otherwise take them with it. `isSystem` and the fallback group
+    itself refuse deletion.
+- `lib/rbac-catalog.ts` — `nav.groups.read` (gates the admin screen) and
+  `nav.groups.manage` (gates the save), under the existing `ORG` module.
+  `rbac-sync` picks them up at startup, but **only auto-grants to SUPER_ADMIN by
+  design** — existing non-super roles need the grant via Access Control or a
+  re-seed. `QMS_ADMIN`'s seed filter already covers `ORG`, so a fresh seed is
+  correct; the local `kaizen_qms2` role was granted directly to match.
+- `lib/audit-scope.ts` — `NavGroup`/`NavGroupModule` added to `MODULE_OVERRIDES`
+  as `ADMIN`; `moduleFor()` would otherwise default them to `QMS`. No other audit
+  work was needed: capture is opt-out, and `LABEL_FIELDS` already covers `title`
+  and `key`.
+- `openapi/spec.ts` — registers the new module's paths.
+- `tests/unit/nav-groups-save.test.ts` (new, 14 tests) — pins the three
+  behaviours that fail *silently* if they regress: writes stay singular (the
+  `createMany` audit gap), orphaned `wf:` keys are pruned rather than rejected,
+  and delete reassigns members before dropping the group. Plus the validation
+  rules (one fallback, no duplicate module, system group undeletable, 409).
+
+Not committed.
+
+---
+
 ## Training matrix: auto-assign on join — 2026-07-28
 
 The Qualification Matrix (`LmsTrainingMatrixRule`) already mapped role /

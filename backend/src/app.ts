@@ -36,6 +36,7 @@ import coaRoutes from './modules/coa/coa.routes';
 import coaPublicRoutes from './modules/coa/coa.public.routes';
 import limsAnalyticsRoutes from './modules/lims-analytics/lims-analytics.routes';
 import navCountsRoutes from './modules/nav-counts/nav-counts.routes';
+import navGroupRoutes from './modules/nav-group/nav-group.routes';
 import dashboardRoutes from './modules/dashboard/dashboard.routes';
 import searchRoutes from './modules/search/search.routes';
 import accessRoutes from './modules/access/access.routes';
@@ -147,6 +148,7 @@ export const buildApp = () => {
   app.use('/api/risk', riskControlRoutes);    // /controls, /hazard-library, /control-library
   app.use('/api/risk', riskRoutes);           // /frameworks, /categories, /registers, /risks, /heatmap, /summary
   app.use('/api/nav-counts', navCountsRoutes); // sidebar notification badges (FQS-QK-UIUX-003 §4)
+  app.use('/api/nav-groups', navGroupRoutes); // sidebar accordion grouping (docs/sidebar-module-grouping-plan.md)
   app.use('/api/dashboard', dashboardRoutes); // Quality Command Center — role-aware, org-scoped overview
   app.use('/api/search', searchRoutes); // global cross-module search (FQS-QK-UIUX-003 §4)
 

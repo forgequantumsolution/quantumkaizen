@@ -97,6 +97,7 @@ const MODULE_PREFIXES: Array<[string, AuditModule]> = [
 const MODULE_OVERRIDES: Record<string, AuditModule> = {
   User: 'ADMIN', Role: 'ADMIN', Permission: 'ADMIN', UserPermission: 'ADMIN',
   Site: 'ADMIN', Organization: 'ADMIN', Department: 'ADMIN', BusinessCalendar: 'ADMIN',
+  NavGroup: 'ADMIN', NavGroupModule: 'ADMIN',
   FieldType: 'WORKFLOW', ActionType: 'WORKFLOW', ActionCriteria: 'WORKFLOW',
   Priority: 'WORKFLOW', Severity: 'WORKFLOW', ChildWorkflowTrigger: 'WORKFLOW',
   ParallelBranchTracking: 'WORKFLOW',
