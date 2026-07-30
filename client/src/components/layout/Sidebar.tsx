@@ -311,6 +311,30 @@ export default function Sidebar() {
         "/lims/data-review",
       ],
     };
+    // Calibration is its own module, not a LIMS sub-section: production gauges
+    // and line monitoring devices are not lab objects.
+    const calibrationItem: NavItem = {
+      label: "Calibration",
+      path: "/calibration/dashboard",
+      icon: Ruler,
+      permission: "calibration_instrument.read",
+      // Only the operational routes — Configuration is its own entry below.
+      activeForPrefixes: [
+        "/calibration/dashboard",
+        "/calibration/instruments",
+        "/calibration/schedule",
+        "/calibration/events",
+        "/calibration/oot",
+        "/calibration/checks",
+      ],
+    };
+    const calibrationConfigItem: NavItem = {
+      label: "Calibration Configuration",
+      path: "/calibration/config",
+      icon: Settings2,
+      permission: "calibration_config.read",
+      activeForPrefixes: ["/calibration/config"],
+    };
     const limsConfigItem: NavItem = {
       label: "LIMS Configuration",
       path: "/lims/config",
@@ -409,6 +433,8 @@ export default function Sidebar() {
       ["dashboard", dashboardItem],
       ["lims", limsItem],
       ["lims-config", limsConfigItem],
+      ["calibration", calibrationItem],
+      ["calibration-config", calibrationConfigItem],
       ["dms", dmsItem],
       ["training", trainingItem],
       ["audit-trail", auditTrailItem],

@@ -26,6 +26,8 @@ export const STATIC_MODULE_KEYS = [
   'dashboard',
   'lims',
   'lims-config',
+  'calibration',
+  'calibration-config',
   'dms',
   'training',
   'audit-trail',
@@ -61,7 +63,7 @@ interface DefaultGroup {
 export const DEFAULT_GROUPS: DefaultGroup[] = [
   // Ungrouped row at the top: no header, never collapsible, never deletable.
   { key: 'top', title: '', collapsible: false, defaultOpen: true, isSystem: true, modules: ['dashboard'] },
-  { key: 'lab-operations', title: 'Lab Operations', defaultOpen: true, modules: ['lims', 'lims-config'] },
+  { key: 'lab-operations', title: 'Lab Operations', defaultOpen: true, modules: ['lims', 'lims-config', 'calibration', 'calibration-config'] },
   { key: 'dms', title: 'DMS', defaultOpen: true, modules: ['dms'] },
   // Fallback: anything unassigned lands here, matching the old `groupForModule`
   // default of "Quality System".
@@ -107,6 +109,29 @@ export async function ensureNavGroups(): Promise<void> {
         await prisma.navGroup.update({ where: { id: last.id }, data: { isFallback: true } });
         console.log(`[nav-groups] no fallback group found — re-flagged "${last.key}"`);
       }
+    }
+
+    // Repair branch 2 — a static module added to the catalog AFTER this table
+    // was bootstrapped has no NavGroupModule row, so it would fall through to
+    // the fallback group rather than the group it declares. Place it where
+    // DEFAULT_GROUPS says it belongs. Idempotent: only ever adds missing rows.
+    const placed = new Set(
+      (await prisma.navGroupModule.findMany({ select: { moduleKey: true } })).map((m) => m.moduleKey),
+    );
+    const missing = STATIC_MODULE_KEYS.filter((k) => !placed.has(k));
+    for (const key of missing) {
+      const home = DEFAULT_GROUPS.find((g) => g.modules.includes(key));
+      const group = await prisma.navGroup.findUnique({ where: { key: home?.key ?? 'quality-system' } });
+      if (!group) continue;
+      const last = await prisma.navGroupModule.findFirst({
+        where: { navGroupId: group.id },
+        orderBy: { sortOrder: 'desc' },
+        select: { sortOrder: true },
+      });
+      await prisma.navGroupModule.create({
+        data: { navGroupId: group.id, moduleKey: key, sortOrder: (last?.sortOrder ?? -1) + 1 },
+      });
+      console.log(`[nav-groups] placed new module "${key}" in group "${group.key}"`);
     }
     return;
   }

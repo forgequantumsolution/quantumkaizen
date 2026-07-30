@@ -24,6 +24,7 @@ import trainingRoutes from './modules/training/training.routes';
 import lmsRoutes from './modules/lms/lms.routes';
 import lmsPublicRoutes from './modules/lms/lms.public.routes';
 import limsRoutes from './modules/lims/lims.routes';
+import calibrationRoutes, { calibrationPublicRouter } from './modules/calibration/calibration.routes';
 import sampleRoutes from './modules/sample/sample.routes';
 import limsMasterRoutes from './modules/lims-master/lims-master.routes';
 import testDefinitionRoutes from './modules/test-definition/test-definition.routes';
@@ -110,7 +111,8 @@ export const buildApp = () => {
   );
 
   app.use('/api/public/coa', coaPublicRoutes); // LIMS 2.0 — public CoA QR verify (no auth) — must precede the '/api' catch-all
-  app.use('/api/public/lms', lmsPublicRoutes); // LMS — public certificate QR verify (no auth) — must precede the '/api' catch-all
+  app.use('/api/public/lms', lmsPublicRoutes);
+  app.use('/api/public/calibration', calibrationPublicRouter); // Calibration — public label QR verify (no auth)
   app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/departments', departmentRoutes);
@@ -130,6 +132,7 @@ export const buildApp = () => {
   app.use('/api/training', trainingRoutes); // training & competency
   app.use('/api/lms', lmsRoutes); // LMS — learning management (courses, content)
   app.use('/api/lims', limsRoutes); // LIMS — lab registry (+ more)
+  app.use('/api/calibration', calibrationRoutes); // Calibration & Measuring Equipment — independent module
   app.use('/api/samples', sampleRoutes); // LIMS — sample lifecycle
   app.use('/api/lims-master', limsMasterRoutes); // LIMS 2.0 — master data
   app.use('/api/test-definitions', testDefinitionRoutes); // LIMS 2.0 — test defs + panels

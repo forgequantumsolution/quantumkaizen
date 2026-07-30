@@ -1881,14 +1881,14 @@ model AuditScheduleRule {
   /// spawn sweep shortens or lengthens the interval according to the residual
   /// risk carried by the named entity, clamped to the min/max bounds. Off by
   /// default, so existing schedules keep their fixed cadence exactly.
-  riskWeighted     Boolean @default(false)
+  riskWeighted     Boolean  @default(false)
   riskEntityType   String?
   riskEntityId     String?
   minFrequencyDays Int?
   maxFrequencyDays Int?
   createdById      String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   @@index([isActive, nextRunAt])
   @@index([auditMasterId])
@@ -4043,26 +4043,26 @@ model RiskFactorLevel {
 }
 
 model RiskLevelDef {
-  id               String              @id @default(uuid())
-  frameworkId      String
-  code             String
-  label            String
-  color            String              @default("#64748B")
-  order            Int                 @default(0)
-  minScore         Int?
-  maxScore         Int?
-  acceptance       RiskAcceptanceLevel @default(ALARP)
-  requiresCapa     Boolean             @default(false)
-  requiresApproval Boolean             @default(false)
-  requiresControl  Boolean             @default(false)
+  id                   String              @id @default(uuid())
+  frameworkId          String
+  code                 String
+  label                String
+  color                String              @default("#64748B")
+  order                Int                 @default(0)
+  minScore             Int?
+  maxScore             Int?
+  acceptance           RiskAcceptanceLevel @default(ALARP)
+  requiresCapa         Boolean             @default(false)
+  requiresApproval     Boolean             @default(false)
+  requiresControl      Boolean             @default(false)
   /// An ADMINISTRATIVE control on a risk at this level must name a training
   /// course, and cannot be verified until the assigned training completes.
-  requiresTraining Boolean             @default(false)
+  requiresTraining     Boolean             @default(false)
   /// A workflow ticket linked to an open risk at this level cannot pass a stage
   /// action guarded by the NO_BLOCKING_RISK criterion (change control, §D.1).
-  blocksChangeApproval Boolean         @default(false)
-  reviewMonths     Int?
-  escalateToRoleId String?
+  blocksChangeApproval Boolean             @default(false)
+  reviewMonths         Int?
+  escalateToRoleId     String?
 
   framework   RiskFramework    @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   matrixCells RiskMatrixCell[]
@@ -4428,16 +4428,16 @@ model RiskAcceptanceRecord {
 /// segregation-of-duties rule — someone other than the person accepting the
 /// risk must sign off first — and that is exactly what this records.
 model RiskApproval {
-  id       String @id @default(uuid())
-  riskId   String
+  id        String  @id @default(uuid())
+  riskId    String
   /// The level code that demanded the approval, captured at request time so the
   /// record still explains itself after the framework is re-banded.
   levelCode String?
   /// PENDING | APPROVED | REJECTED
-  status   String @default("PENDING")
+  status    String  @default("PENDING")
 
   requestedById String?
-  requestedAt   DateTime @default(now())
+  requestedAt   DateTime  @default(now())
   decidedById   String?
   decidedAt     DateTime?
   decision      String?
@@ -4487,20 +4487,20 @@ model RiskTriggerRule {
 /// above tolerance is flagged out-of-appetite everywhere it appears and cannot
 /// be accepted without the extra sign-off the tolerance demands.
 model RiskAppetite {
-  id             String  @id @default(uuid())
-  name           String
-  organizationId String?
-  siteId         String?
-  categoryId     String?
+  id                  String  @id @default(uuid())
+  name                String
+  organizationId      String?
+  siteId              String?
+  categoryId          String?
   /// The highest level still tolerated, as a normalised RiskProfile severity
   /// rank (0-100). Stored as a rank rather than a level id so one statement can
   /// span frameworks — the whole point of an org-level appetite.
-  toleranceRank  Int
-  statement      String?
+  toleranceRank       Int
+  statement           String?
   /// Acceptance above tolerance needs a named second approver, not just a
   /// justification.
   requiresBoardReview Boolean @default(false)
-  isActive       Boolean @default(true)
+  isActive            Boolean @default(true)
 
   createdById String?
   createdAt   DateTime @default(now())
@@ -4563,4 +4563,706 @@ model RiskProfile {
   @@unique([entityType, entityId])
   @@index([entityType, severityRank])
   @@index([severityRank])
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CALIBRATION & MEASURING EQUIPMENT
+// docs/CALIBRATION-module-implementation-plan.md
+//
+// Three regimes ask the same question in different words — "what did this
+// instrument touch since it was last known good?" — and none of them was
+// answerable while a calibration was six flat columns. The model below makes
+// the MEASUREMENT the record: readings at defined points, judged against frozen
+// tolerances, using traceable standards. PASS/FAIL is derived, never typed in.
+// ═════════════════════════════════════════════════════════════════════════════
+
+enum InstrumentKind {
+  LAB_INSTRUMENT // HPLC, balance, pH meter — the existing LIMS population
+  PRODUCTION_GAUGE // torque wrench, vernier, plug gauge
+  MONITORING_DEVICE // metal detector, checkweigher, thermometer, data logger
+  REFERENCE_STANDARD // check weights, gauge blocks, master thermometer
+  UTILITY // autoclave, oven, chamber — qualified rather than calibrated
+}
+
+enum InstrumentCriticality {
+  CRITICAL // GxP / CCP / safety-characteristic measurement
+  MAJOR
+  MINOR
+  INDICATIVE // reference only; no product decision taken from it
+}
+
+enum CalibrationStatus {
+  CALIBRATED
+  DUE_SOON
+  OVERDUE
+  UNDER_CALIBRATION
+  LIMITED_USE // conditional pass — restricted range, documented
+  OUT_OF_SERVICE
+  NOT_REQUIRED // explicitly exempted, with justification
+}
+
+enum QualificationState {
+  NOT_STARTED
+  IQ
+  OQ
+  PQ
+  QUALIFIED
+  REQUALIFICATION_DUE
+}
+
+enum ToleranceType {
+  ABSOLUTE
+  PERCENT_OF_READING
+  PERCENT_OF_SPAN
+  MPE_MULTIPLE
+}
+
+enum InUseFrequency {
+  PER_SHIFT
+  DAILY
+  WEEKLY
+  PER_BATCH
+  MONTHLY
+}
+
+enum IntervalType {
+  DAYS
+  MONTHS
+  USAGE_HOURS
+  USAGE_CYCLES
+  RISK_MODULATED
+}
+
+/// PREVIOUS_DUE_DATE prevents interval creep (a calibration done four days late
+/// must not push every future date four days out). PERFORMED_DATE is the simpler
+/// rule most FMCG plants actually run.
+enum IntervalBasis {
+  PERFORMED_DATE
+  PREVIOUS_DUE_DATE
+}
+
+enum ProviderType {
+  INTERNAL
+  EXTERNAL
+  MANUFACTURER
+}
+
+enum CalibrationEventType {
+  PERIODIC
+  INITIAL
+  AFTER_REPAIR
+  AFTER_RELOCATION
+  AD_HOC
+  VERIFICATION
+}
+
+enum CalibrationEventStatus {
+  PLANNED
+  SCHEDULED
+  IN_PROGRESS
+  PENDING_REVIEW
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum CalibrationOutcome {
+  PASS
+  FAIL
+  CONDITIONAL
+  NOT_PERFORMED
+}
+
+enum OotWindow {
+  SINCE_LAST_CALIBRATION
+  SINCE_LAST_PASSING_CHECK
+  FIXED_DAYS
+}
+
+enum OotStatus {
+  OPEN
+  IMPACT_IN_PROGRESS
+  PENDING_QA_APPROVAL
+  CLOSED
+}
+
+enum OotDisposition {
+  NO_IMPACT
+  IMPACT_CONFIRMED
+  INCONCLUSIVE
+}
+
+enum MsaStudyType {
+  GAGE_RR_CROSSED
+  GAGE_RR_NESTED
+  BIAS
+  LINEARITY
+  STABILITY
+  ATTRIBUTE_AGREEMENT
+}
+
+enum MsaVerdict {
+  ACCEPTABLE // %GRR < 10
+  CONDITIONAL // 10-30
+  UNACCEPTABLE // > 30
+}
+
+// ─────────────────────── Instrument registry (module-owned) ───────────────────────
+
+/// The Calibration module's OWN instrument registry.
+///
+/// Deliberately NOT the LIMS `Equipment` table. This module ships as an
+/// independent unit: it can be deployed, migrated and reasoned about without
+/// LIMS being present, and a LIMS schema change cannot break a calibration
+/// record. Automotive gage cribs and FMCG line devices are not lab objects and
+/// were never going to fit a lab-scoped model anyway.
+///
+/// `limsEquipmentId` is a SOFT link — a nullable id with no foreign key. When a
+/// tenant runs LIMS too and points an instrument at its Equipment row, the
+/// out-of-tolerance impact scan can reach LIMS results. When it is null (or LIMS
+/// is not installed at all) the scan falls back to batch references and the
+/// module carries on. Independence without throwing away the integration.
+model CalibrationInstrument {
+  id     String           @id @default(uuid())
+  code   String           @unique
+  name   String
+  kind   InstrumentKind   @default(LAB_INSTRUMENT)
+  status InstrumentStatus @default(ACTIVE)
+
+  categoryId String?
+  category   EquipmentCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  /// Free-text ownership fields. Ids reference platform tables (Site, Department,
+  /// User) but carry no FK, so the module never blocks on their shape.
+  siteId       String?
+  departmentId String?
+  custodianId  String?
+  labRef       String? // optional lab name/code, when the tenant also runs LIMS
+
+  /// Soft link to a LIMS `Equipment.id`. No FK by design — see model docs.
+  limsEquipmentId String?
+
+  serialNo     String?
+  manufacturer String?
+  model        String?
+  location     String?
+  assetTag     String?
+
+  criticality           InstrumentCriticality @default(MAJOR)
+  /// Derived. `refreshCalibrationStatus` is the only writer; never set by hand.
+  calibrationStatus     CalibrationStatus     @default(CALIBRATED)
+  isCalibrationRequired Boolean               @default(true)
+  exemptionReason       String?
+
+  lastCalibratedAt DateTime?
+  calibrationDueAt DateTime?
+
+  // Metrology attributes
+  measurementRangeMin Decimal? @db.Decimal(18, 6)
+  measurementRangeMax Decimal? @db.Decimal(18, 6)
+  unitCode            String? // plain unit code — no FK to the LIMS unit master
+  resolution          Decimal? @db.Decimal(18, 6)
+  accuracyClass       String? // "Class II", "±0.5% FS", OIML class
+  mpe                 Decimal? @db.Decimal(18, 6) // maximum permissible error
+
+  // Qualification (pharma AIQ / GAMP; automotive gage acceptance)
+  qualificationState QualificationState @default(NOT_STARTED)
+  aiqGroup           String? // USP <1058> A | B | C
+  gampCategory       String? // GAMP 5 category 1/3/4/5
+
+  // Identification & control
+  /// Backs the public label-scan endpoint (/api/public/calibration/verify/:token).
+  qrToken          String?   @unique
+  receivedAt       DateTime?
+  warrantyUntil    DateTime?
+  retiredAt        DateTime?
+  retirementReason String?
+
+  // Legal metrology (FMCG pack) — stamp validity is independent of calibration.
+  legalMetrologyStampNo    String?
+  legalMetrologyValidUntil DateTime?
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plans        CalibrationPlan[]
+  events       CalibrationEvent[]
+  standardUses CalibrationStandardUse[]
+  inUseChecks  InUseVerification[]
+  msaStudies   MsaStudy[]
+
+  @@index([kind, calibrationStatus])
+  @@index([calibrationDueAt])
+  @@index([siteId])
+  @@index([custodianId])
+  @@index([categoryId])
+  @@index([limsEquipmentId])
+}
+
+enum InstrumentStatus {
+  ACTIVE
+  OUT_OF_SERVICE
+  RETIRED
+}
+
+/// Calibration service provider — module-owned, not the LIMS `Supplier` master.
+/// A certificate from a provider whose ISO/IEC 17025 accreditation had lapsed is
+/// a finding in every regime, hence the tracked expiry. `limsSupplierId` is a
+/// soft link for tenants who also keep the agency in their vendor master.
+model CalibrationProvider {
+  id   String       @id @default(uuid())
+  code String       @unique
+  name String
+  type ProviderType @default(EXTERNAL)
+
+  contactName String?
+  email       String?
+  phone       String?
+  country     String?
+
+  accreditationBody   String? // NABL, A2LA, DAkkS, UKAS
+  accreditationNo     String?
+  accreditationScope  String? // the measurement scope actually accredited
+  accreditationExpiry DateTime?
+
+  /// Soft link to a LIMS `Supplier.id`. No FK by design.
+  limsSupplierId String?
+
+  isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  plans  CalibrationPlan[]
+  events CalibrationEvent[]
+
+  @@index([isActive])
+  @@index([accreditationExpiry])
+}
+
+// ─────────────────────────── Configuration masters ───────────────────────────
+
+/// Instrument category + the defaults every plan for it inherits. Industry packs
+/// are nothing more than a seeded set of these rows plus one CalibrationConfig.
+model EquipmentCategory {
+  code         String         @unique
+  id           String         @id @default(uuid())
+  name         String
+  kind         InstrumentKind @default(LAB_INSTRUMENT)
+  siteId       String?
+  /// PHARMA | AUTOMOTIVE | FMCG | null (tenant-authored)
+  industryPack String?
+  description  String?
+
+  defaultIntervalDays   Int?
+  defaultCriticality    InstrumentCriticality @default(MAJOR)
+  defaultToleranceType  ToleranceType?
+  defaultToleranceValue Decimal?              @db.Decimal(18, 6)
+  requiresMsa           Boolean               @default(false)
+  requiresInUseCheck    Boolean               @default(false)
+  inUseCheckFrequency   InUseFrequency?
+
+  isActive    Boolean  @default(true)
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  pointTemplates CalibrationPointTemplate[]
+  instruments    CalibrationInstrument[]
+
+  @@index([kind])
+  @@index([industryPack])
+  @@index([siteId])
+}
+
+model CalibrationPointTemplate {
+  id                   String            @id @default(uuid())
+  categoryId           String
+  category             EquipmentCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  sequence             Int
+  label                String
+  nominalValue         Decimal?          @db.Decimal(18, 6)
+  /// When the nominal is span-relative ("10% of span") the concrete value is
+  /// resolved per instrument from its measurement range.
+  nominalPercentOfSpan Decimal?          @db.Decimal(9, 4)
+  unitCode             String?
+  toleranceType        ToleranceType     @default(ABSOLUTE)
+  toleranceValue       Decimal           @db.Decimal(18, 6)
+
+  @@unique([categoryId, sequence])
+}
+
+/// THE industry switch. One row per site (or org-wide when siteId is null).
+/// Every pharma/automotive/FMCG difference is a column here — never a code branch.
+model CalibrationConfig {
+  id           String  @id @default(uuid())
+  siteId       String? @unique
+  industryPack String  @default("CUSTOM")
+
+  eventNumberPrefix       String @default("CAL")
+  certificateNumberPrefix String @default("CC")
+
+  // Scheduling policy
+  dueSoonWindowDays     Int           @default(30)
+  autoSpawnLeadDays     Int           @default(14)
+  graceDays             Int           @default(0)
+  allowEarlyCalibration Boolean       @default(true)
+  earlyWindowDays       Int           @default(15)
+  intervalResetBasis    IntervalBasis @default(PERFORMED_DATE)
+
+  // Enforcement
+  blockUseWhenOverdue        Boolean @default(true)
+  blockUseWhenFailed         Boolean @default(true)
+  requireCompetencyToPerform Boolean @default(false)
+
+  // Records & signatures — 21 CFR 11 / EU GMP Annex 11
+  requirePerformerSignature Boolean @default(true)
+  requireReviewerSignature  Boolean @default(true)
+  requireApproverSignature  Boolean @default(true)
+  requireReasonForChange    Boolean @default(true)
+
+  // Out-of-tolerance policy
+  ootImpactAssessmentRequired     Boolean   @default(true)
+  ootImpactWindow                 OotWindow @default(SINCE_LAST_CALIBRATION)
+  /// DEVIATION | CAPA | RISK
+  ootAutoSpawn                    String[]  @default(["DEVIATION"])
+  ootRequiresCustomerNotification Boolean   @default(false) // IATF 16949 §7.1.5.2.1
+  ootRequiresProductHold          Boolean   @default(false) // BRCGS / FSSC
+
+  // Capability flags — pack-driven. These gate whether a surface exists at all,
+  // where permissions gate who may see it.
+  enableMsa            Boolean @default(false)
+  enableInUseChecks    Boolean @default(false)
+  enableLegalMetrology Boolean @default(false)
+  enableAiqGroups      Boolean @default(false)
+  enableUsageIntervals Boolean @default(false)
+
+  labelTemplate       Json?
+  certificateTemplate Json?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────── Plan (the schedule) ───────────────────────────
+
+/// Versioned, never edited in place: the tolerance an instrument was judged
+/// against three years ago must stay reproducible from the record.
+model CalibrationPlan {
+  id           String                @id @default(uuid())
+  instrumentId String
+  instrument   CalibrationInstrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  version      Int                   @default(1)
+  isActive     Boolean               @default(true)
+
+  intervalType          IntervalType @default(MONTHS)
+  intervalValue         Int          @default(12)
+  /// Pharma expects the interval to be justified, not assumed.
+  intervalJustification String?
+
+  methodDocId String? // → Document (the calibration SOP)
+  methodRef   String? // free-text SOP reference when not yet in the DMS
+
+  providerType           ProviderType         @default(INTERNAL)
+  providerId             String?
+  provider               CalibrationProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  estimatedDurationHours Decimal?             @db.Decimal(6, 2)
+
+  requiresMsa                 Boolean  @default(false)
+  requiredCourseId            String? // → LmsCourse — competency to perform
+  requiredStandardCategoryIds String[] @default([])
+
+  nextDueAt      DateTime?
+  lastEventId    String?
+  supersededById String?
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  points CalibrationPoint[]
+  events CalibrationEvent[]
+
+  @@unique([instrumentId, version])
+  @@index([instrumentId, isActive])
+  @@index([nextDueAt])
+}
+
+model CalibrationPoint {
+  id       String          @id @default(uuid())
+  planId   String
+  plan     CalibrationPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  sequence Int
+  label    String
+
+  nominalValue   Decimal       @db.Decimal(18, 6)
+  unitCode       String?
+  toleranceType  ToleranceType @default(ABSOLUTE)
+  toleranceValue Decimal       @db.Decimal(18, 6)
+  /// Computed on save and stored, so a report reproduces the exact limits used.
+  lowerLimit     Decimal       @db.Decimal(18, 6)
+  upperLimit     Decimal       @db.Decimal(18, 6)
+
+  @@unique([planId, sequence])
+}
+
+// ─────────────────────────── Execution (the record) ───────────────────────────
+
+model CalibrationEvent {
+  id           String                @id @default(uuid())
+  eventNo      String                @unique
+  instrumentId String
+  instrument   CalibrationInstrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  planId       String?
+  plan         CalibrationPlan?      @relation(fields: [planId], references: [id], onDelete: SetNull)
+  /// Frozen at creation — see the CalibrationPlan versioning rationale.
+  planVersion  Int?
+
+  type   CalibrationEventType   @default(PERIODIC)
+  status CalibrationEventStatus @default(PLANNED)
+  siteId String?
+
+  scheduledFor        DateTime?
+  startedAt           DateTime?
+  performedAt         DateTime?
+  performedById       String?
+  performedByExternal String? // agency technician, when EXTERNAL
+  providerType        ProviderType         @default(INTERNAL)
+  providerId          String?
+  provider            CalibrationProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  // Environmental conditions at time of calibration (ISO/IEC 17025 §6.3)
+  ambientTemperature Decimal? @db.Decimal(8, 3)
+  ambientHumidity    Decimal? @db.Decimal(8, 3)
+  environmentNotes   String?
+
+  // Derived from the readings — never entered directly.
+  asFoundOutcome CalibrationOutcome?
+  asLeftOutcome  CalibrationOutcome?
+  overallOutcome CalibrationOutcome?
+  adjustmentMade Boolean             @default(false)
+
+  certificateNo    String?
+  certificateDocId String?
+  nextDueAt        DateTime?
+  remarks          String?
+
+  /// The human task. The event is the record; the ticket carries SLA,
+  /// escalation, comments and attachments from the existing engine.
+  ticketId        String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  approvedById    String?
+  approvedAt      DateTime?
+  rejectionReason String?
+  cancelReason    String?
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  readings  CalibrationReading[]
+  standards CalibrationStandardUse[]
+  oot       OutOfToleranceAssessment?
+
+  @@index([instrumentId, performedAt])
+  @@index([status])
+  @@index([siteId])
+  @@index([nextDueAt])
+  @@index([scheduledFor])
+}
+
+model CalibrationReading {
+  id       String           @id @default(uuid())
+  eventId  String
+  event    CalibrationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  sequence Int
+  label    String
+
+  nominalValue Decimal @db.Decimal(18, 6)
+  unitCode     String?
+  /// Frozen from the plan point at event creation.
+  lowerLimit   Decimal @db.Decimal(18, 6)
+  upperLimit   Decimal @db.Decimal(18, 6)
+
+  /// As-found is the only field that says whether the LAST six months of data
+  /// were trustworthy. Every impact assessment hangs off it.
+  asFoundValue       Decimal? @db.Decimal(18, 6)
+  asFoundError       Decimal? @db.Decimal(18, 6)
+  asFoundInTolerance Boolean?
+
+  asLeftValue       Decimal? @db.Decimal(18, 6)
+  asLeftError       Decimal? @db.Decimal(18, 6)
+  asLeftInTolerance Boolean?
+
+  /// Expanded uncertainty U (k=2).
+  uncertainty Decimal? @db.Decimal(18, 6)
+  remarks     String?
+
+  @@unique([eventId, sequence])
+}
+
+/// Traceability chain: which certified standard was used, and was it valid then?
+model CalibrationStandardUse {
+  id                   String                @id @default(uuid())
+  eventId              String
+  event                CalibrationEvent      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  standardInstrumentId String
+  standard             CalibrationInstrument @relation(fields: [standardInstrumentId], references: [id], onDelete: Restrict)
+
+  certificateNo         String?
+  certificateValidUntil DateTime?
+  traceableTo           String? // "NABL / NPL India", "NIST", "PTB"
+  /// Computed at save — a lapsed standard invalidates the calibration it backed.
+  wasValidAtUse         Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, standardInstrumentId])
+  @@index([standardInstrumentId])
+}
+
+// ─────────────── Out-of-tolerance & retrospective impact ───────────────
+
+/// The regulatory centrepiece. Pharma asks for the results since the last
+/// calibration; IATF asks for the same plus a customer notification; FMCG asks
+/// for the product back to the last passing shift check. One record, three
+/// configured shapes.
+model OutOfToleranceAssessment {
+  id      String           @id @default(uuid())
+  eventId String           @unique
+  event   CalibrationEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status  OotStatus        @default(OPEN)
+
+  /// Computed from CalibrationConfig.ootImpactWindow.
+  impactWindowFrom DateTime
+  impactWindowTo   DateTime
+  maxObservedError Decimal? @db.Decimal(18, 6)
+
+  // Impact scan output — ids stored so the record is self-contained and a later
+  // data change cannot silently rewrite what was assessed.
+  affectedResultIds   String[]  @default([])
+  affectedQcResultIds String[]  @default([])
+  affectedSampleIds   String[]  @default([])
+  affectedBatchRefs   String[]  @default([])
+  affectedTicketIds   String[]  @default([])
+  lastScannedAt       DateTime?
+
+  disposition   OotDisposition?
+  justification String?
+  qaComments    String?
+
+  // Cross-module spawn (CalibrationConfig.ootAutoSpawn)
+  deviationTicketId String?
+  capaTicketId      String?
+  riskId            String?
+
+  // Industry-specific obligations
+  customerNotificationRequired Boolean   @default(false) // IATF 16949
+  customerNotifiedAt           DateTime?
+  customerNotificationRef      String?
+  productHoldRequired          Boolean   @default(false) // BRCGS / FSSC
+  productHoldRef               String?
+
+  assessedById String?
+  assessedAt   DateTime?
+  approvedById String?
+  approvedAt   DateTime?
+
+  isDeleted Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// ─────────────── In-use verification (high-frequency checks) ───────────────
+
+/// Not every control is a full calibration. A balance gets a daily check-weight
+/// verification; a metal detector gets a test-piece pass every shift. These are
+/// what FMCG lives on — and what the product-hold window is measured from.
+model InUseVerification {
+  id            String                @id @default(uuid())
+  instrumentId  String
+  instrument    CalibrationInstrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  performedAt   DateTime
+  performedById String?
+  shift         String?
+  outcome       CalibrationOutcome
+  /// [{ label, nominal, observed, inTolerance }]
+  readings      Json
+  batchRef      String?
+  remarks       String?
+
+  /// On failure the hold window is [previous passing check, this check].
+  holdTriggered  Boolean   @default(false)
+  holdRef        String?
+  holdWindowFrom DateTime?
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([instrumentId, performedAt])
+  @@index([outcome])
+}
+
+// ─────────────── MSA / Gage R&R (Automotive pack) ───────────────
+
+model MsaStudy {
+  id           String                @id @default(uuid())
+  studyNo      String                @unique
+  instrumentId String
+  instrument   CalibrationInstrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+  type         MsaStudyType          @default(GAGE_RR_CROSSED)
+
+  performedAt   DateTime
+  performedById String?
+  partCount     Int      @default(10)
+  operatorCount Int      @default(3)
+  trialCount    Int      @default(3)
+
+  // Computed by the AIAG average-and-range method.
+  repeatabilityEv   Decimal?    @db.Decimal(18, 6) // equipment variation
+  reproducibilityAv Decimal?    @db.Decimal(18, 6) // appraiser variation
+  grr               Decimal?    @db.Decimal(18, 6)
+  partVariation     Decimal?    @db.Decimal(18, 6)
+  totalVariation    Decimal?    @db.Decimal(18, 6)
+  grrPercent        Decimal?    @db.Decimal(9, 4)
+  ndc               Int? // number of distinct categories
+  verdict           MsaVerdict?
+  toleranceUsed     Decimal?    @db.Decimal(18, 6)
+  notes             String?
+
+  approvedById String?
+  approvedAt   DateTime?
+
+  isDeleted   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  trials MsaTrial[]
+
+  @@index([instrumentId])
+}
+
+model MsaTrial {
+  id       String   @id @default(uuid())
+  studyId  String
+  study    MsaStudy @relation(fields: [studyId], references: [id], onDelete: Cascade)
+  partNo   Int
+  operator Int
+  trial    Int
+  measured Decimal  @db.Decimal(18, 6)
+
+  @@unique([studyId, partNo, operator, trial])
 }
