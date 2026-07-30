@@ -13,10 +13,10 @@ export default defineConfig(({ mode }) => ({
     port: 5173,
     proxy: {
       '/api': {
-        // Point the dev proxy at the remote backend so the SPA talks to it
-        // through same-origin /api (no CORS). Swap back to a local target
-        // (e.g. http://127.0.0.1:4000) when running the backend locally.
-        target: 'http://localhost:4000',
+        // Point the dev proxy at the local backend so the SPA talks to it
+        // through same-origin /api (no CORS). Swap to the remote target
+        // (e.g. http://68.178.164.38:8080) when not running the backend locally.
+        target: 'http://127.0.0.1:4000',
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('error', (_err, _req, res) => {
@@ -28,7 +28,7 @@ export default defineConfig(({ mode }) => ({
         },
       },
       '/socket.io': {
-        target: 'http://68.178.164.38:8080',
+        target: 'http://127.0.0.1:4000',
         ws: true,
       },
     },

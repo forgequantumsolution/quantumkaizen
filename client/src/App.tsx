@@ -87,6 +87,22 @@ import LimsDashboardPage from '@/features/lims/LimsDashboardPage';
 import DataReviewPage from '@/features/lims/DataReviewPage';
 import LimsConfigLayout from '@/features/lims/LimsConfigLayout';
 import LimsModuleLayout from '@/features/lims/LimsModuleLayout';
+import CalibrationModuleLayout from '@/features/calibration/CalibrationModuleLayout';
+import CalibrationDashboardPage from '@/features/calibration/CalibrationDashboardPage';
+import InstrumentListPage from '@/features/calibration/InstrumentListPage';
+import InstrumentDetailPage from '@/features/calibration/InstrumentDetailPage';
+import CalibrationSchedulePage from '@/features/calibration/CalibrationSchedulePage';
+import CalibrationEventsPage from '@/features/calibration/CalibrationEventsPage';
+import CalibrationEventPage from '@/features/calibration/CalibrationEventPage';
+import { OotListPage, OotDetailPage } from '@/features/calibration/OotPage';
+import InUseChecksPage from '@/features/calibration/InUseChecksPage';
+import ReferenceStandardsPage from '@/features/calibration/ReferenceStandardsPage';
+import MsaStudiesPage from '@/features/calibration/MsaStudiesPage';
+import ProvidersPage from '@/features/calibration/ProvidersPage';
+import CalibrationConfigLayout from '@/features/calibration/CalibrationConfigLayout';
+import IndustryPacksPage from '@/features/calibration/IndustryPacksPage';
+import CalibrationPolicyPage from '@/features/calibration/CalibrationPolicyPage';
+import EquipmentCategoriesPage from '@/features/calibration/EquipmentCategoriesPage';
 import AuditReportPage from '@/features/audit/AuditReportPage';
 import CapaListPage from '@/features/audit/CapaListPage';
 import CapaDetailPage from '@/features/audit/CapaDetailPage';
@@ -198,6 +214,39 @@ export default function App() {
 
           {/* LIMS — operational (day-to-day). List/overview pages share the
               LimsModuleLayout tab bar; detail/editor pages stay full-page. */}
+          {/* ── Calibration & Measuring Equipment — independent module ──
+              Own tables, own RBAC keys; LIMS is an optional soft link only. */}
+          <Route path="/calibration" element={<Navigate to="/calibration/dashboard" replace />} />
+          <Route element={<CalibrationModuleLayout />}>
+            <Route path="/calibration/dashboard" element={<CalibrationDashboardPage />} />
+            <Route path="/calibration/instruments" element={<InstrumentListPage />} />
+            <Route path="/calibration/schedule" element={<CalibrationSchedulePage />} />
+            <Route path="/calibration/events" element={<CalibrationEventsPage />} />
+            <Route path="/calibration/oot" element={<OotListPage />} />
+            <Route path="/calibration/checks" element={<InUseChecksPage />} />
+          </Route>
+
+          {/* Set-up-once master data lives in its own shell, mirroring
+              "LIMS Configuration" (LimsConfigLayout). */}
+          <Route path="/calibration/config" element={<Navigate to="/calibration/config/packs" replace />} />
+          <Route element={<CalibrationConfigLayout />}>
+            <Route path="/calibration/config/packs" element={<IndustryPacksPage />} />
+            <Route path="/calibration/config/policy" element={<CalibrationPolicyPage />} />
+            <Route path="/calibration/config/categories" element={<EquipmentCategoriesPage />} />
+            <Route path="/calibration/config/standards" element={<ReferenceStandardsPage />} />
+            <Route path="/calibration/config/providers" element={<ProvidersPage />} />
+            <Route path="/calibration/config/msa" element={<MsaStudiesPage />} />
+          </Route>
+          {/* Old flat paths keep working. */}
+          <Route path="/calibration/settings" element={<Navigate to="/calibration/config/policy" replace />} />
+          <Route path="/calibration/providers" element={<Navigate to="/calibration/config/providers" replace />} />
+          <Route path="/calibration/standards" element={<Navigate to="/calibration/config/standards" replace />} />
+          <Route path="/calibration/msa" element={<Navigate to="/calibration/config/msa" replace />} />
+          {/* Detail pages stay full-page, matching the LIMS pattern. */}
+          <Route path="/calibration/instruments/:id" element={<InstrumentDetailPage />} />
+          <Route path="/calibration/events/:id" element={<CalibrationEventPage />} />
+          <Route path="/calibration/oot/:id" element={<OotDetailPage />} />
+
           <Route path="/lims" element={<Navigate to="/lims/dashboard" replace />} />
           <Route element={<LimsModuleLayout />}>
             <Route path="/lims/dashboard" element={<LimsDashboardPage />} />

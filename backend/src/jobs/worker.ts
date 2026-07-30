@@ -44,6 +44,7 @@ import { spawnDueAudits } from './sweeps/spawnDueAudits';
 import { flagOverdueReviews } from './sweeps/flagOverdueReviews';
 import { flagExpiringCertifications } from './sweeps/flagExpiringCertifications';
 import { flagDueStabilityPulls } from './sweeps/flagDueStabilityPulls';
+import { refreshCalibrationStatus } from './sweeps/refreshCalibrationStatus';
 
 const log = (msg: string, extra?: Record<string, unknown>) => {
   // eslint-disable-next-line no-console
@@ -144,7 +145,9 @@ const err = (msg: string, extra?: Record<string, unknown>) => {
         const review = await flagOverdueReviews();
         const certs = await flagExpiringCertifications();
         const stability = await flagDueStabilityPulls();
-        return { ...result, review, certs, stability };
+        // Calibration is an independent module but shares the daily tick.
+        const calibration = await refreshCalibrationStatus();
+        return { ...result, review, certs, stability, calibration };
       });
     },
     { connection: conn, concurrency: 1 },

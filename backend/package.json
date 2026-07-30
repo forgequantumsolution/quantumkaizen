@@ -26,12 +26,16 @@
     "worker:dev": "tsx watch src/jobs/worker.ts",
     "test:unit": "vitest run --dir ../tests/unit",
     "test:unit:watch": "vitest --dir ../tests/unit",
+    "db:seed:dms": "tsx prisma/seed-dms-data.ts",
+    "db:seed:doc-approval": "tsx prisma/seed-doc-approval-data.ts",
     "db:seed:lims": "tsx prisma/seed-lims-data.ts",
     "db:seed:lms": "tsx prisma/seed-lms-data.ts",
     "gate:ticket-grants": "tsx src/scripts/check-ticket-grants.ts",
     "gate:ticket-grants:prod": "node dist/scripts/check-ticket-grants.js",
     "check:typeless-workflows": "tsx src/scripts/check-typeless-workflows.ts",
-    "check:typeless-workflows:prod": "node dist/scripts/check-typeless-workflows.js"
+    "check:typeless-workflows:prod": "node dist/scripts/check-typeless-workflows.js",
+    "calibration:sweep": "tsx src/jobs/calibration-sweep-once.ts",
+    "db:seed:calibration": "tsx prisma/seed-calibration.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

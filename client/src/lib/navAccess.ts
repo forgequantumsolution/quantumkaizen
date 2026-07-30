@@ -103,6 +103,39 @@ export const NAV_ACCESS: NavModuleAccess[] = [
     ],
   },
   {
+    key: 'calibration',
+    label: 'Calibration',
+    description:
+      'Day-to-day calibration operations — instrument registry, schedule, execution, ' +
+      'out-of-tolerance impact, in-use checks and MSA. An independent module: it owns ' +
+      'its own instrument registry and only soft-links to LIMS equipment where a tenant ' +
+      'runs both. Set-up-once master data lives under "Calibration Configuration".',
+    tabs: [
+      { key: 'cal.dashboard',   label: 'Overview',            permission: 'calibration_analytics.read',  entity: 'calibration_analytics' },
+      { key: 'cal.instruments', label: 'Instruments',         permission: 'calibration_instrument.read', entity: 'calibration_instrument' },
+      { key: 'cal.schedule',    label: 'Schedule',            permission: 'calibration_event.read',      entity: 'calibration_event' },
+      { key: 'cal.events',      label: 'Calibrations',        permission: 'calibration_event.read',      entity: 'calibration_event' },
+      { key: 'cal.oot',         label: 'Out of Tolerance',    permission: 'calibration_oot.read',        entity: 'calibration_oot' },
+      { key: 'cal.checks',      label: 'In-Use Checks',       permission: 'calibration_check.read',      entity: 'calibration_check' },
+    ],
+  },
+  {
+    key: 'calibration-config',
+    label: 'Calibration — Configuration',
+    description:
+      'Set-up-once master data: industry packs, policy and signature rules, instrument ' +
+      'categories with their tolerance templates, and calibration providers. This is ' +
+      'where the pharma / automotive / FMCG difference is configured.',
+    tabs: [
+      { key: 'cal.packs',      label: 'Industry Packs',       permission: 'calibration_config.read',   entity: 'calibration_config' },
+      { key: 'cal.policy',     label: 'Policy & Rules',       permission: 'calibration_config.read',   entity: 'calibration_config' },
+      { key: 'cal.categories', label: 'Instrument Categories', permission: 'calibration_config.read',   entity: 'calibration_config' },
+      { key: 'cal.standards',  label: 'Reference Standards',   permission: 'calibration_standard.read',  entity: 'calibration_standard' },
+      { key: 'cal.providers',  label: 'Calibration Providers', permission: 'calibration_provider.read',  entity: 'calibration_provider' },
+      { key: 'cal.msa',        label: 'MSA / Gage R&R',        permission: 'msa_study.read',             entity: 'msa_study' },
+    ],
+  },
+  {
     key: 'audit',
     label: 'Audit',
     description: 'Audit operations — planning, execution, findings and CAPA.',
