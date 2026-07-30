@@ -27,6 +27,8 @@ import { Card, Button } from '@/components/ui';
 import {
   useNavGroups,
   useSaveNavGroups,
+  useDeleteNavGroup,
+  navGroupKeys,
   maxUpdatedAt,
   type NavGroup,
 } from '@/lib/api/navGroups';
@@ -50,6 +52,8 @@ const extractApiError = (err: unknown, fallback = 'Save failed'): string =>
 
 /** Editable working copy — mirrors the save payload, not the API row. */
 interface DraftGroup {
+  /** Server id; absent for a group added locally and not yet saved. */
+  id?: string;
   key: string;
   title: string;
   collapsible: boolean;
@@ -66,6 +70,7 @@ const toDraft = (groups: NavGroup[]): DraftGroup[] =>
   [...groups]
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((g) => ({
+      id: g.id,
       key: g.key,
       title: g.title,
       collapsible: g.collapsible,
@@ -86,6 +91,7 @@ export default function NavGroupsTab() {
   const { data: groups, isLoading, isError, error } = useNavGroups();
   const { data: workflowTypes } = useWorkflowTypes();
   const save = useSaveNavGroups();
+  const remove = useDeleteNavGroup();
   const confirmDelete = useConfirmDelete();
   const canManage = useHasPermission('nav.groups.manage');
 
@@ -186,11 +192,15 @@ export default function NavGroupsTab() {
     };
   };
 
+  // An empty group renders this placeholder as its only child, and the
+  // placeholder IS the drop target — so it must NOT be `disabled`. rc-tree binds
+  // its drag handlers only to enabled nodes, so marking it disabled made every
+  // newly added group impossible to fill. It stays unselectable, and
+  // `nodeDraggable` already refuses to drag it since the key isn't a `module:`.
   const emptyNode = (groupKey: string): TreeDataNode => ({
     key: `${EMPTY_LEAF}:${groupKey}`,
     isLeaf: true,
     selectable: false,
-    disabled: true,
     title: <span className="text-xs text-gray-500 italic">Drag a module here</span>,
   });
 
@@ -242,10 +252,46 @@ export default function NavGroupsTab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, unassigned, moduleLabels, fallbackTitle]);
 
+  /** Which group currently owns a module key (UNASSIGNED if none). */
+  const ownerOf = (moduleKey: string) =>
+    draft.find((g) => g.moduleKeys.includes(moduleKey))?.key ?? UNASSIGNED;
+
   const onDrop: React.ComponentProps<typeof Tree>['onDrop'] = (info) => {
     const dragKey = String(info.dragNode.key);
     const dropKey = String(info.node.key);
-    if (!dragKey.startsWith('module:')) return; // groups reorder via the arrows
+
+    // ── Dragging a group reorders it ────────────────────────────────────────
+    // Group rows have to be draggable at all (see `nodeDraggable`), so this is
+    // the natural meaning rather than leaving the drag as a dead no-op.
+    if (dragKey.startsWith('group:')) {
+      const from = dragKey.slice('group:'.length);
+      const fromGroup = draft.find((g) => g.key === from);
+      // The Unassigned bucket is a pseudo-group, and the system row stays pinned.
+      if (!fromGroup || fromGroup.isSystem) return;
+
+      const toKey = dropKey.startsWith('group:')
+        ? dropKey.slice('group:'.length)
+        : dropKey.startsWith(`${EMPTY_LEAF}:`)
+          ? dropKey.slice(`${EMPTY_LEAF}:`.length)
+          : ownerOf(dropKey.slice('module:'.length));
+      if (toKey === from || toKey === UNASSIGNED) return;
+
+      setDraft((prev) => {
+        const fromIdx = prev.findIndex((g) => g.key === from);
+        const toIdx = prev.findIndex((g) => g.key === toKey);
+        if (fromIdx < 0 || toIdx < 0) return prev;
+        const next = [...prev];
+        const [moved] = next.splice(fromIdx, 1);
+        // Never above the pinned system row.
+        const floor = next.findIndex((g) => !g.isSystem);
+        next.splice(Math.max(toIdx, floor < 0 ? 0 : floor), 0, moved!);
+        return next;
+      });
+      setDirty(true);
+      return;
+    }
+
+    if (!dragKey.startsWith('module:')) return; // the empty placeholder
     const moduleKey = dragKey.slice('module:'.length);
 
     let targetGroup: string;
@@ -260,7 +306,7 @@ export default function NavGroupsTab() {
       targetIndex = 0;
     } else {
       const overKey = dropKey.slice('module:'.length);
-      const owner = draft.find((g) => g.moduleKeys.includes(overKey))?.key ?? UNASSIGNED;
+      const owner = ownerOf(overKey);
       targetGroup = owner;
       const list =
         owner === UNASSIGNED ? unassigned : draft.find((g) => g.key === owner)!.moduleKeys;
@@ -328,6 +374,21 @@ export default function NavGroupsTab() {
     form.resetFields();
   };
 
+  /**
+   * Applies the same outcome to the working copy that the server applies to the
+   * table: the group goes, and its modules land in the fallback group. Keeping
+   * the two in step matters because a later Save sends the whole document — a
+   * draft that disagreed would undo the reassignment.
+   */
+  const dropGroupFromDraft = (g: DraftGroup) =>
+    setDraft((prev) => {
+      const next = prev.filter((x) => x.key !== g.key);
+      if (!g.moduleKeys.length) return next;
+      const fallback = next.find((x) => x.isFallback);
+      if (fallback) fallback.moduleKeys = [...fallback.moduleKeys, ...g.moduleKeys];
+      return next;
+    });
+
   const removeGroup = (g: DraftGroup) => {
     confirmDelete({
       entityLabel: 'navigation group',
@@ -336,14 +397,17 @@ export default function NavGroupsTab() {
         g.moduleKeys.length > 0
           ? `Its ${g.moduleKeys.length} module${g.moduleKeys.length === 1 ? '' : 's'} will move to “${fallbackTitle}”. No one's access changes.`
           : "No one's access changes.",
-      // Local-only: the removal is applied to the draft and persisted with Save.
       mutate: async () => {
-        setDraft((prev) => prev.filter((x) => x.key !== g.key));
+        // A group that was only added locally has nothing on the server yet.
+        // Everything else is deleted for real here rather than queued behind
+        // Save: a confirm dialog reads as a durable action, and it was
+        // previously possible to "delete" a group, reload, and find it back.
+        if (g.id) await remove.mutateAsync(g.id);
+        dropGroupFromDraft(g);
         setSelected(null);
-        setDirty(true);
       },
-      invalidateKey: ['nav-groups'],
-      successMessage: 'Group removed — click Save to apply',
+      invalidateKey: navGroupKeys.all,
+      successMessage: 'Navigation group deleted',
     });
   };
 
@@ -477,13 +541,16 @@ export default function NavGroupsTab() {
           >
             <Tree
               treeData={treeData}
-              // Only modules move by drag; groups reorder with the arrows in the
-              // panel, which keeps drops unambiguous and the tree shallow.
-              draggable={
-                canManage
-                  ? { icon: false, nodeDraggable: (n) => String(n.key).startsWith('module:') }
-                  : false
-              }
+              // Every node must pass `nodeDraggable`, because rc-tree binds its
+              // DROP handlers only to draggable nodes — anything excluded here
+              // silently stops being a drop target as well. Restricting it to
+              // `module:` keys is what made a newly added (empty) group
+              // impossible to fill: it has no module children to drop onto, and
+              // both its own row and its "Drag a module here" placeholder were
+              // refusing the drop. `onDrop` decides what each drag means —
+              // modules move between groups, group rows reorder, and a dragged
+              // placeholder is ignored.
+              draggable={canManage ? { icon: false, nodeDraggable: () => true } : false}
               blockNode
               expandedKeys={expanded}
               onExpand={(keys) => setExpanded(keys.map(String))}
@@ -563,7 +630,10 @@ export default function NavGroupsTab() {
                   <AntSwitch
                     size="small"
                     checked={selectedGroup.defaultOpen}
-                    disabled={!canManage}
+                    // Meaningless on a non-collapsible group — it can never be
+                    // shut, so "open by default" has nothing to decide. Left
+                    // enabled it read as a working toggle that did nothing.
+                    disabled={!canManage || !selectedGroup.collapsible}
                     onChange={(v) => patchGroup(selectedGroup.key, { defaultOpen: v })}
                   />
                 </label>

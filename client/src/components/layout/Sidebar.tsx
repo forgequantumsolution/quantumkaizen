@@ -593,15 +593,26 @@ export default function Sidebar() {
     const firstLeaf = section.items.map(findFirstLeaf).find(Boolean);
 
     return (
-      <button
+      // The panel is rendered as this tile's SIBLING, not at the end of the
+      // aside: it is position-fixed either way, but DOM order decides tab order.
+      // Parked at the bottom, Tab from the tile skipped straight to the next
+      // group and every module in the rail was keyboard-unreachable.
+      <div
         key={section.key}
+        onMouseLeave={scheduleFlyoutClose}
+        onBlur={(e) => {
+          // Only close when focus actually leaves the tile + panel pair.
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+            scheduleFlyoutClose();
+          }
+        }}
+      >
+      <button
         type="button"
         aria-label={section.title}
         aria-expanded={open}
         onMouseEnter={(e) => openFlyout(section.key, e.currentTarget)}
-        onMouseLeave={scheduleFlyoutClose}
         onFocus={(e) => openFlyout(section.key, e.currentTarget)}
-        onBlur={scheduleFlyoutClose}
         onClick={() => firstLeaf?.path && navigate(firstLeaf.path)}
         style={{
           display: "flex",
@@ -625,6 +636,40 @@ export default function Sidebar() {
           style={{ color: isActive ? ACCENT : "inherit" }}
         />
       </button>
+
+        {open && flyout && (
+          <div
+            role="group"
+            aria-label={section.title}
+            onMouseEnter={cancelFlyoutClose}
+            style={{
+              position: "fixed",
+              left: "60px",
+              top: `${flyout.top}px`,
+              zIndex: 50,
+              minWidth: "208px",
+              maxHeight: "calc(100vh - 16px)",
+              overflowY: "auto",
+              backgroundColor: BG,
+              border: "1px solid rgba(255,255,255,0.10)",
+              borderRadius: "10px",
+              boxShadow: "0 18px 40px -12px rgba(0,0,0,0.75)",
+              padding: "6px",
+            }}
+            className="scrollbar-none"
+          >
+            <p
+              style={{ color: ACCENT, borderBottom: "1px solid " + DIVIDER }}
+              className="px-2.5 pb-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.14em]"
+            >
+              {section.title}
+            </p>
+            <div className="space-y-px">
+              {section.items.map((item) => renderFlyoutItem(item, 0))}
+            </div>
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -1177,47 +1222,6 @@ export default function Sidebar() {
           </span>
         </div>
       )}
-
-      {/* Collapsed-rail group panel. Fixed rather than absolute so the scrolling
-          <nav> can't clip it, and anchored to the hovered tile's viewport y. */}
-      {sidebarCollapsed &&
-        (() => {
-          const section = navigation.find((s) => s.key === flyout?.key);
-          if (!section || !flyout) return null;
-          return (
-            <div
-              role="group"
-              aria-label={section.title}
-              onMouseEnter={cancelFlyoutClose}
-              onMouseLeave={scheduleFlyoutClose}
-              style={{
-                position: "fixed",
-                left: "60px",
-                top: `${flyout.top}px`,
-                zIndex: 50,
-                minWidth: "208px",
-                maxHeight: "calc(100vh - 16px)",
-                overflowY: "auto",
-                backgroundColor: BG,
-                border: "1px solid rgba(255,255,255,0.10)",
-                borderRadius: "10px",
-                boxShadow: "0 18px 40px -12px rgba(0,0,0,0.75)",
-                padding: "6px",
-              }}
-              className="scrollbar-none"
-            >
-              <p
-                style={{ color: ACCENT, borderBottom: "1px solid " + DIVIDER }}
-                className="px-2.5 pb-1.5 mb-1 text-[11px] font-semibold uppercase tracking-[0.14em]"
-              >
-                {section.title}
-              </p>
-              <div className="space-y-px">
-                {section.items.map((item) => renderFlyoutItem(item, 0))}
-              </div>
-            </div>
-          );
-        })()}
 
       {/* Collapse toggle */}
       <div style={{ borderTop: "1px solid " + DIVIDER }} className="shrink-0">

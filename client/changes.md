@@ -1,3 +1,43 @@
+## Navigation groups: newly added groups rejected every drop — 2026-07-29
+
+Reported: after adding a group in **Configuration → Navigation Groups**, no
+module could be dragged into it. Follow-up to the entry below.
+
+- **`features/admin/nav-groups/NavGroupsTab.tsx`** — the cause was
+  `nodeDraggable`, which was restricted to `module:` keys to stop group rows
+  being picked up. rc-tree binds its **drop** handlers only to nodes that pass
+  `nodeDraggable`, so excluding a node silently stops it being a drop *target*
+  too. Existing groups only appeared to work because the drop was really landing
+  on one of their module children; a new group has none, so neither its own row
+  nor its "Drag a module here" placeholder would accept anything. Now every node
+  is draggable and `onDrop` decides what each drag means.
+  - Two earlier guesses were wrong and are recorded so they aren't retried:
+    `disabled: true` on the placeholder was not the cause (though removing it was
+    needed anyway — a disabled node can't receive drops either), and allowing
+    everything *except* the placeholder re-broke it, proving the placeholder
+    itself must be a drop target. What settled it was instrumenting `onDrop` and
+    finding it never fired, against a control drop onto a module leaf that did.
+  - Since group rows are now draggable, **dragging a group reorders it** rather
+    than being a dead no-op. The `isSystem` row stays pinned first and nothing
+    can be dropped above it; the ↑/↓ buttons remain for precise placement.
+  - **Open by default** is disabled when a group is not collapsible. A
+    non-collapsible group can never be shut, so the toggle decided nothing — but
+    it looked live, and was enabled on the locked system row.
+- **`components/layout/Sidebar.tsx`** — the collapsed-rail panel was rendered at
+  the end of the `<aside>`. It is position-fixed either way, but DOM order sets
+  tab order: pressing Tab from a group tile skipped to the *next tile* and closed
+  the panel, so **every module in the collapsed rail was keyboard-unreachable**.
+  The panel now renders as its tile's DOM sibling, with `onBlur` on the wrapper
+  checking `relatedTarget` so it only closes when focus leaves the tile+panel
+  pair.
+- `tests/ui/nav-group-accordion.spec.ts` — two regression specs: a newly added
+  group accepts a dragged module, and Tab from a collapsed tile lands on the
+  first link inside the panel.
+
+Not committed.
+
+---
+
 ## Sidebar navigation groups: admin-configurable grouping + accordion — 2026-07-29
 
 Sidebar group membership was hardcoded in `Sidebar.tsx` (a `MODULE_GROUP` map for
