@@ -4,6 +4,33 @@ Backend-side change log for this repo. Companion to `client/changes.md`.
 
 ---
 
+## Navigation groups: a retired static module would lock the layout — 2026-07-29
+
+Found while auditing the feature below; not user-reported, but it would have
+been a nasty one to diagnose later.
+
+- `modules/nav-group/nav-group.service.ts` — `saveNavGroups()` rejected any
+  module key that wasn't a known static module or a `wf:` key. That is correct
+  for a key a client invented, but **wrong for one already stored**: if a static
+  module is ever retired from `STATIC_MODULE_KEYS`, its `NavGroupModule` rows
+  remain, the editor loads them and echoes them straight back, and every
+  subsequent save 400s — the layout becomes permanently unsaveable, for a reason
+  the admin can neither see nor fix. Exactly the trap already handled for
+  soft-deleted workflow types, missed for the static half.
+  - The discriminator is whether the key is **already stored**: pruned if it is
+    (a leftover), rejected if it isn't (a typo or a bad client). Requires one
+    extra `navGroupModule.findMany` before the transaction to read the stored key
+    set.
+  - The sweep now deletes those rows rather than shovelling them into the
+    fallback group forever, matching what it already did for workflow orphans.
+- `tests/unit/nav-groups-save.test.ts` — two tests pinning both halves: a stored
+  retired key is pruned and its row deleted; an unknown key that is *not* stored
+  is still rejected. 41 tests total.
+
+Not committed.
+
+---
+
 ## Sidebar navigation groups: admin-configurable module grouping — 2026-07-29
 
 Which sidebar group each module sat in was hardcoded in two places in

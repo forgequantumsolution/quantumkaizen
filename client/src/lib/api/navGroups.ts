@@ -103,6 +103,22 @@ export const useSaveNavGroups = () => {
   });
 };
 
+/**
+ * Deletes a group for real, immediately — a destructive action sitting behind a
+ * confirm dialog has to be durable, not queued behind the Save button. The
+ * server moves the group's modules to the fallback group in the same
+ * transaction, so nothing is stranded.
+ */
+export const useDeleteNavGroup = () => {
+  const qc = useQueryClient();
+  return useMutation<void, unknown, string>({
+    mutationFn: (id) => api.delete(`/nav-groups/${id}`).then(() => undefined),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: navGroupKeys.all });
+    },
+  });
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** The concurrency token: newest write the client has seen. */

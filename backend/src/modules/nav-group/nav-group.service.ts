@@ -76,6 +76,9 @@ export const navGroupsUpdatedAt = async (): Promise<Date | null> => {
  */
 export const saveNavGroups = async (input: SaveNavGroupsInput) => {
   const liveIds = await liveWorkflowTypeIds();
+  const storedKeys = new Set(
+    (await prisma.navGroupModule.findMany({ select: { moduleKey: true } })).map((m) => m.moduleKey),
+  );
 
   // ── Validate the document ────────────────────────────────────────────────
   const groupKeys = input.groups.map((g) => g.key);
@@ -87,10 +90,22 @@ export const saveNavGroups = async (input: SaveNavGroupsInput) => {
     throw BadRequest('Exactly one group must be marked as the fallback group');
   }
 
-  // Prune orphaned workflow modules; reject anything genuinely unknown.
+  // Drop keys the app can no longer place, but ONLY the ones already stored —
+  // a key the client invented still has to be rejected.
+  //
+  // Two ways a stored key goes stale: a workflow type was soft-deleted, or a
+  // static module was retired from the registry. Either way the editor loads the
+  // row and echoes it back, so rejecting would make the layout permanently
+  // unsaveable for a reason the admin can neither see nor fix. They are pruned
+  // from the payload here and deleted from the table in the sweep below.
+  const isKnownShape = (k: string) => isStaticModuleKey(k) || isWfModuleKey(k);
   const groups = input.groups.map((g) => ({
     ...g,
-    moduleKeys: g.moduleKeys.filter((k) => !isOrphan(k, liveIds)),
+    moduleKeys: g.moduleKeys.filter((k) => {
+      if (isOrphan(k, liveIds)) return false;
+      if (!isKnownShape(k) && storedKeys.has(k)) return false;
+      return true;
+    }),
   }));
 
   const seen = new Set<string>();
@@ -98,7 +113,7 @@ export const saveNavGroups = async (input: SaveNavGroupsInput) => {
     for (const key of g.moduleKeys) {
       if (seen.has(key)) throw BadRequest(`Module assigned to more than one group: ${key}`);
       seen.add(key);
-      if (!isStaticModuleKey(key) && !isWfModuleKey(key)) {
+      if (!isKnownShape(key)) {
         throw BadRequest(`Unknown module key: ${key}`);
       }
     }
@@ -214,7 +229,10 @@ export const saveNavGroups = async (input: SaveNavGroupsInput) => {
     let tail = groups.find((g) => g.key === fallbackKey)!.moduleKeys.length;
     for (const m of existingMembers) {
       if (assigned.has(m.moduleKey)) continue;
-      if (isOrphan(m.moduleKey, liveIds)) {
+      // Dead workflow type, or a static module retired from the registry —
+      // there is nothing left to render, so the row goes rather than piling up
+      // in the fallback group forever.
+      if (isOrphan(m.moduleKey, liveIds) || !isKnownShape(m.moduleKey)) {
         await tx.navGroupModule.delete({ where: { id: m.id } });
         continue;
       }
