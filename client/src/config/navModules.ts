@@ -23,6 +23,8 @@ export const STATIC_MODULE_KEYS = [
   'dashboard',
   'lims',
   'lims-config',
+  'calibration',
+  'calibration-config',
   'dms',
   'training',
   'audit-trail',
@@ -36,6 +38,8 @@ export const STATIC_MODULE_LABELS: Record<StaticModuleKey, string> = {
   dashboard: 'Dashboard',
   lims: 'LIMS',
   'lims-config': 'LIMS Configuration',
+  calibration: 'Calibration',
+  'calibration-config': 'Calibration Configuration',
   dms: 'DMS',
   training: 'Training & Qualification',
   'audit-trail': 'Audit Trail',
@@ -96,7 +100,7 @@ export interface NavGroupConfig {
  */
 export const FALLBACK_NAV_GROUPS: NavGroupConfig[] = [
   { key: 'top', title: '', collapsible: false, defaultOpen: true, isFallback: false, isSystem: true, moduleKeys: ['dashboard'] },
-  { key: 'lab-operations', title: 'Lab Operations', collapsible: true, defaultOpen: true, isFallback: false, isSystem: false, moduleKeys: ['lims', 'lims-config'] },
+  { key: 'lab-operations', title: 'Lab Operations', collapsible: true, defaultOpen: true, isFallback: false, isSystem: false, moduleKeys: ['lims', 'lims-config', 'calibration', 'calibration-config'] },
   { key: 'dms', title: 'DMS', collapsible: true, defaultOpen: true, isFallback: false, isSystem: false, moduleKeys: ['dms'] },
   { key: 'quality-system', title: 'Quality System', collapsible: true, defaultOpen: true, isFallback: true, isSystem: false, moduleKeys: [] },
   { key: 'compliance', title: 'Compliance', collapsible: true, defaultOpen: true, isFallback: false, isSystem: false, moduleKeys: ['audit-trail'] },
