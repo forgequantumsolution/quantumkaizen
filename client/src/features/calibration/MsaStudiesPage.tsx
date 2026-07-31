@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, App, Button, Descriptions, Empty, Input, InputNumber, Modal, Select, Space, Table, Tag } from 'antd';
 import { Sigma, Plus, Calculator, ShieldCheck } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useMsaStudies,
@@ -33,23 +34,17 @@ export default function MsaStudiesPage() {
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Sigma size={22} className="text-gray-500" />
-            Measurement Systems Analysis
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Gage R&amp;R by the AIAG average-and-range method. A category flagged <em>requires MSA</em> cannot have an
-            active calibration plan until an acceptable study exists.
-          </p>
-        </div>
-        {canCreate && (
-          <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>
-            New study
-          </Button>
-        )}
-      </div>
+      <CalibrationPageHeader
+        title="Measurement Systems Analysis"
+        icon={Sigma}
+        actions={
+          canCreate ? (
+            <Button type="primary" icon={<Plus size={14} />} onClick={() => setOpen(true)}>
+              New study
+            </Button>
+          ) : null
+        }
+      />
 
       <Table<MsaStudy>
         size="small"

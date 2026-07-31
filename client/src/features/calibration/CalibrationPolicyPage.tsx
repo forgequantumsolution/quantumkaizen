@@ -1,6 +1,7 @@
 import { App, InputNumber, Select, Spin, Switch, Tag } from 'antd';
 import { SlidersHorizontal } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import { useHasPermission } from '@/stores/authStore';
 import { useCalibrationConfig, useUpdateCalibrationConfig, type CalibrationConfig } from '@/lib/api/calibration';
 
@@ -52,21 +53,15 @@ export default function CalibrationPolicyPage() {
 
   return (
     <PageContainer>
-      <div className="mb-4 flex items-start justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <SlidersHorizontal size={22} className="text-gray-500" />
-            Policy &amp; Rules
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            How calibration behaves at this site. Applying an industry pack sets all of these at once; each can then be
-            tuned independently.
-          </p>
-        </div>
-        <Tag color={config.industry_pack === 'CUSTOM' ? 'default' : 'gold'} className="!text-[11px]">
-          {config.industry_pack === 'CUSTOM' ? 'Custom configuration' : `${config.industry_pack} pack`}
-        </Tag>
-      </div>
+      <CalibrationPageHeader
+        title="Policy & Rules"
+        icon={SlidersHorizontal}
+        actions={
+          <Tag color={config.industry_pack === 'CUSTOM' ? 'default' : 'gold'} className="!text-[11px] !mr-0">
+            {config.industry_pack === 'CUSTOM' ? 'Custom configuration' : `${config.industry_pack} pack`}
+          </Tag>
+        }
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Section title="Scheduling">

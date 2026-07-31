@@ -3,12 +3,15 @@ import { App, Button, Drawer, Empty, Input, InputNumber, Select, Space, Switch, 
 import { Layers, Plus, Edit3, Trash2, Search, Save } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import {
   useCategories,
   useCreateCategory,
   useUpdateCategory,
   useDeleteCategory,
   useReplacePointTemplates,
+  useReplaceCheckItems,
+  type CheckTemplateItem,
   KIND_LABELS,
   CRITICALITY_BADGE,
   type Category,
@@ -80,50 +83,31 @@ export default function EquipmentCategoriesPage() {
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Layers size={22} className="text-gray-500" />
-            Instrument Categories
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Defaults inherited by every calibration plan created from them — interval, criticality and the tolerance
-            point template. Editing a category never changes a plan that already exists.
-          </p>
-        </div>
-        <Space wrap>
-          <Select
-            allowClear
-            placeholder="Kind"
-            value={kind}
-            onChange={setKind}
-            style={{ width: 170 }}
-            options={KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))}
-          />
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-            <Input
-              placeholder="Name / code…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              style={{ width: 220 }}
+      <CalibrationPageHeader
+        title="Instrument Categories"
+        icon={Layers}
+        actions={
+          <>
+            <Select
+              allowClear
+              placeholder="Kind"
+              value={kind}
+              onChange={setKind}
+              style={{ width: 165 }}
+              options={KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))}
             />
-          </div>
-          {canUpdate && (
-            <Button
-              type="primary"
-              icon={<Plus size={14} />}
-              onClick={() => {
-                setEditing(null);
-                setOpen(true);
-              }}
-            >
-              New Category
-            </Button>
-          )}
-        </Space>
-      </div>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+              <Input placeholder="Name / code…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" style={{ width: 210 }} />
+            </div>
+            {canUpdate && (
+              <Button type="primary" icon={<Plus size={14} />} onClick={() => { setEditing(null); setOpen(true); }}>
+                New Category
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <Table<Category>
         size="small"
@@ -259,6 +243,7 @@ function CategoryDrawer({ open, onClose, category }: { open: boolean; onClose: (
   const create = useCreateCategory();
   const update = useUpdateCategory(category?.id ?? '');
   const savePoints = useReplacePointTemplates();
+  const saveChecks = useReplaceCheckItems();
 
   const blank = {
     name: '',
@@ -271,6 +256,7 @@ function CategoryDrawer({ open, onClose, category }: { open: boolean; onClose: (
   };
   const [form, setForm] = useState<Record<string, unknown>>(blank);
   const [points, setPoints] = useState<TplDraft[]>([]);
+  const [checks, setChecks] = useState<Omit<CheckTemplateItem, 'id'>[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -286,6 +272,18 @@ function CategoryDrawer({ open, onClose, category }: { open: boolean; onClose: (
         in_use_check_frequency: category.in_use_check_frequency,
         is_active: category.is_active,
       });
+      setChecks(
+        (category.check_items ?? []).map((c) => ({
+          sequence: c.sequence,
+          label: c.label,
+          check_type: c.check_type,
+          nominal_value: c.nominal_value,
+          tolerance_value: c.tolerance_value,
+          unit_code: c.unit_code,
+          is_required: c.is_required,
+          guidance: c.guidance,
+        })),
+      );
       setPoints(
         (category.point_templates ?? []).map((p) => ({
           sequence: p.sequence,
@@ -300,6 +298,7 @@ function CategoryDrawer({ open, onClose, category }: { open: boolean; onClose: (
     } else {
       setForm(blank);
       setPoints([]);
+      setChecks([]);
     }
   }, [open, category]);
 
@@ -320,6 +319,13 @@ function CategoryDrawer({ open, onClose, category }: { open: boolean; onClose: (
           id: saved.id,
           points: points.map((p, i) => ({ ...p, sequence: i + 1 })),
         });
+      }
+      // Only push the checklist when this category actually uses one, so
+      // turning the toggle off does not leave orphaned items behind.
+      if (form.requires_in_use_check) {
+        await saveChecks.mutateAsync({ id: saved.id, items: checks.map((c, i) => ({ ...c, sequence: i + 1 })) });
+      } else if ((category?.check_items?.length ?? 0) > 0) {
+        await saveChecks.mutateAsync({ id: saved.id, items: [] });
       }
       message.success(category ? 'Category updated' : 'Category created');
       onClose();
@@ -354,7 +360,7 @@ function CategoryDrawer({ open, onClose, category }: { open: boolean; onClose: (
           <Button
             type="primary"
             icon={<Save size={14} />}
-            loading={create.isPending || update.isPending || savePoints.isPending}
+            loading={create.isPending || update.isPending || savePoints.isPending || saveChecks.isPending}
             onClick={save}
           >
             Save
@@ -437,6 +443,134 @@ function CategoryDrawer({ open, onClose, category }: { open: boolean; onClose: (
             </Space>
           </div>
         </div>
+
+        {!!form.requires_in_use_check && (
+          <div className="pt-2 border-t border-gray-100">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">In-use checklist</h3>
+                <p className="text-[11px] text-gray-500">
+                  What the shift / daily check consists of. Without this the entry screen can only offer one generic row.
+                </p>
+              </div>
+              <Button
+                size="small"
+                icon={<Plus size={12} />}
+                onClick={() =>
+                  setChecks((c) => [
+                    ...c,
+                    { sequence: c.length + 1, label: '', check_type: 'NUMERIC', nominal_value: 0, tolerance_value: 0, unit_code: null, is_required: true, guidance: null },
+                  ])
+                }
+              >
+                Add check
+              </Button>
+            </div>
+
+            {checks.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="No checklist items" className="py-4" />
+            ) : (
+              <Table
+                size="small"
+                rowKey={(_, i) => String(i)}
+                pagination={false}
+                dataSource={checks}
+                columns={[
+                  { title: '#', width: 38, render: (_: unknown, __: unknown, i: number) => i + 1 },
+                  {
+                    title: 'Check',
+                    render: (_: unknown, r, i) => (
+                      <Input
+                        size="small"
+                        value={r.label}
+                        placeholder="Ferrous test piece detected"
+                        onChange={(e) => setChecks((p) => p.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
+                      />
+                    ),
+                  },
+                  {
+                    title: 'Type',
+                    width: 110,
+                    render: (_: unknown, r, i) => (
+                      <Select
+                        size="small"
+                        className="w-full"
+                        value={r.check_type}
+                        onChange={(v) => setChecks((p) => p.map((x, j) => (j === i ? { ...x, check_type: v } : x)))}
+                        options={[
+                          { value: 'NUMERIC', label: 'Measured' },
+                          { value: 'PASS_FAIL', label: 'Pass / fail' },
+                        ]}
+                      />
+                    ),
+                  },
+                  {
+                    title: 'Expect',
+                    width: 90,
+                    render: (_: unknown, r, i) =>
+                      r.check_type === 'NUMERIC' ? (
+                        <InputNumber
+                          size="small"
+                          className="w-full"
+                          value={r.nominal_value ?? undefined}
+                          onChange={(v) => setChecks((p) => p.map((x, j) => (j === i ? { ...x, nominal_value: v ?? null } : x)))}
+                        />
+                      ) : (
+                        <span className="text-[10px] text-gray-400">n/a</span>
+                      ),
+                  },
+                  {
+                    title: '±',
+                    width: 80,
+                    render: (_: unknown, r, i) =>
+                      r.check_type === 'NUMERIC' ? (
+                        <InputNumber
+                          size="small"
+                          className="w-full"
+                          value={r.tolerance_value ?? undefined}
+                          onChange={(v) => setChecks((p) => p.map((x, j) => (j === i ? { ...x, tolerance_value: v ?? null } : x)))}
+                        />
+                      ) : (
+                        <span className="text-[10px] text-gray-400">—</span>
+                      ),
+                  },
+                  {
+                    title: 'Unit',
+                    width: 70,
+                    render: (_: unknown, r, i) =>
+                      r.check_type === 'NUMERIC' ? (
+                        <Input
+                          size="small"
+                          value={r.unit_code ?? ''}
+                          onChange={(e) => setChecks((p) => p.map((x, j) => (j === i ? { ...x, unit_code: e.target.value } : x)))}
+                        />
+                      ) : (
+                        <span className="text-[10px] text-gray-400">—</span>
+                      ),
+                  },
+                  {
+                    title: 'Req.',
+                    width: 52,
+                    render: (_: unknown, r, i) => (
+                      <Switch
+                        size="small"
+                        checked={r.is_required !== false}
+                        onChange={(v) => setChecks((p) => p.map((x, j) => (j === i ? { ...x, is_required: v } : x)))}
+                      />
+                    ),
+                  },
+                  {
+                    title: '',
+                    width: 38,
+                    render: (_: unknown, __: unknown, i: number) => (
+                      <Button size="small" danger icon={<Trash2 size={11} />} onClick={() => setChecks((p) => p.filter((_, j) => j !== i))} />
+                    ),
+                  },
+                ]}
+              />
+            )}
+          </div>
+        )}
 
         <div className="pt-2 border-t border-gray-100">
           <div className="flex items-center justify-between mb-2">

@@ -4,6 +4,7 @@ import { Alert, App, Button, Descriptions, Empty, Input, Select, Space, Spin, Ta
 import { AlertTriangle, ArrowLeft, RefreshCw, Send, ShieldCheck, GitBranch, Bell, PackageX } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import {
   useOotList,
   useOot,
@@ -40,25 +41,20 @@ export function OotListPage() {
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <AlertTriangle size={22} className="text-gray-500" />
-            Out of Tolerance
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Retrospective impact of an as-found failure — every record the instrument touched since it last passed.
-          </p>
-        </div>
-        <Select
-          allowClear
-          placeholder="Status"
-          value={status}
-          onChange={setStatus}
-          style={{ width: 200 }}
-          options={Object.entries(OOT_BADGE).map(([k, v]) => ({ value: k, label: v.label }))}
-        />
-      </div>
+      <CalibrationPageHeader
+        title="Out of Tolerance"
+        icon={AlertTriangle}
+        actions={
+          <Select
+            allowClear
+            placeholder="Status"
+            value={status}
+            onChange={setStatus}
+            style={{ width: 200 }}
+            options={Object.entries(OOT_BADGE).map(([k, v]) => ({ value: k, label: v.label }))}
+          />
+        }
+      />
 
       <Table<Oot>
         size="small"

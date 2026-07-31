@@ -81,10 +81,11 @@ export default function CalibrationDashboardPage() {
       )}
 
       {/* ── Headline: the five numbers someone actually acts on ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+      <div className={`grid grid-cols-2 gap-3 mb-4 ${o.checks.enabled ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
         <KpiCard label="Instruments" value={o.instruments.total} icon={Ruler} accent="blue" onClick={() => nav('/calibration/instruments')} />
         <KpiCard
           label="Overdue"
+          subtitle="calibration"
           value={o.schedule.overdue}
           icon={AlertTriangle}
           accent={o.schedule.overdue > 0 ? 'red' : 'green'}
@@ -93,7 +94,7 @@ export default function CalibrationDashboardPage() {
         <KpiCard
           label="Open work"
           value={o.events.open_workload}
-          subtitle="scheduled → approval"
+          subtitle="calibrations in flight"
           icon={ClipboardCheck}
           accent={o.events.open_workload > 0 ? 'amber' : 'green'}
           onClick={() => nav('/calibration/events')}
@@ -105,8 +106,19 @@ export default function CalibrationDashboardPage() {
           accent={o.oot.open > 0 ? 'red' : 'green'}
           onClick={() => nav('/calibration/oot')}
         />
+        {o.checks.enabled && (
+          <KpiCard
+            label="Checks due"
+            subtitle="in-use verification"
+            value={o.checks.due_now}
+            icon={Repeat}
+            accent={o.checks.due_now > 0 ? 'amber' : 'green'}
+            onClick={() => nav('/calibration/checks')}
+          />
+        )}
         <KpiCard
           label="Compliance"
+          subtitle="instruments in date"
           value={o.instruments.compliance_rate === null ? '—' : `${o.instruments.compliance_rate}%`}
           icon={CheckCircle2}
           accent={(o.instruments.compliance_rate ?? 0) >= 95 ? 'green' : (o.instruments.compliance_rate ?? 0) >= 80 ? 'amber' : 'red'}

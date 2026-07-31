@@ -204,10 +204,13 @@ export const getInstrument = async (id: string) => {
   ]);
 
   const cfg = await resolveConfig(e.siteId);
+  const canReturn = e.status === 'OUT_OF_SERVICE' ? await assessReturnToService(id) : null;
 
   return {
     ...serializeInstrument(e, names),
     blocked_for_use: isBlocked(e.calibrationStatus, cfg),
+    can_return_to_service: canReturn ? canReturn.allowed : null,
+    return_blocked_reason: canReturn && !canReturn.allowed ? canReturn.reason : null,
     open_oot_count: ootOpen,
     in_use_check_count: checkCount,
     active_plan: activePlan
@@ -319,6 +322,12 @@ export const createInstrument = async (input: InstrumentUpsertInput, userId?: st
 export const updateInstrument = async (id: string, input: InstrumentUpsertInput, userId?: string) => {
   const existing = await prisma.calibrationInstrument.findFirst({ where: { id, isDeleted: false } });
   if (!existing) throw NotFound('Instrument not found');
+
+  // Retirement is terminal. Editing a retired instrument's metrology (range,
+  // MPE, unit) would silently change how its historical readings read back.
+  if (existing.status === 'RETIRED') {
+    throw BadRequest('A retired instrument is a historical record and cannot be edited');
+  }
 
   if (input.is_calibration_required === false && !input.exemption_reason) {
     throw BadRequest('An exemption reason is required when calibration is not required');
@@ -461,10 +470,91 @@ export const setOutOfService = async (id: string, input: ReasonInput, userId?: s
   return serializeInstrument(updated, await namesFor([updated]));
 };
 
+// ─────────────────────── Return-to-service gate ───────────────────────
+
+export interface ReturnAssessment {
+  allowed: boolean;
+  /** Why it is blocked, phrased as the next action to take. */
+  reason: string | null;
+  /** When the instrument was last proven bad, if it was. */
+  failedAt: Date | null;
+  failedBy: 'CALIBRATION' | 'IN_USE_CHECK' | null;
+}
+
+/**
+ * An instrument taken out of service because it FAILED must not return on a
+ * reason string alone — that would launder a known-bad instrument back into
+ * production with no evidence it was ever fixed, which is the whole point of
+ * taking it out.
+ *
+ * Evidence = an approved calibration (PASS or CONDITIONAL — conditional means it
+ * was adjusted and now passes as-left) or a passing in-use verification,
+ * performed AFTER the failure.
+ *
+ * An instrument taken out of service for any other reason — relocation, storage,
+ * awaiting parts — never failed anything, so a documented reason is sufficient.
+ */
+export const assessReturnToService = async (instrumentId: string): Promise<ReturnAssessment> => {
+  const [lastFailedCal, lastFailedCheck] = await Promise.all([
+    prisma.calibrationEvent.findFirst({
+      where: { instrumentId, isDeleted: false, status: 'APPROVED', overallOutcome: 'FAIL' },
+      orderBy: { performedAt: 'desc' },
+      select: { performedAt: true, eventNo: true },
+    }),
+    prisma.inUseVerification.findFirst({
+      where: { instrumentId, isDeleted: false, outcome: 'FAIL' },
+      orderBy: { performedAt: 'desc' },
+      select: { performedAt: true },
+    }),
+  ]);
+
+  const calAt = lastFailedCal?.performedAt ?? null;
+  const checkAt = lastFailedCheck?.performedAt ?? null;
+  const failedBy: ReturnAssessment['failedBy'] =
+    calAt && checkAt ? (calAt >= checkAt ? 'CALIBRATION' : 'IN_USE_CHECK') : calAt ? 'CALIBRATION' : checkAt ? 'IN_USE_CHECK' : null;
+  const failedAt = failedBy === 'CALIBRATION' ? calAt : failedBy === 'IN_USE_CHECK' ? checkAt : null;
+
+  // Never failed — out of service for an operational reason. Nothing to prove.
+  if (!failedAt) return { allowed: true, reason: null, failedAt: null, failedBy: null };
+
+  const [passingCal, passingCheck] = await Promise.all([
+    prisma.calibrationEvent.findFirst({
+      where: {
+        instrumentId,
+        isDeleted: false,
+        status: 'APPROVED',
+        overallOutcome: { in: ['PASS', 'CONDITIONAL'] },
+        performedAt: { gt: failedAt },
+      },
+      select: { id: true },
+    }),
+    prisma.inUseVerification.findFirst({
+      where: { instrumentId, isDeleted: false, outcome: 'PASS', performedAt: { gt: failedAt } },
+      select: { id: true },
+    }),
+  ]);
+
+  if (passingCal || passingCheck) return { allowed: true, reason: null, failedAt, failedBy };
+
+  const what = failedBy === 'CALIBRATION' ? `calibration ${lastFailedCal?.eventNo ?? ''}`.trim() : 'an in-use verification check';
+  return {
+    allowed: false,
+    failedAt,
+    failedBy,
+    reason:
+      `This instrument failed ${what} on ${failedAt.toISOString().slice(0, 10)} and has not passed since. ` +
+      'Repair it and record a passing calibration (type "After repair") before returning it to service.',
+  };
+};
+
 export const returnToService = async (id: string, input: ReasonInput, userId?: string) => {
   const existing = await prisma.calibrationInstrument.findFirst({ where: { id, isDeleted: false } });
   if (!existing) throw NotFound('Instrument not found');
   if (existing.status === 'RETIRED') throw BadRequest('A retired instrument cannot be returned to service');
+  if (existing.status === 'ACTIVE') throw BadRequest('This instrument is already in service');
+
+  const assessment = await assessReturnToService(id);
+  if (!assessment.allowed) throw BadRequest(assessment.reason ?? 'Return to service is not permitted');
 
   const cfg = await resolveConfig(existing.siteId);
   const status = deriveCalibrationStatus({
@@ -490,7 +580,9 @@ export const returnToService = async (id: string, input: ReasonInput, userId?: s
       field: 'status',
       oldValue: existing.status,
       newValue: 'ACTIVE',
-      reason: input.reason,
+      reason: assessment.failedAt
+        ? `${input.reason} (returned after a passing result following the ${assessment.failedBy === 'CALIBRATION' ? 'failed calibration' : 'failed in-use check'} of ${assessment.failedAt.toISOString().slice(0, 10)})`
+        : input.reason,
     },
     userId,
   );
@@ -642,6 +734,19 @@ export const getLabel = async (id: string) => {
     select: { certificateNo: true, performedAt: true },
   });
 
+  // `calibrationStatus` is a stored derivation maintained by the nightly sweep.
+  // A label is printed and then lives on the instrument for months, so it must
+  // never show a status the clock has already invalidated — derive it here.
+  const cfg = await resolveConfig(e.siteId);
+  const liveStatus = deriveCalibrationStatus({
+    isCalibrationRequired: e.isCalibrationRequired,
+    instrumentStatus: e.status,
+    current: e.calibrationStatus,
+    nextDueAt: e.calibrationDueAt,
+    dueSoonWindowDays: cfg.dueSoonWindowDays,
+    graceDays: cfg.graceDays,
+  });
+
   return {
     id: e.id,
     code: e.code,
@@ -649,12 +754,17 @@ export const getLabel = async (id: string) => {
     serial_no: e.serialNo,
     asset_tag: e.assetTag,
     location: e.location,
-    calibration_status: e.calibrationStatus,
+    calibration_status: liveStatus,
     last_calibrated_at: e.lastCalibratedAt,
     calibration_due_at: e.calibrationDueAt,
     certificate_no: lastEvent?.certificateNo ?? null,
     qr_token: token,
-    verify_path: `/api/public/calibration/verify/${token}`,
+    /**
+     * The app page a phone camera should land on — NOT the JSON endpoint. A
+     * sticker whose QR dumps raw JSON is useless to the person holding the
+     * instrument. Mirrors /verify/coa/:token and /verify/certificate/:token.
+     */
+    verify_path: `/verify/instrument/${token}`,
   };
 };
 
@@ -666,6 +776,9 @@ export const verifyByToken = async (token: string) => {
       code: true,
       name: true,
       serialNo: true,
+      location: true,
+      status: true,
+      siteId: true,
       calibrationStatus: true,
       lastCalibratedAt: true,
       calibrationDueAt: true,
@@ -674,15 +787,49 @@ export const verifyByToken = async (token: string) => {
   });
   if (!e) throw NotFound('Unknown calibration label');
 
+  const cfg = await resolveConfig(e.siteId);
+
+  // Scanning asks for the LIVE answer. Trusting the stored column would let a
+  // sticker read "cleared for use" on an instrument whose due date passed
+  // before the sweep last ran — the exact failure a label exists to prevent.
+  const status = deriveCalibrationStatus({
+    isCalibrationRequired: e.isCalibrationRequired,
+    instrumentStatus: e.status,
+    current: e.calibrationStatus,
+    nextDueAt: e.calibrationDueAt,
+    dueSoonWindowDays: cfg.dueSoonWindowDays,
+    graceDays: cfg.graceDays,
+  });
+  const blocked = isBlocked(status, cfg);
+  const usable = !blocked && e.status !== 'RETIRED';
+
+  const message = !e.isCalibrationRequired
+    ? 'This instrument is exempt from calibration.'
+    : e.status === 'RETIRED'
+      ? 'This instrument is retired and must not be used.'
+      : status === 'UNDER_CALIBRATION'
+        ? 'Currently being calibrated — do not use until the record is approved.'
+        : blocked
+          ? `Do not use — ${status.replace(/_/g, ' ').toLowerCase()}.`
+        : status === 'LIMITED_USE'
+          ? 'Restricted use — check the documented limitation before relying on a reading.'
+          : status === 'DUE_SOON'
+            ? 'In calibration, but due shortly.'
+            : 'In calibration and cleared for use.';
+
   return {
     code: e.code,
     name: e.name,
     serial_no: e.serialNo,
-    calibration_status: e.calibrationStatus,
+    location: e.location,
+    calibration_status: status,
     last_calibrated_at: e.lastCalibratedAt,
     calibration_due_at: e.calibrationDueAt,
     days_until_due: daysUntil(e.calibrationDueAt),
     is_calibration_required: e.isCalibrationRequired,
+    /** The question a shop-floor scan is actually asking. */
+    usable,
+    message,
     verified_at: new Date(),
   };
 };

@@ -153,6 +153,16 @@ export const resolveNames = async (ids: {
   };
 };
 
+/**
+ * Resolve an active user for assignment. Returns null when the user does not
+ * exist, is inactive, or the platform table is unreachable — the caller decides
+ * whether that is an error.
+ */
+export const findAssignableUser = async (userId: string): Promise<{ id: string; name: string } | null> =>
+  prisma.user
+    .findFirst({ where: { id: userId, isActive: true }, select: { id: true, name: true } })
+    .catch(() => null);
+
 /** Organisation branding + industry, for the certificate header and pack hint. */
 export const getOrganization = async () =>
   prisma.organization

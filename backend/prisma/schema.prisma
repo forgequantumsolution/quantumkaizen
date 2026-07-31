@@ -2105,6 +2105,22 @@ enum CapaType {
   BOTH
 }
 
+/// Where a CAPA came from.
+///
+/// Four modules feed one CAPA register (audit non-conformances, generic
+/// findings, risk treatment, OOS investigations). Without an explicit source a
+/// risk-driven CAPA is indistinguishable from an audit one — it links to
+/// neither a non-conformance nor a finding — so every module's CAPA view showed
+/// every other module's CAPAs.
+enum CapaSource {
+  AUDIT
+  FINDING
+  RISK
+  OOS
+  CALIBRATION
+  MANUAL
+}
+
 enum CapaStatus {
   OPEN
   INVESTIGATION
@@ -2116,10 +2132,15 @@ enum CapaStatus {
 }
 
 model Capa {
-  id          String     @id @default(uuid())
-  capaNumber  String     @unique // CAPA-YYYY-XXXX
-  type        CapaType   @default(CORRECTIVE)
-  status      CapaStatus @default(OPEN)
+  id         String     @id @default(uuid())
+  capaNumber String     @unique // CAPA-YYYY-XXXX
+  type       CapaType   @default(CORRECTIVE)
+  status     CapaStatus @default(OPEN)
+
+  /// Which module raised this. Set by the caller of `createCapa`.
+  source      CapaSource @default(MANUAL)
+  /// Human reference of the originating record — RISK-2026-0007, OOS-24, NC-11.
+  sourceRef   String?
   title       String
   description String?
 
@@ -3793,19 +3814,19 @@ model LmsCurriculumCourse {
 
 // ─────────────────────────── Training matrix (rule-based auto-assignment) ───────────────────────────
 model LmsTrainingMatrixRule {
-  id            String                @id @default(uuid())
-  targetType    LmsMatrixTargetType
-  targetId      String // role/department/site id, or job-function string key
-  requiresType  LmsMatrixRequiresType
-  requiresId    String // course or curriculum id
-  dueWithinDays Int? // due N days after assignment
-  recurring     Boolean               @default(false) // re-assign on validity expiry
-  isActive      Boolean               @default(true)
+  id               String                @id @default(uuid())
+  targetType       LmsMatrixTargetType
+  targetId         String // role/department/site id, or job-function string key
+  requiresType     LmsMatrixRequiresType
+  requiresId       String // course or curriculum id
+  dueWithinDays    Int? // due N days after assignment
+  recurring        Boolean               @default(false) // re-assign on validity expiry
+  isActive         Boolean               @default(true)
   // Fire the rule the moment a user lands in the target — created into it, moved
   // into it, or reactivated — instead of waiting for a manual matrix sync. See
   // syncMatrixForUser() in lms-assign.service.ts. Opt-in: enrollments have no
   // unassign/waive path yet, so arming a rule is effectively one-way.
-  autoAssignOnJoin Boolean            @default(false)
+  autoAssignOnJoin Boolean               @default(false)
 
   isDeleted   Boolean  @default(false)
   createdById String?
@@ -4617,6 +4638,14 @@ enum ToleranceType {
   MPE_MULTIPLE
 }
 
+/// What kind of answer an in-use check item expects.
+enum InUseCheckType {
+  /// A measured value judged against nominal ± tolerance.
+  NUMERIC
+  /// A yes/no confirmation — reject mechanism fired, seal intact, belt stopped.
+  PASS_FAIL
+}
+
 enum InUseFrequency {
   PER_SHIFT
   DAILY
@@ -4873,6 +4902,7 @@ model EquipmentCategory {
   updatedAt   DateTime @updatedAt
 
   pointTemplates CalibrationPointTemplate[]
+  checkItems     InUseCheckItem[]
   instruments    CalibrationInstrument[]
 
   @@index([kind])
@@ -4893,6 +4923,34 @@ model CalibrationPointTemplate {
   unitCode             String?
   toleranceType        ToleranceType     @default(ABSOLUTE)
   toleranceValue       Decimal           @db.Decimal(18, 6)
+
+  @@unique([categoryId, sequence])
+}
+
+/// One line of the in-use verification checklist for a category.
+///
+/// Without this the check screen can only offer a single generic row, which is
+/// the same for a metal detector and a probe thermometer — and therefore
+/// evidence of nothing. A metal detector needs its Fe / non-Fe / stainless test
+/// pieces and a reject-mechanism confirmation; a checkweigher needs min, target
+/// and max. The checklist is what makes the record specific to the device.
+model InUseCheckItem {
+  id         String            @id @default(uuid())
+  categoryId String
+  category   EquipmentCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  sequence   Int
+  label      String
+  checkType  InUseCheckType    @default(NUMERIC)
+
+  /// NUMERIC only: the expected value and the band around it.
+  nominalValue   Decimal? @db.Decimal(18, 6)
+  toleranceValue Decimal? @db.Decimal(18, 6)
+  unitCode       String?
+
+  /// A check cannot be submitted with a required item left blank.
+  isRequired Boolean @default(true)
+  /// Shown to the operator on the entry screen — how to actually do this check.
+  guidance   String?
 
   @@unique([categoryId, sequence])
 }
@@ -5029,8 +5087,23 @@ model CalibrationEvent {
   status CalibrationEventStatus @default(PLANNED)
   siteId String?
 
-  scheduledFor        DateTime?
-  startedAt           DateTime?
+  scheduledFor DateTime?
+  startedAt    DateTime?
+
+  /// Who owns getting this done. Distinct from `performedById`, which is only
+  /// stamped once someone actually starts work — without an assignee a scheduled
+  /// calibration belongs to nobody and simply waits to become overdue. Defaults
+  /// to the instrument's custodian when the sweep creates the record.
+  assignedToId String?
+  assignedAt   DateTime?
+  assignedById String?
+
+  /// The procedure used, snapshotted from the plan at creation. A certificate
+  /// must identify the method (ISO/IEC 17025 §7.8.4) and the plan may be
+  /// superseded later, so the event carries its own copy.
+  methodRef   String?
+  methodDocId String?
+
   performedAt         DateTime?
   performedById       String?
   performedByExternal String? // agency technician, when EXTERNAL
@@ -5078,6 +5151,7 @@ model CalibrationEvent {
   @@index([siteId])
   @@index([nextDueAt])
   @@index([scheduledFor])
+  @@index([assignedToId, status])
 }
 
 model CalibrationReading {

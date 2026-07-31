@@ -14,7 +14,14 @@ import { Prisma } from '@prisma/client';
 import type { CalibrationEventStatus, CalibrationOutcome } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, Conflict, NotFound } from '../../lib/httpError';
-import { getSignatures, hasCompletedCourse, getOrganization, signRecord, trail } from './integrations';
+import {
+  findAssignableUser,
+  getSignatures,
+  hasCompletedCourse,
+  getOrganization,
+  signRecord,
+  trail,
+} from './integrations';
 import {
   TX_OPTIONS,
   computeNextDue,
@@ -70,6 +77,10 @@ export const serializeEvent = (e: EventRow, full = true) => ({
   site_id: e.siteId,
   scheduled_for: e.scheduledFor,
   started_at: e.startedAt,
+  assigned_to_id: e.assignedToId,
+  assigned_at: e.assignedAt,
+  method_ref: e.methodRef,
+  method_doc_id: e.methodDocId,
   performed_at: e.performedAt,
   performed_by_id: e.performedById,
   performed_by_external: e.performedByExternal,
@@ -157,6 +168,8 @@ export const listEvents = async (q: ListEventsQuery) => {
   if (q.site_id) where.siteId = q.site_id;
   if (q.outcome) where.overallOutcome = q.outcome;
   if (q.provider_id) where.providerId = q.provider_id;
+  if (q.assigned_to) where.assignedToId = q.assigned_to;
+  if (q.unassigned) where.assignedToId = null;
   if (q.overdue) {
     where.scheduledFor = { lt: new Date() };
     where.status = { in: ['PLANNED', 'SCHEDULED', 'IN_PROGRESS', 'PENDING_REVIEW', 'PENDING_APPROVAL'] };
@@ -220,10 +233,28 @@ export const getEvent = async (id: string) => {
 export const createEvent = async (input: CreateEventInput, userId?: string) => {
   const instrument = await prisma.calibrationInstrument.findFirst({
     where: { id: input.instrument_id, isDeleted: false },
-    select: { id: true, code: true, siteId: true, status: true, isCalibrationRequired: true, calibrationDueAt: true },
+    select: {
+      id: true,
+      code: true,
+      siteId: true,
+      status: true,
+      isCalibrationRequired: true,
+      calibrationDueAt: true,
+      custodianId: true,
+    },
   });
   if (!instrument) throw NotFound('Instrument not found');
   if (instrument.status === 'RETIRED') throw BadRequest('A retired instrument cannot be calibrated');
+
+  // An out-of-service instrument MUST stay calibratable — that is the recovery
+  // path. But a *periodic* calibration of something not in service would advance
+  // the schedule as if nothing had happened, so the record has to say what this
+  // actually is.
+  if (instrument.status === 'OUT_OF_SERVICE' && input.type === 'PERIODIC') {
+    throw BadRequest(
+      'This instrument is out of service. Record the recovery calibration as "After repair" (or Initial / Ad-hoc) rather than Periodic, so the schedule is not advanced as though nothing failed.',
+    );
+  }
 
   const plan = input.plan_id
     ? await prisma.calibrationPlan.findFirst({ where: { id: input.plan_id, isDeleted: false }, include: { points: true } })
@@ -252,6 +283,15 @@ export const createEvent = async (input: CreateEventInput, userId?: string) => {
       scheduledFor,
       providerType: input.provider_type ?? plan.providerType,
       providerId: input.provider_id ?? plan.providerId,
+      // The method is frozen here: the plan can be superseded, but the
+      // certificate must state the procedure this calibration actually used.
+      methodRef: plan.methodRef,
+      methodDocId: plan.methodDocId,
+      // Somebody owns it from the moment it exists. The instrument's custodian
+      // is the sensible default; it is re-assignable at any time.
+      assignedToId: input.assigned_to_id ?? instrument.custodianId ?? null,
+      assignedAt: input.assigned_to_id || instrument.custodianId ? new Date() : null,
+      assignedById: input.assigned_to_id ? userId ?? null : null,
       remarks: input.remarks ?? null,
       createdById: userId ?? null,
       readings: {
@@ -281,6 +321,51 @@ export const createEvent = async (input: CreateEventInput, userId?: string) => {
     userId,
   );
   return serializeEvent(created);
+};
+
+/**
+ * Hand a calibration to someone (or take it back).
+ *
+ * Kept separate from `updateEvent` so ownership changes are their own audited
+ * act rather than a field buried in a general edit — "who was this handed to,
+ * and by whom" is a question that gets asked after something is missed.
+ */
+export const assignEvent = async (id: string, assignedToId: string | null, userId?: string) => {
+  const e = await load(id);
+  if (['APPROVED', 'CANCELLED'].includes(e.status)) {
+    throw BadRequest(`${e.eventNo} is ${e.status.toLowerCase()} and cannot be reassigned`);
+  }
+
+  let name: string | null = null;
+  if (assignedToId) {
+    const user = await findAssignableUser(assignedToId);
+    if (!user) throw BadRequest('That user does not exist or is not active');
+    name = user.name;
+  }
+
+  const updated = await prisma.calibrationEvent.update({
+    where: { id },
+    data: {
+      assignedToId,
+      assignedAt: assignedToId ? new Date() : null,
+      assignedById: assignedToId ? userId ?? null : null,
+    },
+    include: EVENT_INCLUDE,
+  });
+
+  await trail(
+    {
+      entityType: 'CalibrationEvent',
+      entityId: id,
+      action: 'UPDATE',
+      field: 'assignedTo',
+      oldValue: e.assignedToId,
+      newValue: assignedToId,
+      reason: assignedToId ? `Assigned to ${name}` : 'Assignment cleared',
+    },
+    userId,
+  );
+  return serializeEvent(updated);
 };
 
 export const updateEvent = async (id: string, input: UpdateEventInput, userId?: string) => {
@@ -631,18 +716,32 @@ export const approveEvent = async (id: string, input: SignatureInput, userId?: s
   }
 
   const cfg = await resolveConfig(e.siteId);
-  const needsOot = requiresOot(e.asFoundOutcome, e.overallOutcome);
+  const oot = e.oot ?? (await prisma.outOfToleranceAssessment.findUnique({ where: { eventId: id } }));
 
-  if (needsOot && cfg.ootImpactAssessmentRequired) {
-    const oot = e.oot ?? (await prisma.outOfToleranceAssessment.findUnique({ where: { eventId: id } }));
-    if (!oot) {
-      throw BadRequest('An out-of-tolerance impact assessment is required before this calibration can be approved');
-    }
-    if (oot.status !== 'CLOSED') {
-      throw BadRequest(
-        `The out-of-tolerance impact assessment is still ${oot.status.replace(/_/g, ' ').toLowerCase()} — close it before approving this calibration`,
-      );
-    }
+  /**
+   * Two distinct questions, and asking only the second one leaves a hole.
+   *
+   * 1. Is there an OPEN assessment? If so nothing may close over the top of it —
+   *    regardless of what the readings currently say. Without this check, an
+   *    assessment raised from a failure could be orphaned simply by editing the
+   *    readings until they pass: `requiresOot` would return false, the guard
+   *    would be skipped, and the record would be approved and certificated with
+   *    a live impact assessment still hanging off it.
+   *
+   * 2. Does the current outcome demand an assessment that does not exist yet?
+   */
+  if (oot && oot.status !== 'CLOSED') {
+    const stillFailing = requiresOot(e.asFoundOutcome, e.overallOutcome);
+    throw BadRequest(
+      `The out-of-tolerance impact assessment is still ${oot.status.replace(/_/g, ' ').toLowerCase()} — close it before approving this calibration.` +
+        (stillFailing
+          ? ''
+          : ' The readings now pass, but the assessment raised earlier must still be dispositioned and closed on the record rather than abandoned.'),
+    );
+  }
+
+  if (requiresOot(e.asFoundOutcome, e.overallOutcome) && cfg.ootImpactAssessmentRequired && !oot) {
+    throw BadRequest('An out-of-tolerance impact assessment is required before this calibration can be approved');
   }
 
   const plan = e.planId
@@ -650,22 +749,41 @@ export const approveEvent = async (id: string, input: SignatureInput, userId?: s
     : null;
 
   const performedAt = e.performedAt ?? new Date();
-  const nextDue = plan
-    ? computeNextDue({
-        intervalType: plan.intervalType,
-        intervalValue: plan.intervalValue,
-        performedAt,
-        previousDueAt: plan.nextDueAt,
-        basis: cfg.intervalResetBasis,
-      })
-    : null;
+
+  /**
+   * A hard FAIL is not a calibration — it is evidence the instrument is not fit
+   * for use. It must NOT advance the schedule: doing so would record the
+   * instrument as freshly calibrated and push its next due date months out on
+   * the strength of a failure.
+   *
+   * CONDITIONAL is different: as-found was out but as-left passed, so the
+   * instrument is working now and its interval legitimately restarts — the
+   * period BEHIND it is what the out-of-tolerance assessment covers.
+   */
+  const passed = e.overallOutcome === 'PASS' || e.overallOutcome === 'CONDITIONAL';
+
+  const nextDue =
+    passed && plan
+      ? computeNextDue({
+          intervalType: plan.intervalType,
+          intervalValue: plan.intervalValue,
+          performedAt,
+          previousDueAt: plan.nextDueAt,
+          basis: cfg.intervalResetBasis,
+        })
+      : null;
 
   // Instrument status follows the outcome: a failed calibration takes the
   // instrument out of service, a conditional one restricts it.
   const instrumentStatus =
     e.overallOutcome === 'FAIL' ? 'OUT_OF_SERVICE' : e.overallOutcome === 'CONDITIONAL' ? 'LIMITED_USE' : 'CALIBRATED';
 
-  const certificateNo = e.certificateNo ?? `${cfg.certificateNumberPrefix}-${e.eventNo}`;
+  /**
+   * A certificate attests conformity. A failed instrument has none to attest, so
+   * it gets no certificate number — the record still holds every as-found
+   * reading and renders as a non-conformance report instead.
+   */
+  const certificateNo = passed ? e.certificateNo ?? `${cfg.certificateNumberPrefix}-${e.eventNo}` : null;
 
   await signRecord({
     entityType: 'CalibrationEvent',
@@ -698,16 +816,22 @@ export const approveEvent = async (id: string, input: SignatureInput, userId?: s
     await tx.calibrationInstrument.update({
       where: { id: e.instrumentId },
       data: {
-        lastCalibratedAt: performedAt,
-        calibrationDueAt: nextDue,
+        // Only a passing result counts as "last calibrated". On a failure the
+        // previous due date stands, so the instrument stays due/overdue rather
+        // than looking freshly calibrated.
+        lastCalibratedAt: passed ? performedAt : undefined,
+        calibrationDueAt: passed ? nextDue : undefined,
         calibrationStatus: instrumentStatus,
         status: e.overallOutcome === 'FAIL' ? 'OUT_OF_SERVICE' : undefined,
       },
     });
 
-    if (e.planId && nextDue) {
-      await tx.calibrationPlan.update({ where: { id: e.planId }, data: { nextDueAt: nextDue, lastEventId: id } });
-    }
+    // The plan's schedule only moves on a passing result; a failure still
+    // records which event was last against it.
+    await tx.calibrationPlan.update({
+      where: { id: e.planId ?? '' },
+      data: passed && nextDue ? { nextDueAt: nextDue, lastEventId: id } : { lastEventId: id },
+    }).catch(() => undefined);
     return ev;
   }, TX_OPTIONS);
 
@@ -735,7 +859,11 @@ export const approveEvent = async (id: string, input: SignatureInput, userId?: s
       field: 'status',
       oldValue: e.status,
       newValue: 'APPROVED',
-      reason: input.comments ?? `Certificate ${certificateNo}`,
+      reason:
+        input.comments ??
+        (passed
+          ? `Certificate ${certificateNo}`
+          : 'Failed calibration approved — instrument withdrawn from service, schedule not advanced'),
     },
     userId,
   );
@@ -811,6 +939,7 @@ export const raiseOot = async (id: string, userId?: string) => {
 export const getCertificate = async (id: string) => {
   const e = await load(id);
   if (e.status !== 'APPROVED') throw BadRequest('A certificate is only issued for an approved calibration');
+  const conforming = e.overallOutcome === 'PASS' || e.overallOutcome === 'CONDITIONAL';
 
   const [instrument, org, signatures, standards] = await Promise.all([
     prisma.calibrationInstrument.findUnique({
@@ -826,6 +955,9 @@ export const getCertificate = async (id: string) => {
   ]);
 
   return {
+    /** Conformity certificate vs. a report of a non-conforming instrument. */
+    document_kind: conforming ? 'CERTIFICATE' : 'NON_CONFORMANCE_REPORT',
+    document_title: conforming ? 'Calibration Certificate' : 'Calibration Report — Non-Conforming',
     certificate_no: e.certificateNo,
     event_no: e.eventNo,
     issued_at: e.approvedAt,
@@ -848,6 +980,9 @@ export const getCertificate = async (id: string) => {
       : null,
     calibration: {
       type: e.type,
+      /// ISO/IEC 17025 §7.8.4 — the certificate identifies the method used.
+      method: e.methodRef ?? null,
+      method_doc_id: e.methodDocId ?? null,
       performed_at: e.performedAt,
       next_due_at: e.nextDueAt,
       as_found_outcome: e.asFoundOutcome,

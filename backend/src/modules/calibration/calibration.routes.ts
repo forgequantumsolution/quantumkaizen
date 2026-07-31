@@ -15,6 +15,7 @@ import { asyncHandler } from '../../lib/asyncHandler';
 import {
   AddStandardSchema,
   AnalyticsQuerySchema,
+  AssignEventSchema,
   ApplyPackSchema,
   CategoryUpsertSchema,
   CreateCheckSchema,
@@ -98,6 +99,7 @@ router.get('/categories/:id', P.configRead, idParam, asyncHandler(ctrl.getCatego
 router.post('/categories', P.configUpdate, validate(CategoryUpsertSchema), asyncHandler(ctrl.createCategory));
 router.put('/categories/:id', P.configUpdate, idParam, validate(CategoryUpsertSchema), asyncHandler(ctrl.updateCategory));
 router.delete('/categories/:id', P.configUpdate, idParam, asyncHandler(ctrl.deleteCategory));
+router.put('/categories/:id/check-items', P.configUpdate, idParam, asyncHandler(ctrl.replaceCheckItems));
 router.put('/categories/:id/point-templates', P.configUpdate, idParam, asyncHandler(ctrl.replacePointTemplates));
 
 // ── Instruments ──
@@ -129,6 +131,7 @@ router.post('/plans/:id/deactivate', P.planUpdate, idParam, validate(ReasonSchem
 // ── In-use verification checks ──
 router.get('/checks/due', P.checkRead, asyncHandler(ctrl.listDueChecks));
 router.get('/checks', P.checkRead, validate(ListChecksQuerySchema, 'query'), asyncHandler(ctrl.listChecks));
+router.get('/instruments/:id/check-template', P.checkRead, idParam, asyncHandler(ctrl.checkTemplate));
 router.post('/instruments/:id/checks', P.checkCreate, idParam, validate(CreateCheckSchema), asyncHandler(ctrl.createCheck));
 
 // ── Calibration events ──
@@ -136,6 +139,7 @@ router.get('/events', P.eventRead, validate(ListEventsQuerySchema, 'query'), asy
 router.post('/events', P.eventCreate, validate(CreateEventSchema), asyncHandler(ctrl.createEvent));
 router.get('/events/:id', P.eventRead, idParam, asyncHandler(ctrl.getEvent));
 router.put('/events/:id', P.eventUpdate, idParam, validate(UpdateEventSchema), asyncHandler(ctrl.updateEvent));
+router.post('/events/:id/assign', P.eventUpdate, idParam, validate(AssignEventSchema), asyncHandler(ctrl.assignEvent));
 router.post('/events/:id/start', P.eventPerform, idParam, asyncHandler(ctrl.startEvent));
 router.put('/events/:id/readings', P.eventPerform, idParam, validate(SaveReadingsSchema), asyncHandler(ctrl.saveReadings));
 router.post('/events/:id/standards', P.eventPerform, idParam, validate(AddStandardSchema), asyncHandler(ctrl.addStandard));

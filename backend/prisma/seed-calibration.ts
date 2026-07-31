@@ -110,6 +110,24 @@ async function main() {
         inUseCheckFrequency: c.inUseCheckFrequency ?? null,
       },
     });
+    // The in-use checklist — what a shift/daily check on this device consists of.
+    await prisma.inUseCheckItem.deleteMany({ where: { categoryId: cat.id } });
+    if (c.checkItems?.length) {
+      await prisma.inUseCheckItem.createMany({
+        data: c.checkItems.map((it) => ({
+          categoryId: cat.id,
+          sequence: it.sequence,
+          label: it.label,
+          checkType: it.checkType,
+          nominalValue: it.nominalValue ?? null,
+          toleranceValue: it.toleranceValue ?? null,
+          unitCode: it.unitCode ?? null,
+          isRequired: it.isRequired ?? true,
+          guidance: it.guidance ?? null,
+        })),
+      });
+    }
+
     await prisma.calibrationPointTemplate.deleteMany({ where: { categoryId: cat.id } });
     await prisma.calibrationPointTemplate.createMany({
       data: c.points.map((p) => ({
@@ -123,7 +141,8 @@ async function main() {
       })),
     });
   }
-  console.log(`  categories       ✓ ${pack.categories.length} (+ point templates)`);
+  const checkItemCount = await prisma.inUseCheckItem.count();
+  console.log(`  categories       ✓ ${pack.categories.length} (+ point templates, ${checkItemCount} check items)`);
 
   // ── 3. Provider ──
   const provider = await prisma.calibrationProvider.upsert({

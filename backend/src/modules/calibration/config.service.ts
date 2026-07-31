@@ -16,6 +16,7 @@ import type {
   ApplyPackInput,
   CategoryUpsertInput,
   ListCategoriesQuery,
+  CheckItemUpsertInput,
   PointTemplateUpsertInput,
   UpdateConfigInput,
 } from './calibration.schema';
@@ -54,7 +55,7 @@ export const serializeConfig = (c: CalibrationConfig) => ({
   updated_at: c.updatedAt,
 });
 
-type CategoryRow = Prisma.EquipmentCategoryGetPayload<{ include: { pointTemplates: true } }>;
+type CategoryRow = Prisma.EquipmentCategoryGetPayload<{ include: { pointTemplates: true; checkItems: true } }>;
 
 export const serializeCategory = (c: CategoryRow | EquipmentCategory, count?: number) => ({
   id: c.id,
@@ -73,6 +74,22 @@ export const serializeCategory = (c: CategoryRow | EquipmentCategory, count?: nu
   in_use_check_frequency: c.inUseCheckFrequency,
   is_active: c.isActive,
   instrument_count: count ?? undefined,
+  check_items:
+    'checkItems' in c
+      ? [...c.checkItems]
+          .sort((a, b) => a.sequence - b.sequence)
+          .map((i) => ({
+            id: i.id,
+            sequence: i.sequence,
+            label: i.label,
+            check_type: i.checkType,
+            nominal_value: num(i.nominalValue),
+            tolerance_value: num(i.toleranceValue),
+            unit_code: i.unitCode,
+            is_required: i.isRequired,
+            guidance: i.guidance,
+          }))
+      : undefined,
   point_templates:
     'pointTemplates' in c
       ? [...c.pointTemplates]
@@ -255,6 +272,24 @@ export const applyPack = async (input: ApplyPackInput, userId?: string) => {
       : await prisma.equipmentCategory.create({ data: { ...data, code: c.code, createdById: userId ?? null } });
     existingCat ? (updated += 1) : (created += 1);
 
+    // The in-use checklist is what makes a shift check specific to the device.
+    await prisma.inUseCheckItem.deleteMany({ where: { categoryId: cat.id } });
+    if (c.checkItems?.length) {
+      await prisma.inUseCheckItem.createMany({
+        data: c.checkItems.map((it) => ({
+          categoryId: cat.id,
+          sequence: it.sequence,
+          label: it.label,
+          checkType: it.checkType,
+          nominalValue: it.nominalValue ?? null,
+          toleranceValue: it.toleranceValue ?? null,
+          unitCode: it.unitCode ?? null,
+          isRequired: it.isRequired ?? true,
+          guidance: it.guidance ?? null,
+        })),
+      });
+    }
+
     // Point templates are replaced wholesale — a partially-updated point set is
     // worse than either version of it.
     await prisma.calibrationPointTemplate.deleteMany({ where: { categoryId: cat.id } });
@@ -329,7 +364,7 @@ export const listCategories = async (q: ListCategoriesQuery) => {
     prisma.equipmentCategory.count({ where }),
     prisma.equipmentCategory.findMany({
       where,
-      include: { pointTemplates: true, _count: { select: { instruments: true } } },
+      include: { pointTemplates: true, checkItems: true, _count: { select: { instruments: true } } },
       orderBy: [{ kind: 'asc' }, { name: 'asc' }],
       skip: (q.page - 1) * q.page_size,
       take: q.page_size,
@@ -347,7 +382,7 @@ export const listCategories = async (q: ListCategoriesQuery) => {
 export const getCategory = async (id: string) => {
   const c = await prisma.equipmentCategory.findFirst({
     where: { id, isDeleted: false },
-    include: { pointTemplates: true, _count: { select: { instruments: true } } },
+    include: { pointTemplates: true, checkItems: true, _count: { select: { instruments: true } } },
   });
   if (!c) throw NotFound('Category not found');
   return serializeCategory(c, c._count.instruments);
@@ -382,7 +417,7 @@ export const createCategory = async (input: CategoryUpsertInput, userId?: string
       isActive: input.is_active ?? true,
       createdById: userId ?? null,
     },
-    include: { pointTemplates: true },
+    include: { pointTemplates: true, checkItems: true },
   });
 
   await trail(
@@ -412,7 +447,7 @@ export const updateCategory = async (id: string, input: CategoryUpsertInput, use
       inUseCheckFrequency: input.in_use_check_frequency ?? null,
       isActive: input.is_active ?? existing.isActive,
     },
-    include: { pointTemplates: true, _count: { select: { instruments: true } } },
+    include: { pointTemplates: true, checkItems: true, _count: { select: { instruments: true } } },
   });
 
   await trail(
@@ -476,6 +511,42 @@ export const replacePointTemplates = async (
     userId,
   );
 
+  return getCategory(categoryId);
+};
+
+/** Replaces the category's whole in-use checklist — atomic, like plan points. */
+export const replaceCheckItems = async (
+  categoryId: string,
+  items: CheckItemUpsertInput[],
+  userId?: string,
+) => {
+  const cat = await prisma.equipmentCategory.findFirst({ where: { id: categoryId, isDeleted: false } });
+  if (!cat) throw NotFound('Category not found');
+
+  const seqs = new Set(items.map((i) => i.sequence));
+  if (seqs.size !== items.length) throw BadRequest('Checklist sequences must be unique');
+
+  await prisma.$transaction([
+    prisma.inUseCheckItem.deleteMany({ where: { categoryId } }),
+    prisma.inUseCheckItem.createMany({
+      data: items.map((i) => ({
+        categoryId,
+        sequence: i.sequence,
+        label: i.label,
+        checkType: i.check_type,
+        nominalValue: i.check_type === 'NUMERIC' ? i.nominal_value ?? null : null,
+        toleranceValue: i.check_type === 'NUMERIC' ? i.tolerance_value ?? null : null,
+        unitCode: i.unit_code ?? null,
+        isRequired: i.is_required ?? true,
+        guidance: i.guidance ?? null,
+      })),
+    }),
+  ]);
+
+  await trail(
+    { entityType: 'EquipmentCategory', entityId: categoryId, action: 'UPDATE', field: 'checkItems', newValue: `${items.length} item(s)` },
+    userId,
+  );
   return getCategory(categoryId);
 };
 

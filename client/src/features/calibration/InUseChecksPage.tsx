@@ -1,12 +1,15 @@
-import { useState } from 'react';
-import { Alert, App, Button, Empty, Input, Modal, Space, Switch, Table, Tag } from 'antd';
+import { useEffect, useState } from 'react';
+import { Alert, App, Button, Empty, Input, InputNumber, Modal, Space, Spin, Switch, Table, Tag } from 'antd';
 import { Repeat, Plus, Clock } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useChecks,
   useDueChecks,
   useCreateCheck,
+  useCheckTemplate,
+  type CheckTemplateItem,
   OUTCOME_BADGE,
   fmtDateTime,
   type Check,
@@ -28,16 +31,10 @@ export default function InUseChecksPage() {
 
   return (
     <PageContainer>
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Repeat size={22} className="text-gray-500" />
-          In-Use Checks
-        </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Shift and daily verification of monitoring devices. A failed check puts product on hold back to the last
-          passing one.
-        </p>
-      </div>
+      <CalibrationPageHeader
+        title="In-Use Checks"
+        icon={Repeat}
+      />
 
       <div className="rounded-xl border border-amber-200 bg-white shadow-sm p-4 mb-4">
         <h2 className="text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
@@ -139,26 +136,57 @@ export default function InUseChecksPage() {
 function CheckModal({ target, onClose }: { target: DueCheck | null; onClose: () => void }) {
   const { message } = App.useApp();
   const create = useCreateCheck();
+  const { data: template, isLoading } = useCheckTemplate(target?.instrument_id);
+
   const [shift, setShift] = useState('');
   const [batch, setBatch] = useState('');
   const [remarks, setRemarks] = useState('');
-  const [rows, setRows] = useState<{ label: string; observed: string; in_tolerance: boolean }[]>([
-    { label: 'Test piece / check weight', observed: '', in_tolerance: true },
-  ]);
+  /** Keyed by template item id; free-form rows use their index. */
+  const [values, setValues] = useState<Record<string, { observed?: number | null; passed?: boolean }>>({});
+
+  // Load this instrument's own checklist whenever the modal opens on a new one.
+  useEffect(() => {
+    setValues({});
+    setShift('');
+    setBatch('');
+    setRemarks('');
+  }, [target?.instrument_id]);
+
+  const items = template?.items ?? [];
+
+  /** Live verdict, mirroring what the server will compute on submit. */
+  const verdict = (it: CheckTemplateItem): boolean | null => {
+    const v = values[it.id];
+    if (it.check_type === 'PASS_FAIL') return v?.passed === undefined ? null : v.passed;
+    if (v?.observed === null || v?.observed === undefined) return null;
+    if (it.nominal_value === null || it.tolerance_value === null) return true;
+    return Math.abs(v.observed - it.nominal_value) <= Math.abs(it.tolerance_value);
+  };
+
+  const anyFail = items.some((it) => verdict(it) === false);
+  const missingRequired = items.filter((it) => it.is_required && verdict(it) === null);
 
   const save = async () => {
     if (!target) return;
-    if (rows.some((r) => !r.label.trim())) return message.warning('Every reading needs a label');
+    if (!template?.available) return message.warning('This instrument has no checklist defined');
+    if (missingRequired.length) {
+      return message.warning(`Complete every required check: ${missingRequired.map((m) => m.label).join(', ')}`);
+    }
     try {
       const res = await create.mutateAsync({
         id: target.instrument_id,
         shift: shift || null,
         batch_ref: batch || null,
         remarks: remarks || null,
-        readings: rows.map((r) => ({
-          label: r.label,
-          observed: r.observed === '' ? null : Number(r.observed),
-          in_tolerance: r.in_tolerance,
+        readings: items.map((it) => ({
+          item_id: it.id,
+          label: it.label,
+          check_type: it.check_type,
+          nominal: it.nominal_value,
+          tolerance: it.tolerance_value,
+          unit_code: it.unit_code,
+          observed: it.check_type === 'NUMERIC' ? values[it.id]?.observed ?? null : null,
+          passed: it.check_type === 'PASS_FAIL' ? values[it.id]?.passed === true : undefined,
         })),
       });
       if (res.hold_window) {
@@ -171,24 +199,20 @@ function CheckModal({ target, onClose }: { target: DueCheck | null; onClose: () 
               <p className="font-mono text-xs">
                 {fmtDateTime(res.hold_window.from)} → {fmtDateTime(res.hold_window.to)}
               </p>
-              {res.hold_window.hours !== null && <p className="text-xs text-gray-500 mt-1">{res.hold_window.hours} hours of production</p>}
+              {res.hold_window.hours !== null && (
+                <p className="text-xs text-gray-500 mt-1">{res.hold_window.hours} hours of production</p>
+              )}
             </div>
           ),
         });
       } else {
         message.success('Check recorded');
       }
-      setRows([{ label: 'Test piece / check weight', observed: '', in_tolerance: true }]);
-      setShift('');
-      setBatch('');
-      setRemarks('');
       onClose();
     } catch (e) {
       message.error((e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? 'Failed');
     }
   };
-
-  const anyFail = rows.some((r) => !r.in_tolerance);
 
   return (
     <Modal
@@ -196,77 +220,117 @@ function CheckModal({ target, onClose }: { target: DueCheck | null; onClose: () 
       onCancel={onClose}
       onOk={save}
       okText="Record check"
-      okButtonProps={{ danger: anyFail }}
+      okButtonProps={{ danger: anyFail, disabled: !template?.available }}
       confirmLoading={create.isPending}
-      title={target ? `Verification — ${target.code}` : ''}
-      centered
-      width={560}
-    >
-      {anyFail && (
-        <Alert
-          type="error"
-          showIcon
-          className="mb-3"
-          message="This will be recorded as a FAILED check"
-          description="A product-hold window back to the last passing check will be computed and the device taken out of service."
-        />
-      )}
-      <div className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+      title={
+        target ? (
           <div>
-            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Shift</label>
-            <Input value={shift} onChange={(e) => setShift(e.target.value)} placeholder="A / B / C" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Batch running</label>
-            <Input value={batch} onChange={(e) => setBatch(e.target.value)} placeholder="B-26071" />
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="text-[11px] font-semibold text-gray-600">Readings</label>
-            <Button size="small" icon={<Plus size={11} />} onClick={() => setRows((r) => [...r, { label: '', observed: '', in_tolerance: true }])}>
-              Add
-            </Button>
-          </div>
-          <div className="space-y-2">
-            {rows.map((r, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <Input
-                  size="small"
-                  placeholder="Label"
-                  value={r.label}
-                  onChange={(e) => setRows((p) => p.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))}
-                  className="flex-1"
-                />
-                <Input
-                  size="small"
-                  placeholder="Observed"
-                  value={r.observed}
-                  onChange={(e) => setRows((p) => p.map((x, j) => (j === i ? { ...x, observed: e.target.value } : x)))}
-                  style={{ width: 110 }}
-                />
-                <Space size={4}>
-                  <Switch
-                    size="small"
-                    checked={r.in_tolerance}
-                    onChange={(v) => setRows((p) => p.map((x, j) => (j === i ? { ...x, in_tolerance: v } : x)))}
-                  />
-                  <span className={`text-[10px] font-semibold ${r.in_tolerance ? 'text-emerald-600' : 'text-red-600'}`}>
-                    {r.in_tolerance ? 'pass' : 'fail'}
-                  </span>
-                </Space>
+            <div>{`${target.code} — ${target.name}`}</div>
+            {template?.category_name && (
+              <div className="text-[11px] font-normal text-gray-500">
+                {template.category_name}
+                {template.frequency && ` · ${template.frequency.toLowerCase().replace('_', ' ')} check`}
               </div>
-            ))}
+            )}
+          </div>
+        ) : (
+          ''
+        )
+      }
+      centered
+      width={640}
+    >
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Spin />
+        </div>
+      ) : !template?.available ? (
+        <Alert type="warning" showIcon message="No checklist defined" description={template?.reason} />
+      ) : (
+        <div className="space-y-3">
+          {anyFail && (
+            <Alert
+              type="error"
+              showIcon
+              message="This will be recorded as a FAILED check"
+              description="A product-hold window back to the last passing check will be computed and the device taken out of service."
+            />
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">Shift</label>
+              <Input value={shift} onChange={(e) => setShift(e.target.value)} placeholder="A / B / C" />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-600 mb-1">Batch running</label>
+              <Input value={batch} onChange={(e) => setBatch(e.target.value)} placeholder="B-26071" />
+            </div>
+          </div>
+
+          <div className="border border-gray-200 rounded-lg divide-y divide-gray-100">
+            {items.map((it) => {
+              const v = verdict(it);
+              return (
+                <div key={it.id} className="p-2.5 flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-medium text-gray-800">
+                      {it.label}
+                      {it.is_required && <span className="text-red-500 ml-0.5">*</span>}
+                    </div>
+                    {it.check_type === 'NUMERIC' && it.nominal_value !== null && (
+                      <div className="text-[10px] text-gray-400 font-mono">
+                        expect {it.nominal_value}
+                        {it.tolerance_value !== null && ` ± ${it.tolerance_value}`} {it.unit_code ?? ''}
+                      </div>
+                    )}
+                    {it.guidance && <div className="text-[10px] text-gray-500 leading-snug mt-0.5">{it.guidance}</div>}
+                  </div>
+
+                  <div className="shrink-0 flex items-center gap-2">
+                    {it.check_type === 'NUMERIC' ? (
+                      <InputNumber
+                        size="small"
+                        style={{ width: 110 }}
+                        placeholder={it.unit_code ?? 'value'}
+                        value={values[it.id]?.observed ?? undefined}
+                        onChange={(val) => setValues((p) => ({ ...p, [it.id]: { ...p[it.id], observed: val } }))}
+                        className={v === false ? '!border-red-400 !bg-red-50' : v === true ? '!border-emerald-300' : ''}
+                      />
+                    ) : (
+                      <Space size={4}>
+                        <Switch
+                          size="small"
+                          checked={values[it.id]?.passed === true}
+                          onChange={(on) => setValues((p) => ({ ...p, [it.id]: { ...p[it.id], passed: on } }))}
+                        />
+                        <span className={`text-[10px] font-semibold ${v === true ? 'text-emerald-600' : v === false ? 'text-red-600' : 'text-gray-400'}`}>
+                          {v === null ? '—' : v ? 'pass' : 'fail'}
+                        </span>
+                      </Space>
+                    )}
+                    <span className="w-4 text-center">
+                      {v === true && <span className="text-emerald-600 text-xs">✓</span>}
+                      {v === false && <span className="text-red-600 text-xs">✗</span>}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {missingRequired.length > 0 && (
+            <p className="text-[11px] text-amber-700">
+              {missingRequired.length} required check(s) still to complete.
+            </p>
+          )}
+
+          <div>
+            <label className="block text-[11px] font-semibold text-gray-600 mb-1">Remarks</label>
+            <Input.TextArea rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
           </div>
         </div>
-
-        <div>
-          <label className="block text-[11px] font-semibold text-gray-600 mb-1">Remarks</label>
-          <Input.TextArea rows={2} value={remarks} onChange={(e) => setRemarks(e.target.value)} />
-        </div>
-      </div>
+      )}
     </Modal>
   );
 }

@@ -255,6 +255,8 @@ type CapaRow = Prisma.CapaGetPayload<{ include: typeof capaInclude }>;
 const serializeCapa = (c: CapaRow) => ({
   id: c.id,
   capa_number: c.capaNumber,
+  source: c.source,
+  source_ref: c.sourceRef,
   type: c.type,
   status: c.status,
   title: c.title,
@@ -297,6 +299,19 @@ export const listCapasForRegister = async (registerId: string) => {
 
 export const listCapas = async (q: ListCapaQuery) => {
   const where: Prisma.CapaWhereInput = {};
+  /**
+   * Origin filter. Four modules raise CAPAs into this one register, so a view
+   * that does not filter shows every other module's work — the Audit CAPA tab
+   * was listing risk-driven and OOS CAPAs alongside its own.
+   * Comma-separated; omitted means every source.
+   */
+  if (q.source) {
+    const list = q.source
+      .split(',')
+      .map((x) => x.trim().toUpperCase())
+      .filter(Boolean) as Prisma.EnumCapaSourceFilter['in'];
+    if (list && (list as string[]).length) where.source = { in: list };
+  }
   if (q.status) where.status = q.status;
   if (q.type) where.type = q.type;
   if (q.owner_id) where.ownerId = q.owner_id;
@@ -427,6 +442,12 @@ export const createCapa = async (input: CapaCreateInput, userId?: string) => {
     return prisma.$transaction(async (tx) => {
       const created = await tx.capa.create({
         data: {
+          // Declared by the caller. Inferred for legacy callers that pass
+          // neither: an NC link means audit, a finding link means finding.
+          source:
+            input.source ??
+            (input.non_conformance_id ? 'AUDIT' : input.finding_id ? 'FINDING' : 'MANUAL'),
+          sourceRef: input.source_ref ?? null,
           capaNumber,
           title: input.title,
           description: input.description ?? null,

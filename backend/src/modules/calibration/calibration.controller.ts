@@ -78,6 +78,10 @@ export const deleteCategory = async (req: Request, res: Response) => {
   await config.deleteCategory(id(req), uid(req));
   res.status(204).send();
 };
+export const replaceCheckItems = async (req: Request, res: Response) => {
+  const { items } = req.body as { items: Parameters<typeof config.replaceCheckItems>[1] };
+  res.json(await config.replaceCheckItems(id(req), items, uid(req)));
+};
 export const replacePointTemplates = async (req: Request, res: Response) => {
   const { points } = req.body as { points: Parameters<typeof config.replacePointTemplates>[1] };
   res.json(await config.replacePointTemplates(id(req), points, uid(req)));
@@ -131,8 +135,33 @@ export const listStandards = async (req: Request, res: Response) => {
 export const searchLimsEquipment = async (req: Request, res: Response) => {
   res.json(await instrument.searchLinkableLimsEquipment((req.query.q as string) ?? ''));
 };
+/**
+ * Public label scan.
+ *
+ * Content-negotiated on purpose. A label is a physical object: once a sticker is
+ * printed and stuck on an instrument, the URL inside its QR code cannot be
+ * changed. Older labels encode THIS endpoint, so a phone camera opening it must
+ * land on the human verification page rather than a wall of JSON.
+ *
+ * The SPA's own fetch sends `Accept: application/json` (see the axios
+ * interceptor in client/src/lib/api.ts), so it still gets data.
+ */
 export const verifyLabel = async (req: Request, res: Response) => {
-  res.json(await instrument.verifyByToken(req.params.token as string));
+  const token = req.params.token as string;
+
+  const wantsJson =
+    req.xhr ||
+    req.get('X-Requested-With') === 'XMLHttpRequest' ||
+    (req.get('Accept') ?? '').toLowerCase().includes('application/json');
+
+  if (!wantsJson && req.accepts('html')) {
+    // Same-origin relative redirect: the SPA is served alongside the API in
+    // every deployment of this app, so no absolute base URL is needed.
+    res.redirect(302, `/verify/instrument/${encodeURIComponent(token)}`);
+    return;
+  }
+
+  res.json(await instrument.verifyByToken(token));
 };
 
 // ── Plans ──
@@ -167,6 +196,9 @@ export const createEvent = async (req: Request, res: Response) => {
 };
 export const updateEvent = async (req: Request, res: Response) => {
   res.json(await event.updateEvent(id(req), body<UpdateEventInput>(req), uid(req)));
+};
+export const assignEvent = async (req: Request, res: Response) => {
+  res.json(await event.assignEvent(id(req), (req.body as { assigned_to_id: string | null }).assigned_to_id, uid(req)));
 };
 export const startEvent = async (req: Request, res: Response) => {
   res.json(await event.startEvent(id(req), uid(req)));
@@ -237,6 +269,9 @@ export const listChecks = async (req: Request, res: Response) => {
 };
 export const createCheck = async (req: Request, res: Response) => {
   res.status(201).json(await check.createCheck(id(req), body<CreateCheckInput>(req), uid(req)));
+};
+export const checkTemplate = async (req: Request, res: Response) => {
+  res.json(await check.getCheckTemplate(id(req)));
 };
 export const listDueChecks = async (req: Request, res: Response) => {
   res.json(await check.listDueChecks(req.query.site_id as string | undefined));

@@ -11,8 +11,71 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { BadRequest, NotFound } from '../../lib/httpError';
 import { trail } from './integrations';
-import { addDays, resolveConfig } from './calibration.lib';
+import { addDays, num, resolveConfig } from './calibration.lib';
 import type { CreateCheckInput, ListChecksQuery } from './calibration.schema';
+
+/**
+ * The checklist an instrument's shift/daily check consists of, from its
+ * category. Without this the entry screen can only offer one generic row — the
+ * same for a metal detector and a probe thermometer, which is evidence of
+ * nothing.
+ *
+ * Returns `available: false` rather than throwing when a category has no
+ * checklist yet: the operator can still record a free-form check, and the UI
+ * says why the list is empty.
+ */
+export const getCheckTemplate = async (instrumentId: string) => {
+  const inst = await prisma.calibrationInstrument.findFirst({
+    where: { id: instrumentId, isDeleted: false },
+    select: {
+      id: true,
+      code: true,
+      name: true,
+      measurementRangeMin: true,
+      measurementRangeMax: true,
+      unitCode: true,
+      category: {
+        select: {
+          id: true,
+          name: true,
+          requiresInUseCheck: true,
+          inUseCheckFrequency: true,
+          checkItems: { orderBy: { sequence: 'asc' } },
+        },
+      },
+    },
+  });
+  if (!inst) throw NotFound('Instrument not found');
+
+  const cat = inst.category;
+  const items = cat?.checkItems ?? [];
+
+  return {
+    instrument_id: inst.id,
+    instrument_code: inst.code,
+    instrument_name: inst.name,
+    category_name: cat?.name ?? null,
+    requires_check: cat?.requiresInUseCheck ?? false,
+    frequency: cat?.inUseCheckFrequency ?? null,
+    available: items.length > 0,
+    reason: items.length
+      ? null
+      : cat
+        ? `No in-use checklist is defined for the "${cat.name}" category. Add one under Configuration → Instrument Categories.`
+        : 'This instrument has no category, so there is no checklist to load.',
+    items: items.map((i) => ({
+      id: i.id,
+      sequence: i.sequence,
+      label: i.label,
+      check_type: i.checkType,
+      nominal_value: num(i.nominalValue),
+      tolerance_value: num(i.toleranceValue),
+      unit_code: i.unitCode ?? inst.unitCode,
+      is_required: i.isRequired,
+      guidance: i.guidance,
+    })),
+  };
+};
 
 type CheckRow = Prisma.InUseVerificationGetPayload<{
   include: { instrument: { select: { code: true; name: true; kind: true } } };
@@ -83,7 +146,63 @@ export const createCheck = async (instrumentId: string, input: CreateCheckInput,
   const performedAt = input.performed_at ? new Date(input.performed_at) : new Date();
   if (Number.isNaN(performedAt.getTime())) throw BadRequest('Invalid performed_at date');
 
-  const failed = input.readings.some((r) => !r.in_tolerance);
+  // Load the checklist so required items can be enforced and numeric verdicts
+  // computed here rather than taken on trust from the client.
+  const template = await prisma.inUseCheckItem.findMany({
+    where: { category: { instruments: { some: { id: instrumentId } } } },
+    orderBy: { sequence: 'asc' },
+  });
+  const byId = new Map(template.map((t) => [t.id, t]));
+
+  const evaluated = input.readings.map((r) => {
+    const tpl = r.item_id ? byId.get(r.item_id) : undefined;
+    const type = tpl?.checkType ?? r.check_type;
+    const nominal = tpl ? num(tpl.nominalValue) : r.nominal ?? null;
+    const tol = tpl ? num(tpl.toleranceValue) : r.tolerance ?? null;
+
+    if (type === 'PASS_FAIL') {
+      return {
+        item_id: r.item_id ?? null,
+        label: tpl?.label ?? r.label,
+        check_type: 'PASS_FAIL' as const,
+        observed: null,
+        nominal: null,
+        tolerance: null,
+        unit_code: tpl?.unitCode ?? r.unit_code ?? null,
+        in_tolerance: r.passed === true,
+        recorded: r.passed !== undefined,
+      };
+    }
+
+    // NUMERIC — the verdict is derived, never accepted.
+    const observed = r.observed ?? null;
+    const inTol =
+      observed === null || nominal === null || tol === null
+        ? null
+        : Math.abs(observed - nominal) <= Math.abs(tol);
+    return {
+      item_id: r.item_id ?? null,
+      label: tpl?.label ?? r.label,
+      check_type: 'NUMERIC' as const,
+      observed,
+      nominal,
+      tolerance: tol,
+      unit_code: tpl?.unitCode ?? r.unit_code ?? null,
+      // With no nominal/tolerance to judge against, an entered value is a
+      // record but not a verdict — treat it as satisfied rather than failing.
+      in_tolerance: inTol === null ? observed !== null : inTol,
+      recorded: observed !== null,
+    };
+  });
+
+  // Every required item must actually have been answered.
+  const answeredIds = new Set(evaluated.filter((e) => e.recorded).map((e) => e.item_id));
+  const missing = template.filter((t) => t.isRequired && !answeredIds.has(t.id)).map((t) => t.label);
+  if (missing.length) {
+    throw BadRequest(`These required checks were not completed: ${missing.join(', ')}`);
+  }
+
+  const failed = evaluated.some((e) => e.recorded && !e.in_tolerance);
   const outcome = failed ? 'FAIL' : 'PASS';
 
   // Hold window: back to the previous passing check. With none on record the
@@ -117,7 +236,7 @@ export const createCheck = async (instrumentId: string, input: CreateCheckInput,
       performedById: userId ?? null,
       shift: input.shift ?? null,
       outcome,
-      readings: input.readings as unknown as Prisma.InputJsonValue,
+      readings: evaluated as unknown as Prisma.InputJsonValue,
       batchRef: input.batch_ref ?? null,
       remarks: input.remarks ?? null,
       holdTriggered: failed && cfg.ootRequiresProductHold,
