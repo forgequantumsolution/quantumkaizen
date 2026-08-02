@@ -13,6 +13,8 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository }}/frontend
+  FRONTEND_PORT: '8081'
+  API_PORT: '4000'
 
 jobs:
   build:
@@ -26,7 +28,7 @@ jobs:
       image_tag: ${{ steps.tag.outputs.tag }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Compute image tag (short SHA)
         id: tag
@@ -42,7 +44,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build & push backend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./backend/Dockerfile
@@ -57,12 +59,12 @@ jobs:
           cache-to: type=gha,scope=backend,mode=max
 
       - name: Build & push frontend image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: ./client/Dockerfile
           push: true
-          # Relative /api — frontend nginx proxies to qk-api internally.
+          # Relative /api — frontend nginx proxies to api:4000 internally.
           build-args: |
             VITE_API_BASE_URL=/api
           tags: |
@@ -84,10 +86,10 @@ jobs:
       packages: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Load SSH key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.9.1
         with:
           ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
 
@@ -115,6 +117,19 @@ jobs:
           echo "$GHCR_TOKEN" | ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             "docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin"
 
+      # Compose interpolates BACKEND_IMAGE/FRONTEND_IMAGE/IMAGE_TAG from the
+      # environment; POSTGRES_* still come from /opt/quantumkaizen/.env.
+      - name: Validate compose renders with this tag
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "cd /opt/quantumkaizen && \
+             IMAGE_TAG=${IMAGE_TAG} \
+             BACKEND_IMAGE=${{ env.BACKEND_IMAGE }} \
+             FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }} \
+             docker compose -f docker-compose.yml config --images"
+
       - name: Pull images, migrate, restart on VPS
         env:
           IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
@@ -126,21 +141,37 @@ jobs:
              FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }} \
              bash deploy.sh"
 
+      - name: Verify running containers match this build
+        env:
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            "docker inspect --format='{{.Config.Image}}' kaizen-api kaizen-worker kaizen-frontend" \
+            | tee /tmp/running.txt
+          grep -q "${IMAGE_TAG}" /tmp/running.txt \
+            || { echo "Containers are not running ${IMAGE_TAG}"; exit 1; }
+
       - name: Public smoke test
         run: |
           # API direct
           for i in {1..10}; do
-            if curl -fsS "http://${{ secrets.VPS_HOST }}:4000/health" > /dev/null; then
-              echo "API healthy at :4000"
+            if curl -fsS "http://${{ secrets.VPS_HOST }}:${{ env.API_PORT }}/health" > /dev/null; then
+              echo "API healthy at :${{ env.API_PORT }}"
               break
             fi
             echo "Waiting for api... ($i/10)"
             sleep 3
           done
-          curl -fsS "http://${{ secrets.VPS_HOST }}:4000/health" > /dev/null \
-            || { echo "API never responded at :4000"; exit 1; }
+          curl -fsS "http://${{ secrets.VPS_HOST }}:${{ env.API_PORT }}/health" > /dev/null \
+            || { echo "API never responded at :${{ env.API_PORT }}"; exit 1; }
 
-          # Frontend (also proxies /health to api)
-          curl -fsS "http://${{ secrets.VPS_HOST }}:8080/" > /dev/null \
-            || { echo "Frontend never responded at :8080"; exit 1; }
-          echo "Frontend healthy at :8080"
+          # Frontend shell
+          curl -fsS "http://${{ secrets.VPS_HOST }}:${{ env.FRONTEND_PORT }}/" > /dev/null \
+            || { echo "Frontend never responded at :${{ env.FRONTEND_PORT }}"; exit 1; }
+          echo "Frontend healthy at :${{ env.FRONTEND_PORT }}"
+
+          # Frontend → api proxy. Catches the nginx upstream-name mismatch that
+          # a plain "/" probe cannot see.
+          curl -fsS "http://${{ secrets.VPS_HOST }}:${{ env.FRONTEND_PORT }}/health" > /dev/null \
+            || { echo "Frontend cannot reach api — check nginx proxy_pass upstream"; exit 1; }
+          echo "Frontend → api proxy healthy"
