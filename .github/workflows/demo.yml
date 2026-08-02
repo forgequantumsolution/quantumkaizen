@@ -30,24 +30,6 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # TEMPORARY — diagnosing "lstat backend: no such file or directory".
-      # Runs before the build steps so its output survives the failure.
-      # Delete once the correct context/file pair is confirmed.
-      - name: Debug repo layout
-        run: |
-          echo "--- branch/sha ---"
-          git rev-parse --abbrev-ref HEAD; git rev-parse HEAD
-          echo "--- root ---"
-          ls -la
-          echo "--- tracked dockerfiles ---"
-          git ls-files | grep -i dockerfile || echo "(none tracked)"
-          echo "--- on-disk dockerfiles ---"
-          find . -iname 'Dockerfile*' -not -path './node_modules/*'
-          echo "--- .dockerignore ---"
-          cat .dockerignore 2>/dev/null || echo "(none)"
-          echo "--- submodules ---"
-          cat .gitmodules 2>/dev/null || echo "(none)"
-
       - name: Compute image tag (short SHA)
         id: tag
         run: echo "tag=sha-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
@@ -65,7 +47,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./backend/Dockerfile
+          file: ./server/Dockerfile
           push: true
           tags: |
             ${{ env.BACKEND_IMAGE }}:${{ steps.tag.outputs.tag }}
