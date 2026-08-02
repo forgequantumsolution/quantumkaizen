@@ -928,7 +928,7 @@ export default function Sidebar() {
       )}
     >
       {/* Brand */}
-      <div
+      {/* <div
         style={{ borderBottom: "1px solid " + DIVIDER }}
         className={cn(
           "flex items-center justify-center h-[72px] shrink-0",
@@ -953,7 +953,7 @@ export default function Sidebar() {
             </p>
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* Logged-in user — raised card so the identity block reads as its own
           surface rather than another sidebar row (FQS-QK-UIUX-003 §4). */}
