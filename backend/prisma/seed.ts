@@ -60,109 +60,6 @@ const ROLES = [
     isSystem: true,
     permissionKeys: PERMISSIONS.map(p => p.key),
   },
-  {
-    name: 'QMS_ADMIN',
-    description: 'Quality Management System administrator',
-    isSystem: true,
-    // Full ticket access (all 5 verbs, across all workflow types) is granted
-    // post-seed by ensureSystemRoleTicketGrants() — the `TICKET` module has no
-    // catalog rows anymore for this filter to pick up (see
-    // lib/rbac-system-role-tickets.ts).
-    permissionKeys: PERMISSIONS.filter(p =>
-      p.module !== 'USER' && p.module !== 'ROLE' || p.action === 'READ'
-    ).map(p => p.key),
-  },
-  {
-    name: 'QUALITY_ENGINEER',
-    description: 'Day-to-day QMS work: create and edit records, no admin access',
-    isSystem: true,
-    permissionKeys: [
-      'user.read', 'department.read', 'org.read', 'site.read',
-      'doc.read', 'doc.write',
-      'capa.read', 'capa.write',
-      'nc.read', 'nc.write',
-      'audit.read',
-      'fmea.read', 'fmea.write',
-      'risk.read', 'risk.write',
-      'supplier.read', 'supplier.write',
-      'training.read',
-      'inspection.read', 'inspection.write',
-      'calibration.read', 'calibration.write',
-      'workflow.read', 'workflow.lookups.read',
-      // Ticket access (read/create/update/transition, across all workflow
-      // types) is granted post-seed by ensureSystemRoleTicketGrants() in
-      // lib/rbac-system-role-tickets.ts — the global `ticket.*` master this
-      // used to reference was retired (docs/per-module-ticket-master-plan.md).
-      // Phase 3 — approve as participant + read everything + extend timers
-      'approval.read', 'approval.decide', 'approval.policy.read',
-      'sla.policy.read', 'sla.timer.read', 'sla.timer.extend',
-      'business-calendar.read',
-      // Phase 3.5 — see and fill workflow-bound forms
-      'stage-form.read',
-      'form.read', 'form_submission.read', 'form_submission.create',
-    ],
-  },
-  {
-    name: 'AUDITOR',
-    description: 'Conducts audits, reads other QMS records',
-    isSystem: true,
-    permissionKeys: [
-      'user.read', 'department.read', 'org.read', 'site.read',
-      'doc.read', 'capa.read', 'nc.read',
-      'audit.read', 'audit.write', 'audit.approve',
-      // Audit module (new `audit_*` catalog). AUDITORs run audits AND are the
-      // intended approvers, so they hold `audit_register.approve`; combined with
-      // the named-approver enforcement in audit-register.service.ts this lets an
-      // auditor named on a register approve it (and only that register).
-      'audit_register.read', 'audit_register.create', 'audit_register.update', 'audit_register.approve',
-      'audit_master.read', 'audit_master.create', 'audit_master.update',
-      'audit_program.read', 'audit_program.execute',
-      'audit_finding.read', 'audit_finding.create', 'audit_finding.update',
-      'audit_schedule.read', 'audit_schedule.create', 'audit_schedule.update',
-      'audit_type.read', 'audit_type.create', 'audit_type.update',
-      'non_conformance.read', 'non_conformance.create',
-      'fmea.read', 'risk.read', 'supplier.read',
-      'training.read', 'inspection.read', 'calibration.read',
-      'workflow.read', 'workflow.lookups.read',
-      // Ticket access (read/transition, across all workflow types) is granted
-      // post-seed by ensureSystemRoleTicketGrants() — see QUALITY_ENGINEER above.
-      // Phase 3 — read-only on governance primitives
-      'approval.read', 'approval.policy.read',
-      'sla.policy.read', 'sla.timer.read',
-      'business-calendar.read',
-      // Phase 3.5 — read-only on bindings + submissions
-      'stage-form.read', 'form.read', 'form_submission.read',
-    ],
-  },
-  {
-    name: 'DOCUMENT_CONTROLLER',
-    description: 'Manages document lifecycle and approvals',
-    isSystem: true,
-    permissionKeys: [
-      'user.read', 'department.read', 'org.read', 'site.read',
-      'doc.read', 'doc.write', 'doc.approve',
-      'capa.read', 'nc.read', 'audit.read',
-      'training.read',
-      'workflow.read', 'workflow.lookups.read',
-      // Ticket access (read/transition, across all workflow types) is granted
-      // post-seed by ensureSystemRoleTicketGrants() — see QUALITY_ENGINEER above.
-      // Phase 3 — read + decide as approver
-      'approval.read', 'approval.decide', 'approval.policy.read',
-      'sla.policy.read', 'sla.timer.read',
-      'business-calendar.read',
-      // Phase 3.5 — read + fill workflow-bound forms
-      'stage-form.read',
-      'form.read', 'form_submission.read', 'form_submission.create',
-    ],
-  },
-  {
-    name: 'READ_ONLY',
-    description: 'View-only access across all modules',
-    isSystem: true,
-    // Ticket read (across all workflow types) is granted post-seed by
-    // ensureSystemRoleTicketGrants() — see QMS_ADMIN above.
-    permissionKeys: PERMISSIONS.filter(p => p.action === 'READ').map(p => p.key),
-  },
 ];
 
 const ORGANIZATION = {
@@ -180,17 +77,16 @@ const SITES = [
   { code: 'HQ',  name: 'Headquarters', address: 'Pune, India' },
 ];
 
+// Single department — the one the seeded SUPER_ADMIN belongs to. Everything
+// else is created by the customer through Admin → Departments.
 const DEPARTMENTS = [
-  { code: 'MGT', name: 'Management',       description: 'Executive & Management' },
-  { code: 'QA',  name: 'Quality Assurance',description: 'QA team' },
-  { code: 'QC',  name: 'Quality Control',  description: 'QC laboratory' },
-  { code: 'MFG', name: 'Manufacturing',    description: 'Production floor' },
-  { code: 'ENG', name: 'Engineering',      description: 'R&D and engineering' },
-  { code: 'DOC', name: 'Document Control', description: 'Document management' },
+  { code: 'MGT', name: 'Management', description: 'Executive & Management' },
 ];
 
 const SEED_PASSWORD = 'Admin@123';
 
+// Single bootstrap user: the SUPER_ADMIN who creates everyone else from
+// Admin → Users. Change this password immediately after first login.
 const USERS = [
   {
     email: 'info@forgequantumsolution.com',
@@ -200,62 +96,6 @@ const USERS = [
     designation: 'System Administrator',
     departmentCode: 'MGT',
     roleName: 'SUPER_ADMIN',
-  },
-  {
-    email: 'admin@forgequantum.com',
-    employeeId: 'EMP-002',
-    firstName: 'Ashish',
-    lastName: 'Pandit',
-    designation: 'QMS Director',
-    departmentCode: 'MGT',
-    roleName: 'QMS_ADMIN',
-  },
-  {
-    email: 'qa@forgequantum.com',
-    employeeId: 'EMP-003',
-    firstName: 'Priya',
-    lastName: 'Sharma',
-    designation: 'Senior Quality Engineer',
-    departmentCode: 'QA',
-    roleName: 'QUALITY_ENGINEER',
-  },
-  {
-    email: 'auditor@forgequantum.com',
-    employeeId: 'EMP-004',
-    firstName: 'Rajesh',
-    lastName: 'Kumar',
-    designation: 'Internal Auditor',
-    departmentCode: 'QA',
-    roleName: 'AUDITOR',
-  },
-  {
-    // LIMS — dedicated reviewer so the second-person data review (analyst ≠ reviewer)
-    // can be demonstrated end-to-end.
-    email: 'reviewer@forgequantum.com',
-    employeeId: 'EMP-007',
-    firstName: 'Meera',
-    lastName: 'Nair',
-    designation: 'QC Reviewer',
-    departmentCode: 'QC',
-    roleName: 'QUALITY_ENGINEER',
-  },
-  {
-    email: 'doc@forgequantum.com',
-    employeeId: 'EMP-005',
-    firstName: 'Anita',
-    lastName: 'Desai',
-    designation: 'Document Controller',
-    departmentCode: 'DOC',
-    roleName: 'DOCUMENT_CONTROLLER',
-  },
-  {
-    email: 'readonly@forgequantum.com',
-    employeeId: 'EMP-006',
-    firstName: 'Vikram',
-    lastName: 'Patel',
-    designation: 'External Partner',
-    departmentCode: null,
-    roleName: 'READ_ONLY',
   },
 ];
 
@@ -369,11 +209,7 @@ async function main() {
   }
 
   console.log('🌱  Backfilling department heads...');
-  const qaHead = await prisma.user.findUnique({ where: { email: 'qa@forgequantum.com' } });
-  const docHead = await prisma.user.findUnique({ where: { email: 'doc@forgequantum.com' } });
-  const mgtHead = await prisma.user.findUnique({ where: { email: 'admin@forgequantum.com' } });
-  if (qaHead)  await prisma.department.update({ where: { code: 'QA'  }, data: { headUserId: qaHead.id  } });
-  if (docHead) await prisma.department.update({ where: { code: 'DOC' }, data: { headUserId: docHead.id } });
+  const mgtHead = await prisma.user.findUnique({ where: { email: USERS[0].email } });
   if (mgtHead) await prisma.department.update({ where: { code: 'MGT' }, data: { headUserId: mgtHead.id } });
 
   console.log('🌱  Seeding Workflow Stage Statuses...');
@@ -540,7 +376,9 @@ async function main() {
   const sampleWorkflow = await prisma.workflow.findFirst({
     where: { name: 'Document Review v1', typeId: docType.id, isLatestVersion: true },
   });
-  const qeRole = await prisma.role.findUnique({ where: { name: 'QUALITY_ENGINEER' } });
+  // SUPER_ADMIN is the only seeded role, so the sample SLA/approval policy
+  // hangs off it; re-point these once real roles exist.
+  const qeRole = await prisma.role.findUnique({ where: { name: 'SUPER_ADMIN' } });
 
   if (sampleWorkflow && qeRole) {
     const submitStage = await prisma.workflowStage.findFirst({
@@ -885,23 +723,22 @@ async function main() {
       }
     };
 
+    // Only SUPER_ADMIN is seeded, so both bindings resolve to it. Once the
+    // customer creates real roles, re-scope these from Admin → Forms.
     if (submitStageForForms) {
-      // Submission Confirmation — filled by the document controller who submits;
-      // visible to QA/management/audit for context. Optional (doesn't block).
+      // Submission Confirmation — optional (doesn't block the transition).
       await upsertBinding(submitStageForForms.id, submissionFormId, false, {
         fillMode: 'ANYONE',
-        fillRoles: ['DOCUMENT_CONTROLLER'],
-        viewRoles: ['QMS_ADMIN', 'QUALITY_ENGINEER', 'AUDITOR'],
+        fillRoles: ['SUPER_ADMIN'],
+        viewRoles: ['SUPER_ADMIN'],
       });
     }
     if (reviewStageForForms) {
-      // Document Review Checklist — filled by the reviewing quality engineer;
-      // visible to management/doc-control/audit. Required (blocks the Approve
-      // transition until submitted).
+      // Document Review Checklist — required (blocks Approve until submitted).
       await upsertBinding(reviewStageForForms.id, reviewFormId, true, {
         fillMode: 'ANYONE',
-        fillRoles: ['QUALITY_ENGINEER'],
-        viewRoles: ['QMS_ADMIN', 'DOCUMENT_CONTROLLER', 'AUDITOR'],
+        fillRoles: ['SUPER_ADMIN'],
+        viewRoles: ['SUPER_ADMIN'],
       });
     }
     console.log(`    sample forms: 2 (Submission Confirmation, Document Review Checklist)`);
@@ -1241,8 +1078,9 @@ async function main() {
           await transition(implementation, verification);
           await transition(verification, closure);
 
-          // Bind each stage's REQUIRED form. QE fills the working stages;
-          // QMS_ADMIN signs off at Closure. Auditors get view access throughout.
+          // Bind each stage's REQUIRED form. SUPER_ADMIN is the only seeded
+          // role, so it both fills and views every stage until the customer
+          // creates the roles this workflow is meant to be split across.
           const bind = (
             stageId: string,
             formId: string,
@@ -1262,12 +1100,12 @@ async function main() {
               },
             });
 
-          await bind(initiation.id, capaInitiationFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
-          await bind(investigation.id, capaRcaFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
-          await bind(plan.id, capaPlanFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
-          await bind(implementation.id, capaImplFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
-          await bind(verification.id, capaEffFormId, ['QUALITY_ENGINEER'], ['QMS_ADMIN', 'AUDITOR']);
-          await bind(closure.id, capaClosureFormId, ['QMS_ADMIN'], ['QUALITY_ENGINEER', 'AUDITOR']);
+          await bind(initiation.id, capaInitiationFormId, ['SUPER_ADMIN'], ['SUPER_ADMIN']);
+          await bind(investigation.id, capaRcaFormId, ['SUPER_ADMIN'], ['SUPER_ADMIN']);
+          await bind(plan.id, capaPlanFormId, ['SUPER_ADMIN'], ['SUPER_ADMIN']);
+          await bind(implementation.id, capaImplFormId, ['SUPER_ADMIN'], ['SUPER_ADMIN']);
+          await bind(verification.id, capaEffFormId, ['SUPER_ADMIN'], ['SUPER_ADMIN']);
+          await bind(closure.id, capaClosureFormId, ['SUPER_ADMIN'], ['SUPER_ADMIN']);
         },
         { timeout: 30_000, maxWait: 5_000 },
       );
@@ -1275,7 +1113,7 @@ async function main() {
   }
   console.log('    CAPA workflow: 6 stages (Initiation → Closure) + 6 required stage forms');
 
-  console.log(`\n    All seeded users login with password:  ${SEED_PASSWORD}`);
+  console.log(`\n    Login:  ${USERS[0].email}  /  ${SEED_PASSWORD}   (change immediately)`);
 }
 
 main()
