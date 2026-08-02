@@ -1,20 +1,33 @@
 name: Deploy For Demo
 
+# This workflow lives on `main`, which holds CI config only — the application
+# code lives on `shriyansh-backend`. A `push` trigger would be dead here: GitHub
+# only fires push events for workflow files present on the pushed branch, and
+# this file is not on shriyansh-backend. So it is dispatch-only, and the build
+# job explicitly checks out the code branch.
 on:
-  push:
-    branches: [shriyansh-backend]
   workflow_dispatch:
+    inputs:
+      code_ref:
+        description: Branch or SHA to build the demo images from
+        required: true
+        default: shriyansh-backend
 
+# Separate group from the production deploy — the demo stack is independent and
+# must not queue behind (or cancel) a qk-v2 rollout.
 concurrency:
-  group: deploy-vps
+  group: deploy-demo
   cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository }}/frontend
+  # Demo ports. Production on this VPS already owns 8080 (qk-frontend) and
+  # 4000 (qk-api), so the demo stack must not reuse them.
   FRONTEND_PORT: '8081'
-  API_PORT: '4000'
+  API_PORT: '4001'
+  DEMO_DIR: /opt/quantumkaizen
 
 jobs:
   build:
@@ -26,13 +39,23 @@ jobs:
       packages: write
     outputs:
       image_tag: ${{ steps.tag.outputs.tag }}
+      code_sha: ${{ steps.tag.outputs.code_sha }}
 
     steps:
+      # The code branch, NOT main. main has no backend/ or client/ to build.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.code_ref }}
 
+      # Tag from the checked-out code commit, not github.sha (which points at
+      # main, the branch that triggered the dispatch).
       - name: Compute image tag (short SHA)
         id: tag
-        run: echo "tag=sha-${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+        run: |
+          sha="$(git rev-parse HEAD)"
+          echo "code_sha=${sha}" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${sha:0:8}" >> "$GITHUB_OUTPUT"
+          echo "Building ${{ inputs.code_ref }} @ ${sha}"
 
       - uses: docker/setup-buildx-action@v3
 
@@ -47,13 +70,13 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./server/Dockerfile
+          file: ./backend/Dockerfile
           push: true
           tags: |
             ${{ env.BACKEND_IMAGE }}:${{ steps.tag.outputs.tag }}
-            ${{ env.BACKEND_IMAGE }}:latest
+            ${{ env.BACKEND_IMAGE }}:demo-latest
           labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ steps.tag.outputs.code_sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,scope=backend,mode=max
@@ -69,9 +92,9 @@ jobs:
             VITE_API_BASE_URL=/api
           tags: |
             ${{ env.FRONTEND_IMAGE }}:${{ steps.tag.outputs.tag }}
-            ${{ env.FRONTEND_IMAGE }}:latest
+            ${{ env.FRONTEND_IMAGE }}:demo-latest
           labels: |
-            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.revision=${{ steps.tag.outputs.code_sha }}
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,scope=frontend,mode=max
@@ -86,7 +109,11 @@ jobs:
       packages: read
 
     steps:
+      # Same ref as the build job — deploy-demo/ lives on the code branch, not
+      # on main. main carries only this workflow file.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.code_ref }}
 
       - name: Load SSH key
         uses: webfactory/ssh-agent@v0.9.1
@@ -98,14 +125,27 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
 
+      # /opt is root-owned, so the deploy user cannot write there until the
+      # directory exists and belongs to it — this was the "mkstemp ... Permission
+      # denied (13)" failure. Idempotent, safe on every run. Needs passwordless
+      # sudo for VPS_USER; if that is unavailable, run these two commands on the
+      # VPS by hand once and delete this step.
+      - name: Ensure demo directory is writable
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
+            'sudo mkdir -p ${{ env.DEMO_DIR }} && sudo chown -R $(id -u):$(id -g) ${{ env.DEMO_DIR }}'
+
+      # Both files land flat in DEMO_DIR (rsync copies basenames), so deploy.sh
+      # finds docker-compose.demo.yml beside itself. .env is NOT synced — it is
+      # created once on the VPS and holds secrets.
       - name: Rsync compose + deploy script
         run: |
           rsync -avz \
-            docker-compose.yml \
-            deploy/deploy.sh \
-            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/quantumkaizen
+            deploy-demo/docker-compose.demo.yml \
+            deploy-demo/deploy.sh \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ env.DEMO_DIR }}/
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            'chmod +x /opt/quantumkaizen/deploy.sh'
+            'chmod +x ${{ env.DEMO_DIR }}/deploy.sh'
 
       # Authenticate the VPS Docker to GHCR every deploy so we never rely on a
       # persistent login that can expire/clear (the cause of "registry: denied").
@@ -118,27 +158,31 @@ jobs:
             "docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin"
 
       # Compose interpolates BACKEND_IMAGE/FRONTEND_IMAGE/IMAGE_TAG from the
-      # environment; POSTGRES_* still come from /opt/quantumkaizen/.env.
+      # environment; POSTGRES_* still come from ${DEMO_DIR}/.env.
       - name: Validate compose renders with this tag
         env:
           IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "cd /opt/quantumkaizen && \
+            "cd ${{ env.DEMO_DIR }} && \
              IMAGE_TAG=${IMAGE_TAG} \
              BACKEND_IMAGE=${{ env.BACKEND_IMAGE }} \
              FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }} \
-             docker compose -f docker-compose.yml config --images"
+             docker compose -f docker-compose.demo.yml config --images"
 
+      # deploy.sh pulls the tag, runs prisma migrate deploy, applies the
+      # idempotent risk seeds, then rolls api + worker + frontend.
       - name: Pull images, migrate, restart on VPS
         env:
           IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
         run: |
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
-            "cd /opt/quantumkaizen && \
+            "cd ${{ env.DEMO_DIR }} && \
              IMAGE_TAG=${IMAGE_TAG} \
              BACKEND_IMAGE=${{ env.BACKEND_IMAGE }} \
              FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }} \
+             API_PORT=${{ env.API_PORT }} \
+             FRONTEND_PORT=${{ env.FRONTEND_PORT }} \
              bash deploy.sh"
 
       - name: Verify running containers match this build
@@ -148,8 +192,11 @@ jobs:
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
             "docker inspect --format='{{.Config.Image}}' kaizen-api kaizen-worker kaizen-frontend" \
             | tee /tmp/running.txt
-          grep -q "${IMAGE_TAG}" /tmp/running.txt \
-            || { echo "Containers are not running ${IMAGE_TAG}"; exit 1; }
+          # All three must be on this tag — a single match would pass even if
+          # two containers were left on a stale image.
+          count=$(grep -c "${IMAGE_TAG}" /tmp/running.txt || true)
+          [ "$count" -eq 3 ] \
+            || { echo "Expected 3 demo containers on ${IMAGE_TAG}, found ${count}:"; cat /tmp/running.txt; exit 1; }
 
       - name: Public smoke test
         run: |
