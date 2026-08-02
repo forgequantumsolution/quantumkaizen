@@ -329,7 +329,13 @@ export const ActionItemStatusEnum = z.enum(ACTION_ITEM_STATUSES);
 export const ActionItemPriorityEnum = z.enum(ACTION_ITEM_PRIORITIES);
 
 // ── CAPA ──
+export const CapaSourceEnum = z.enum(['AUDIT', 'FINDING', 'RISK', 'OOS', 'CALIBRATION', 'MANUAL']);
+
 export const CapaCreateSchema = z.object({
+  /** Which module raised this. Inferred from the origin links when omitted. */
+  source: CapaSourceEnum.optional(),
+  /** Human reference of the originating record — RISK-2026-0007, OOS-24. */
+  source_ref: z.string().max(80).optional().nullable(),
   title: z.string().min(1).max(200),
   description: z.string().max(4000).optional().nullable(),
   type: CapaTypeEnum.default('CORRECTIVE'),
@@ -367,6 +373,8 @@ export const UpdateCapaStatusSchema = z.object({
 });
 
 export const ListCapaQuerySchema = z.object({
+  /** Comma-separated origins; omitted means all. */
+  source: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   page_size: z.coerce.number().int().min(1).max(200).default(20),
   status: CapaStatusEnum.optional(),

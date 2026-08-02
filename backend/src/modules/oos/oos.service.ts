@@ -153,6 +153,8 @@ export const createCapaForInvestigation = async (
       description: `Raised from OOS investigation ${o.code}${o.title ? ` — ${o.title}` : ''}.`,
       owner_id: input.owner_id ?? null,
       due_date: input.due_date ?? null,
+      source: 'OOS',
+      source_ref: o.code,
     },
     userId,
   );

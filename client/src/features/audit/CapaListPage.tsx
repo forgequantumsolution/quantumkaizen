@@ -15,6 +15,8 @@ import {
   type CapaType,
   type CapaCreate,
 } from '@/lib/api/audit';
+import { CAPA_SOURCE_BADGE } from '@/lib/api/audit';
+import type { CapaSource } from '@/lib/api/audit';
 import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useDepartments } from '@/features/admin/departments/hooks';
 import { useHasPermission } from '@/stores/authStore';
@@ -38,6 +40,14 @@ export default function CapaListPage() {
   const canDelete = useHasPermission('capa.delete');
   const deleteMut = useDeleteCapa();
   const [status, setStatus] = useState<CapaStatus | 'ALL'>('ALL');
+  /**
+   * Four modules raise CAPAs into one register. This screen is the Audit
+   * module's, so it defaults to CAPAs raised from audit non-conformances plus
+   * ones raised by hand here — not risk-driven or OOS ones. "All sources" is
+   * still one click away, so nothing becomes unreachable.
+   */
+  const [source, setSource] = useState<'AUDIT_SCOPE' | 'ALL' | CapaSource>('AUDIT_SCOPE');
+  const sourceParam = source === 'ALL' ? undefined : source === 'AUDIT_SCOPE' ? 'AUDIT,MANUAL' : source;
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -45,12 +55,13 @@ export default function CapaListPage() {
   const activeStatusLabel = status === 'ALL' ? 'All' : status.replace(/_/g, ' ');
 
   const debouncedSearch = useDebouncedValue(search, 450);
-  useEffect(() => setPage(1), [debouncedSearch, status]);
+  useEffect(() => setPage(1), [debouncedSearch, status, source]);
 
   const { data, isLoading } = useCapas({
     page,
     page_size: PAGE_SIZE,
     status: status === 'ALL' ? undefined : status,
+    source: sourceParam,
     search: debouncedSearch || undefined,
   });
   const rows = data?.data ?? [];
@@ -142,6 +153,19 @@ export default function CapaListPage() {
             onChange={(e) => setSearch(e.target.value)}
             style={{ width: 240 }}
           />
+          <Select
+            value={source}
+            onChange={setSource}
+            style={{ width: 190 }}
+            options={[
+              { value: 'AUDIT_SCOPE', label: 'Audit CAPAs' },
+              { value: 'ALL', label: 'All sources' },
+              { value: 'RISK', label: 'From Risk' },
+              { value: 'OOS', label: 'From OOS' },
+              { value: 'FINDING', label: 'From Findings' },
+              { value: 'CALIBRATION', label: 'From Calibration' },
+            ]}
+          />
           <Button icon={<SlidersHorizontal size={14} />} onClick={() => setFilterOpen(true)}>
             Filter
             {status !== 'ALL' && (
@@ -157,6 +181,13 @@ export default function CapaListPage() {
           )}
         </div>
       </div>
+
+      {source === 'AUDIT_SCOPE' && (
+        <p className="text-[11px] text-gray-500 -mt-1 mb-3">
+          Showing CAPAs raised from audit non-conformances and those created here. CAPAs raised by Risk, OOS or other
+          modules are hidden — switch to <span className="font-medium">All sources</span> to include them.
+        </p>
+      )}
 
       {/* Filter modal — status selection. */}
       <Modal
@@ -222,6 +253,19 @@ export default function CapaListPage() {
 }
 
 const CAPA_BASE_COLUMNS: Column<Capa>[] = [
+  {
+    key: 'source',
+    header: 'Origin',
+    render: (r: Capa) => {
+      const b = CAPA_SOURCE_BADGE[r.source] ?? CAPA_SOURCE_BADGE.MANUAL;
+      return (
+        <span className="inline-flex items-center gap-1">
+          <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-medium rounded border ${b.cls}`}>{b.label}</span>
+          {r.source_ref && <span className="font-mono text-[10px] text-gray-400">{r.source_ref}</span>}
+        </span>
+      );
+    },
+  },
   {
     key: 'capa_number',
     header: 'CAPA #',

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, App, Button, Modal, Spin, Table, Tag } from 'antd';
 import { Package } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useCalibrationConfig,
@@ -71,16 +72,10 @@ export default function IndustryPacksPage() {
 
   return (
     <PageContainer>
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Package size={22} className="text-gray-500" />
-          Industry Packs
-        </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Every pharma / automotive / FMCG difference is configuration, never a code branch. Pick the pack that matches
-          your regime, then adjust anything in Policy &amp; Rules.
-        </p>
-      </div>
+      <CalibrationPageHeader
+        title="Industry Packs"
+        icon={Package}
+      />
 
       {config?.is_default && (
         <Alert

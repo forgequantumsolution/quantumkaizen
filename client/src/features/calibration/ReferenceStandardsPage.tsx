@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Alert, Empty, Table, Tag } from 'antd';
 import { ShieldCheck } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import { useReferenceStandards, STATUS_BADGE, fmtDate } from '@/lib/api/calibration';
 
 export default function ReferenceStandardsPage() {
@@ -12,16 +13,10 @@ export default function ReferenceStandardsPage() {
 
   return (
     <PageContainer>
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <ShieldCheck size={22} className="text-gray-500" />
-          Reference Standards
-        </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
-          The instruments other instruments are measured against. A standard is itself calibrated on an interval — and a
-          lapsed one retroactively weakens every calibration it backed.
-        </p>
-      </div>
+      <CalibrationPageHeader
+        title="Reference Standards"
+        icon={ShieldCheck}
+      />
 
       {lapsed.length > 0 && (
         <Alert

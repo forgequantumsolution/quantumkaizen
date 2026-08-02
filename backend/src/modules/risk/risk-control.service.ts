@@ -219,6 +219,8 @@ export const ensureCapaForRisk = async (riskId: string, userId?: string): Promis
         type: 'CORRECTIVE',
         owner_id: risk.ownerId ?? null,
         department_id: risk.departmentId ?? null,
+        source: 'RISK',
+        source_ref: risk.riskNumber,
       },
       userId,
     );

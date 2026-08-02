@@ -4,6 +4,8 @@
  * Nothing here reads another module, and nothing is hardcoded: a fresh install
  * returns honest zeroes rather than plausible-looking demo numbers.
  */
+import { Prisma } from '@prisma/client';
+import type { CalibrationStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { addDays, num, resolveConfig } from './calibration.lib';
 import { probeIntegrations } from './integrations';
@@ -11,6 +13,67 @@ import type { AnalyticsQuery } from './calibration.schema';
 
 const pct = (numer: number, denom: number): number | null =>
   denom === 0 ? null : Math.round((numer / denom) * 1000) / 10;
+
+/**
+ * Status counts that respect the clock.
+ *
+ * `calibrationStatus` is a stored derivation written only by the nightly sweep,
+ * which needs Redis. Counting it directly means a dashboard reports 0 overdue
+ * while instruments are days past due — the sweep simply has not run. Anything
+ * time-driven must therefore be recounted from `calibrationDueAt` at read time.
+ *
+ * Terminal states are left alone: UNDER_CALIBRATION, OUT_OF_SERVICE,
+ * LIMITED_USE and NOT_REQUIRED are set by events, not by the clock, and the
+ * derivation deliberately lets them win over a due date.
+ */
+const TERMINAL_STATUSES = ['UNDER_CALIBRATION', 'OUT_OF_SERVICE', 'LIMITED_USE', 'NOT_REQUIRED'] as const;
+
+export const liveStatusCounts = async (
+  base: Prisma.CalibrationInstrumentWhereInput,
+  cfg: { dueSoonWindowDays: number; graceDays: number },
+) => {
+  const now = new Date();
+  const overdueBefore = addDays(now, -cfg.graceDays);
+  const dueSoonBefore = addDays(now, cfg.dueSoonWindowDays);
+
+  const clockDriven: Prisma.CalibrationInstrumentWhereInput = {
+    ...base,
+    calibrationStatus: { notIn: [...TERMINAL_STATUSES] },
+    isCalibrationRequired: true,
+  };
+
+  const [terminal, overdue, dueSoon, clockTotal, exempt] = await Promise.all([
+    prisma.calibrationInstrument.groupBy({
+      by: ['calibrationStatus'],
+      where: { ...base, calibrationStatus: { in: [...TERMINAL_STATUSES] } },
+      _count: { _all: true },
+    }),
+    prisma.calibrationInstrument.count({ where: { ...clockDriven, calibrationDueAt: { lt: overdueBefore } } }),
+    prisma.calibrationInstrument.count({
+      where: { ...clockDriven, calibrationDueAt: { gte: overdueBefore, lte: dueSoonBefore } },
+    }),
+    prisma.calibrationInstrument.count({ where: clockDriven }),
+    prisma.calibrationInstrument.count({
+      where: { ...base, isCalibrationRequired: false, calibrationStatus: { notIn: [...TERMINAL_STATUSES] } },
+    }),
+  ]);
+
+  const counts: Record<string, number> = Object.fromEntries(terminal.map((t) => [t.calibrationStatus, t._count._all]));
+  counts.OVERDUE = overdue;
+  counts.DUE_SOON = dueSoon;
+  // No due date yet reads as calibrated, not overdue — it has missed nothing.
+  counts.CALIBRATED = clockTotal - overdue - dueSoon;
+  if (exempt) counts.NOT_REQUIRED = (counts.NOT_REQUIRED ?? 0) + exempt;
+
+  const total = Object.values(counts).reduce((n, v) => n + v, 0);
+  return {
+    counts,
+    total,
+    by_status: Object.entries(counts)
+      .filter(([, v]) => v > 0)
+      .map(([status, count]) => ({ status: status as CalibrationStatus, count })),
+  };
+};
 
 /** Headline KPIs for the module dashboard. */
 export const getSummary = async (q: AnalyticsQuery) => {
@@ -20,13 +83,11 @@ export const getSummary = async (q: AnalyticsQuery) => {
   const soon = addDays(now, cfg.dueSoonWindowDays);
   const windowStart = addDays(now, -q.days);
 
-  const [byStatus, byCriticality, total, dueSoon, overdue, openOot, events, lapsedStandards, missingPlans] =
+  const liveBase: Prisma.CalibrationInstrumentWhereInput = { isDeleted: false, status: { not: 'RETIRED' }, ...siteFilter };
+
+  const [live, byCriticality, total, dueSoon, overdue, openOot, events, lapsedStandards, missingPlans] =
     await Promise.all([
-      prisma.calibrationInstrument.groupBy({
-        by: ['calibrationStatus'],
-        where: { isDeleted: false, status: { not: 'RETIRED' }, ...siteFilter },
-        _count: { _all: true },
-      }),
+      liveStatusCounts(liveBase, cfg),
       prisma.calibrationInstrument.groupBy({
         by: ['criticality'],
         where: { isDeleted: false, status: { not: 'RETIRED' }, ...siteFilter },
@@ -85,7 +146,7 @@ export const getSummary = async (q: AnalyticsQuery) => {
       }),
     ]);
 
-  const statusMap = Object.fromEntries(byStatus.map((s) => [s.calibrationStatus, s._count._all]));
+  const statusMap = live.counts;
   const calibrated = statusMap.CALIBRATED ?? 0;
 
   // On-time = performed on or before the date it was scheduled for.
@@ -115,7 +176,7 @@ export const getSummary = async (q: AnalyticsQuery) => {
     calibrations_completed: events.length,
     on_time_rate: pct(onTime, dated.length),
     as_found_failure_rate: pct(asFoundFails, events.length),
-    by_status: byStatus.map((s) => ({ status: s.calibrationStatus, count: s._count._all })),
+    by_status: live.by_status,
     by_criticality: byCriticality.map((c) => ({ criticality: c.criticality, count: c._count._all })),
   };
 };
@@ -353,7 +414,7 @@ export const getOverview = async (q: AnalyticsQuery) => {
   const liveInstrument = { isDeleted: false, status: { not: 'RETIRED' as const }, ...site };
 
   const [
-    instByStatus,
+    live,
     instByKind,
     instByCriticality,
     instTotal,
@@ -361,6 +422,7 @@ export const getOverview = async (q: AnalyticsQuery) => {
     dueBuckets,
     nextDue,
     eventsByStatus,
+    unassignedEvents,
     recentEvents,
     approvedInWindow,
     ootByStatus,
@@ -374,7 +436,7 @@ export const getOverview = async (q: AnalyticsQuery) => {
     providers,
     categoryStats,
   ] = await Promise.all([
-    prisma.calibrationInstrument.groupBy({ by: ['calibrationStatus'], where: liveInstrument, _count: { _all: true } }),
+    liveStatusCounts(liveInstrument, cfg),
     prisma.calibrationInstrument.groupBy({ by: ['kind'], where: liveInstrument, _count: { _all: true } }),
     prisma.calibrationInstrument.groupBy({ by: ['criticality'], where: liveInstrument, _count: { _all: true } }),
     prisma.calibrationInstrument.count({ where: liveInstrument }),
@@ -395,6 +457,14 @@ export const getOverview = async (q: AnalyticsQuery) => {
       take: 6,
     }),
     prisma.calibrationEvent.groupBy({ by: ['status'], where: { isDeleted: false, ...eventSite }, _count: { _all: true } }),
+    prisma.calibrationEvent.count({
+      where: {
+        isDeleted: false,
+        ...eventSite,
+        assignedToId: null,
+        status: { in: ['PLANNED', 'SCHEDULED', 'IN_PROGRESS'] },
+      },
+    }),
     prisma.calibrationEvent.findMany({
       where: { isDeleted: false, ...eventSite },
       select: {
@@ -406,6 +476,7 @@ export const getOverview = async (q: AnalyticsQuery) => {
         performedAt: true,
         asFoundOutcome: true,
         overallOutcome: true,
+        assignedToId: true,
         instrument: { select: { code: true, name: true } },
       },
       orderBy: [{ updatedAt: 'desc' }],
@@ -487,7 +558,7 @@ export const getOverview = async (q: AnalyticsQuery) => {
     }),
   ]);
 
-  const statusMap = Object.fromEntries(instByStatus.map((s) => [s.calibrationStatus, s._count._all]));
+  const statusMap = live.counts;
   const evStatus = Object.fromEntries(eventsByStatus.map((s) => [s.status, s._count._all]));
 
   const datedApproved = approvedInWindow.filter((e) => e.performedAt && e.scheduledFor);
@@ -538,7 +609,7 @@ export const getOverview = async (q: AnalyticsQuery) => {
 
     instruments: {
       total: instTotal,
-      by_status: instByStatus.map((s) => ({ status: s.calibrationStatus, count: s._count._all })),
+      by_status: live.by_status,
       by_kind: instByKind.map((k) => ({ kind: k.kind, count: k._count._all })),
       by_criticality: instByCriticality.map((c) => ({ criticality: c.criticality, count: c._count._all })),
       without_plan: withoutPlan,
@@ -548,6 +619,8 @@ export const getOverview = async (q: AnalyticsQuery) => {
     },
 
     schedule: {
+      // Same live derivation the KPI strip reads — these two disagreeing is
+      // exactly the bug this replaced.
       overdue: statusMap.OVERDUE ?? 0,
       due_7: dueBuckets[0] ?? 0,
       due_30: dueBuckets[1] ?? 0,
@@ -570,6 +643,7 @@ export const getOverview = async (q: AnalyticsQuery) => {
       rejected: evStatus.REJECTED ?? 0,
       approved_total: evStatus.APPROVED ?? 0,
       /** Everything sitting in someone's queue right now. */
+      unassigned: unassignedEvents,
       open_workload:
         (evStatus.SCHEDULED ?? 0) + (evStatus.IN_PROGRESS ?? 0) + (evStatus.PENDING_REVIEW ?? 0) + (evStatus.PENDING_APPROVAL ?? 0),
       completed_in_window: approvedInWindow.length,
@@ -586,6 +660,7 @@ export const getOverview = async (q: AnalyticsQuery) => {
         performed_at: e.performedAt,
         as_found_outcome: e.asFoundOutcome,
         overall_outcome: e.overallOutcome,
+        assigned_to_id: e.assignedToId,
       })),
     },
 

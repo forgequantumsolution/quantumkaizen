@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Alert, App, Button, Descriptions, Empty, Input, Modal, Space, Spin, Table, Tabs, Tag } from 'antd';
-import { ArrowLeft, Ruler, Play, Ban, RotateCcw, Archive, QrCode, TrendingUp } from 'lucide-react';
+import { Alert, App, Button, Descriptions, Empty, Input, Modal, Space, Spin, Table, Tabs, Tag, Tooltip } from 'antd';
+import { ArrowLeft, Ruler, Play, Ban, RotateCcw, Archive, QrCode, TrendingUp, Printer } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
 import {
@@ -80,9 +81,9 @@ export default function InstrumentDetailPage() {
     });
   };
 
-  const startCalibration = async () => {
+  const startCalibration = async (type: 'PERIODIC' | 'AFTER_REPAIR' = 'PERIODIC') => {
     try {
-      const ev = await createEvent.mutateAsync({ instrument_id: inst.id, type: 'PERIODIC' });
+      const ev = await createEvent.mutateAsync({ instrument_id: inst.id, type });
       message.success(`${ev.event_no} created`);
       nav(`/calibration/events/${ev.id}`);
     } catch (e) {
@@ -121,8 +122,13 @@ export default function InstrumentDetailPage() {
           <Button icon={<QrCode size={14} />} onClick={() => setLabelOpen(true)}>
             Label
           </Button>
+          {canCreateEvent && inst.status === 'OUT_OF_SERVICE' && !inst.open_event && (
+            <Button type="primary" icon={<Play size={14} />} onClick={() => startCalibration('AFTER_REPAIR')} loading={createEvent.isPending}>
+              After-repair calibration
+            </Button>
+          )}
           {canCreateEvent && inst.status === 'ACTIVE' && !inst.open_event && (
-            <Button type="primary" icon={<Play size={14} />} onClick={startCalibration} loading={createEvent.isPending}>
+            <Button type="primary" icon={<Play size={14} />} onClick={() => startCalibration('PERIODIC')} loading={createEvent.isPending}>
               Start calibration
             </Button>
           )}
@@ -137,9 +143,15 @@ export default function InstrumentDetailPage() {
             </Button>
           )}
           {canUpdate && inst.status === 'OUT_OF_SERVICE' && (
-            <Button icon={<RotateCcw size={14} />} onClick={() => withReason('Return to service?', (r) => rts.mutateAsync({ id: inst.id, reason: r }))}>
-              Return to service
-            </Button>
+            <Tooltip title={inst.return_blocked_reason ?? ''}>
+              <Button
+                icon={<RotateCcw size={14} />}
+                disabled={inst.can_return_to_service === false}
+                onClick={() => withReason('Return to service?', (r) => rts.mutateAsync({ id: inst.id, reason: r }))}
+              >
+                Return to service
+              </Button>
+            </Tooltip>
           )}
           {canRetire && inst.status !== 'RETIRED' && (
             <Button icon={<Archive size={14} />} onClick={() => withReason('Retire this instrument?', (r) => retire.mutateAsync({ id: inst.id, reason: r }))}>
@@ -169,6 +181,22 @@ export default function InstrumentDetailPage() {
             <Button size="small" onClick={() => nav(`/calibration/oot?instrument=${inst.id}`)}>
               Review
             </Button>
+          }
+        />
+      )}
+      {inst.status === 'OUT_OF_SERVICE' && inst.return_blocked_reason && (
+        <Alert
+          type="error"
+          showIcon
+          className="mb-4"
+          message="Cannot be returned to service yet"
+          description={inst.return_blocked_reason}
+          action={
+            canCreateEvent && (
+              <Button size="small" onClick={() => startCalibration('AFTER_REPAIR')}>
+                Record after-repair calibration
+              </Button>
+            )
           }
         />
       )}
@@ -393,35 +421,83 @@ function OutcomeTag({ v }: { v: Outcome | null }) {
 
 function LabelModal({ open, onClose, instrumentId }: { open: boolean; onClose: () => void; instrumentId: string }) {
   const { data } = useInstrumentLabel(open ? instrumentId : undefined);
+  // Absolute URL — the sticker leaves the building, so a relative path is useless.
   const url = data ? `${window.location.origin}${data.verify_path}` : '';
 
+  /** Print just the sticker, at a size that survives a label printer. */
+  const print = () => {
+    const node = document.getElementById('calibration-label');
+    if (!node) return;
+    const w = window.open('', '_blank', 'width=420,height=560');
+    if (!w) return;
+    w.document.write(
+      `<html><head><title>${data?.code ?? 'Calibration label'}</title>` +
+        `<style>
+           @page { margin: 8mm; }
+           body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; padding: 12px; }
+           .lbl { border: 2px solid #000; border-radius: 8px; padding: 12px; text-align: center; width: 260px; }
+           .st { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #555; }
+           .badge { display:inline-block; border:1px solid #000; border-radius:4px; padding:2px 10px; font-weight:700; font-size:13px; margin:4px 0; }
+           .code { font-family: ui-monospace, monospace; font-size:17px; font-weight:700; }
+           .nm { font-size:11px; } .sn { font-size:10px; color:#555; }
+           table { width:100%; margin-top:8px; border-top:1px solid #ccc; padding-top:6px; font-size:10px; }
+           td { padding-top:4px; } .k { color:#777; } .v { font-weight:700; }
+           .cert { font-size:9px; color:#555; margin-top:6px; }
+         </style></head><body>${node.innerHTML}</body></html>`,
+    );
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 250);
+  };
+
   return (
-    <Modal open={open} onCancel={onClose} footer={null} title="Calibration label" centered width={380}>
+    <Modal
+      open={open}
+      onCancel={onClose}
+      centered
+      width={360}
+      title="Calibration label"
+      footer={
+        <Button type="primary" icon={<Printer size={14} />} onClick={print} disabled={!data}>
+          Print label
+        </Button>
+      }
+    >
       {!data ? (
         <div className="flex justify-center py-8">
           <Spin />
         </div>
       ) : (
-        <div className="border-2 border-gray-800 rounded-lg p-4 text-center space-y-1.5 print:border-black">
-          <div className="text-[10px] uppercase tracking-widest font-bold text-gray-500">Calibration status</div>
-          <div className={`inline-flex px-3 py-1 text-sm font-bold rounded border ${STATUS_BADGE[data.calibration_status].cls}`}>
-            {STATUS_BADGE[data.calibration_status].label}
-          </div>
-          <div className="font-mono text-lg font-bold pt-1">{data.code}</div>
-          <div className="text-xs text-gray-700">{data.name}</div>
-          {data.serial_no && <div className="text-[11px] text-gray-500">S/N {data.serial_no}</div>}
-          <div className="grid grid-cols-2 gap-2 pt-2 text-[11px] border-t border-gray-200 mt-2">
-            <div>
-              <div className="text-gray-400">Calibrated</div>
-              <div className="font-semibold">{fmtDate(data.last_calibrated_at)}</div>
+        <div id="calibration-label">
+          <div className="lbl border-2 border-gray-900 rounded-lg p-3 text-center">
+            <div className="st text-[9px] uppercase tracking-widest text-gray-500">Calibration status</div>
+            <div className={`badge inline-block px-2.5 py-0.5 my-1 text-[13px] font-bold rounded border ${STATUS_BADGE[data.calibration_status].cls}`}>
+              {STATUS_BADGE[data.calibration_status].label}
             </div>
-            <div>
-              <div className="text-gray-400">Due</div>
-              <div className="font-semibold">{fmtDate(data.calibration_due_at)}</div>
+            <div className="code font-mono text-[17px] font-bold">{data.code}</div>
+            <div className="nm text-[11px] text-gray-800">{data.name}</div>
+            {data.serial_no && <div className="sn text-[10px] text-gray-500">S/N {data.serial_no}</div>}
+
+            <table className="w-full mt-2 pt-1.5 border-t border-gray-300 text-[10px]">
+              <tbody>
+                <tr>
+                  <td className="k text-gray-500 text-left">Calibrated</td>
+                  <td className="k text-gray-500 text-right">Due</td>
+                </tr>
+                <tr>
+                  <td className="v font-bold text-left">{fmtDate(data.last_calibrated_at)}</td>
+                  <td className="v font-bold text-right">{fmtDate(data.calibration_due_at)}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* The actual reason a label exists. */}
+            <div className="flex justify-center mt-2.5">
+              <QRCodeSVG value={url} size={96} level="M" />
             </div>
+            <div className="st text-[8px] uppercase tracking-widest text-gray-500 mt-1">Scan to verify</div>
+            {data.certificate_no && <div className="cert text-[9px] text-gray-500 mt-1">Cert. {data.certificate_no}</div>}
           </div>
-          {data.certificate_no && <div className="text-[10px] text-gray-500 pt-1">Cert. {data.certificate_no}</div>}
-          <div className="pt-2 text-[9px] text-gray-400 break-all">{url}</div>
         </div>
       )}
     </Modal>

@@ -35,6 +35,18 @@ export interface PackPointTemplate {
   toleranceValue: number;
 }
 
+/** One line of a category's in-use verification checklist. */
+export interface PackCheckItem {
+  sequence: number;
+  label: string;
+  checkType: 'NUMERIC' | 'PASS_FAIL';
+  nominalValue?: number;
+  toleranceValue?: number;
+  unitCode?: string;
+  isRequired?: boolean;
+  guidance?: string;
+}
+
 export interface PackCategory {
   code: string;
   name: string;
@@ -48,6 +60,8 @@ export interface PackCategory {
   requiresInUseCheck?: boolean;
   inUseCheckFrequency?: InUseFrequency;
   points: PackPointTemplate[];
+  /** What the shift/daily check actually consists of for this device. */
+  checkItems?: PackCheckItem[];
 }
 
 export interface PackConfig {
@@ -140,6 +154,12 @@ const PHARMA: IndustryPack = {
       defaultToleranceValue: 0.1,
       requiresInUseCheck: true,
       inUseCheckFrequency: 'DAILY',
+      checkItems: [
+        { sequence: 1, label: 'Level bubble centred', checkType: 'PASS_FAIL', guidance: 'Confirm the spirit level is centred before weighing.' },
+        { sequence: 2, label: 'Check weight 10 g', checkType: 'NUMERIC', nominalValue: 10, toleranceValue: 0.01, unitCode: 'g' },
+        { sequence: 3, label: 'Check weight 100 g', checkType: 'NUMERIC', nominalValue: 100, toleranceValue: 0.1, unitCode: 'g' },
+        { sequence: 4, label: 'Pan clean and draught shield closed', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: '10% of span', nominalPercentOfSpan: 10, toleranceType: PCT_READ, toleranceValue: 0.1 },
         { sequence: 2, label: '50% of span', nominalPercentOfSpan: 50, toleranceType: PCT_READ, toleranceValue: 0.1 },
@@ -168,6 +188,11 @@ const PHARMA: IndustryPack = {
       defaultCriticality: 'MAJOR',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'DAILY',
+      checkItems: [
+        { sequence: 1, label: 'Buffer pH 4.01', checkType: 'NUMERIC', nominalValue: 4.01, toleranceValue: 0.05, unitCode: 'pH' },
+        { sequence: 2, label: 'Buffer pH 7.00', checkType: 'NUMERIC', nominalValue: 7.0, toleranceValue: 0.05, unitCode: 'pH' },
+        { sequence: 3, label: 'Electrode clean, no visible damage', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: 'Buffer pH 4.01', nominalValue: 4.01, toleranceType: ABS, toleranceValue: 0.05 },
         { sequence: 2, label: 'Buffer pH 7.00', nominalValue: 7.0, toleranceType: ABS, toleranceValue: 0.05 },
@@ -377,6 +402,11 @@ const AUTOMOTIVE: IndustryPack = {
       defaultCriticality: 'CRITICAL',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'DAILY',
+      checkItems: [
+        { sequence: 1, label: 'Master leak part', checkType: 'NUMERIC', nominalValue: 0.5, toleranceValue: 0.05, unitCode: 'cc/min', guidance: 'Run the certified master leak part through a normal cycle.' },
+        { sequence: 2, label: 'Zero / blank part', checkType: 'NUMERIC', nominalValue: 0, toleranceValue: 0.05, unitCode: 'cc/min' },
+        { sequence: 3, label: 'Machine rejects the master leak part', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: 'Master leak part (cc/min)', nominalValue: 0.5, toleranceType: PCT_READ, toleranceValue: 10 },
         { sequence: 2, label: 'Zero / blank part', nominalValue: 0, toleranceType: ABS, toleranceValue: 0.05 },
@@ -445,6 +475,14 @@ const FMCG: IndustryPack = {
       defaultCriticality: 'CRITICAL',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'PER_SHIFT',
+      checkItems: [
+        { sequence: 1, label: 'Ferrous test piece detected', checkType: 'PASS_FAIL', guidance: 'Pass the Fe 2.0 mm test piece at the leading edge, then trailing edge.' },
+        { sequence: 2, label: 'Non-ferrous test piece detected', checkType: 'PASS_FAIL', guidance: 'Non-Fe 2.5 mm test piece.' },
+        { sequence: 3, label: 'Stainless steel test piece detected', checkType: 'PASS_FAIL', guidance: 'SS 3.0 mm test piece — the hardest to detect; run last.' },
+        { sequence: 4, label: 'Reject mechanism operated', checkType: 'PASS_FAIL' },
+        { sequence: 5, label: 'Belt-stop / alarm on failure to reject', checkType: 'PASS_FAIL' },
+        { sequence: 6, label: 'Reject bin secure and locked', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: 'Ferrous test piece (mm)', nominalValue: 2.0, toleranceType: ABS, toleranceValue: 0 },
         { sequence: 2, label: 'Non-ferrous test piece (mm)', nominalValue: 2.5, toleranceType: ABS, toleranceValue: 0 },
@@ -461,6 +499,12 @@ const FMCG: IndustryPack = {
       defaultCriticality: 'CRITICAL',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'PER_SHIFT',
+      checkItems: [
+        { sequence: 1, label: 'Minimum weight sample', checkType: 'NUMERIC', toleranceValue: 0.5, unitCode: 'g', guidance: 'Use the certified low check weight for this pack format.' },
+        { sequence: 2, label: 'Target weight sample', checkType: 'NUMERIC', toleranceValue: 0.5, unitCode: 'g' },
+        { sequence: 3, label: 'Maximum weight sample', checkType: 'NUMERIC', toleranceValue: 0.5, unitCode: 'g' },
+        { sequence: 4, label: 'Underweight pack rejected', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: 'Minimum weight', nominalPercentOfSpan: 20, toleranceType: PCT_READ, toleranceValue: 0.5 },
         { sequence: 2, label: 'Target weight', nominalPercentOfSpan: 50, toleranceType: PCT_READ, toleranceValue: 0.5 },
@@ -475,6 +519,12 @@ const FMCG: IndustryPack = {
       defaultCriticality: 'CRITICAL',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'PER_SHIFT',
+      checkItems: [
+        { sequence: 1, label: 'Glass test card detected', checkType: 'PASS_FAIL', guidance: '2.0 mm glass sphere card.' },
+        { sequence: 2, label: 'Stainless steel test card detected', checkType: 'PASS_FAIL', guidance: '1.5 mm SS card.' },
+        { sequence: 3, label: 'Reject mechanism operated', checkType: 'PASS_FAIL' },
+        { sequence: 4, label: 'Image quality acceptable, no lens fouling', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: 'Test card — glass (mm)', nominalValue: 2.0, toleranceType: ABS, toleranceValue: 0 },
         { sequence: 2, label: 'Test card — stainless steel (mm)', nominalValue: 1.5, toleranceType: ABS, toleranceValue: 0 },
@@ -490,6 +540,13 @@ const FMCG: IndustryPack = {
       defaultCriticality: 'CRITICAL',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'DAILY',
+      checkItems: [
+        { sequence: 1, label: 'Zero / tare reads 0', checkType: 'NUMERIC', nominalValue: 0, toleranceValue: 0.5, unitCode: 'g' },
+        { sequence: 2, label: 'Certified test weight — mid range', checkType: 'NUMERIC', toleranceValue: 2, unitCode: 'g' },
+        { sequence: 3, label: 'Certified test weight — near capacity', checkType: 'NUMERIC', toleranceValue: 5, unitCode: 'g' },
+        { sequence: 4, label: 'Platform level and free of debris', checkType: 'PASS_FAIL' },
+        { sequence: 5, label: 'Legal metrology stamp intact', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: '10% of capacity', nominalPercentOfSpan: 10, toleranceType: PCT_READ, toleranceValue: 0.1 },
         { sequence: 2, label: '50% of capacity', nominalPercentOfSpan: 50, toleranceType: PCT_READ, toleranceValue: 0.1 },
@@ -505,6 +562,11 @@ const FMCG: IndustryPack = {
       defaultCriticality: 'CRITICAL',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'DAILY',
+      checkItems: [
+        { sequence: 1, label: 'Ice point', checkType: 'NUMERIC', nominalValue: 0, toleranceValue: 0.5, unitCode: '°C', guidance: 'Crushed-ice slurry, stirred, probe not touching the vessel.' },
+        { sequence: 2, label: 'Boiling point', checkType: 'NUMERIC', nominalValue: 100, toleranceValue: 1, unitCode: '°C', guidance: 'Adjust for altitude if applicable.' },
+        { sequence: 3, label: 'Probe undamaged and sanitised', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: 'Ice point 0 °C', nominalValue: 0, toleranceType: ABS, toleranceValue: 0.5 },
         { sequence: 2, label: 'Cook temperature 75 °C', nominalValue: 75, toleranceType: ABS, toleranceValue: 0.5 },
@@ -519,6 +581,11 @@ const FMCG: IndustryPack = {
       defaultCriticality: 'MAJOR',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'WEEKLY',
+      checkItems: [
+        { sequence: 1, label: 'Chill store reading', checkType: 'NUMERIC', nominalValue: 4, toleranceValue: 1, unitCode: '°C' },
+        { sequence: 2, label: 'Frozen store reading', checkType: 'NUMERIC', nominalValue: -18, toleranceValue: 1, unitCode: '°C' },
+        { sequence: 3, label: 'Chart / log advancing, no gaps', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: 'Chill store 4 °C', nominalValue: 4, toleranceType: ABS, toleranceValue: 1 },
         { sequence: 2, label: 'Frozen store -18 °C', nominalValue: -18, toleranceType: ABS, toleranceValue: 1 },
@@ -533,6 +600,12 @@ const FMCG: IndustryPack = {
       defaultCriticality: 'MAJOR',
       requiresInUseCheck: true,
       inUseCheckFrequency: 'DAILY',
+      checkItems: [
+        { sequence: 1, label: 'Buffer pH 4.01', checkType: 'NUMERIC', nominalValue: 4.01, toleranceValue: 0.05, unitCode: 'pH' },
+        { sequence: 2, label: 'Buffer pH 7.00', checkType: 'NUMERIC', nominalValue: 7.0, toleranceValue: 0.05, unitCode: 'pH' },
+        { sequence: 3, label: 'Brix standard 20 °Bx', checkType: 'NUMERIC', nominalValue: 20, toleranceValue: 0.2, unitCode: '°Bx' },
+        { sequence: 4, label: 'Prism / sensor clean', checkType: 'PASS_FAIL' },
+      ],
       points: [
         { sequence: 1, label: 'Buffer pH 4.01', nominalValue: 4.01, toleranceType: ABS, toleranceValue: 0.05 },
         { sequence: 2, label: 'Buffer pH 7.00', nominalValue: 7.0, toleranceType: ABS, toleranceValue: 0.05 },

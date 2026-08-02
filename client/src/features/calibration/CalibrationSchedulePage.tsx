@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Empty, Progress, Table, Tag } from 'antd';
 import { CalendarClock } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import {
   useCalibrationSchedule,
   CRITICALITY_BADGE,
@@ -57,15 +58,10 @@ export default function CalibrationSchedulePage() {
 
   return (
     <PageContainer>
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <CalendarClock size={22} className="text-gray-500" />
-          Schedule
-        </h1>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Forward calibration load for the next 180 days. Records are created automatically ahead of the due date.
-        </p>
-      </div>
+      <CalibrationPageHeader
+        title="Schedule"
+        icon={CalendarClock}
+      />
 
       {(data?.by_month.length ?? 0) > 0 && (
         <div className="rounded-xl border border-gray-200/80 bg-white shadow-sm p-4 mb-4">

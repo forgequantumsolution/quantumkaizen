@@ -156,6 +156,9 @@ export interface Instrument {
 
 export interface InstrumentDetail extends Instrument {
   blocked_for_use: boolean;
+  /** null unless the instrument is out of service. */
+  can_return_to_service: boolean | null;
+  return_blocked_reason: string | null;
   open_oot_count: number;
   in_use_check_count: number;
   active_plan: {
@@ -309,6 +312,10 @@ export interface CalibrationEvent {
   site_id: string | null;
   scheduled_for: string | null;
   started_at: string | null;
+  assigned_to_id: string | null;
+  assigned_at: string | null;
+  method_ref: string | null;
+  method_doc_id: string | null;
   performed_at: string | null;
   performed_by_id: string | null;
   performed_by_external: string | null;
@@ -406,6 +413,7 @@ export interface Category {
   in_use_check_frequency: InUseFrequency | null;
   is_active: boolean;
   instrument_count?: number;
+  check_items?: CheckTemplateItem[];
   point_templates?: {
     id: string;
     sequence: number;
@@ -502,7 +510,17 @@ export interface Check {
   performed_at: string;
   shift: string | null;
   outcome: Outcome;
-  readings: { label: string; nominal: number | null; observed: number | null; in_tolerance: boolean }[];
+  readings: {
+    item_id: string | null;
+    label: string;
+    check_type: CheckType;
+    nominal: number | null;
+    tolerance: number | null;
+    unit_code: string | null;
+    observed: number | null;
+    in_tolerance: boolean;
+    recorded: boolean;
+  }[];
   batch_ref: string | null;
   remarks: string | null;
   hold_triggered: boolean;
@@ -698,6 +716,15 @@ export const useReplacePointTemplates = () => {
   });
 };
 
+export const useReplaceCheckItems = () => {
+  const inv = useInvalidate();
+  return useMutation<Category, unknown, { id: string; items: Omit<CheckTemplateItem, 'id'>[] }>({
+    mutationFn: ({ id, items }) =>
+      api.put(`/calibration/categories/${id}/check-items`, { items }).then((r) => r.data),
+    onSuccess: inv,
+  });
+};
+
 export const useDeleteCategory = () => {
   const inv = useInvalidate();
   return useMutation<void, unknown, string>({
@@ -804,6 +831,30 @@ export const useInstrumentLabel = (id?: string) =>
     enabled: !!id,
   });
 
+export interface InstrumentVerification {
+  code: string;
+  name: string;
+  serial_no: string | null;
+  location: string | null;
+  calibration_status: CalibrationStatus;
+  last_calibrated_at: string | null;
+  calibration_due_at: string | null;
+  days_until_due: number | null;
+  is_calibration_required: boolean;
+  usable: boolean;
+  message: string;
+  verified_at: string;
+}
+
+/** Public label scan — no auth. Backed by /api/public/calibration/verify/:token. */
+export const useVerifyInstrument = (token?: string) =>
+  useQuery<InstrumentVerification>({
+    queryKey: ['calibration', 'verify', token],
+    queryFn: () => get(`/public/calibration/verify/${token}`),
+    enabled: !!token,
+    retry: false,
+  });
+
 export const useReferenceStandards = () =>
   useQuery<{ data: (Instrument & { times_used: number; is_lapsed: boolean })[]; total: number }>({
     queryKey: K.standards,
@@ -865,6 +916,8 @@ export interface EventFilters {
   instrument_id?: string;
   outcome?: Outcome;
   overdue?: boolean;
+  assigned_to?: string;
+  unassigned?: boolean;
   search?: string;
 }
 
@@ -907,6 +960,31 @@ export const useEventAction = <B = Record<string, unknown>>(
     onSuccess: inv,
   });
 };
+
+/** Hand a calibration to someone, or clear the assignment with null. */
+export const useAssignEvent = () => {
+  const inv = useInvalidate();
+  return useMutation<CalibrationEvent, unknown, { id: string; assigned_to_id: string | null }>({
+    mutationFn: ({ id, assigned_to_id }) =>
+      api.post(`/calibration/events/${id}/assign`, { assigned_to_id }).then((r) => r.data),
+    onSuccess: inv,
+  });
+};
+
+/** Active users, for the assignee picker. Shared by the list and detail pages. */
+export const useAssignableUsers = () =>
+  useQuery<{ id: string; name: string; email: string }[]>({
+    queryKey: ['calibration', 'assignable-users'],
+    queryFn: () =>
+      api
+        .get('/users', { params: { page_size: 200, is_active: true } })
+        // /users returns { items: [...] }, unlike the calibration module's
+        // { data: [...] }. Tolerate both rather than silently rendering an
+        // empty picker.
+        .then((r) => (r.data?.items ?? r.data?.data ?? r.data ?? []) as { id: string; name: string; email: string }[])
+        .catch(() => []),
+    staleTime: 5 * 60_000,
+  });
 
 export const useSaveReadings = () => {
   const inv = useInvalidate();
@@ -989,6 +1067,40 @@ export const useChecks = (params: { instrument_id?: string; outcome?: Outcome } 
     queryFn: () => get('/calibration/checks', { ...params, page_size: 200 }),
   });
 
+export type CheckType = 'NUMERIC' | 'PASS_FAIL';
+
+export interface CheckTemplateItem {
+  id: string;
+  sequence: number;
+  label: string;
+  check_type: CheckType;
+  nominal_value: number | null;
+  tolerance_value: number | null;
+  unit_code: string | null;
+  is_required: boolean;
+  guidance: string | null;
+}
+
+export interface CheckTemplate {
+  instrument_id: string;
+  instrument_code: string;
+  instrument_name: string;
+  category_name: string | null;
+  requires_check: boolean;
+  frequency: InUseFrequency | null;
+  available: boolean;
+  reason: string | null;
+  items: CheckTemplateItem[];
+}
+
+/** The checklist this specific instrument's category defines. */
+export const useCheckTemplate = (instrumentId?: string) =>
+  useQuery<CheckTemplate>({
+    queryKey: ['calibration', 'check-template', instrumentId],
+    queryFn: () => get(`/calibration/instruments/${instrumentId}/check-template`),
+    enabled: !!instrumentId,
+  });
+
 export const useDueChecks = () =>
   useQuery<{ data: DueCheck[]; all: DueCheck[]; total: number }>({
     queryKey: K.dueChecks,
@@ -1005,7 +1117,16 @@ export const useCreateCheck = () => {
       shift?: string | null;
       batch_ref?: string | null;
       remarks?: string | null;
-      readings: { label: string; nominal?: number | null; observed?: number | null; in_tolerance: boolean }[];
+      readings: {
+        item_id?: string | null;
+        label: string;
+        check_type: CheckType;
+        nominal?: number | null;
+        tolerance?: number | null;
+        unit_code?: string | null;
+        observed?: number | null;
+        passed?: boolean;
+      }[];
     }
   >({
     mutationFn: ({ id, ...body }) => api.post(`/calibration/instruments/${id}/checks`, body).then((r) => r.data),
@@ -1168,6 +1289,7 @@ export interface Overview {
     rejected: number;
     approved_total: number;
     open_workload: number;
+    unassigned: number;
     completed_in_window: number;
     on_time_rate: number | null;
     as_found_failure_rate: number | null;
@@ -1182,6 +1304,7 @@ export interface Overview {
       performed_at: string | null;
       as_found_outcome: Outcome | null;
       overall_outcome: Outcome | null;
+      assigned_to_id: string | null;
     }[];
   };
   oot: {

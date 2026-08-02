@@ -172,6 +172,19 @@ export const PointTemplateUpsertSchema = z.object({
   tolerance_value: z.coerce.number(),
 });
 
+export const CheckTypeEnum = z.enum(['NUMERIC', 'PASS_FAIL']);
+
+export const CheckItemUpsertSchema = z.object({
+  sequence: z.coerce.number().int().min(1).max(100),
+  label: z.string().min(1).max(200),
+  check_type: CheckTypeEnum.default('NUMERIC'),
+  nominal_value: optNum,
+  tolerance_value: optNum,
+  unit_code: optStr(40),
+  is_required: z.boolean().optional(),
+  guidance: optStr(500),
+});
+
 // ─────────────────────────── Instruments ───────────────────────────
 
 export const ListInstrumentsQuerySchema = z.object({
@@ -269,7 +282,14 @@ export const ListEventsQuerySchema = z.object({
   from: z.string().optional(),
   to: z.string().optional(),
   overdue: z.coerce.boolean().optional(),
+  assigned_to: z.string().optional(),
+  unassigned: z.coerce.boolean().optional(),
   search: z.string().optional(),
+});
+
+export const AssignEventSchema = z.object({
+  /** null clears the assignment. */
+  assigned_to_id: z.string().min(1).nullable(),
 });
 
 export const CreateEventSchema = z.object({
@@ -279,6 +299,7 @@ export const CreateEventSchema = z.object({
   plan_id: optStr(60),
   provider_type: ProviderTypeEnum.optional(),
   provider_id: optStr(60),
+  assigned_to_id: optStr(60),
   remarks: optStr(1000),
 });
 
@@ -381,14 +402,25 @@ export const CreateCheckSchema = z.object({
   readings: z
     .array(
       z.object({
-        label: z.string().min(1).max(150),
+        /** Present when the row came from the category checklist. */
+        item_id: optStr(60),
+        label: z.string().min(1).max(200),
+        check_type: CheckTypeEnum.default('NUMERIC'),
         nominal: optNum,
+        tolerance: optNum,
+        unit_code: optStr(40),
+        /** NUMERIC rows: the measured value. The verdict is derived from it. */
         observed: optNum,
-        in_tolerance: z.boolean(),
+        /**
+         * PASS_FAIL rows only. A NUMERIC row's verdict is computed server-side
+         * from `observed` against nominal ± tolerance and this is ignored — a
+         * client that can assert its own pass/fail can assert anything.
+         */
+        passed: z.boolean().optional(),
       }),
     )
     .min(1)
-    .max(50),
+    .max(60),
 });
 
 // ─────────────────────────── MSA ───────────────────────────
@@ -465,12 +497,14 @@ export type ApplyPackInput = z.infer<typeof ApplyPackSchema>;
 export type ListCategoriesQuery = z.infer<typeof ListCategoriesQuerySchema>;
 export type CategoryUpsertInput = z.infer<typeof CategoryUpsertSchema>;
 export type PointTemplateUpsertInput = z.infer<typeof PointTemplateUpsertSchema>;
+export type CheckItemUpsertInput = z.infer<typeof CheckItemUpsertSchema>;
 export type ListInstrumentsQuery = z.infer<typeof ListInstrumentsQuerySchema>;
 export type InstrumentUpsertInput = z.infer<typeof InstrumentUpsertSchema>;
 export type ReasonInput = z.infer<typeof ReasonSchema>;
 export type PlanUpsertInput = z.infer<typeof PlanUpsertSchema>;
 export type ListEventsQuery = z.infer<typeof ListEventsQuerySchema>;
 export type CreateEventInput = z.infer<typeof CreateEventSchema>;
+export type AssignEventInput = z.infer<typeof AssignEventSchema>;
 export type UpdateEventInput = z.infer<typeof UpdateEventSchema>;
 export type SaveReadingsInput = z.infer<typeof SaveReadingsSchema>;
 export type AddStandardInput = z.infer<typeof AddStandardSchema>;

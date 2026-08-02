@@ -85,7 +85,9 @@ export const spawnDueCalibrations = async () => {
   const plans = await prisma.calibrationPlan.findMany({
     where: { isActive: true, isDeleted: false, nextDueAt: { not: null } },
     include: {
-      instrument: { select: { id: true, code: true, siteId: true, status: true, isCalibrationRequired: true } },
+      instrument: {
+        select: { id: true, code: true, siteId: true, status: true, isCalibrationRequired: true, custodianId: true },
+      },
     },
   });
 
@@ -150,6 +152,12 @@ export const spawnDueCalibrations = async () => {
         scheduledFor: plan.nextDueAt,
         providerType: plan.providerType,
         providerId: plan.providerId,
+        methodRef: plan.methodRef,
+        methodDocId: plan.methodDocId,
+        // Auto-created work with no owner is work nobody does. The instrument's
+        // custodian owns it by default; it can be reassigned.
+        assignedToId: inst.custodianId,
+        assignedAt: inst.custodianId ? new Date() : null,
         readings: {
           create: points.map((p) => ({
             sequence: p.sequence,

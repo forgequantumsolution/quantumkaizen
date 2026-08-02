@@ -100,6 +100,7 @@ import ReferenceStandardsPage from '@/features/calibration/ReferenceStandardsPag
 import MsaStudiesPage from '@/features/calibration/MsaStudiesPage';
 import ProvidersPage from '@/features/calibration/ProvidersPage';
 import CalibrationConfigLayout from '@/features/calibration/CalibrationConfigLayout';
+import InstrumentVerifyPage from '@/features/calibration/InstrumentVerifyPage';
 import IndustryPacksPage from '@/features/calibration/IndustryPacksPage';
 import CalibrationPolicyPage from '@/features/calibration/CalibrationPolicyPage';
 import EquipmentCategoriesPage from '@/features/calibration/EquipmentCategoriesPage';
@@ -155,6 +156,8 @@ export default function App() {
       <Route path="/verify/coa/:token" element={<CoaVerifyPage />} />
       {/* Public LMS certificate QR verification — no auth */}
       <Route path="/verify/certificate/:token" element={<CertificateVerifyPage />} />
+      {/* Public calibration-label QR verification — no auth */}
+      <Route path="/verify/instrument/:token" element={<InstrumentVerifyPage />} />
 
       {/* Protected */}
       <Route element={<ProtectedRoute />}>

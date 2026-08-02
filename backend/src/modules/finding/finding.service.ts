@@ -227,6 +227,7 @@ export const raiseChild = async (
     // under the source ticket and linked back to this finding.
     const capa = await createCapa(
       {
+      source: 'FINDING',
         title,
         description,
         type: input.capa_type ?? 'CORRECTIVE',

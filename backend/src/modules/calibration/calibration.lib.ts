@@ -239,11 +239,18 @@ export const deriveCalibrationStatus = (i: StatusInput): CalibrationStatus => {
 };
 
 /** Statuses that block an instrument from being used to produce data. */
-export const BLOCKING_STATUSES: CalibrationStatus[] = ['OVERDUE', 'OUT_OF_SERVICE'];
+export const BLOCKING_STATUSES: CalibrationStatus[] = ['OVERDUE', 'OUT_OF_SERVICE', 'UNDER_CALIBRATION'];
 
-export const isBlocked = (status: CalibrationStatus, cfg: Pick<CalibrationConfig, 'blockUseWhenOverdue' | 'blockUseWhenFailed'>): boolean => {
+export const isBlocked = (
+  status: CalibrationStatus,
+  cfg: Pick<CalibrationConfig, 'blockUseWhenOverdue' | 'blockUseWhenFailed'>,
+): boolean => {
   if (status === 'OVERDUE') return cfg.blockUseWhenOverdue;
   if (status === 'OUT_OF_SERVICE') return cfg.blockUseWhenFailed;
+  // Not configurable: an instrument mid-calibration is physically on the
+  // technician's bench and its state is unverified until the record is
+  // approved. "Cleared for use" would be false on a label either way.
+  if (status === 'UNDER_CALIBRATION') return true;
   return false;
 };
 

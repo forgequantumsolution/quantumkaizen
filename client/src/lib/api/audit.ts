@@ -1059,8 +1059,22 @@ export type CapaStatus =
   | 'CLOSED'
   | 'CANCELLED';
 
+export type CapaSource = 'AUDIT' | 'FINDING' | 'RISK' | 'OOS' | 'CALIBRATION' | 'MANUAL';
+
+/** Origin labels + badge classes, shared by the list and detail views. */
+export const CAPA_SOURCE_BADGE: Record<CapaSource, { label: string; cls: string }> = {
+  AUDIT: { label: 'Audit', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  FINDING: { label: 'Finding', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  RISK: { label: 'Risk', cls: 'bg-purple-50 text-purple-700 border-purple-200' },
+  OOS: { label: 'OOS', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  CALIBRATION: { label: 'Calibration', cls: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  MANUAL: { label: 'Manual', cls: 'bg-gray-100 text-gray-600 border-gray-200' },
+};
+
 export interface Capa {
   id: string;
+  source: CapaSource;
+  source_ref: string | null;
   capa_number: string;
   type: CapaType;
   status: CapaStatus;
@@ -1099,6 +1113,8 @@ export interface Capa {
 export interface ListCapaQuery {
   page?: number;
   page_size?: number;
+  /** Comma-separated origins. Omitted means every source. */
+  source?: string;
   status?: CapaStatus;
   type?: CapaType;
   owner_id?: string;

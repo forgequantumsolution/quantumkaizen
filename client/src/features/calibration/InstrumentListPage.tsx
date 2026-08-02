@@ -4,6 +4,7 @@ import { App, Button, Drawer, Input, InputNumber, Select, Space, Switch, Table, 
 import { Ruler, Plus, Search, Edit3, Trash2, QrCode, Link2 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
+import CalibrationPageHeader from './CalibrationPageHeader';
 import {
   useInstruments,
   useCategories,
@@ -80,61 +81,55 @@ export default function InstrumentListPage() {
 
   return (
     <PageContainer>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Ruler size={22} className="text-gray-500" />
-            Instruments
-          </h1>
-          <p className="text-xs text-gray-500 mt-0.5">
-            Every measuring device under calibration control — lab instruments, production gauges, monitoring devices
-            and reference standards.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <Select
-            allowClear
-            placeholder="Kind"
-            value={kind}
-            onChange={setKind}
-            style={{ width: 170 }}
-            options={KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))}
-          />
-          <Select
-            allowClear
-            placeholder="Status"
-            value={status}
-            onChange={(v) => (v ? setStatus(v) : clearStatus())}
-            style={{ width: 160 }}
-            options={Object.entries(STATUS_BADGE).map(([k, v]) => ({ value: k, label: v.label }))}
-          />
-          <Button type={dueOnly ? 'primary' : 'default'} onClick={() => setDueOnly((v) => !v)}>
-            Due in 30 days
-          </Button>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
-            <Input
-              placeholder="Code / name / serial…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              style={{ width: 230 }}
+      <CalibrationPageHeader
+        title="Instruments"
+        icon={Ruler}
+        actions={
+          <>
+            <Select
+              allowClear
+              placeholder="Kind"
+              value={kind}
+              onChange={setKind}
+              style={{ width: 160 }}
+              options={KINDS.map((k) => ({ value: k, label: KIND_LABELS[k] }))}
             />
-          </div>
-          {canCreate && (
-            <Button
-              type="primary"
-              icon={<Plus size={14} />}
-              onClick={() => {
-                setEditing(null);
-                setOpen(true);
-              }}
-            >
-              New Instrument
+            <Select
+              allowClear
+              placeholder="Status"
+              value={status}
+              onChange={(v) => (v ? setStatus(v) : clearStatus())}
+              style={{ width: 150 }}
+              options={Object.entries(STATUS_BADGE).map(([k, v]) => ({ value: k, label: v.label }))}
+            />
+            <Button type={dueOnly ? 'primary' : 'default'} onClick={() => setDueOnly((v) => !v)}>
+              Due in 30 days
             </Button>
-          )}
-        </div>
-      </div>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none z-10" />
+              <Input
+                placeholder="Code / name / serial…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+                style={{ width: 220 }}
+              />
+            </div>
+            {canCreate && (
+              <Button
+                type="primary"
+                icon={<Plus size={14} />}
+                onClick={() => {
+                  setEditing(null);
+                  setOpen(true);
+                }}
+              >
+                New Instrument
+              </Button>
+            )}
+          </>
+        }
+      />
 
       <Table<Instrument>
         size="small"

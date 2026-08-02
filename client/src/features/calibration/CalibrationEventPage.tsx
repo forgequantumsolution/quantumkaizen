@@ -6,6 +6,8 @@ import PageContainer from '@/components/layout/PageContainer';
 import { useHasPermission } from '@/stores/authStore';
 import {
   useEvent,
+  useAssignEvent,
+  useAssignableUsers,
   useEventAction,
   useSaveReadings,
   useAddStandard,
@@ -43,6 +45,8 @@ export default function CalibrationEventPage() {
   const review = useEventAction('review');
   const approve = useEventAction('approve');
   const cancel = useEventAction('cancel');
+  const assign = useAssignEvent();
+  const { data: users } = useAssignableUsers();
   const saveReadings = useSaveReadings();
   const addStandard = useAddStandard();
   const updateEvent = useUpdateEvent(id ?? '');
@@ -195,10 +199,18 @@ export default function CalibrationEventPage() {
           {canApprove && ev.status === 'PENDING_APPROVAL' && (
             <Button
               type="primary"
+              danger={ev.overall_outcome === 'FAIL'}
               icon={<ShieldCheck size={14} />}
-              onClick={() => act(() => approve.mutateAsync({ id: ev.id, body: {} }), 'Approved — certificate issued')}
+              onClick={() =>
+                act(
+                  () => approve.mutateAsync({ id: ev.id, body: {} }),
+                  ev.overall_outcome === 'FAIL'
+                    ? 'Failure approved — instrument withdrawn from service'
+                    : 'Approved — certificate issued',
+                )
+              }
             >
-              Approve &amp; issue certificate
+              {ev.overall_outcome === 'FAIL' ? 'Approve failure & withdraw' : 'Approve & issue certificate'}
             </Button>
           )}
           {!['APPROVED', 'CANCELLED'].includes(ev.status) && (
@@ -224,6 +236,24 @@ export default function CalibrationEventPage() {
           }
         />
       )}
+      {ev.overall_outcome === 'FAIL' && !['APPROVED', 'CANCELLED'].includes(ev.status) && (
+        <Alert
+          type="error"
+          showIcon
+          className="mb-4"
+          message="This calibration failed — no certificate will be issued"
+          description="Approving it signs off the failure: the instrument is withdrawn from service and its calibration schedule is NOT advanced. It can only return to service after a passing after-repair calibration."
+        />
+      )}
+      {ev.overall_outcome === 'FAIL' && ev.status === 'APPROVED' && (
+        <Alert
+          type="error"
+          showIcon
+          className="mb-4"
+          message="Failed calibration — non-conformance report"
+          description="No conformity certificate exists for this record. The instrument was withdrawn from service and its due date was left unchanged."
+        />
+      )}
       {ev.rejection_reason && <Alert type="warning" showIcon className="mb-4" message="Rejected" description={ev.rejection_reason} />}
       {anyAsFoundFail && editable && (
         <Alert
@@ -246,6 +276,32 @@ export default function CalibrationEventPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <Descriptions bordered size="small" column={1} title="Execution" className="lg:col-span-2">
+          <Descriptions.Item label="Assigned to">
+            {['APPROVED', 'CANCELLED'].includes(ev.status) ? (
+              <span>{users?.find((u) => u.id === ev.assigned_to_id)?.name ?? '—'}</span>
+            ) : (
+              <Select
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                size="small"
+                style={{ minWidth: 220 }}
+                placeholder="Unassigned — nobody owns this"
+                value={ev.assigned_to_id ?? undefined}
+                onChange={(v) =>
+                  act(() => assign.mutateAsync({ id: ev.id, assigned_to_id: v ?? null }), v ? 'Assigned' : 'Assignment cleared')
+                }
+                options={(users ?? []).map((u) => ({ value: u.id, label: u.name }))}
+              />
+            )}
+          </Descriptions.Item>
+          <Descriptions.Item label="Method">
+            {ev.method_ref ? (
+              <span className="font-mono text-xs">{ev.method_ref}</span>
+            ) : (
+              <span className="text-gray-400 text-xs">not stated on the plan</span>
+            )}
+          </Descriptions.Item>
           <Descriptions.Item label="Scheduled">{fmtDate(ev.scheduled_for)}</Descriptions.Item>
           <Descriptions.Item label="Performed">{fmtDateTime(ev.performed_at)}</Descriptions.Item>
           <Descriptions.Item label="Performed by">
