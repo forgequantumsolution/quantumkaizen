@@ -1,0 +1,136 @@
+# Quantum Kaizen — DEMO stack.
+#
+# Runs side-by-side with the existing /var/www/qk-v2 deployment on the same VPS.
+# Everything is namespaced so the two stacks never collide:
+#
+#                     existing (qk-v2)      demo (this file)
+#   project name      quantum-kaizen        quantum-kaizen-demo
+#   directory         /var/www/qk-v2        /opt/quantumkaizen
+#   containers        qk-*                  kaizen-*
+#   network           qk-net                kaizen-net
+#   frontend port     8080                  8081
+#   api port          4000                  ${API_PORT} (see note below)
+#
+# API_PORT defaults to 4000. If the production qk-v2 stack runs on THIS SAME
+# host it already publishes 4000, and the demo api container will fail to bind
+# with "address already in use" — set API_PORT=4001 in the workflow env then.
+# Check with: ss -lntp | grep -E ':(4000|8080|8081)'
+#
+# The distinct `name:` is what isolates volumes and networks — without it both
+# stacks would share pgdata and the demo would write into production's database.
+#
+# SERVICE names must stay `api`, `postgres`, `redis`, `frontend`:
+# client/nginx.conf hardcodes `proxy_pass http://api:4000` and the api's
+# DATABASE_URL resolves `postgres` by service name. Only container_name is
+# renamed for the demo.
+#
+# Interpolated by CI: BACKEND_IMAGE, FRONTEND_IMAGE, IMAGE_TAG
+# Read from /opt/quantumkaizen/.env: POSTGRES_*, JWT_*, and app config.
+
+name: quantum-kaizen-demo
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kaizen-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # No host port — the VPS already runs Postgres on :5432 and qk-v2 keeps its
+    # own instance internal for the same reason.
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kaizen-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: kaizen-redis
+    restart: unless-stopped
+    # No host port — only the worker talks to it, inside kaizen-net.
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - kaizen-net
+
+  api:
+    image: ${BACKEND_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: kaizen-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '${API_PORT:-4000}:4000'
+    healthcheck:
+      test: ['CMD', 'curl', '-fsS', 'http://127.0.0.1:4000/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    networks:
+      - kaizen-net
+
+  worker:
+    image: ${BACKEND_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: kaizen-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      DIRECT_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public
+      REDIS_URL: redis://redis:6379
+    command: ['node', 'dist/jobs/worker.js']
+    networks:
+      - kaizen-net
+
+  frontend:
+    image: ${FRONTEND_IMAGE}:${IMAGE_TAG:-latest}
+    container_name: kaizen-frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    # nginx proxies /api/*, /socket.io/* and /health to api:4000 inside the
+    # network, so the bundle uses relative URLs and no IP is baked in.
+    ports:
+      - '${FRONTEND_PORT:-8081}:80'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1/']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - kaizen-net
+
+networks:
+  kaizen-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+  redisdata:

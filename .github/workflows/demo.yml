@@ -23,10 +23,13 @@ env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/${{ github.repository }}/backend
   FRONTEND_IMAGE: ghcr.io/${{ github.repository }}/frontend
-  # Demo ports. Production on this VPS already owns 8080 (qk-frontend) and
-  # 4000 (qk-api), so the demo stack must not reuse them.
+  # Demo host ports. If the production qk-v2 stack runs on this same host it
+  # already publishes 4000 (qk-api) and 8080 (qk-frontend) — the api container
+  # would then fail to bind. Verify with:
+  #   ss -lntp | grep -E ':(4000|8080|8081)'
+  # and switch API_PORT to 4001 if 4000 is taken.
   FRONTEND_PORT: '8081'
-  API_PORT: '4001'
+  API_PORT: '4000'
   DEMO_DIR: /opt/quantumkaizen
 
 jobs:
@@ -136,12 +139,12 @@ jobs:
             'sudo mkdir -p ${{ env.DEMO_DIR }} && sudo chown -R $(id -u):$(id -g) ${{ env.DEMO_DIR }}'
 
       # Both files land flat in DEMO_DIR (rsync copies basenames), so deploy.sh
-      # finds docker-compose.demo.yml beside itself. .env is NOT synced — it is
+      # finds docker-compose.yml beside itself. .env is NOT synced — it is
       # created once on the VPS and holds secrets.
       - name: Rsync compose + deploy script
         run: |
           rsync -avz \
-            deploy-demo/docker-compose.demo.yml \
+            deploy-demo/docker-compose.yml \
             deploy-demo/deploy.sh \
             ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ env.DEMO_DIR }}/
           ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} \
@@ -168,7 +171,7 @@ jobs:
              IMAGE_TAG=${IMAGE_TAG} \
              BACKEND_IMAGE=${{ env.BACKEND_IMAGE }} \
              FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }} \
-             docker compose -f docker-compose.demo.yml config --images"
+             docker compose -f docker-compose.yml config --images"
 
       # deploy.sh pulls the tag, runs prisma migrate deploy, applies the
       # idempotent risk seeds, then rolls api + worker + frontend.
