@@ -351,6 +351,37 @@ const flattenResponses = (responses: unknown): Record<string, unknown> => {
   return out;
 };
 const asStr = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v));
+const asRows = (v: unknown): Record<string, unknown>[] =>
+  Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => !!x && typeof x === 'object') : [];
+
+// The live CAPA workflow's forms are authored in the form builder, so their
+// template keys are per-environment UUIDs — recognise the RCA form by its
+// response shape instead of its key.
+const isBuilderRca = (r: Record<string, unknown>) =>
+  '5_why_analysis' in r || 'fishbone_ishikawa_worksheet' in r || 'root_cause_s_identified' in r;
+
+// Builder RCA form → RootCauseData. 5-why rows carry a question/observation and
+// a root-cause answer; the fishbone worksheet is a table of
+// { category: 'Man / People', potential_cause_s } rows whose category labels
+// prefix-match the bespoke tab's Ishikawa categories.
+const mapBuilderRca = (r: Record<string, unknown>) => {
+  const whyRows = asRows(r['5_why_analysis']);
+  const fiveWhys = Array.from({ length: 5 }, (_, i) => {
+    const row = whyRows[i] ?? {};
+    return [asStr(row.question_observation).trim(), asStr(row.root_cause_answer).trim()]
+      .filter(Boolean)
+      .join(' → ');
+  });
+  const fishbone: Record<string, string[]> = {};
+  for (const c of FISHBONE_CATEGORIES) fishbone[c] = [];
+  for (const row of asRows(r.fishbone_ishikawa_worksheet)) {
+    const label = asStr(row.category).toLowerCase();
+    const cat = FISHBONE_CATEGORIES.find((c) => label.startsWith(c.toLowerCase()));
+    const cause = asStr(row.potential_cause_s ?? row.potential_cause).trim();
+    if (cat && cause) fishbone[cat].push(cause);
+  }
+  return { fiveWhys, fishbone, conclusion: asStr(r.root_cause_s_identified) };
+};
 
 // Mirror the submitted CAPA workflow forms (Root Cause Analysis + Effectiveness
 // Verification) into the structured shapes the bespoke tabs render, so a CAPA
@@ -360,20 +391,21 @@ const deriveCapaFormData = async (
   ticketId: string,
 ): Promise<{ rootCauseData: unknown | null; effectivenessData: unknown | null }> => {
   const subs = await prisma.formSubmission.findMany({
-    where: {
-      ticketId,
-      status: 'SUBMITTED',
-      form: { templateKey: { in: ['capa-rca', 'capa-effectiveness'] } },
-    },
+    where: { ticketId, status: 'SUBMITTED' },
     orderBy: { submittedAt: 'desc' },
     select: { responses: true, form: { select: { templateKey: true } } },
   });
-  const rca = subs.find((s) => s.form.templateKey === 'capa-rca');
-  const eff = subs.find((s) => s.form.templateKey === 'capa-effectiveness');
+  const flat = subs.map((s) => ({
+    key: s.form.templateKey,
+    r: flattenResponses(s.responses),
+  }));
+  const rca = flat.find((s) => s.key === 'capa-rca');
+  const rcaBuilder = flat.find((s) => isBuilderRca(s.r));
+  const eff = flat.find((s) => s.key === 'capa-effectiveness');
 
   let rootCauseData: unknown | null = null;
   if (rca) {
-    const r = flattenResponses(rca.responses);
+    const r = rca.r;
     const fishbone: Record<string, string[]> = {};
     for (const c of FISHBONE_CATEGORIES) fishbone[c] = [];
     const category = asStr(r.rootCauseCategory);
@@ -384,11 +416,13 @@ const deriveCapaFormData = async (
       fishbone,
       conclusion: asStr(r.confirmedRootCause),
     };
+  } else if (rcaBuilder) {
+    rootCauseData = mapBuilderRca(rcaBuilder.r);
   }
 
   let effectivenessData: unknown | null = null;
   if (eff) {
-    const r = flattenResponses(eff.responses);
+    const r = eff.r;
     const norm = (v: unknown): 'pending' | 'pass' | 'fail' => {
       const s = String(v ?? '').toLowerCase();
       return s === 'pass' || s === 'fail' ? s : 'pending';

@@ -55,23 +55,17 @@ const generateUniqueTicketId = async (
   // GLOBALLY unique — so scoping per-workflow would let a new workflow
   // collide with already-allocated ids on a sibling workflow.
   //
-  // Also skip SLA escalation children (named `{parent}-SLA`) — their tail
-  // parses to NaN and would reset the counter to 1.
-  const last = await tx.ticket.findFirst({
-    where: {
-      uniqueId: { startsWith: `${prefix}-FQS-` },
-      parentTicketId: null,
-    },
-    orderBy: { uniqueId: 'desc' },
-    select: { uniqueId: true },
-  });
-
-  let next = 1;
-  if (last) {
-    const tail = last.uniqueId.split('-').pop();
-    const n = Number(tail);
-    if (!Number.isNaN(n)) next = n + 1;
-  }
+  // Child tickets raised under a parent (e.g. a CAPA spawned from a finding)
+  // draw from the same numeric sequence, so they must be counted too —
+  // excluding them leaves the counter pointing at already-taken ids. Only
+  // non-numeric tails (`{parent}-SLA` escalation children) are skipped.
+  const [row] = await tx.$queryRaw<{ max: number | null }[]>`
+    SELECT MAX(SPLIT_PART("uniqueId", '-FQS-', 2)::int) AS max
+    FROM "Ticket"
+    WHERE "uniqueId" LIKE ${`${prefix}-FQS-%`}
+      AND SPLIT_PART("uniqueId", '-FQS-', 2) ~ '^[0-9]+$'
+  `;
+  let next = (row?.max ?? 0) + 1;
 
   for (let i = 0; i < 5; i++) {
     const candidate = `${prefix}-FQS-${String(next).padStart(3, '0')}`;

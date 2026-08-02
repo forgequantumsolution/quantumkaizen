@@ -381,13 +381,17 @@ export default function NavGroupsTab() {
    * draft that disagreed would undo the reassignment.
    */
   const dropGroupFromDraft = (g: DraftGroup) =>
-    setDraft((prev) => {
-      const next = prev.filter((x) => x.key !== g.key);
-      if (!g.moduleKeys.length) return next;
-      const fallback = next.find((x) => x.isFallback);
-      if (fallback) fallback.moduleKeys = [...fallback.moduleKeys, ...g.moduleKeys];
-      return next;
-    });
+    setDraft((prev) =>
+      // Pure w.r.t. `prev` — StrictMode runs updaters twice in dev, so mutating
+      // the fallback object in place would append the modules twice.
+      prev
+        .filter((x) => x.key !== g.key)
+        .map((x) =>
+          x.isFallback && g.moduleKeys.length
+            ? { ...x, moduleKeys: [...x.moduleKeys, ...g.moduleKeys] }
+            : x,
+        ),
+    );
 
   const removeGroup = (g: DraftGroup) => {
     confirmDelete({

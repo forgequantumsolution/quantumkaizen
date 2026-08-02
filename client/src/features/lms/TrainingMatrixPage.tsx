@@ -84,9 +84,9 @@ export default function TrainingMatrixPage() {
       <span><Tag color="blue">{r.requires_type}</Tag> {requiresLookup(r.requires_type, r.requires_id)}</span>
     ) },
     { title: 'Due', dataIndex: 'due_within_days', width: 110, render: (d: number | null) => (d ? `${d} days` : '—') },
-    { title: 'Recurring', dataIndex: 'recurring', width: 100, render: (v: boolean) => (v ? <Tag color="gold">Recurring</Tag> : '—') },
+    { title: 'Recurring', dataIndex: 'recurring', width: 100, align: 'center' as const, render: (v: boolean) => (v ? <Tag color="gold">Recurring</Tag> : '—') },
     {
-      title: 'On join', dataIndex: 'auto_assign_on_join', width: 110,
+      title: 'On join', dataIndex: 'auto_assign_on_join', width: 110, align: 'center' as const,
       render: (v: boolean, r: MatrixRule) => (canWrite ? (
         <Switch
           size="small"

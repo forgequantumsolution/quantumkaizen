@@ -1,3 +1,52 @@
+## Navigation groups: deleting a group didn't delete it — 2026-07-30
+
+Reported: "the delete doesn't actually delete the group." Confirmed by probe —
+create + save a group, confirm the delete dialog, reload: the group is back.
+
+- **`lib/api/navGroups.ts`** — new `useDeleteNavGroup()` calling
+  `DELETE /nav-groups/:id` and invalidating `navGroupKeys.all`. The backend route
+  and service already existed and already moved the group's modules to the
+  fallback group inside the delete transaction; nothing on the client ever called
+  it.
+- **`features/admin/nav-groups/NavGroupsTab.tsx`** — `removeGroup()` only spliced
+  the group out of the local draft, so the deletion lived or died with the Save
+  button: navigating away, reloading, or a save that hit the 409 concurrency
+  guard silently resurrected it. A destructive action behind a confirm dialog has
+  to be durable at the moment it's confirmed, so the confirm handler now awaits
+  the real DELETE for any group that exists server-side, then mirrors the
+  server's reassignment locally via `dropGroupFromDraft()` (members move to the
+  fallback group) so the tree matches what the server just did and no spurious
+  "unsaved changes" is left behind. Groups added but never saved have no `id`
+  and are still just dropped from the draft.
+  - `DraftGroup` gained an optional `id`, carried through `toDraft()`.
+
+Probe before → `in tree: 0, dirty: 1, save enabled: true, after reload: 1`.
+After → `in tree: 0, dirty: 0, save enabled: false, after reload: 0`.
+
+- `tests/ui/nav-group-accordion.spec.ts` — regression spec "deleting a group is
+  durable, not queued behind Save".
+
+**Follow-up (gap check, same day):** `dropGroupFromDraft` mutated the fallback
+group object belonging to the *previous* state (`fallback.moduleKeys = [...]`
+inside the updater). The app renders under `React.StrictMode`, which invokes
+state updaters twice in dev — so deleting a group **that had modules** appended
+those modules to the fallback group **twice**, showing duplicates in the tree.
+The earlier probe missed it because it deleted an empty group. The updater is
+now pure (`.filter().map()` producing new objects). Regression coverage was
+added to the drag spec: after dropping a module into the new group, delete the
+group and assert the module appears in the tree exactly once. Kept out of the
+durable-delete spec on purpose — doing it there would save the module into the
+throwaway group and the delete would permanently move it to the fallback group
+in the DB on every run.
+
+Also in that spec: the drag gesture now retries up to 3× — Playwright's
+synthesized HTML5 drag occasionally misses rc-tree's dragover bookkeeping
+(seen only in full-suite runs, never in isolation).
+
+Not committed.
+
+---
+
 ## Navigation groups: newly added groups rejected every drop — 2026-07-29
 
 Reported: after adding a group in **Configuration → Navigation Groups**, no

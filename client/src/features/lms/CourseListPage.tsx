@@ -104,10 +104,36 @@ export default function CourseListPage() {
       ),
     },
     {
+      title: 'Duration',
+      dataIndex: 'estimated_minutes',
+      width: 95,
+      render: (m: number | null) => (m ? `${m} min` : '—'),
+    },
+    {
+      title: 'Pass mark',
+      dataIndex: 'passing_score',
+      width: 95,
+      align: 'center' as const,
+      render: (p: number | null) => (p != null ? `${p}%` : '—'),
+    },
+    {
       title: 'Recert',
       dataIndex: 'validity_months',
       width: 90,
       render: (m: number | null) => (m ? `${m} mo` : '—'),
+    },
+    {
+      title: 'Self-enrol',
+      dataIndex: 'allow_self_enroll',
+      width: 95,
+      align: 'center' as const,
+      render: (v: boolean) => (v ? <Tag color="blue">Catalog</Tag> : '—'),
+    },
+    {
+      title: 'Published',
+      dataIndex: 'published_at',
+      width: 110,
+      render: (d: string | null) => (d ? new Date(d).toLocaleDateString() : '—'),
     },
   ];
 

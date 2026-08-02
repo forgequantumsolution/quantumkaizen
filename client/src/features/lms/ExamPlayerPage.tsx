@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Checkbox, Empty, Input, Radio, Spin, Tag } from 'antd';
-import { ArrowLeft, ShieldCheck, FileQuestion, CheckCircle2, XCircle, Clock3 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ShieldCheck, FileQuestion, CheckCircle2, XCircle, Clock3 } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { cn } from '@/lib/utils';
 import ESignatureModal from '@/components/shared/ESignatureModal';
@@ -19,6 +19,7 @@ export default function ExamPlayerPage() {
   const { data: info, isLoading, refetch } = useExamInfo(id);
 
   const [attempt, setAttempt] = useState<ActiveAttempt | null>(null);
+  const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [result, setResult] = useState<AttemptResult | null>(null);
   const [starting, setStarting] = useState(false);
@@ -31,6 +32,7 @@ export default function ExamPlayerPage() {
     try {
       const a = await startAttempt(info.assessment_id);
       setAttempt(a);
+      setQIndex(0);
       setAnswers({});
       setResult(null);
     } catch (e) {
@@ -163,49 +165,136 @@ export default function ExamPlayerPage() {
           );
         })()
       ) : attempt ? (
-        /* Taking the exam */
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 mb-1">{attempt.title}</h1>
-          <p className="text-xs text-gray-500 mb-4">Answer all questions, then submit. Passing score {attempt.passing_score}%.</p>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-            {attempt.questions.map((q, i) => (
-              <div key={q.id} className="rounded-xl border border-gray-200 bg-white p-4">
-                <p className="text-sm font-medium text-gray-800 mb-2">Q{i + 1}. {q.prompt} <span className="text-xs text-gray-400">({q.points} pt{q.points > 1 ? 's' : ''})</span></p>
-                {q.type === 'SINGLE' || q.type === 'TRUE_FALSE' ? (
-                  <Radio.Group
-                    value={answers[q.id]?.selected?.[0]}
-                    onChange={(e) => setAnswers((p) => ({ ...p, [q.id]: { selected: [e.target.value] } }))}
-                  >
-                    <div className="flex flex-col gap-1.5">
-                      {q.options.map((o) => <Radio key={o.id} value={o.id}>{o.text}</Radio>)}
-                    </div>
-                  </Radio.Group>
-                ) : q.type === 'MULTI' ? (
-                  <Checkbox.Group
-                    value={answers[q.id]?.selected ?? []}
-                    onChange={(vals) => setAnswers((p) => ({ ...p, [q.id]: { selected: vals as string[] } }))}
-                  >
-                    <div className="flex flex-col gap-1.5">
-                      {q.options.map((o) => <Checkbox key={o.id} value={o.id}>{o.text}</Checkbox>)}
-                    </div>
-                  </Checkbox.Group>
-                ) : (
-                  <Input.TextArea
-                    rows={q.type === 'LONG_TEXT' ? 5 : 2}
-                    value={answers[q.id]?.text ?? ''}
-                    onChange={(e) => setAnswers((p) => ({ ...p, [q.id]: { text: e.target.value } }))}
-                    placeholder="Your answer"
-                  />
-                )}
+        /* Taking the exam — one question at a time */
+        (() => {
+          const total = attempt.questions.length;
+          const q = attempt.questions[Math.min(qIndex, total - 1)];
+          const isAnswered = (qq: typeof q) => {
+            const a = answers[qq.id];
+            return !!(a?.selected?.length || a?.text?.trim());
+          };
+          const answeredCount = attempt.questions.filter(isAnswered).length;
+          const unanswered = total - answeredCount;
+          const isLast = qIndex >= total - 1;
+          const optionRow = 'w-full rounded-lg border border-gray-200 px-4 py-3 m-0 hover:border-gray-300 hover:bg-gray-50 transition-colors';
+          const hint = q.type === 'MULTI' ? 'Select all that apply'
+            : q.type === 'TRUE_FALSE' ? 'Select True or False'
+            : q.type === 'SINGLE' ? 'Select one answer'
+            : 'Write your answer below';
+          return (
+            <div className="flex flex-col lg:flex-row gap-5 lg:items-stretch">
+              {/* Question panel */}
+              <div className="flex-1 min-w-0 w-full">
+                <div className="rounded-xl border border-gray-200 bg-white flex flex-col h-full min-h-[480px]">
+                  <div className="px-8 py-4 border-b border-gray-100 flex items-center justify-between">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">Question {qIndex + 1} of {total}</span>
+                    <span className="text-xs text-gray-400">{q.points} pt{q.points > 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="px-8 py-6 flex-1">
+                    <p className="text-lg font-semibold text-gray-900 leading-snug">{q.prompt}</p>
+                    <p className="text-xs text-gray-400 mt-1.5 mb-5">{hint}</p>
+                    {q.type === 'SINGLE' || q.type === 'TRUE_FALSE' ? (
+                      <Radio.Group
+                        className="w-full"
+                        value={answers[q.id]?.selected?.[0]}
+                        onChange={(e) => setAnswers((p) => ({ ...p, [q.id]: { selected: [e.target.value] } }))}
+                      >
+                        <div className="flex flex-col gap-2">
+                          {q.options.map((o) => (
+                            <Radio key={o.id} value={o.id} className={cn(optionRow, answers[q.id]?.selected?.[0] === o.id && 'border-blue-400 bg-blue-50/60')}>
+                              {o.text}
+                            </Radio>
+                          ))}
+                        </div>
+                      </Radio.Group>
+                    ) : q.type === 'MULTI' ? (
+                      <Checkbox.Group
+                        className="w-full"
+                        value={answers[q.id]?.selected ?? []}
+                        onChange={(vals) => setAnswers((p) => ({ ...p, [q.id]: { selected: vals as string[] } }))}
+                      >
+                        <div className="flex flex-col gap-2 w-full">
+                          {q.options.map((o) => (
+                            <Checkbox key={o.id} value={o.id} className={cn(optionRow, (answers[q.id]?.selected ?? []).includes(o.id) && 'border-blue-400 bg-blue-50/60')}>
+                              {o.text}
+                            </Checkbox>
+                          ))}
+                        </div>
+                      </Checkbox.Group>
+                    ) : (
+                      <Input.TextArea
+                        rows={q.type === 'LONG_TEXT' ? 8 : 4}
+                        value={answers[q.id]?.text ?? ''}
+                        onChange={(e) => setAnswers((p) => ({ ...p, [q.id]: { text: e.target.value } }))}
+                        placeholder="Your answer"
+                      />
+                    )}
+                  </div>
+                  <div className="px-8 py-4 border-t border-gray-100 flex items-center justify-between">
+                    <Button disabled={qIndex === 0} icon={<ArrowLeft size={14} />} onClick={() => setQIndex((i) => Math.max(0, i - 1))}>
+                      Previous
+                    </Button>
+                    {isLast ? (
+                      <span className="text-xs text-gray-400">End of exam — submit when ready</span>
+                    ) : (
+                      <Button type="primary" onClick={() => setQIndex((i) => Math.min(total - 1, i + 1))}>
+                        Next <ArrowRight size={14} />
+                      </Button>
+                    )}
+                  </div>
+                </div>
               </div>
-            ))}
-          </div>
-          <div className="mt-4 flex justify-end">
-            <Button type="primary" loading={submitting} icon={attempt.require_esign ? <ShieldCheck size={14} /> : undefined} onClick={onSubmitClick}>
-              {attempt.require_esign ? 'Submit & sign' : 'Submit exam'}
-            </Button>
-          </div>
-        </div>
+
+              {/* Sidebar: exam info, navigator, submit */}
+              <aside className="w-full lg:w-96 shrink-0 flex flex-col gap-4">
+                <div className="rounded-xl border border-gray-200 bg-white p-5">
+                  <h2 className="text-sm font-semibold text-gray-900 leading-snug">{attempt.title}</h2>
+                  <p className="text-xs text-gray-500 mt-1">Passing score {attempt.passing_score}%{attempt.require_esign ? ' · e-sign on submit' : ''}</p>
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-xs mb-1.5">
+                      <span className="text-gray-500">Progress</span>
+                      <span className="font-medium text-gray-700">{answeredCount} / {total} answered</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${(answeredCount / total) * 100}%` }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-5 flex-1">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-3">Questions</p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {attempt.questions.map((qq, i) => (
+                      <button
+                        key={qq.id}
+                        onClick={() => setQIndex(i)}
+                        className={cn(
+                          'h-9 rounded-md text-xs font-medium border transition-colors',
+                          i === qIndex
+                            ? 'border-blue-500 bg-blue-500 text-white'
+                            : isAnswered(qq)
+                              ? 'border-blue-200 bg-blue-50 text-blue-700 hover:border-blue-300'
+                              : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300',
+                        )}
+                      >
+                        {i + 1}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-gray-200 bg-white p-5">
+                  {unanswered > 0 && (
+                    <p className="text-xs text-amber-600 mb-2 text-center">{unanswered} question{unanswered > 1 ? 's' : ''} unanswered</p>
+                  )}
+                  <Button type="primary" block loading={submitting} icon={attempt.require_esign ? <ShieldCheck size={14} /> : undefined} onClick={onSubmitClick}>
+                    {attempt.require_esign ? 'Submit & sign' : 'Submit exam'}
+                  </Button>
+                </div>
+              </aside>
+            </div>
+          );
+        })()
       ) : (
         /* Intro / start screen */
         <div>

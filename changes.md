@@ -1,3 +1,90 @@
+# Changes — Exam player: one-question-at-a-time stepper
+
+Reported: `/lms/learn/:id/exam` "doesn't look good and the alignment is all
+wrong, ask one question at a time". Verified with Playwright first: the old
+in-exam view rendered all 15 questions in a 2-column grid; cards of different
+heights made ragged rows, one question's prompt ran under the floating chat
+bubble, and the last card sat alone.
+
+> Status: **Implemented + verified with Playwright** (screenshots of Q1, after
+> answering + Next, and jump-to-last via pill). `tsc --noEmit` clean. Working
+> tree only, not committed. One file changed.
+
+## Fix (`client/src/features/lms/ExamPlayerPage.tsx`)
+
+Rebuilt the attempt view as a one-question-at-a-time stepper with a two-panel
+layout (full content width, flexing question panel + `lg:w-96` sticky
+sidebar; stacks on small screens). A first centered-column version left too
+much dead space at 1600px, so it became question panel + sidebar, then both
+panels were widened to fill the page on request:
+
+- **Question panel** (left, `min-h-[440px]` so the card doesn't jump between
+  questions): "QUESTION i OF N" header row with points; prompt at `text-lg`;
+  a per-type hint ("Select one answer" / "Select all that apply" / …);
+  options as full-width bordered rows (whole row clickable, blue tint when
+  selected); taller textareas for written answers; Previous/Next in the card
+  footer ("End of exam — submit when ready" replaces Next on the last one).
+- **Sidebar** (sticky): exam title + passing score + e-sign note, progress
+  bar driven by *answered* count, a 5-per-row question-navigator grid
+  (current = solid blue, answered = light blue, unanswered = white; click to
+  jump), and an always-visible Submit (& sign) button with an amber
+  "n questions unanswered" hint.
+- `qIndex` state reset in `begin()`.
+- Submission payload/e-sign flow unchanged — answers still collected in the
+  same `AnswerMap` and sent all at once.
+- Pre-existing behaviour kept: resuming an attempt starts at Q1 with a blank
+  local answer map (answers were never persisted server-side before submit).
+
+---
+
+# Changes — LMS admin tables: alignment + richer columns (Courses / Training Programs / Qualification Matrix)
+
+Reported against the Training → Configuration screens: the Qualification Matrix
+"Recurring"/"On join" cells looked off, the Courses and Training Programs tables
+had few columns with lots of dead space, and an expanded program's course list
+started at the table's left edge instead of nesting under its parent row.
+
+> Status: **Implemented, `tsc --noEmit` clean.** Working tree only, not
+> committed. Three files changed, all client-side — no API/backend changes.
+
+## Qualification Matrix (`client/src/features/lms/TrainingMatrixPage.tsx`)
+
+- **Recurring** and **On join** columns now `align: 'center'` — the em-dashes,
+  tags and the on-join switch were left-aligned under centered-looking headers.
+- Known, not fixed here: the Target cell renders `<Tag>{type}</Tag> {name}`
+  inline, so a narrow tag (ROLE vs DEPARTMENT) shifts the name's left edge —
+  the "AUDITOR" row looks disjointed for that reason. Fix would be a fixed-width
+  tag or a separate type column.
+
+## Courses (`client/src/features/lms/CourseListPage.tsx`)
+
+Four new columns after *Content*, all from fields `CourseSummary` already
+returned but the table ignored:
+
+- **Duration** — `estimated_minutes` as "45 min"
+- **Pass mark** — `passing_score` as "80%", centered
+- **Self-enrol** — blue "Catalog" tag when `allow_self_enroll`, else "—"
+- **Published** — `published_at` via `toLocaleDateString()` (dash for
+  never-published drafts)
+
+Left out on purpose: `category` (null on all current data) and `owner_id` (the
+summary endpoint returns only the raw ID; a name needs a lookup or backend
+change).
+
+## Training Programs (`client/src/features/lms/CurriculaPage.tsx`)
+
+- New **Description** column (flexible width, `ellipsis`); Title pinned to 260px
+  so descriptions get the leftover space.
+- **Courses** column now shows the mandatory split when not all courses are
+  mandatory — "5 courses · 3 mandatory".
+- Expanded row rendered as a **tree branch**: content padded 198px left (expand
+  icon column + Code column) so courses start under *Title*, with a vertical
+  guide line; each line is `n. <code> <title>` with the code in monospace grey.
+  ⚠ The 198px indent is matched to current column widths — resizing Code or
+  adding a column before Title needs the same adjustment.
+
+---
+
 # Changes — KPI card icon sizing across all dashboards
 
 Reported: KPI tile icons "not the correct size or aligned properly in all the
