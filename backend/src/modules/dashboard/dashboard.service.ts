@@ -112,13 +112,6 @@ function rangeStart(range: OverviewQuery['range']): Date {
 const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
 const pct = (n: number, d: number, dp = 1) => (d ? Math.round((n / d) * 100 * 10 ** dp) / 10 ** dp : 0);
 
-/** Deterministic pseudo-random so sample fallbacks are stable per seed. */
-function seeded(seed: number) {
-  let s = seed % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return () => (s = (s * 16807) % 2147483647) / 2147483647;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Current-user context
 // ─────────────────────────────────────────────────────────────────────────────
@@ -163,8 +156,9 @@ const deptWhere = (ctx: Ctx) => (ctx.departmentScope ? { departmentId: ctx.depar
 const siteWhere = (ctx: Ctx) => (ctx.site?.id ? { siteId: ctx.site.id } : {});
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Panel builders — each returns { data, sample } where sample=true means the
-// real query was empty and we substituted representative data.
+// Panel builders — each returns { data, sample }. Panels report only what is
+// actually in the database: an empty table yields zeros / empty arrays, never
+// substituted figures. `sample` stays false and is kept for API compatibility.
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function buildSnapshot(ctx: Ctx, range: OverviewQuery['range']) {
@@ -185,22 +179,6 @@ async function buildSnapshot(ctx: Ctx, range: OverviewQuery['range']) {
     prisma.actionItem.count({ where: { status: { notIn: ['DONE', 'VERIFIED', 'CANCELLED'] }, dueDate: { lt: now } } }),
   ]);
 
-  const real = openNCs + openCAPAs + pendingApprovals + expiringDocs + overdueActions;
-  if (real === 0) {
-    const rnd = seeded(ctx.persona.length * 7 + 3);
-    const nc = 8 + Math.floor(rnd() * 8);
-    return {
-      sample: true,
-      cards: [
-        { key: 'openNCs', label: 'Open NCs', value: nc, deltaPct: 8, trend: 'up', tone: 'bad' },
-        { key: 'openCAPAs', label: 'Open CAPAs', value: 4 + Math.floor(rnd() * 6), deltaPct: -12, trend: 'down', tone: 'brand' },
-        { key: 'pendingApprovals', label: 'Pending Approvals', value: 3 + Math.floor(rnd() * 4), deltaPct: 0, trend: 'flat', tone: 'info' },
-        { key: 'expiringDocs', label: 'Expiring Docs', value: 1 + Math.floor(rnd() * 3), deltaPct: 0, trend: 'flat', tone: 'warn' },
-        { key: 'overdueActions', label: 'Overdue Actions', value: 2 + Math.floor(rnd() * 4), deltaPct: 5, trend: 'up', tone: 'bad' },
-      ],
-    };
-  }
-
   const deltaPct = prevOpenNCs ? Math.round(((openNCs - prevOpenNCs) / prevOpenNCs) * 100) : 0;
   return {
     sample: false,
@@ -220,34 +198,6 @@ async function buildNonConformance(ctx: Ctx, buckets: Bucket[]) {
     where: { ...deptWhere(ctx), createdAt: { gte: first } },
     select: { createdAt: true, severity: true, status: true, track: true, department: { select: { name: true } } },
   });
-
-  if (rows.length === 0) {
-    const rnd = seeded(13 + buckets.length);
-    const trend = buckets.map((b) => ({ month: b.label, count: 3 + Math.floor(rnd() * 8) }));
-    const total = sum(trend.map((t) => t.count));
-    return {
-      sample: true,
-      trend,
-      severityTrend: buckets.map((b, i) => {
-        const c = trend[i].count;
-        return { month: b.label, Critical: Math.round(c * 0.15), Major: Math.round(c * 0.45), Minor: Math.max(0, c - Math.round(c * 0.15) - Math.round(c * 0.45)) };
-      }),
-      byType: [
-        { type: 'Deviation', count: Math.round(total * 0.3) },
-        { type: 'Product NC', count: Math.round(total * 0.24) },
-        { type: 'Process NC', count: Math.round(total * 0.26) },
-        { type: 'OOS', count: Math.round(total * 0.12) },
-        { type: 'Complaint', count: Math.round(total * 0.08) },
-      ].filter((t) => t.count > 0),
-      byDepartment: [
-        { dept: 'Production', count: Math.round(total * 0.32) },
-        { dept: 'QC Lab', count: Math.round(total * 0.24) },
-        { dept: 'Warehouse', count: Math.round(total * 0.18) },
-        { dept: 'QA', count: Math.round(total * 0.14) },
-        { dept: 'Engineering', count: Math.round(total * 0.12) },
-      ].filter((d) => d.count > 0),
-    };
-  }
 
   const inBucket = (d: Date, b: Bucket) => d >= b.start && d < b.end;
   const trend = buckets.map((b) => ({ month: b.label, count: rows.filter((r) => inBucket(r.createdAt, b)).length }));
@@ -279,26 +229,6 @@ async function buildCapa(ctx: Ctx) {
     where: { ...deptWhere(ctx), status: { notIn: ['CLOSED', 'CANCELLED'] } },
     select: { createdAt: true, dueDate: true },
   });
-
-  if (grouped.length === 0) {
-    const rnd = seeded(29);
-    return {
-      sample: true,
-      byStage: [
-        { stage: 'Open', count: 3 + Math.floor(rnd() * 3) },
-        { stage: 'Investigation', count: 2 + Math.floor(rnd() * 3) },
-        { stage: 'Plan', count: 4 + Math.floor(rnd() * 3) },
-        { stage: 'Implementation', count: 6 + Math.floor(rnd() * 4) },
-        { stage: 'Verification', count: 3 + Math.floor(rnd() * 3) },
-        { stage: 'Closed', count: 18 + Math.floor(rnd() * 10) },
-      ],
-      aging: [
-        { bucket: '0-15d', count: 6 }, { bucket: '16-30d', count: 4 },
-        { bucket: '31-60d', count: 3 }, { bucket: '60d+', count: 2 },
-      ],
-      onTimeClosureRate: 87,
-    };
-  }
 
   const stageOrder = ['OPEN', 'INVESTIGATION', 'PLAN', 'IMPLEMENTATION', 'VERIFICATION', 'CLOSED', 'CANCELLED'];
   const stageLabel: Record<string, string> = { OPEN: 'Open', INVESTIGATION: 'Investigation', PLAN: 'Plan', IMPLEMENTATION: 'Implementation', VERIFICATION: 'Verification', CLOSED: 'Closed', CANCELLED: 'Cancelled' };
@@ -332,17 +262,6 @@ async function buildComplaints(ctx: Ctx, buckets: Bucket[]) {
     select: { createdAt: true, updatedAt: true, flows: { select: { isCompleted: true } } },
   }).catch(() => [] as { createdAt: Date; updatedAt: Date; flows: { isCompleted: boolean }[] }[]);
 
-  if (tickets.length === 0) {
-    const rnd = seeded(41 + buckets.length);
-    return {
-      sample: true,
-      trend: buckets.map((b) => {
-        const received = 4 + Math.floor(rnd() * 6);
-        return { month: b.label, received, resolved: Math.max(0, received - 1 + Math.floor(rnd() * 3 - 1)), pending: Math.max(0, Math.floor(rnd() * 3)) };
-      }),
-    };
-  }
-
   // "Resolved" = a ticket whose every workflow flow is completed (closed out),
   // bucketed by the last-updated timestamp. No status column exists on Ticket.
   const isResolved = (t: { flows: { isCompleted: boolean }[] }) => t.flows.length > 0 && t.flows.every((f) => f.isCompleted);
@@ -363,18 +282,6 @@ async function buildDocuments(ctx: Ctx) {
   };
   const label: Record<string, string> = { DRAFT: 'Draft', IN_REVIEW: 'Under Review', APPROVED: 'Approved', EFFECTIVE: 'Effective', SUPERSEDED: 'Superseded', RETIRED: 'Retired' };
 
-  if (grouped.length === 0) {
-    return {
-      sample: true,
-      pipeline: [
-        { status: 'Draft', count: 9, fill: palette.DRAFT },
-        { status: 'Under Review', count: 6, fill: palette.IN_REVIEW },
-        { status: 'Approved', count: 4, fill: palette.APPROVED },
-        { status: 'Effective', count: 52, fill: palette.EFFECTIVE },
-        { status: 'Superseded', count: 8, fill: palette.SUPERSEDED },
-      ],
-    };
-  }
   const pipeline = grouped.map((g) => ({ status: label[g.status] ?? g.status, count: g._count, fill: palette[g.status] ?? '#94a3b8' }));
   return { sample: false, pipeline };
 }
@@ -385,16 +292,6 @@ async function buildTraining(ctx: Ctx) {
   const assignments = await prisma.trainingAssignment.findMany({
     select: { status: true, userId: true },
   }).catch(() => [] as { status: string; userId: string }[]);
-
-  if (assignments.length === 0) {
-    const rnd = seeded(53);
-    const depts = ['QA', 'Production', 'QC', 'Engineering', 'Warehouse', 'Regulatory'];
-    return {
-      sample: true,
-      byDept: depts.map((d) => ({ dept: d, compliance: 80 + Math.floor(rnd() * 18) })),
-      overall: 90,
-    };
-  }
 
   const userIds = [...new Set(assignments.map((a) => a.userId))];
   const users = await prisma.user.findMany({
@@ -422,18 +319,6 @@ async function buildAudit(ctx: Ctx) {
     select: { severity: true, status: true, program: { select: { register: { select: { title: true } } } } },
   }).catch(() => [] as { severity: string; status: string }[]);
 
-  if (findings.length === 0) {
-    const rnd = seeded(67);
-    const depts = ['QC Lab', 'Production', 'QA', 'Warehouse', 'Engineering'];
-    return {
-      sample: true,
-      findingsByDept: depts.map((d) => ({ dept: d, Major: 1 + Math.floor(rnd() * 4), Minor: 2 + Math.floor(rnd() * 5), OFI: 1 + Math.floor(rnd() * 4) })),
-      severityMix: [
-        { name: 'Critical', value: 3 }, { name: 'Major', value: 11 }, { name: 'Minor', value: 24 }, { name: 'Observation', value: 15 },
-      ],
-    };
-  }
-
   const sevMix = [
     { name: 'Critical', value: findings.filter((f) => f.severity === 'CRITICAL').length },
     { name: 'Major', value: findings.filter((f) => f.severity === 'MAJOR').length },
@@ -458,15 +343,6 @@ async function buildAudit(ctx: Ctx) {
 async function buildInspection() {
   const grouped = await prisma.sampleTest.groupBy({ by: ['overallResult'], _count: true }).catch(() => [] as { overallResult: string | null; _count: number }[]);
 
-  if (grouped.length === 0) {
-    return {
-      sample: true,
-      byResult: [
-        { result: 'Pass', count: 142 }, { result: 'Fail', count: 11 }, { result: 'Conditional', count: 18 }, { result: 'Pending', count: 7 },
-      ],
-      passRate: 87.5,
-    };
-  }
   const byResult = grouped.map((g) => ({ result: g.overallResult ?? 'Pending', count: g._count }));
   const pass = byResult.find((b) => /PASS|WITHIN/i.test(b.result))?.count ?? 0;
   const total = sum(byResult.map((b) => b.count));
@@ -483,17 +359,6 @@ async function buildCalibration() {
     prisma.equipment.count({ where: { isDeleted: false, status: { not: 'ACTIVE' } } }).catch(() => 0),
   ]);
 
-  if (current + dueSoon + overdue + oos === 0) {
-    return {
-      sample: true,
-      status: [
-        { status: 'Current', count: 12, fill: '#22C55E' },
-        { status: 'Due Soon', count: 3, fill: '#F59E0B' },
-        { status: 'Overdue', count: 2, fill: '#EF4444' },
-        { status: 'Out of Service', count: 1, fill: '#94a3b8' },
-      ],
-    };
-  }
   return {
     sample: false,
     status: [
@@ -513,17 +378,6 @@ async function buildScorecard(ctx: Ctx) {
     prisma.nonConformance.count({ where: deptWhere(ctx) }),
   ]);
 
-  if (capaTotal === 0 && ncTotal === 0) {
-    return {
-      sample: true,
-      kpis: [
-        { label: 'CAPA Closure Rate', value: '87%', sub: 'Within target', tone: 'good' },
-        { label: 'NC Closure Rate', value: '82%', sub: 'This period', tone: 'good' },
-        { label: 'First-Pass Inspection', value: '94.2%', sub: 'vs 95% target', tone: 'warn' },
-        { label: 'On-Time CAPA', value: '85%', sub: 'Closed by due date', tone: 'good' },
-      ],
-    };
-  }
   const capaRate = pct(capaClosed, capaTotal, 0);
   const ncRate = pct(ncClosed, ncTotal, 0);
   return {
@@ -544,18 +398,6 @@ async function buildActivity(ctx: Ctx, limit: number) {
     select: { id: true, action: true, entityType: true, entityId: true, userName: true, createdAt: true },
   }).catch(() => [] as { id: string; action: string; entityType: string; entityId: string; userName: string | null; createdAt: Date }[]);
 
-  if (rows.length === 0) {
-    const now = Date.now();
-    const sample = [
-      { action: 'CREATE', entityType: 'NON_CONFORMANCE', entityId: 'NC-2025-0312', userName: 'Priya Sharma' },
-      { action: 'APPROVE', entityType: 'DOCUMENT', entityId: 'SOP-QC-088', userName: 'Rajesh Kumar' },
-      { action: 'CLOSE', entityType: 'CAPA', entityId: 'CAPA-2025-0201', userName: 'Anita Desai' },
-      { action: 'UPDATE', entityType: 'NON_CONFORMANCE', entityId: 'NC-2025-0308', userName: 'Vikram Patel' },
-      { action: 'PUBLISH', entityType: 'DOCUMENT', entityId: 'BMR-2025-112', userName: 'Sunita Rao' },
-      { action: 'CREATE', entityType: 'AUDIT', entityId: 'AUD-2025-Q3', userName: 'Priya Sharma' },
-    ].slice(0, limit).map((s, i) => ({ id: `s${i}`, ...s, createdAt: new Date(now - (i + 1) * 6 * 3600_000).toISOString() }));
-    return { sample: true, items: sample };
-  }
   return {
     sample: false,
     items: rows.map((r) => ({ id: r.id, action: r.action, entityType: r.entityType, entityId: r.entityId, userName: r.userName ?? 'System', createdAt: r.createdAt.toISOString() })),

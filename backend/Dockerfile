@@ -54,6 +54,10 @@ COPY --from=prod-deps --chown=app:app /app/backend/package.json ./backend/
 COPY --from=prod-deps --chown=app:app /app/backend/prisma ./backend/prisma
 # Built JS
 COPY --from=builder --chown=app:app /app/backend/dist ./backend/dist
+# prisma/seed.ts imports ../src/lib/rbac-catalog directly, so `npx tsx
+# prisma/seed.ts` inside this image needs that one source file (it has no
+# imports of its own — the rest of src/ stays out).
+COPY --from=builder --chown=app:app /app/backend/src/lib/rbac-catalog.ts ./backend/src/lib/rbac-catalog.ts
 
 USER app
 WORKDIR /app/backend

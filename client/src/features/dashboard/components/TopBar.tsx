@@ -45,7 +45,7 @@ export default function TopBar() {
 
         <div className="updated">
           <span className="live" />
-          {isSample ? 'Sample data' : 'Live'} · {updated}
+          {isSample ? 'Offline — no data' : 'Live'} · {updated}
         </div>
 
         <div className="seg">
