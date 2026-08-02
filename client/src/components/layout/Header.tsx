@@ -17,7 +17,6 @@ import NotificationPanel from '@/components/shared/NotificationPanel';
 import { LanguageSwitcher } from '@/components/shared/LanguageSwitcher';
 import { cn } from '@/lib/utils';
 import GlobalSearch from '@/components/shared/GlobalSearch';
-import { useFiscalYearStore, FISCAL_YEARS } from '@/stores/fiscalYearStore';
 
 const breadcrumbMap: Record<string, string> = {
   dashboard: 'Dashboard', qms: 'Quality', dms: 'Documents',
@@ -36,6 +35,7 @@ const breadcrumbMap: Record<string, string> = {
   calibration: 'Calibration', inspection: 'Inspection',
   workflows: 'Workflows', competency: 'Competency Matrix',
   'api-docs': 'API Docs',
+  profile: 'Profile & Preferences', 'out-of-office': 'Out of Office',
 };
 
 // Notification severity icon
@@ -159,7 +159,6 @@ export default function Header() {
   const { user, logout } = useAuthStore();
   const { setSidebarOpen } = useUIStore();
   const { notifications, isOpen, openPanel, setNotifications } = useNotificationStore();
-  const { year: fyYear, setYear: setFyYear } = useFiscalYearStore();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifDropdown, setShowNotifDropdown] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -294,24 +293,6 @@ export default function Header() {
           {/* Site selector — scopes ticket lists to the active site */}
           <SiteSelector />
 
-          {/* FY selector — compact toggle */}
-          <div className="hidden sm:flex items-center border border-gray-200 rounded overflow-hidden ml-1">
-            {FISCAL_YEARS.map(y => (
-              <button
-                key={y}
-                onClick={() => setFyYear(y)}
-                className="px-2 h-6 text-[11px] font-medium transition-colors border-r last:border-r-0"
-                style={
-                  fyYear === y
-                    ? { backgroundColor: '#0D0E17', color: '#F59E0B' }
-                    : { backgroundColor: 'transparent', color: '#9CA3AF' }
-                }
-              >
-                {y}
-              </button>
-            ))}
-          </div>
-
           {/* Role badge — always visible per compliance req. */}
           {roleLabel && (
             <span className="hidden sm:inline-flex items-center px-2 h-5 rounded text-xxs font-semibold tracking-wide"
@@ -423,7 +404,10 @@ export default function Header() {
                       </span>
                     )}
                   </div>
-                  <button className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-ink hover:bg-surface-bg transition-colors">
+                  <button
+                    onClick={() => { setShowUserMenu(false); navigate('/profile'); }}
+                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-ink hover:bg-surface-bg transition-colors"
+                  >
                     <User size={13} className="text-ink-tertiary" />
                     Profile & Preferences
                   </button>

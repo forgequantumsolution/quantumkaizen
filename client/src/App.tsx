@@ -13,6 +13,7 @@ import WorkflowLookupsPage from '@/features/admin/workflow-lookups/WorkflowLooku
 import BusinessCalendarsPage from '@/features/admin/business-calendars/BusinessCalendarsPage';
 import AuditTrailPage from '@/features/admin/audit-trail/AuditTrailPage';
 import OutOfOfficePage from '@/features/profile/OutOfOfficePage';
+import ProfilePage from '@/features/profile/ProfilePage';
 // Tickets
 import TicketsPage from '@/features/tickets/TicketsPage';
 import TicketDetailPage from '@/features/tickets/TicketDetailPage';
@@ -171,6 +172,7 @@ export default function App() {
           <Route path="/admin/audit-trail" element={<AuditTrailPage />} />
           <Route path="/tickets" element={<TicketsPage />} />
           <Route path="/tickets/:id" element={<TicketDetailPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route path="/out-of-office" element={<OutOfOfficePage />} />
           <Route path="/modules/:typeId" element={<ModulePage />} />
 

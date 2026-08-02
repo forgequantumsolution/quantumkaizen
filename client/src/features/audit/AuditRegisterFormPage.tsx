@@ -20,8 +20,7 @@ import {
 } from '@/lib/api/audit';
 import { useUserDirectory } from '@/features/admin/users/hooks';
 import { useWorkflowDirectory } from '@/lib/api/workflow';
-import { fyLabel } from '@/stores/fiscalYearStore';
-import { useFiscalYearStore } from '@/stores/fiscalYearStore';
+import { currentFiscalYear, fyLabel } from '@/stores/fiscalYearStore';
 
 // The workflow type that scopes the "Audit Workflow" picker — a register may
 // only follow a workflow whose type is Audit (matches the AUD code-prefix type).
@@ -90,13 +89,11 @@ export default function AuditRegisterFormPage() {
   const { data: regData, isLoading: loadingReg } = useAuditRegister(id);
   const register = isEdit ? regData?.data ?? null : null;
 
-  // A new register defaults its Financial Year to the year selected in the
-  // top-bar fiscal-year selector, keeping the whole app on one FY.
-  const globalFiscalYear = useFiscalYearStore((s) => s.year);
-
   const [draft, setDraft] = useState<DraftState>(() => {
     const d = initialDraft(register);
-    if (!isEdit && !d.financial_year) d.financial_year = fyLabel(globalFiscalYear);
+    // A new register defaults its Financial Year to the current one; the user
+    // can pick any other from FY_OPTIONS.
+    if (!isEdit && !d.financial_year) d.financial_year = fyLabel(currentFiscalYear());
     return d;
   });
   const [hydrated, setHydrated] = useState(!isEdit);
