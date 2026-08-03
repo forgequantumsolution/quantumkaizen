@@ -69,6 +69,7 @@ export function ChartCard({
   accent,
   children,
   className,
+  bodyAlign = 'center',
 }: {
   title: string;
   subtitle?: string;
@@ -77,6 +78,12 @@ export function ChartCard({
   accent?: string;
   children: ReactNode;
   className?: string;
+  /**
+   * How the body sits in the card. Charts read best centred (the default), but
+   * lists, tables and matrices must start at the top — centring them leaves a
+   * gap above the first row whenever a taller card stretches the grid row.
+   */
+  bodyAlign?: 'center' | 'top';
 }) {
   return (
     <div
@@ -97,9 +104,16 @@ export function ChartCard({
         </div>
         {action}
       </div>
-      {/* Body fills the card and centres its chart so sparse data still reads as
-          an intentional, balanced panel rather than a collapsed one. */}
-      <div className="flex flex-1 flex-col justify-center">{children}</div>
+      {/* Body fills the card. Charts centre so sparse data still reads as an
+          intentional, balanced panel rather than a collapsed one; lists and
+          tables anchor to the top (see bodyAlign). */}
+      <div
+        className={`flex min-w-0 flex-1 flex-col ${
+          bodyAlign === 'top' ? 'justify-start' : 'justify-center'
+        }`}
+      >
+        {children}
+      </div>
     </div>
   );
 }

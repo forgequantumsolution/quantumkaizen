@@ -24,7 +24,12 @@ export interface DashboardOverview {
     department: string | null;
     site: { id: string; code: string; name: string } | null;
     organization: { name: string; industry: string; standards: string[] } | null;
-    range: DashRange; canViewAll: boolean;
+    range: DashRange;
+    /** Calendar year the figures are reported "as of". */
+    year?: number;
+    /** ISO instant the figures are reported "as of". */
+    asOf?: string;
+    canViewAll: boolean;
   };
   layout: PanelKey[];
   panels: {
@@ -65,12 +70,12 @@ export const RANGE_LABEL: Record<DashRange, string> = {
 // Query hook — falls back to a representative sample when the API is offline
 // (mirrors the app-wide demo-deploy pattern where hooks catch → mock).
 // ─────────────────────────────────────────────────────────────────────────────
-export function useDashboardOverview(range: DashRange, siteId: string | null) {
+export function useDashboardOverview(range: DashRange, siteId: string | null, year: number) {
   return useQuery({
-    queryKey: ['dashboard-overview', range, siteId],
+    queryKey: ['dashboard-overview', range, siteId, year],
     queryFn: async (): Promise<DashboardOverview> => {
       const res = await api.get('/dashboard/overview', {
-        params: { range, ...(siteId ? { siteId } : {}) },
+        params: { range, year, ...(siteId ? { siteId } : {}) },
       });
       return res.data as DashboardOverview;
     },

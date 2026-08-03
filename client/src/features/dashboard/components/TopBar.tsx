@@ -1,11 +1,11 @@
-import { useDashboard, SEG_TO_RANGE, RANGE_TO_SEG } from '../context';
+import { useDashboard, SEG_TO_RANGE, RANGE_TO_SEG, DASH_YEARS, CURRENT_YEAR } from '../context';
 import { useAuthStore } from '@/stores/authStore';
 import { useSiteStore } from '@/stores/siteStore';
 
 const RANGES = ['7D', '1M', '3M', '12M', '3Y'] as const;
 
 export default function TopBar() {
-  const { range, setRange, data, isSample } = useDashboard();
+  const { range, setRange, data, isSample, year, setYear, isHistoric } = useDashboard();
   const activeSeg = RANGE_TO_SEG[range];
 
   const allowedSites = useAuthStore((s) => s.user?.allowedSites ?? []);
@@ -44,8 +44,28 @@ export default function TopBar() {
         <div className="spacer" />
 
         <div className="updated">
-          <span className="live" />
-          {isSample ? 'Offline — no data' : 'Live'} · {updated}
+          <span className={isHistoric ? 'live historic' : 'live'} />
+          {isSample
+            ? 'Offline — no data'
+            : isHistoric
+              ? `As of 31 Dec ${year}`
+              : `Live · ${updated}`}
+        </div>
+
+        {/* Year — anchors every panel to 31 Dec of a past year, or to now for
+            the current one. Sits before the range toggle because it scopes it. */}
+        <div className="seg">
+          {DASH_YEARS.map((y) => (
+            <button
+              key={y}
+              className={year === y ? 'active' : ''}
+              onClick={() => setYear(y)}
+              type="button"
+              title={y === CURRENT_YEAR ? 'Live figures' : `Figures as they stood on 31 Dec ${y}`}
+            >
+              {y}
+            </button>
+          ))}
         </div>
 
         <div className="seg">

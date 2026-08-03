@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Empty, Progress, Spin, Tag } from 'antd';
+import { Alert, Empty, Spin, Tag } from 'antd';
 import {
   Ruler,
   AlertTriangle,
@@ -12,17 +12,21 @@ import {
   Repeat,
   Sigma,
   Truck,
-  Layers,
-  Plug,
   ArrowRight,
-  Package,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import PageContainer from '@/components/layout/PageContainer';
 import { KpiCard } from '@/components/ui';
 import {
+  ComplianceGauge,
+  AgingBucketChart,
+  FunnelChart,
+  DonutChart,
+  CategoryParetoChart,
+  type Slice,
+} from '@/components/analytics';
+import {
   useCalibrationOverview,
-  useCapabilities,
   STATUS_BADGE,
   CRITICALITY_BADGE,
   EVENT_STATUS_BADGE,
@@ -30,8 +34,35 @@ import {
   KIND_LABELS,
   fmtDate,
   fmtDateTime,
-  type Overview,
 } from '@/lib/api/calibration';
+
+/**
+ * Chart colours for calibration status. The STATUS_BADGE map holds Tailwind
+ * classes, which recharts can't consume — these are the same hues as hex.
+ */
+const STATUS_HEX: Record<string, string> = {
+  CALIBRATED: '#10B981',
+  DUE_SOON: '#F59E0B',
+  OVERDUE: '#DC2626',
+  UNDER_CALIBRATION: '#3B82F6',
+  LIMITED_USE: '#F97316',
+  OUT_OF_SERVICE: '#991B1B',
+  NOT_REQUIRED: '#94A3B8',
+};
+
+const OOT_STATUS_CHART: Record<string, { label: string; color: string }> = {
+  OPEN: { label: 'Open', color: '#DC2626' },
+  IMPACT_IN_PROGRESS: { label: 'Impact in progress', color: '#F59E0B' },
+  PENDING_QA_APPROVAL: { label: 'Pending QA approval', color: '#D97706' },
+  CLOSED: { label: 'Closed', color: '#10B981' },
+};
+
+const OUTCOME_CHART: Record<string, { label: string; color: string }> = {
+  PASS: { label: 'Pass', color: '#10B981' },
+  FAIL: { label: 'Fail', color: '#DC2626' },
+  CONDITIONAL: { label: 'Conditional', color: '#F59E0B' },
+  NOT_PERFORMED: { label: 'Not performed', color: '#94A3B8' },
+};
 
 /**
  * Calibration Overview — the module's front door.
@@ -44,12 +75,93 @@ import {
 export default function CalibrationDashboardPage() {
   const nav = useNavigate();
   const { data: o, isLoading } = useCalibrationOverview(90);
-  const { data: caps } = useCapabilities();
+  // Chart series, all derived from the single overview payload so they can't
+  // disagree with the tiles above them.
+  const charts = useMemo(() => {
+    const statusRows = o?.instruments.by_status ?? [];
+    const statusMap = new Map(statusRows.map((r) => [r.status, r.count]));
 
-  const unavailableIntegrations = useMemo(
-    () => Object.values(caps?.integrations ?? {}).filter((i) => !i.available).length,
-    [caps],
-  );
+    const fleet: Slice[] = statusRows
+      .filter((r) => r.count > 0)
+      .map((r) => ({
+        name: STATUS_BADGE[r.status].label,
+        value: r.count,
+        color: STATUS_HEX[r.status] ?? '#94A3B8',
+      }));
+
+    // The API's due_7 / due_30 / due_90 are CUMULATIVE windows (each counts
+    // everything due between now and N days out), so they must be subtracted
+    // into disjoint bands before charting — plotting them raw would count the
+    // same instrument in three bars.
+    const d7 = o?.schedule.due_7 ?? 0;
+    const d30 = o?.schedule.due_30 ?? 0;
+    const d90 = o?.schedule.due_90 ?? 0;
+    const dueHorizon: Slice[] = [
+      { name: 'Overdue', value: o?.schedule.overdue ?? 0, color: '#DC2626' },
+      { name: '0–7d', value: d7, color: '#F97316' },
+      { name: '8–30d', value: Math.max(0, d30 - d7), color: '#F59E0B' },
+      { name: '31–90d', value: Math.max(0, d90 - d30), color: '#3B82F6' },
+    ];
+
+    // The real order calibrations move through — a funnel reads the bottleneck
+    // straight off the widest band.
+    const pipeline: Slice[] = [
+      { name: 'Scheduled', value: o?.events.scheduled ?? 0, color: '#3B82F6' },
+      { name: 'In progress', value: o?.events.in_progress ?? 0, color: '#6366F1' },
+      { name: 'Pending review', value: o?.events.pending_review ?? 0, color: '#F59E0B' },
+      { name: 'Pending approval', value: o?.events.pending_approval ?? 0, color: '#D97706' },
+    ];
+
+    const byKind: Slice[] = (o?.instruments.by_kind ?? []).map((k) => ({
+      name: KIND_LABELS[k.kind],
+      value: k.count,
+    }));
+
+    const msa: Slice[] = [
+      { name: 'Acceptable', value: o?.msa.acceptable ?? 0, color: '#10B981' },
+      { name: 'Conditional', value: o?.msa.conditional ?? 0, color: '#F59E0B' },
+      { name: 'Rejected', value: o?.msa.unacceptable ?? 0, color: '#DC2626' },
+      { name: 'Not computed', value: o?.msa.not_computed ?? 0, color: '#94A3B8' },
+    ].filter((s) => s.value > 0);
+
+    const ootByStatus: Slice[] = (o?.oot.by_status ?? [])
+      .filter((r) => r.count > 0)
+      .map((r) => ({
+        name: OOT_STATUS_CHART[r.status]?.label ?? r.status,
+        value: r.count,
+        color: OOT_STATUS_CHART[r.status]?.color ?? '#94A3B8',
+      }));
+
+    // Outcome split of the in-use checks actually performed in the last 7 days.
+    const checkTally = new Map<string, number>();
+    for (const c of o?.checks.recent ?? []) {
+      checkTally.set(c.outcome, (checkTally.get(c.outcome) ?? 0) + 1);
+    }
+    const checkOutcomes: Slice[] = [...checkTally.entries()].map(([outcome, value]) => ({
+      name: OUTCOME_CHART[outcome]?.label ?? outcome,
+      value,
+      color: OUTCOME_CHART[outcome]?.color ?? '#94A3B8',
+    }));
+
+    return {
+      fleet,
+      dueHorizon,
+      pipeline,
+      byKind,
+      msa,
+      ootByStatus,
+      checkOutcomes,
+      // Instruments found within tolerance on arrival — the inverse of the
+      // as-found failure rate the API returns.
+      asFoundPassRate:
+        o?.events.as_found_failure_rate === null || o?.events.as_found_failure_rate === undefined
+          ? null
+          : 100 - o.events.as_found_failure_rate,
+      // Matches the backend's compliance_rate numerator exactly (CALIBRATED +
+      // DUE_SOON), so the gauge caption can't contradict the percentage.
+      inDate: (statusMap.get('CALIBRATED') ?? 0) + (statusMap.get('DUE_SOON') ?? 0),
+    };
+  }, [o]);
 
   if (isLoading || !o) {
     return (
@@ -125,8 +237,36 @@ export default function CalibrationDashboardPage() {
         />
       </div>
 
-      {/* ── Things that quietly undermine the programme ── */}
-      <Attention o={o} nav={nav} />
+      {/* ── Programme at a glance: the three shapes the tiles can't show ── */}
+      {!empty && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+          <Panel title="Calibration Compliance" icon={CheckCircle2} to="/calibration/instruments" nav={nav}>
+            <ComplianceGauge
+              value={o.instruments.compliance_rate ?? 0}
+              target={95}
+              label="Instruments in date"
+              caption={`${charts.inDate} of ${o.instruments.total} instruments`}
+            />
+          </Panel>
+
+          <Panel title="Due Horizon" icon={CalendarClock} to="/calibration/schedule" nav={nav}>
+            <AgingBucketChart
+              data={charts.dueHorizon}
+              height={230}
+              valueLabel="Instruments"
+              emptyLabel="Nothing due in the next 90 days"
+            />
+          </Panel>
+
+          <Panel title="Calibration Pipeline" icon={ClipboardCheck} to="/calibration/events" nav={nav}>
+            <FunnelChart
+              stages={charts.pipeline}
+              height={230}
+              emptyLabel="No calibrations in flight"
+            />
+          </Panel>
+        </div>
+      )}
 
       {/* ── Instruments ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
@@ -137,36 +277,23 @@ export default function CalibrationDashboardPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <Label>By calibration status</Label>
-                <div className="space-y-1.5">
-                  {o.instruments.by_status.map((row) => {
-                    const b = STATUS_BADGE[row.status];
-                    const share = o.instruments.total ? (row.count / o.instruments.total) * 100 : 0;
-                    return (
-                      <div key={row.status} className="flex items-center gap-2">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border w-[105px] justify-center ${b.cls}`}>
-                          {b.label}
-                        </span>
-                        <Progress
-                          percent={Math.round(share)}
-                          size="small"
-                          showInfo={false}
-                          strokeColor={row.status === 'OVERDUE' || row.status === 'OUT_OF_SERVICE' ? '#dc2626' : undefined}
-                          className="flex-1 !mb-0"
-                        />
-                        <span className="text-[11px] font-semibold text-gray-700 w-6 text-right">{row.count}</span>
-                      </div>
-                    );
-                  })}
-                </div>
+                <DonutChart
+                  data={charts.fleet}
+                  height={250}
+                  centerLabel="instruments"
+                  emptyLabel="No instrument statuses yet"
+                />
               </div>
               <div className="space-y-3">
                 <div>
                   <Label>By kind</Label>
-                  <div className="flex flex-wrap gap-1.5">
-                    {o.instruments.by_kind.map((k) => (
-                      <Chip key={k.kind} label={KIND_LABELS[k.kind]} value={k.count} />
-                    ))}
-                  </div>
+                  <CategoryParetoChart
+                    data={charts.byKind}
+                    height={180}
+                    cumulativeLine={false}
+                    valueLabel="Instruments"
+                    emptyLabel="No instrument kinds recorded"
+                  />
                 </div>
                 <div>
                   <Label>By criticality</Label>
@@ -193,13 +320,10 @@ export default function CalibrationDashboardPage() {
         </Panel>
 
         {/* ── Schedule ── */}
+        {/* The overdue/7/30/90 counts that used to sit here are now the Due
+            Horizon chart above, so this panel is just the next-due list. */}
         <Panel title="Schedule" icon={CalendarClock} to="/calibration/schedule" nav={nav}>
-          <div className="grid grid-cols-4 gap-2 mb-3 text-center">
-            <Stat v={o.schedule.overdue} l="overdue" tone={o.schedule.overdue > 0 ? 'red' : undefined} />
-            <Stat v={o.schedule.due_7} l="7 days" />
-            <Stat v={o.schedule.due_30} l="30 days" />
-            <Stat v={o.schedule.due_90} l="90 days" />
-          </div>
+          <Label>Next due</Label>
           {o.schedule.next.length === 0 ? (
             <Blank text="Nothing scheduled" />
           ) : (
@@ -223,13 +347,9 @@ export default function CalibrationDashboardPage() {
 
       {/* ── Calibrations + Out of tolerance ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        {/* The scheduled/in-progress/review/approval counts that used to sit
+            here are now the Calibration Pipeline funnel above. */}
         <Panel title="Calibrations" icon={ClipboardCheck} to="/calibration/events" nav={nav}>
-          <div className="grid grid-cols-4 gap-2 mb-3 text-center">
-            <Stat v={o.events.scheduled} l="scheduled" />
-            <Stat v={o.events.in_progress} l="in progress" />
-            <Stat v={o.events.pending_review} l="review" tone={o.events.pending_review > 0 ? 'amber' : undefined} />
-            <Stat v={o.events.pending_approval} l="approval" tone={o.events.pending_approval > 0 ? 'amber' : undefined} />
-          </div>
           <div className="flex gap-4 text-[11px] text-gray-600 mb-3 pb-2 border-b border-gray-100">
             <span>
               <strong className="text-gray-900">{o.events.completed_in_window}</strong> completed / {o.window_days}d
@@ -270,11 +390,30 @@ export default function CalibrationDashboardPage() {
         </Panel>
 
         <Panel title="Out of Tolerance" icon={AlertTriangle} to="/calibration/oot" nav={nav}>
-          <div className="grid grid-cols-4 gap-2 mb-3 text-center">
-            <Stat v={o.oot.open} l="open" tone={o.oot.open > 0 ? 'red' : undefined} />
-            <Stat v={o.oot.impact_confirmed} l="confirmed" tone={o.oot.impact_confirmed > 0 ? 'red' : undefined} />
-            <Stat v={o.oot.no_impact} l="no impact" />
-            <Stat v={o.oot.affected_records} l="records" tone={o.oot.affected_records > 0 ? 'amber' : undefined} />
+          {/* by_status is a true distribution, so it charts honestly; the other
+              figures are separate measures and stay as a summary line. */}
+          <DonutChart
+            data={charts.ootByStatus}
+            height={210}
+            centerLabel="assessments"
+            emptyLabel="No out-of-tolerance assessments"
+          />
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-gray-600 my-3 pt-2 border-t border-gray-100">
+            <span>
+              impact confirmed{' '}
+              <strong className={o.oot.impact_confirmed > 0 ? 'text-red-600' : 'text-gray-900'}>
+                {o.oot.impact_confirmed}
+              </strong>
+            </span>
+            <span>
+              no impact <strong className="text-gray-900">{o.oot.no_impact}</strong>
+            </span>
+            <span>
+              affected records{' '}
+              <strong className={o.oot.affected_records > 0 ? 'text-amber-700' : 'text-gray-900'}>
+                {o.oot.affected_records}
+              </strong>
+            </span>
           </div>
           {(o.oot.awaiting_customer_notification > 0 || o.oot.awaiting_product_hold > 0) && (
             <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
@@ -308,14 +447,43 @@ export default function CalibrationDashboardPage() {
         </Panel>
       </div>
 
-      {/* ── Config-side surfaces ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+      {/* ── Quality of the calibrations themselves, plus traceability ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+        <Panel title="As-Found Quality" icon={ShieldAlert} to="/calibration/events" nav={nav}>
+          {charts.asFoundPassRate === null ? (
+            <Blank text={`No calibrations completed in ${o.window_days} days`} />
+          ) : (
+            <ComplianceGauge
+              value={charts.asFoundPassRate}
+              target={90}
+              label="Found in tolerance"
+              caption={`${o.events.completed_in_window} completed / ${o.window_days}d · on time ${
+                o.events.on_time_rate === null ? '—' : `${o.events.on_time_rate}%`
+              }`}
+            />
+          )}
+        </Panel>
+
         {o.checks.enabled && (
           <Panel title="In-Use Checks" icon={Repeat} to="/calibration/checks" nav={nav}>
-            <div className="grid grid-cols-3 gap-2 mb-3 text-center">
-              <Stat v={o.checks.due_now} l="due now" tone={o.checks.due_now > 0 ? 'amber' : undefined} />
-              <Stat v={o.checks.failed_7d} l="failed 7d" tone={o.checks.failed_7d > 0 ? 'red' : undefined} />
-              <Stat v={o.checks.monitored_instruments} l="monitored" />
+            <DonutChart
+              data={charts.checkOutcomes}
+              height={190}
+              centerLabel="checks / 7d"
+              emptyLabel="No checks in the last 7 days"
+            />
+            <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-gray-600 my-3 pt-2 border-t border-gray-100">
+              <span>
+                due now{' '}
+                <strong className={o.checks.due_now > 0 ? 'text-amber-700' : 'text-gray-900'}>{o.checks.due_now}</strong>
+              </span>
+              <span>
+                failed 7d{' '}
+                <strong className={o.checks.failed_7d > 0 ? 'text-red-600' : 'text-gray-900'}>{o.checks.failed_7d}</strong>
+              </span>
+              <span>
+                monitored <strong className="text-gray-900">{o.checks.monitored_instruments}</strong>
+              </span>
             </div>
             {o.checks.recent.length === 0 ? (
               <Blank text="No checks in the last 7 days" />
@@ -381,21 +549,21 @@ export default function CalibrationDashboardPage() {
             </div>
           )}
         </Panel>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        {/* MSA lives in this row rather than one of its own: it's optional, so
+            a dedicated row collapses to a lone card whenever it's disabled. */}
         {o.msa.enabled && (
           <Panel title="MSA / Gage R&R" icon={Sigma} to="/calibration/config/msa" nav={nav}>
             {o.msa.total === 0 ? (
               <Blank text="No studies recorded" />
             ) : (
               <>
-                <div className="grid grid-cols-4 gap-2 mb-3 text-center">
-                  <Stat v={o.msa.acceptable} l="acceptable" />
-                  <Stat v={o.msa.conditional} l="conditional" tone={o.msa.conditional > 0 ? 'amber' : undefined} />
-                  <Stat v={o.msa.unacceptable} l="rejected" tone={o.msa.unacceptable > 0 ? 'red' : undefined} />
-                  <Stat v={o.msa.not_computed} l="pending" />
-                </div>
+                <DonutChart
+                  data={charts.msa}
+                  height={210}
+                  centerLabel="studies"
+                  emptyLabel="No study verdicts yet"
+                />
                 {o.msa.awaiting_approval > 0 && (
                   <p className="text-[11px] text-amber-700 mb-2">{o.msa.awaiting_approval} study(ies) computed but not approved.</p>
                 )}
@@ -414,116 +582,19 @@ export default function CalibrationDashboardPage() {
             )}
           </Panel>
         )}
-
-        <Panel title="Categories" icon={Layers} to="/calibration/config/categories" nav={nav}>
-          <div className="grid grid-cols-2 gap-3">
-            <Stat v={o.categories.in_use} l="in use" />
-            <Stat v={o.categories.active} l="active" />
-            <Stat v={o.categories.requiring_msa} l="require MSA" />
-            <Stat v={o.categories.requiring_checks} l="require checks" />
-          </div>
-          {o.instruments.without_plan > 0 && (
-            <p className="text-[11px] text-amber-700 mt-3 pt-2 border-t border-gray-100">
-              {o.instruments.without_plan} instrument(s) still have no calibration plan.
-            </p>
-          )}
-        </Panel>
-
-        <Panel title="Configuration" icon={Package} to="/calibration/config/policy" nav={nav}>
-          <div className="space-y-1.5 text-[11px]">
-            <KV k="Industry pack" v={<Tag className="!text-[10px] !mr-0">{o.config.industry_pack}</Tag>} />
-            <KV k="Due-soon window" v={`${o.config.due_soon_window_days} days`} />
-            <KV k="OOT impact window" v={o.config.oot_impact_window.replace(/_/g, ' ').toLowerCase()} />
-            <KV k="MSA" v={o.config.enable_msa ? 'enabled' : 'off'} />
-            <KV k="In-use checks" v={o.config.enable_in_use_checks ? 'enabled' : 'off'} />
-          </div>
-
-          <div className="mt-3 pt-2 border-t border-gray-100">
-            <Label>Integrations</Label>
-            <div className="space-y-1">
-              {Object.entries(caps?.integrations ?? {}).map(([key, v]) => (
-                <div key={key} className="flex items-center gap-1.5 text-[10px]">
-                  <Plug size={10} className={v.available ? 'text-emerald-600' : 'text-gray-300'} />
-                  <span className={v.available ? 'text-gray-700' : 'text-gray-400'}>{v.label}</span>
-                </div>
-              ))}
-            </div>
-            {unavailableIntegrations > 0 && (
-              <p className="text-[10px] text-gray-400 mt-1.5 leading-snug">
-                Unavailable integrations are hidden from action menus rather than failing when clicked.
-              </p>
-            )}
-          </div>
-        </Panel>
       </div>
 
+      {/* The Categories and Configuration panels that used to close the page
+          were pure setup state, not programme health, and are one click away
+          under Configuration. */}
       <p className="text-[10px] text-gray-400 mt-4 text-right">
-        All figures from one query at {fmtDateTime(o.generated_at)} · {o.window_days}-day window
+        {o.config.industry_pack} pack · due-soon {o.config.due_soon_window_days}d · all figures from one query at{' '}
+        {fmtDateTime(o.generated_at)} · {o.window_days}-day window
       </p>
     </PageContainer>
   );
 }
 
-// ─────────────────────────── Attention strip ───────────────────────────
-
-/** Only renders when there is something genuinely wrong. */
-function Attention({ o, nav }: { o: Overview; nav: (to: string) => void }) {
-  const items: { type: 'error' | 'warning'; msg: string; desc: string; to: string }[] = [];
-
-  if (o.standards.lapsed > 0)
-    items.push({
-      type: 'error',
-      msg: `${o.standards.lapsed} reference standard(s) lapsed`,
-      desc: 'A calibration performed with a lapsed standard has no valid traceability.',
-      to: '/calibration/config/standards',
-    });
-  if (o.providers.accreditation_lapsed > 0)
-    items.push({
-      type: 'error',
-      msg: `${o.providers.accreditation_lapsed} provider accreditation(s) lapsed`,
-      desc: 'A certificate from a lapsed laboratory is a finding in every regime.',
-      to: '/calibration/config/providers',
-    });
-  if (o.checks.due_now > 0)
-    items.push({
-      type: 'warning',
-      msg: `${o.checks.due_now} in-use check(s) due now`,
-      desc: 'Shift or daily verification is overdue on these devices.',
-      to: '/calibration/checks',
-    });
-  if (o.instruments.without_plan > 0)
-    items.push({
-      type: 'warning',
-      msg: `${o.instruments.without_plan} instrument(s) with no plan`,
-      desc: 'Without a plan there is no schedule and no tolerance to judge against.',
-      to: '/calibration/instruments',
-    });
-  if (o.msa.unacceptable > 0)
-    items.push({
-      type: 'error',
-      msg: `${o.msa.unacceptable} gauge(s) failed MSA`,
-      desc: '%GRR above 30% — the measurement system cannot discriminate the characteristic.',
-      to: '/calibration/config/msa',
-    });
-
-  if (items.length === 0) return null;
-
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-4">
-      {items.map((i) => (
-        <Alert
-          key={i.msg}
-          type={i.type}
-          showIcon
-          message={i.msg}
-          description={i.desc}
-          className="cursor-pointer"
-          onClick={() => nav(i.to)}
-        />
-      ))}
-    </div>
-  );
-}
 
 // ─────────────────────────── Primitives ───────────────────────────
 
@@ -585,24 +656,6 @@ function Row({ children, onClick }: { children: React.ReactNode; onClick: () => 
 
 function Label({ children }: { children: React.ReactNode }) {
   return <div className="text-[9px] text-gray-400 uppercase tracking-wide font-semibold mb-1.5">{children}</div>;
-}
-
-function Chip({ label, value }: { label: string; value: number }) {
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] rounded border border-gray-200 bg-gray-50 text-gray-600">
-      {label}
-      <span className="font-bold text-gray-900">{value}</span>
-    </span>
-  );
-}
-
-function KV({ k, v }: { k: string; v: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="text-gray-500">{k}</span>
-      <span className="text-gray-900 font-medium">{v}</span>
-    </div>
-  );
 }
 
 function Blank({ text }: { text: string }) {

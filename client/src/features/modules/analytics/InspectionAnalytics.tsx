@@ -9,6 +9,7 @@
  * derived from these records), a KpiCard strip, and a two-column ChartCard grid.
  */
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   CalendarClock,
   CheckCircle2,
@@ -38,6 +39,8 @@ import { KpiCard } from '@/components/ui';
 import type { ModuleAnalyticsProps } from './types';
 
 export default function InspectionAnalytics({ tickets, onDrill }: ModuleAnalyticsProps) {
+  const navigate = useNavigate();
+
   // No panel-level Filter: the module header owns the one Filter button and
   // hands this panel an already-scoped list.
   const filtered = tickets;
@@ -127,7 +130,12 @@ export default function InspectionAnalytics({ tickets, onDrill }: ModuleAnalytic
         </ChartCard>
 
         <ChartCard title="Overdue Inspections" subtitle="Open inspections past their due date, soonest first">
-          <CalendarList entries={m.overdueEntries} emptyLabel="No overdue inspections" />
+          {/* Entry ids are ticket ids, so a row opens its inspection ticket. */}
+          <CalendarList
+            entries={m.overdueEntries}
+            emptyLabel="No overdue inspections"
+            onEntryClick={(e) => navigate(`/tickets/${e.id}`)}
+          />
         </ChartCard>
       </div>
     </div>

@@ -26,6 +26,11 @@
   --neutral: #5d6b7e;
   --neutral-soft: #eef1f4;
 
+  /* Height of the global app Header (components/layout/Header.tsx — h-14).
+     The command-center bar sticks below it rather than at the viewport top,
+     otherwise it slides underneath and disappears on scroll. */
+  --app-header-h: 56px;
+
   --radius: 16px;
   --radius-sm: 11px;
   --shadow: 0 1px 2px rgba(18, 28, 42, 0.04), 0 6px 22px -10px rgba(18, 28, 42, 0.1);
@@ -49,8 +54,10 @@
 /* ---------- Header ---------- */
 .qcc .top {
   position: sticky;
-  top: 0;
-  z-index: 5;
+  top: var(--app-header-h);
+  /* Above the dashboard's own cards/charts, below the app Header (z-30) so the
+     two stack cleanly instead of fighting. */
+  z-index: 20;
   background: rgba(255, 255, 255, 0.82);
   backdrop-filter: saturate(180%) blur(14px);
   -webkit-backdrop-filter: saturate(180%) blur(14px);
@@ -89,6 +96,9 @@
   70%  { box-shadow: 0 0 0 7px rgba(21, 163, 74, 0); }
   100% { box-shadow: 0 0 0 0 rgba(21, 163, 74, 0); }
 }
+/* Viewing a closed-out past year — static and neutral, because nothing about
+   a historic snapshot is live. */
+.qcc .live.historic { background: var(--ink-3); box-shadow: none; animation: none; }
 .qcc .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; padding: 3px; }
 .qcc .seg button {
   font-family: "IBM Plex Sans", sans-serif; font-size: 12.5px; font-weight: 600; color: var(--ink-2);

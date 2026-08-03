@@ -23,11 +23,19 @@ import InspectionAnalytics from './InspectionAnalytics';
 import MaintenanceAnalytics from './MaintenanceAnalytics';
 import SupplierQualityAnalytics from './SupplierQualityAnalytics';
 import CalibrationAnalytics from './CalibrationAnalytics';
+import BatchDispositionAnalytics from './BatchDispositionAnalytics';
+import ElectronicLogbookAnalytics from './ElectronicLogbookAnalytics';
+import RecallAnalytics from './RecallAnalytics';
 
 const normalise = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /** Ordered keyword rules — first match on the normalised module name wins. */
 const RULES: Array<{ match: string[]; component: ComponentType<ModuleAnalyticsProps> }> = [
+  // Ahead of the broader rules below: "Batch Disposition" must not be caught by
+  // a looser keyword before it reaches its own panel.
+  { match: ['batchdisposition', 'batchrelease', 'disposition'], component: BatchDispositionAnalytics },
+  { match: ['electroniclogbook', 'logbook', 'elog'], component: ElectronicLogbookAnalytics },
+  { match: ['recall', 'fieldaction', 'withdrawal'], component: RecallAnalytics },
   { match: ['capa', 'correctiveaction', 'preventiveaction'], component: CapaAnalytics },
   { match: ['changecontrol', 'change'], component: ChangeControlAnalytics },
   { match: ['deviation', 'incident'], component: DeviationAnalytics },

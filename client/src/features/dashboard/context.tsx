@@ -9,6 +9,10 @@ interface DashboardCtx {
   isSample: boolean; // true when the backend is unreachable (empty offline shell)
   range: DashRange;
   setRange: (r: DashRange) => void;
+  year: number;
+  setYear: (y: number) => void;
+  /** True when viewing a closed-out past year rather than live figures. */
+  isHistoric: boolean;
   has: (panel: PanelKey) => boolean;
 }
 
@@ -18,10 +22,16 @@ const Ctx = createContext<DashboardCtx | null>(null);
 export const SEG_TO_RANGE: Record<string, DashRange> = { '7D': '7d', '1M': '30d', '3M': '90d', '12M': '1y', '3Y': '3y' };
 export const RANGE_TO_SEG: Record<DashRange, string> = { '7d': '7D', '30d': '1M', '90d': '3M', '1y': '12M', '3y': '3Y' };
 
+/** Selectable years: the current one plus the two before it. Derived from the
+ *  clock so the list never goes stale. */
+export const CURRENT_YEAR = new Date().getFullYear();
+export const DASH_YEARS = [CURRENT_YEAR - 2, CURRENT_YEAR - 1, CURRENT_YEAR];
+
 export function DashboardProvider({ children }: { children: ReactNode }) {
   const [range, setRange] = useState<DashRange>('30d');
+  const [year, setYear] = useState<number>(CURRENT_YEAR);
   const siteId = useSiteStore((s) => s.selectedSiteId);
-  const query = useDashboardOverview(range, siteId);
+  const query = useDashboardOverview(range, siteId, year);
 
   const data = query.data ?? (query.isError ? offlineFallback(range) : undefined);
   const isSample = query.isError || !!data?.panels.snapshot.sample;
@@ -32,8 +42,11 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     isSample,
     range,
     setRange,
+    year,
+    setYear,
+    isHistoric: year < CURRENT_YEAR,
     has: (panel: PanelKey) => !!data?.layout.includes(panel),
-  }), [data, query.isLoading, isSample, range]);
+  }), [data, query.isLoading, isSample, range, year]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

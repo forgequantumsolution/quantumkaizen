@@ -20,6 +20,13 @@ export interface HeatMapMatrixProps {
   rowHeader?: string;
   colHeader?: string;
   emptyLabel?: string;
+  /**
+   * Stretch the grid across the card instead of using fixed square cells.
+   * Off by default: the Risk 5×5 matrix is meaningful *because* its cells are
+   * square. Turn it on for label-driven matrices with only a few columns,
+   * which otherwise hug the left edge and leave the card looking empty.
+   */
+  fill?: boolean;
 }
 
 function amberRamp(v: number, max: number): string {
@@ -41,6 +48,7 @@ export default function HeatMapMatrix({
   rowHeader,
   colHeader,
   emptyLabel = 'No data yet',
+  fill = false,
 }: HeatMapMatrixProps) {
   if (rows.length === 0 || cols.length === 0) {
     return <EmptyChart label={emptyLabel} height={height} />;
@@ -50,15 +58,30 @@ export default function HeatMapMatrix({
     for (let c = 0; c < cols.length; c++) max = Math.max(max, value(r, c));
 
   return (
-    <div className="overflow-x-auto" style={{ minHeight: height }}>
-      <table className="border-separate" style={{ borderSpacing: 3 }}>
+    <div className={fill ? 'w-full overflow-x-auto' : 'overflow-x-auto'} style={{ minHeight: height }}>
+      <table
+        className={fill ? 'w-full table-fixed border-separate' : 'border-separate'}
+        style={{ borderSpacing: 3 }}
+      >
         <thead>
           <tr>
-            <th className="text-[10px] text-gray-400 font-medium text-right pr-2 align-bottom">
+            <th
+              className="text-[10px] text-gray-400 font-medium text-right pr-2 align-bottom"
+              // Pin the label column so table-fixed splits the remaining width
+              // evenly across the data columns.
+              style={fill ? { width: 130 } : undefined}
+            >
               {rowHeader && colHeader ? `${rowHeader} \\ ${colHeader}` : ''}
             </th>
             {cols.map((c) => (
-              <th key={c} className="text-[10px] font-medium text-gray-500 px-1 pb-1 text-center max-w-[80px]">
+              <th
+                key={c}
+                className={
+                  fill
+                    ? 'text-[10px] font-medium text-gray-500 px-1 pb-1 text-center'
+                    : 'text-[10px] font-medium text-gray-500 px-1 pb-1 text-center max-w-[80px]'
+                }
+              >
                 <span className="block truncate" title={c}>{c}</span>
               </th>
             ))}
@@ -76,10 +99,10 @@ export default function HeatMapMatrix({
                   <td
                     key={c}
                     title={`${rname} × ${cols[c]}: ${v}`}
-                    className="w-9 h-9 text-center rounded"
+                    className={fill ? 'h-9 text-center rounded' : 'w-9 h-9 text-center rounded'}
                     style={{
                       backgroundColor: colorFor(v, max),
-                      minWidth: 34,
+                      ...(fill ? null : { minWidth: 34 }),
                     }}
                   >
                     <span className="text-[11px] font-semibold text-gray-800">{cellLabel(v)}</span>

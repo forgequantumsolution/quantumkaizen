@@ -60,8 +60,28 @@ type Bucket = { label: string; start: Date; end: Date };
 
 const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-function buildBuckets(range: OverviewQuery['range']): Bucket[] {
+/**
+ * The instant every panel is computed "as of".
+ *
+ * Omitted year, or the current//a future year → now, i.e. the live dashboard
+ * exactly as before. A past year → the last millisecond of that year, so the
+ * whole page answers "where did the programme stand at the end of 2024?".
+ */
+export function resolveAnchor(year?: number): Date {
   const now = new Date();
+  if (!year || year >= now.getFullYear()) return now;
+  return new Date(year, 11, 31, 23, 59, 59, 999);
+}
+
+/**
+ * Cut-off applied to every entity query. Without it a past year would still
+ * count records created afterwards — the dashboard would show today's figures
+ * under a 2024 label, which is worse than showing nothing.
+ */
+const upto = (anchor: Date, field = 'createdAt') => ({ [field]: { lte: anchor } });
+
+function buildBuckets(range: OverviewQuery['range'], anchor: Date): Bucket[] {
+  const now = anchor;
   const buckets: Bucket[] = [];
 
   if (range === '7d') {
@@ -101,9 +121,9 @@ function buildBuckets(range: OverviewQuery['range']): Bucket[] {
   return buckets;
 }
 
-function rangeStart(range: OverviewQuery['range']): Date {
+function rangeStart(range: OverviewQuery['range'], anchor: Date): Date {
   const days = range === '7d' ? 7 : range === '30d' ? 30 : range === '90d' ? 90 : range === '1y' ? 365 : 1095;
-  return new Date(Date.now() - days * DAY);
+  return new Date(+anchor - days * DAY);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,22 +181,23 @@ const siteWhere = (ctx: Ctx) => (ctx.site?.id ? { siteId: ctx.site.id } : {});
 // substituted figures. `sample` stays false and is kept for API compatibility.
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function buildSnapshot(ctx: Ctx, range: OverviewQuery['range']) {
-  const since = rangeStart(range);
-  const prevSince = new Date(+since - (Date.now() - +since));
-  const in30 = new Date(Date.now() + 30 * DAY);
-  const now = new Date();
+async function buildSnapshot(ctx: Ctx, range: OverviewQuery['range'], anchor: Date) {
+  const since = rangeStart(range, anchor);
+  const prevSince = new Date(+since - (+anchor - +since));
+  const in30 = new Date(+anchor + 30 * DAY);
+  const now = anchor;
+  const cut = upto(anchor);
 
   const [
     openNCs, prevOpenNCs, openCAPAs, pendingApprovals, expiringDocs,
     overdueActions,
   ] = await Promise.all([
-    prisma.nonConformance.count({ where: { ...deptWhere(ctx), status: { notIn: ['CLOSED', 'CANCELLED'] } } }),
+    prisma.nonConformance.count({ where: { ...deptWhere(ctx), ...cut, status: { notIn: ['CLOSED', 'CANCELLED'] } } }),
     prisma.nonConformance.count({ where: { ...deptWhere(ctx), status: { notIn: ['CLOSED', 'CANCELLED'] }, createdAt: { lt: since } } }),
-    prisma.capa.count({ where: { ...deptWhere(ctx), status: { notIn: ['CLOSED', 'CANCELLED'] } } }),
-    prisma.approvalInstance.count({ where: { status: 'PENDING' } }).catch(() => 0),
-    prisma.document.count({ where: { isDeleted: false, status: 'EFFECTIVE', reviewDueDate: { lte: in30, gte: now } } }),
-    prisma.actionItem.count({ where: { status: { notIn: ['DONE', 'VERIFIED', 'CANCELLED'] }, dueDate: { lt: now } } }),
+    prisma.capa.count({ where: { ...deptWhere(ctx), ...cut, status: { notIn: ['CLOSED', 'CANCELLED'] } } }),
+    prisma.approvalInstance.count({ where: { ...cut, status: 'PENDING' } }).catch(() => 0),
+    prisma.document.count({ where: { isDeleted: false, ...cut, status: 'EFFECTIVE', reviewDueDate: { lte: in30, gte: now } } }),
+    prisma.actionItem.count({ where: { ...cut, status: { notIn: ['DONE', 'VERIFIED', 'CANCELLED'] }, dueDate: { lt: now } } }),
   ]);
 
   const deltaPct = prevOpenNCs ? Math.round(((openNCs - prevOpenNCs) / prevOpenNCs) * 100) : 0;
@@ -192,10 +213,10 @@ async function buildSnapshot(ctx: Ctx, range: OverviewQuery['range']) {
   };
 }
 
-async function buildNonConformance(ctx: Ctx, buckets: Bucket[]) {
+async function buildNonConformance(ctx: Ctx, buckets: Bucket[], anchor: Date) {
   const first = buckets[0].start;
   const rows = await prisma.nonConformance.findMany({
-    where: { ...deptWhere(ctx), createdAt: { gte: first } },
+    where: { ...deptWhere(ctx), createdAt: { gte: first, lte: anchor } },
     select: { createdAt: true, severity: true, status: true, track: true, department: { select: { name: true } } },
   });
 
@@ -222,11 +243,12 @@ async function buildNonConformance(ctx: Ctx, buckets: Bucket[]) {
   return { sample: false, trend, severityTrend, byType, byDepartment };
 }
 
-async function buildCapa(ctx: Ctx) {
-  const grouped = await prisma.capa.groupBy({ by: ['status'], where: deptWhere(ctx), _count: true });
-  const now = new Date();
+async function buildCapa(ctx: Ctx, anchor: Date) {
+  const cut = upto(anchor);
+  const grouped = await prisma.capa.groupBy({ by: ['status'], where: { ...deptWhere(ctx), ...cut }, _count: true });
+  const now = anchor;
   const openList = await prisma.capa.findMany({
-    where: { ...deptWhere(ctx), status: { notIn: ['CLOSED', 'CANCELLED'] } },
+    where: { ...deptWhere(ctx), ...cut, status: { notIn: ['CLOSED', 'CANCELLED'] } },
     select: { createdAt: true, dueDate: true },
   });
 
@@ -244,8 +266,8 @@ async function buildCapa(ctx: Ctx) {
   ];
 
   const [closed, closedOnTime] = await Promise.all([
-    prisma.capa.count({ where: { ...deptWhere(ctx), status: 'CLOSED' } }),
-    prisma.capa.count({ where: { ...deptWhere(ctx), status: 'CLOSED', closedAt: { not: null }, dueDate: { not: null } } }),
+    prisma.capa.count({ where: { ...deptWhere(ctx), ...cut, status: 'CLOSED' } }),
+    prisma.capa.count({ where: { ...deptWhere(ctx), ...cut, status: 'CLOSED', closedAt: { not: null }, dueDate: { not: null } } }),
   ]);
   void closedOnTime;
   const onTimeClosureRate = closed ? 82 : 0; // exact on-time needs row compare; approximate headline
@@ -253,12 +275,12 @@ async function buildCapa(ctx: Ctx) {
   return { sample: false, byStage, aging, onTimeClosureRate };
 }
 
-async function buildComplaints(ctx: Ctx, buckets: Bucket[]) {
+async function buildComplaints(ctx: Ctx, buckets: Bucket[], anchor: Date) {
   // Complaints are modelled as tickets; we approximate with created vs closed
   // tickets in each bucket (site-scoped where possible).
   const first = buckets[0].start;
   const tickets = await prisma.ticket.findMany({
-    where: { isDeleted: false, ...siteWhere(ctx), createdAt: { gte: first } },
+    where: { isDeleted: false, ...siteWhere(ctx), createdAt: { gte: first, lte: anchor } },
     select: { createdAt: true, updatedAt: true, flows: { select: { isCompleted: true } } },
   }).catch(() => [] as { createdAt: Date; updatedAt: Date; flows: { isCompleted: boolean }[] }[]);
 
@@ -274,8 +296,8 @@ async function buildComplaints(ctx: Ctx, buckets: Bucket[]) {
   return { sample: false, trend };
 }
 
-async function buildDocuments(ctx: Ctx) {
-  const grouped = await prisma.document.groupBy({ by: ['status'], where: { isDeleted: false, ...deptWhere(ctx) }, _count: true });
+async function buildDocuments(ctx: Ctx, anchor: Date) {
+  const grouped = await prisma.document.groupBy({ by: ['status'], where: { isDeleted: false, ...deptWhere(ctx), ...upto(anchor) }, _count: true });
 
   const palette: Record<string, string> = {
     DRAFT: '#94a3b8', IN_REVIEW: '#f59e0b', APPROVED: '#0ea5e9', EFFECTIVE: '#10b981', SUPERSEDED: '#e2e8f0', RETIRED: '#cbd5e1',
@@ -286,10 +308,12 @@ async function buildDocuments(ctx: Ctx) {
   return { sample: false, pipeline };
 }
 
-async function buildTraining(ctx: Ctx) {
+async function buildTraining(ctx: Ctx, anchor: Date) {
   // Compliance = completed / total assignments, grouped by the assignee's dept.
   // TrainingAssignment.userId is a plain id (no FK), so resolve depts separately.
   const assignments = await prisma.trainingAssignment.findMany({
+    // TrainingAssignment stamps assignedAt rather than createdAt.
+    where: upto(anchor, 'assignedAt'),
     select: { status: true, userId: true },
   }).catch(() => [] as { status: string; userId: string }[]);
 
@@ -313,9 +337,10 @@ async function buildTraining(ctx: Ctx) {
   return { sample: false, byDept, overall: pct(totals.done, totals.total, 0) };
 }
 
-async function buildAudit(ctx: Ctx) {
+async function buildAudit(ctx: Ctx, anchor: Date) {
   void ctx;
   const findings = await prisma.auditFinding.findMany({
+    where: upto(anchor),
     select: { severity: true, status: true, program: { select: { register: { select: { title: true } } } } },
   }).catch(() => [] as { severity: string; status: string }[]);
 
@@ -340,8 +365,8 @@ async function buildAudit(ctx: Ctx) {
   return { sample: false, findingsByDept, severityMix: sevMix };
 }
 
-async function buildInspection() {
-  const grouped = await prisma.sampleTest.groupBy({ by: ['overallResult'], _count: true }).catch(() => [] as { overallResult: string | null; _count: number }[]);
+async function buildInspection(anchor: Date) {
+  const grouped = await prisma.sampleTest.groupBy({ by: ['overallResult'], where: upto(anchor), _count: true }).catch(() => [] as { overallResult: string | null; _count: number }[]);
 
   const byResult = grouped.map((g) => ({ result: g.overallResult ?? 'Pending', count: g._count }));
   const pass = byResult.find((b) => /PASS|WITHIN/i.test(b.result))?.count ?? 0;
@@ -349,14 +374,15 @@ async function buildInspection() {
   return { sample: false, byResult, passRate: pct(pass, total) };
 }
 
-async function buildCalibration() {
-  const now = new Date();
+async function buildCalibration(anchor: Date) {
+  const now = anchor;
   const in30 = new Date(+now + 30 * DAY);
+  const cut = upto(anchor);
   const [current, dueSoon, overdue, oos] = await Promise.all([
-    prisma.equipment.count({ where: { isDeleted: false, status: 'ACTIVE', calibrationDueAt: { gt: in30 } } }).catch(() => 0),
-    prisma.equipment.count({ where: { isDeleted: false, status: 'ACTIVE', calibrationDueAt: { gt: now, lte: in30 } } }).catch(() => 0),
-    prisma.equipment.count({ where: { isDeleted: false, calibrationDueAt: { lt: now } } }).catch(() => 0),
-    prisma.equipment.count({ where: { isDeleted: false, status: { not: 'ACTIVE' } } }).catch(() => 0),
+    prisma.equipment.count({ where: { isDeleted: false, ...cut, status: 'ACTIVE', calibrationDueAt: { gt: in30 } } }).catch(() => 0),
+    prisma.equipment.count({ where: { isDeleted: false, ...cut, status: 'ACTIVE', calibrationDueAt: { gt: now, lte: in30 } } }).catch(() => 0),
+    prisma.equipment.count({ where: { isDeleted: false, ...cut, calibrationDueAt: { lt: now } } }).catch(() => 0),
+    prisma.equipment.count({ where: { isDeleted: false, ...cut, status: { not: 'ACTIVE' } } }).catch(() => 0),
   ]);
 
   return {
@@ -370,12 +396,13 @@ async function buildCalibration() {
   };
 }
 
-async function buildScorecard(ctx: Ctx) {
+async function buildScorecard(ctx: Ctx, anchor: Date) {
+  const cut = upto(anchor);
   const [capaClosed, capaTotal, ncClosed, ncTotal] = await Promise.all([
-    prisma.capa.count({ where: { ...deptWhere(ctx), status: 'CLOSED' } }),
-    prisma.capa.count({ where: deptWhere(ctx) }),
-    prisma.nonConformance.count({ where: { ...deptWhere(ctx), status: 'CLOSED' } }),
-    prisma.nonConformance.count({ where: deptWhere(ctx) }),
+    prisma.capa.count({ where: { ...deptWhere(ctx), ...cut, status: 'CLOSED' } }),
+    prisma.capa.count({ where: { ...deptWhere(ctx), ...cut } }),
+    prisma.nonConformance.count({ where: { ...deptWhere(ctx), ...cut, status: 'CLOSED' } }),
+    prisma.nonConformance.count({ where: { ...deptWhere(ctx), ...cut } }),
   ]);
 
   const capaRate = pct(capaClosed, capaTotal, 0);
@@ -391,9 +418,10 @@ async function buildScorecard(ctx: Ctx) {
   };
 }
 
-async function buildActivity(ctx: Ctx, limit: number) {
+async function buildActivity(ctx: Ctx, limit: number, anchor: Date) {
   void ctx;
   const rows = await prisma.auditTrailEntry.findMany({
+    where: upto(anchor),
     orderBy: { createdAt: 'desc' }, take: limit,
     select: { id: true, action: true, entityType: true, entityId: true, userName: true, createdAt: true },
   }).catch(() => [] as { id: string; action: string; entityType: string; entityId: string; userName: string | null; createdAt: Date }[]);
@@ -409,7 +437,8 @@ async function buildActivity(ctx: Ctx, limit: number) {
 // ─────────────────────────────────────────────────────────────────────────────
 export async function overview(userId: string, q: OverviewQuery) {
   const ctx = await loadContext(userId, q.siteId);
-  const buckets = buildBuckets(q.range);
+  const anchor = resolveAnchor(q.year);
+  const buckets = buildBuckets(q.range, anchor);
 
   // Which panels this persona sees, gated by permission.
   const layout = PANEL_ORDER.filter((key) => {
@@ -424,17 +453,17 @@ export async function overview(userId: string, q: OverviewQuery) {
   const [
     snapshot, nonconformance, capa, complaints, documents, training, audit, inspection, calibration, scorecard, activity,
   ] = await Promise.all([
-    buildSnapshot(ctx, q.range),
-    buildNonConformance(ctx, buckets),
-    buildCapa(ctx),
-    buildComplaints(ctx, buckets),
-    buildDocuments(ctx),
-    buildTraining(ctx),
-    buildAudit(ctx),
-    buildInspection(),
-    buildCalibration(),
-    buildScorecard(ctx),
-    buildActivity(ctx, activityLimit),
+    buildSnapshot(ctx, q.range, anchor),
+    buildNonConformance(ctx, buckets, anchor),
+    buildCapa(ctx, anchor),
+    buildComplaints(ctx, buckets, anchor),
+    buildDocuments(ctx, anchor),
+    buildTraining(ctx, anchor),
+    buildAudit(ctx, anchor),
+    buildInspection(anchor),
+    buildCalibration(anchor),
+    buildScorecard(ctx, anchor),
+    buildActivity(ctx, activityLimit, anchor),
   ]);
 
   return {
@@ -446,6 +475,8 @@ export async function overview(userId: string, q: OverviewQuery) {
       site: ctx.site ? { id: ctx.site.id, code: ctx.site.code, name: ctx.site.name } : null,
       organization: ctx.org ? { name: ctx.org.name, industry: ctx.org.industry, standards: ctx.org.standards } : null,
       range: q.range,
+      year: anchor.getFullYear(),
+      asOf: anchor.toISOString(),
       canViewAll: ctx.canViewAll,
     },
     layout,

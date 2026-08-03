@@ -25,6 +25,12 @@ export interface CalendarListProps {
   emptyLabel?: string;
   /** When true, past dates render red (overdue); default true. */
   flagOverdue?: boolean;
+  /**
+   * Makes each row activatable — typically to open the underlying record.
+   * Opt-in: callers whose entry ids don't map to a navigable route (e.g. the
+   * audit dashboard's register ids) simply omit it and rows stay static.
+   */
+  onEntryClick?: (entry: CalendarEntry) => void;
 }
 
 function chipFor(date: string): { label: string; color: string } {
@@ -40,6 +46,7 @@ export default function CalendarList({
   entries,
   height = 260,
   emptyLabel = 'Nothing scheduled',
+  onEntryClick,
 }: CalendarListProps) {
   if (entries.length === 0) return <EmptyChart label={emptyLabel} height={height} />;
   return (
@@ -50,10 +57,19 @@ export default function CalendarList({
           : e.date
             ? chipFor(e.date)
             : null;
-        return (
-          <div key={e.id} className="flex items-center gap-3 py-2">
+
+        const body = (
+          <>
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium text-gray-800 truncate">{e.title}</div>
+              <div
+                className={
+                  onEntryClick
+                    ? 'text-[13px] font-medium text-gray-800 truncate group-hover:text-blue-600'
+                    : 'text-[13px] font-medium text-gray-800 truncate'
+                }
+              >
+                {e.title}
+              </div>
               {e.meta && <div className="text-[11px] text-gray-400 truncate">{e.meta}</div>}
             </div>
             {chip && (
@@ -64,7 +80,27 @@ export default function CalendarList({
                 {chip.label}
               </span>
             )}
-          </div>
+          </>
+        );
+
+        if (!onEntryClick) {
+          return (
+            <div key={e.id} className="flex items-center gap-3 py-2">
+              {body}
+            </div>
+          );
+        }
+
+        return (
+          <button
+            key={e.id}
+            type="button"
+            onClick={() => onEntryClick(e)}
+            title={`Open ${e.title}`}
+            className="group flex w-full items-center gap-3 py-2 px-1 -mx-1 rounded text-left hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 transition-colors"
+          >
+            {body}
+          </button>
         );
       })}
     </div>
